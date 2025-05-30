@@ -6,6 +6,8 @@ import {
   Text,
   TouchableOpacity,
   Dimensions,
+  RefreshControl, // Added for pull-to-refresh
+  AppState, // Added for app state monitoring
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,10 +20,50 @@ const AnalyticsScreen = () => {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // For pull-to-refresh
+  const [lastActiveDate, setLastActiveDate] = useState(
+    new Date().toDateString(),
+  ); // For date detection
 
   useEffect(() => {
     loadTransactions();
   }, []);
+
+  // Initialize last active date on component mount
+  useEffect(() => {
+    setLastActiveDate(new Date().toDateString());
+  }, []);
+
+  // Monitor app state changes for automatic refresh
+  useEffect(() => {
+    const handleAppStateChange = nextAppState => {
+      if (nextAppState === 'active') {
+        const now = new Date();
+        const currentDateString = now.toDateString();
+
+        // Check if the date has changed since last time app was active
+        if (lastActiveDate !== currentDateString) {
+          console.log(
+            'Analytics: Date changed from',
+            lastActiveDate,
+            'to',
+            currentDateString,
+          );
+          setLastActiveDate(currentDateString);
+        }
+
+        // Always reload data when app becomes active (same date or different)
+        console.log('Analytics: App became active, refreshing data');
+        loadTransactions();
+      }
+    };
+
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange,
+    );
+    return () => subscription?.remove();
+  }, [lastActiveDate]);
 
   const loadTransactions = async () => {
     try {
@@ -29,12 +71,23 @@ const AnalyticsScreen = () => {
       if (storedTransactions) {
         const parsedTransactions = JSON.parse(storedTransactions);
         setTransactions(parsedTransactions);
+      } else {
+        setTransactions([]);
       }
     } catch (error) {
       console.error('Error loading transactions:', error);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    console.log('Analytics: Manual refresh triggered');
+    await loadTransactions();
+    setRefreshing(false);
   };
 
   const getPeriodData = () => {
@@ -278,7 +331,19 @@ const AnalyticsScreen = () => {
         <Text style={styles.headerSubtitle}>Track your spending patterns</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary || '#6366F1']} // Android
+            tintColor={colors.primary || '#6366F1'} // iOS
+            title="Pull to refresh..." // iOS
+            titleColor={colors.textSecondary || '#6B7280'} // iOS
+          />
+        }>
         {/* Period Selector */}
         <View style={styles.selectorContainer}>
           <View style={styles.periodButtons}>
@@ -436,6 +501,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
+    fontFamily: 'System',
     color: colors.textSecondary || '#6B7280',
   },
   header: {
@@ -445,12 +511,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: '400',
+    fontFamily: 'System',
     color: colors.textWhite || '#FFFFFF',
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 14,
+    fontFamily: 'System',
     color: colors.textWhite || '#FFFFFF',
     opacity: 0.9,
   },
@@ -486,9 +554,11 @@ const styles = StyleSheet.create({
   periodButtonText: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: 'System',
     color: colors.text || '#1F2937',
   },
   periodButtonTextActive: {
+    fontFamily: 'System',
     color: colors.textWhite || '#FFFFFF',
   },
   comparisonToggle: {
@@ -513,9 +583,11 @@ const styles = StyleSheet.create({
     color: colors.textWhite || '#FFFFFF',
     fontSize: 10,
     fontWeight: 'bold',
+    fontFamily: 'System',
   },
   comparisonText: {
     fontSize: 14,
+    fontFamily: 'System',
     color: colors.text || '#1F2937',
   },
   statsContainer: {
@@ -537,12 +609,14 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
+    fontFamily: 'System',
     color: colors.textSecondary || '#6B7280',
     marginBottom: 8,
   },
   statValue: {
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: 'System',
     color: colors.text || '#1F2937',
   },
   chartContainer: {
@@ -559,6 +633,7 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: 'System',
     color: colors.text || '#1F2937',
     marginBottom: 16,
   },
@@ -579,6 +654,7 @@ const styles = StyleSheet.create({
   insightsTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: 'System',
     color: colors.text || '#1F2937',
     marginBottom: 16,
   },
@@ -591,11 +667,13 @@ const styles = StyleSheet.create({
   },
   insightText: {
     fontSize: 14,
+    fontFamily: 'System',
     color: colors.text || '#1F2937',
     lineHeight: 20,
   },
   insightBold: {
     fontWeight: '600',
+    fontFamily: 'System',
   },
 });
 

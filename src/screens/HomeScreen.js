@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Text,
   Alert,
+  AppState, // Added AppState import
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
@@ -34,6 +35,11 @@ const HomeScreen = ({navigation}) => {
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editingIds, setEditingIds] = useState([]);
 
+  // Date detection state
+  const [lastActiveDate, setLastActiveDate] = useState(
+    new Date().toDateString(),
+  );
+
   // Balance card onboarding state
   const [showBalanceCardSpotlight, setShowBalanceCardSpotlight] =
     useState(false);
@@ -57,6 +63,55 @@ const HomeScreen = ({navigation}) => {
     loadIncomeData();
     loadTransactions();
   }, []);
+
+  // Initialize last active date on component mount
+  useEffect(() => {
+    setLastActiveDate(new Date().toDateString());
+  }, []);
+
+  // Monitor app state changes for date detection
+  useEffect(() => {
+    const handleAppStateChange = nextAppState => {
+      if (nextAppState === 'active') {
+        const now = new Date();
+        const currentDateString = now.toDateString();
+
+        // Check if the date has changed since last time app was active
+        if (lastActiveDate !== currentDateString) {
+          console.log(
+            'Date changed from',
+            lastActiveDate,
+            'to',
+            currentDateString,
+          );
+
+          // Update the last active date
+          setLastActiveDate(currentDateString);
+
+          // If user was viewing "today" (previous day), update to new today
+          const selectedDateString = selectedDate.toDateString();
+          if (selectedDateString === lastActiveDate) {
+            console.log('Updating selected date to new today');
+            setSelectedDate(new Date());
+          }
+
+          // Reload all data
+          loadIncomeData();
+          loadTransactions();
+        } else {
+          // Same date, but still reload data in case of changes
+          loadIncomeData();
+          loadTransactions();
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange,
+    );
+    return () => subscription?.remove();
+  }, [lastActiveDate, selectedDate]);
 
   // FIXED: Simplified useEffect for checking onboarding status
   useEffect(() => {
