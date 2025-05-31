@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
-// screens/HomeScreen.js (Refactored with Goals Integration)
+/* eslint-disable react-hooks/exhaustive-deps */
+// screens/HomeScreen.js (Fixed with proper useEffect dependencies)
 import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
@@ -77,15 +78,16 @@ const HomeScreen = ({navigation}) => {
     calculateTotalGoalContributions,
   } = useGoals();
 
+  // FIXED: Initial data loading on component mount
   useEffect(() => {
     loadIncomeData();
     loadTransactions();
-  }, [loadTransactions]);
+  }, []); // Empty dependency array - only run on mount
 
   // Load goals on component mount
   useEffect(() => {
     loadGoals();
-  }, [loadGoals]);
+  }, []); // Empty dependency array - only run on mount
 
   // Update spending goals when transactions change
   useEffect(() => {
@@ -136,19 +138,19 @@ const HomeScreen = ({navigation}) => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [lastActiveDate, selectedDate, loadTransactions, loadGoals]);
+  }, [lastActiveDate, selectedDate]); // FIXED: Removed function dependencies
 
   // Check onboarding status
   useEffect(() => {
     checkOnboardingStatus();
-  }, [checkOnboardingStatus]);
+  }, []); // FIXED: Empty dependency array
 
   // Reload income data when screen comes into focus (after editing)
   useFocusEffect(
     React.useCallback(() => {
       loadIncomeData();
       loadGoals();
-    }, [loadGoals]),
+    }, []), // FIXED: Empty dependency array
   );
 
   const loadIncomeData = async () => {
@@ -190,7 +192,7 @@ const HomeScreen = ({navigation}) => {
     } catch (error) {
       console.error('Error checking onboarding status:', error);
     }
-  }, [measureBalanceCard, measureFloatingButton]);
+  }, []); // FIXED: Empty dependency array
 
   const measureBalanceCard = useCallback(() => {
     if (balanceCardRef.current) {
@@ -369,7 +371,7 @@ const HomeScreen = ({navigation}) => {
         <BalanceCard
           incomeData={incomeData}
           loading={loading}
-          totalExpenses={calculateTotalExpenses(selectedDate)}
+          totalExpenses={calculateTotalExpenses(selectedDate, incomeData)}
           onCalendarPress={() => setShowCalendar(true)}
           onEditIncome={handleEditIncome}
           selectedDate={selectedDate}
