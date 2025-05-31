@@ -714,4 +714,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default React.memo(AnalyticsScreen);
+export default AnalyticsScreen;
