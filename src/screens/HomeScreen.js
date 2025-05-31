@@ -1,4 +1,5 @@
-// screens/HomeScreen.js (Refactored)
+/* eslint-disable no-unused-vars */
+// screens/HomeScreen.js (Refactored with Goals Integration)
 import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
@@ -20,6 +21,7 @@ import BalanceCardSpotlight from '../components/BalanceCardSpotlight';
 import AddTransactionSpotlight from '../components/AddTransactionSpotlight';
 import TransactionSwipeSpotlight from '../components/TransactionSwipeSpotlight';
 import useTransactions from '../hooks/useTransactions';
+import useGoals from '../hooks/useGoals';
 
 const HomeScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
@@ -66,10 +68,32 @@ const HomeScreen = ({navigation}) => {
     calculateTotalExpenses,
   } = useTransactions();
 
+  // Custom hook for goals management
+  const {
+    goals,
+    loadGoals,
+    updateSpendingGoals,
+    getBalanceCardGoals,
+    calculateTotalGoalContributions,
+  } = useGoals();
+
   useEffect(() => {
     loadIncomeData();
     loadTransactions();
   }, [loadTransactions]);
+
+  // Load goals on component mount
+  useEffect(() => {
+    loadGoals();
+  }, [loadGoals]);
+
+  // Update spending goals when transactions change
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const lastTransaction = transactions[transactions.length - 1];
+      updateSpendingGoals(lastTransaction);
+    }
+  }, [transactions, updateSpendingGoals]);
 
   // Initialize last active date on component mount
   useEffect(() => {
@@ -85,30 +109,24 @@ const HomeScreen = ({navigation}) => {
 
         // Check if the date has changed since last time app was active
         if (lastActiveDate !== currentDateString) {
-          console.log(
-            'Date changed from',
-            lastActiveDate,
-            'to',
-            currentDateString,
-          );
-
           // Update the last active date
           setLastActiveDate(currentDateString);
 
           // If user was viewing "today" (previous day), update to new today
           const selectedDateString = selectedDate.toDateString();
           if (selectedDateString === lastActiveDate) {
-            console.log('Updating selected date to new today');
             setSelectedDate(new Date());
           }
 
           // Reload all data
           loadIncomeData();
           loadTransactions();
+          loadGoals();
         } else {
           // Same date, but still reload data in case of changes
           loadIncomeData();
           loadTransactions();
+          loadGoals();
         }
       }
     };
@@ -118,7 +136,7 @@ const HomeScreen = ({navigation}) => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [lastActiveDate, selectedDate, loadTransactions]);
+  }, [lastActiveDate, selectedDate, loadTransactions, loadGoals]);
 
   // Check onboarding status
   useEffect(() => {
@@ -129,7 +147,8 @@ const HomeScreen = ({navigation}) => {
   useFocusEffect(
     React.useCallback(() => {
       loadIncomeData();
-    }, []),
+      loadGoals();
+    }, [loadGoals]),
   );
 
   const loadIncomeData = async () => {
@@ -199,7 +218,6 @@ const HomeScreen = ({navigation}) => {
         );
 
         if (hasSeenTransactionSwipeTour) {
-          console.log('Tutorial already seen, not showing again');
           return;
         }
 
@@ -209,14 +227,6 @@ const HomeScreen = ({navigation}) => {
               setTransactionLayout({x: pageX, y: pageY, width, height});
               setTransactionSwipeStep(0);
               setShowTransactionSwipeSpotlight(true);
-            },
-          );
-        } else {
-          console.log(
-            'Cannot measure transaction - no ref or no transactions:',
-            {
-              hasRef: !!transactionRef.current,
-              transactionCount: transactions.length,
             },
           );
         }
@@ -237,6 +247,10 @@ const HomeScreen = ({navigation}) => {
     navigation.navigate('IncomeSetup', {editMode: true});
   };
 
+  const handleGoalsPress = () => {
+    navigation.navigate('Goals');
+  };
+
   const handleSaveTransaction = async transaction => {
     try {
       const result = await saveTransaction(transaction);
@@ -247,19 +261,11 @@ const HomeScreen = ({navigation}) => {
           'hasSeenTransactionSwipeTour',
         );
 
-        console.log('Transaction added - tutorial status:', {
-          hasSeenTransactionSwipeTour,
-          transactionCount: result.updatedTransactions.length,
-        });
-
         // ONLY show tutorial if they haven't seen it AND this is their first transaction
         if (
           !hasSeenTransactionSwipeTour &&
           result.updatedTransactions.length === 1
         ) {
-          console.log(
-            'Triggering transaction swipe tutorial for FIRST transaction',
-          );
           setTimeout(() => {
             measureFirstTransaction();
           }, 1000);
@@ -338,7 +344,6 @@ const HomeScreen = ({navigation}) => {
 
   const handleTransactionSwipeSpotlightNext = async () => {
     try {
-      console.log('Setting hasSeenTransactionSwipeTour to true (Next)');
       await AsyncStorage.setItem('hasSeenTransactionSwipeTour', 'true');
       setShowTransactionSwipeSpotlight(false);
       setTransactionSwipeStep(0);
@@ -349,7 +354,6 @@ const HomeScreen = ({navigation}) => {
 
   const handleTransactionSwipeSpotlightSkip = async () => {
     try {
-      console.log('Setting hasSeenTransactionSwipeTour to true (Skip)');
       await AsyncStorage.setItem('hasSeenTransactionSwipeTour', 'true');
       setShowTransactionSwipeSpotlight(false);
       setTransactionSwipeStep(0);
@@ -370,6 +374,8 @@ const HomeScreen = ({navigation}) => {
           onEditIncome={handleEditIncome}
           selectedDate={selectedDate}
           balanceCardRef={balanceCardRef}
+          goals={getBalanceCardGoals()}
+          onGoalsPress={handleGoalsPress}
         />
       </View>
 
