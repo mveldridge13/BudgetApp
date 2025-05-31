@@ -304,9 +304,14 @@ const GoalCard = ({
             onValueChange={() =>
               onToggleBalanceDisplay && onToggleBalanceDisplay(safeGoal.id)
             }
-            trackColor={{false: colors.border, true: colors.primaryLight}}
+            trackColor={{
+              false: colors.border,
+              true: colors.primary,
+            }}
             thumbColor={
-              safeGoal.showOnBalanceCard ? colors.primary : colors.textSecondary
+              safeGoal.showOnBalanceCard
+                ? colors.textWhite
+                : colors.textSecondary
             }
             ios_backgroundColor={colors.border}
           />
@@ -546,10 +551,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   toggleInfo: {
     flexDirection: 'row',
