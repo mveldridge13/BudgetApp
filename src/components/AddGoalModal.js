@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 // components/AddGoalModal.js
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -88,60 +88,95 @@ const AddGoalModal = ({
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
 
-  // Animation value for slide from right
-  const slideAnim = useState(new Animated.Value(screenWidth))[0];
+  // Track modal visibility state for proper animation control
+  const [modalVisible, setModalVisible] = useState(false);
 
-  // Animate modal in/out
+  // Use useRef to persist animation value across renders
+  const slideAnim = useRef(new Animated.Value(screenWidth)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Handle modal opening
+  useEffect(() => {
+    if (visible && !modalVisible) {
+      setModalVisible(true);
+      // Reset position before animating in
+      slideAnim.setValue(screenWidth);
+      fadeAnim.setValue(0);
+
+      // Small delay to ensure modal is mounted before animating
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }, 50);
+    }
+  }, [visible, modalVisible, slideAnim, fadeAnim]);
+
+  // Initialize form when editing or modal opens
   useEffect(() => {
     if (visible) {
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
+      if (editingGoal) {
+        // Editing existing goal
+        setFormData({
+          title: editingGoal.title || '',
+          type: editingGoal.type || 'savings',
+          target: editingGoal.target?.toString() || '',
+          current: editingGoal.current?.toString() || '0',
+          originalAmount: editingGoal.originalAmount?.toString() || '',
+          deadline: editingGoal.deadline || '',
+          category: editingGoal.category || 'Other',
+          priority: editingGoal.priority || 'medium',
+          autoContribute: editingGoal.autoContribute?.toString() || '',
+          isMonthly: editingGoal.isMonthly || false,
+        });
+      } else {
+        // Creating new goal - reset form
+        setFormData({
+          title: '',
+          type: 'savings',
+          target: '',
+          current: '0',
+          originalAmount: '',
+          deadline: '',
+          category: 'Other',
+          priority: 'medium',
+          autoContribute: '',
+          isMonthly: false,
+        });
+      }
+      setErrors({});
+      setSaving(false);
+    }
+  }, [editingGoal, visible]);
+
+  const handleCloseModal = () => {
+    // Animate out
+    Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: screenWidth,
         duration: 250,
         useNativeDriver: true,
-      }).start();
-    }
-  }, [visible, slideAnim]);
-
-  // Initialize form when editing
-  useEffect(() => {
-    if (editingGoal) {
-      // Editing existing goal
-      setFormData({
-        title: editingGoal.title || '',
-        type: editingGoal.type || 'savings',
-        target: editingGoal.target?.toString() || '',
-        current: editingGoal.current?.toString() || '0',
-        originalAmount: editingGoal.originalAmount?.toString() || '',
-        deadline: editingGoal.deadline || '',
-        category: editingGoal.category || 'Other',
-        priority: editingGoal.priority || 'medium',
-        autoContribute: editingGoal.autoContribute?.toString() || '',
-        isMonthly: editingGoal.isMonthly || false,
-      });
-    } else {
-      // Creating new goal - reset form
-      setFormData({
-        title: '',
-        type: 'savings',
-        target: '',
-        current: '0',
-        originalAmount: '',
-        deadline: '',
-        category: 'Other',
-        priority: 'medium',
-        autoContribute: '',
-        isMonthly: false,
-      });
-    }
-    setErrors({});
-    setSaving(false);
-  }, [editingGoal, visible]);
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // After animation completes, hide modal and call onClose
+      setModalVisible(false);
+      onClose();
+    });
+  };
 
   const updateFormData = (field, value) => {
     setFormData(prev => ({
@@ -244,7 +279,8 @@ const AddGoalModal = ({
 
       // Handle the result
       if (result && result.success) {
-        // Don't close modal here - let parent handle it
+        // If successful, close the modal with animation
+        handleCloseModal();
       } else {
         const errorMessage =
           result?.error || 'Failed to save goal. Please try again.';
@@ -364,11 +400,18 @@ const AddGoalModal = ({
 
   return (
     <Modal
-      visible={visible}
+      visible={modalVisible}
       transparent={true}
       animationType="none"
-      presentationStyle="overFullScreen">
-      <View style={styles.modalOverlayContainer}>
+      presentationStyle="overFullScreen"
+      onRequestClose={handleCloseModal}>
+      <Animated.View
+        style={[
+          styles.modalOverlayContainer,
+          {
+            opacity: fadeAnim,
+          },
+        ]}>
         <Animated.View
           style={[
             styles.animatedContainer,
@@ -383,7 +426,7 @@ const AddGoalModal = ({
             <View style={[styles.header, {paddingTop: insets.top + 20}]}>
               <TouchableOpacity
                 style={styles.closeButton}
-                onPress={onClose}
+                onPress={handleCloseModal}
                 activeOpacity={0.7}>
                 <Icon name="x" size={24} color={colors.textWhite} />
               </TouchableOpacity>
@@ -868,7 +911,7 @@ const AddGoalModal = ({
             </Modal>
           </KeyboardAvoidingView>
         </Animated.View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 };

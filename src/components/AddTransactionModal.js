@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -86,9 +86,10 @@ const AddTransactionModal = ({
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
 
-  // View management
-  const [slideAnim] = useState(new Animated.Value(0));
-  const [modalAnim] = useState(new Animated.Value(screenWidth));
+  // Use useRef for animation values to prevent recreation on renders
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const modalAnim = useRef(new Animated.Value(screenWidth)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // Other modals
   const [showCalendar, setShowCalendar] = useState(false);
@@ -118,18 +119,32 @@ const AddTransactionModal = ({
   useEffect(() => {
     if (visible) {
       loadCategories();
+
+      // Reset animations to starting positions
       slideAnim.setValue(0);
-      // Slide main modal in from right
-      Animated.timing(modalAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      // Reset position when closed
       modalAnim.setValue(screenWidth);
+      fadeAnim.setValue(0);
+
+      // Animate modal in from right with fade
+      Animated.parallel([
+        Animated.timing(modalAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      // Reset positions when modal is closed
+      slideAnim.setValue(0);
+      modalAnim.setValue(screenWidth);
+      fadeAnim.setValue(0);
     }
-  }, [visible, slideAnim, modalAnim]);
+  }, [visible, slideAnim, modalAnim, fadeAnim]);
 
   // Effect to populate form when editing
   useEffect(() => {
@@ -170,6 +185,7 @@ const AddTransactionModal = ({
     setSelectedRecurrence('none');
     slideAnim.setValue(0);
     modalAnim.setValue(screenWidth);
+    fadeAnim.setValue(0);
     // Reset add category form
     setCategoryName('');
     setSelectedIcon('');
@@ -205,11 +221,18 @@ const AddTransactionModal = ({
 
     if (currentValue === 0) {
       // Already in transaction view, animate modal out then save and close
-      Animated.timing(modalAnim, {
-        toValue: screenWidth, // Slide out to right
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
+      Animated.parallel([
+        Animated.timing(modalAnim, {
+          toValue: screenWidth, // Slide out to right
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
         onSave(transaction);
         resetForm();
         onClose();
@@ -221,11 +244,18 @@ const AddTransactionModal = ({
         duration: 300,
         useNativeDriver: true,
       }).start(() => {
-        Animated.timing(modalAnim, {
-          toValue: screenWidth,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
+        Animated.parallel([
+          Animated.timing(modalAnim, {
+            toValue: screenWidth,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
           onSave(transaction);
           resetForm();
           onClose();
@@ -240,11 +270,18 @@ const AddTransactionModal = ({
 
     if (currentValue === 0) {
       // Already in transaction view, animate modal out then close
-      Animated.timing(modalAnim, {
-        toValue: screenWidth, // Slide out to right
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
+      Animated.parallel([
+        Animated.timing(modalAnim, {
+          toValue: screenWidth, // Slide out to right
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
         resetForm();
         onClose();
       });
@@ -255,11 +292,18 @@ const AddTransactionModal = ({
         duration: 300,
         useNativeDriver: true,
       }).start(() => {
-        Animated.timing(modalAnim, {
-          toValue: screenWidth,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
+        Animated.parallel([
+          Animated.timing(modalAnim, {
+            toValue: screenWidth,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
           resetForm();
           onClose();
         });
@@ -405,13 +449,24 @@ const AddTransactionModal = ({
       : colors.textSecondary;
   };
 
+  // Don't render if not visible to avoid layout issues
+  if (!visible) {
+    return null;
+  }
+
   return (
     <Modal
       visible={visible}
       transparent={true}
       animationType="none"
       onRequestClose={handleClose}>
-      <View style={styles.modalOverlay}>
+      <Animated.View
+        style={[
+          styles.modalOverlay,
+          {
+            opacity: fadeAnim,
+          },
+        ]}>
         <Animated.View
           style={[
             styles.modalContent,
@@ -810,7 +865,7 @@ const AddTransactionModal = ({
             </View>
           </Animated.View>
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* Calendar Modal */}
       <CalendarModal
