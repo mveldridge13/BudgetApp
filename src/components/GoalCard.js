@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   Switch,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
@@ -24,6 +25,7 @@ const GoalCard = ({
   formatCurrency,
 }) => {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
+  const [customAmount, setCustomAmount] = useState('');
 
   // FIXED: Add safe formatCurrency function
   const safeCurrency = amount => {
@@ -163,6 +165,42 @@ const GoalCard = ({
         },
       ],
     );
+  };
+
+  // NEW: Handle custom amount submission
+  const handleCustomAmountSubmit = () => {
+    const amount = parseFloat(customAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert(
+        'Invalid Amount',
+        'Please enter a valid amount greater than 0.',
+      );
+      return;
+    }
+
+    Alert.alert(
+      isDebtGoal ? 'Make Payment' : 'Add Contribution',
+      `${isDebtGoal ? 'Pay' : 'Add'} ${safeCurrency(amount)} ${
+        isDebtGoal ? 'toward' : 'to'
+      } ${safeGoal.title}?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: isDebtGoal ? 'Pay' : 'Add',
+          onPress: () => {
+            onUpdateProgress && onUpdateProgress(safeGoal.id, amount);
+            setCustomAmount('');
+            setShowProgressUpdate(false);
+          },
+        },
+      ],
+    );
+  };
+
+  // NEW: Cancel custom amount input
+  const handleCancelCustomAmount = () => {
+    setCustomAmount('');
+    setShowProgressUpdate(false);
   };
 
   const getProgressColor = () => {
@@ -330,8 +368,44 @@ const GoalCard = ({
         </Text>
       )}
 
+      {/* NEW: Custom Amount Input Section */}
+      {showProgressUpdate && !isCompleted && (
+        <View style={styles.customAmountContainer}>
+          <Text style={styles.customAmountTitle}>
+            {isDebtGoal ? 'Enter Payment Amount' : 'Enter Contribution Amount'}
+          </Text>
+          <View style={styles.customAmountInputRow}>
+            <TextInput
+              style={styles.customAmountInput}
+              value={customAmount}
+              onChangeText={setCustomAmount}
+              placeholder="0.00"
+              keyboardType="numeric"
+              autoFocus={true}
+            />
+            <View style={styles.customAmountButtons}>
+              <TouchableOpacity
+                style={styles.customAmountCancelButton}
+                onPress={handleCancelCustomAmount}
+                activeOpacity={0.8}>
+                <Icon name="x" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.customAmountSubmitButton,
+                  {backgroundColor: goalColor},
+                ]}
+                onPress={handleCustomAmountSubmit}
+                activeOpacity={0.8}>
+                <Icon name="check" size={16} color={colors.textWhite} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Action Buttons */}
-      {!isCompleted && (
+      {!isCompleted && !showProgressUpdate && (
         <View style={styles.actionButtonsContainer}>
           {safeGoal.type === 'savings' && (
             <>
@@ -343,7 +417,7 @@ const GoalCard = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setShowProgressUpdate(!showProgressUpdate)}
+                onPress={() => setShowProgressUpdate(true)}
                 activeOpacity={0.8}>
                 <Text style={styles.secondaryButtonText}>Custom Amount</Text>
               </TouchableOpacity>
@@ -360,7 +434,7 @@ const GoalCard = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => setShowProgressUpdate(!showProgressUpdate)}
+                onPress={() => setShowProgressUpdate(true)}
                 activeOpacity={0.8}>
                 <Text style={styles.secondaryButtonText}>Custom Payment</Text>
               </TouchableOpacity>
@@ -582,6 +656,60 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     marginBottom: 16,
+  },
+  // NEW: Custom Amount Input Styles
+  customAmountContainer: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  customAmountTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  customAmountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  customAmountInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: 'System',
+    color: colors.text,
+  },
+  customAmountButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  customAmountCancelButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customAmountSubmitButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
