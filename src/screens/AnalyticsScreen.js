@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
   StyleSheet,
@@ -6,10 +6,11 @@ import {
   Text,
   TouchableOpacity,
   Dimensions,
-  RefreshControl, // Added for pull-to-refresh
-  AppState, // Added for app state monitoring
+  RefreshControl,
+  AppState,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {LineChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
@@ -19,42 +20,63 @@ const AnalyticsScreen = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('daily');
   const [comparisonMode, setComparisonMode] = useState(false);
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // For pull-to-refresh
-  const [lastActiveDate, setLastActiveDate] = useState(
-    new Date().toDateString(),
-  ); // For date detection
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Refs to prevent multiple simultaneous loads and flicker
+  const isLoadingRef = useRef(false);
+  const lastActiveDate = useRef(new Date().toDateString());
+  const isMountedRef = useRef(true);
+  const hasLoadedOnce = useRef(false);
+
+  // Consolidated data loading function
+  const loadTransactions = useCallback(async (force = false) => {
+    if (isLoadingRef.current && !force) {
+      return;
+    }
+
+    isLoadingRef.current = true;
+
+    try {
+      const storedTransactions = await AsyncStorage.getItem('transactions');
+      if (storedTransactions && isMountedRef.current) {
+        const parsedTransactions = JSON.parse(storedTransactions);
+        setTransactions(parsedTransactions);
+      } else if (isMountedRef.current) {
+        setTransactions([]);
+      }
+      hasLoadedOnce.current = true;
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+      if (isMountedRef.current) {
+        setTransactions([]);
+      }
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, []);
+
+  // Initial load on mount
   useEffect(() => {
+    isMountedRef.current = true;
     loadTransactions();
-  }, []);
 
-  // Initialize last active date on component mount
-  useEffect(() => {
-    setLastActiveDate(new Date().toDateString());
-  }, []);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadTransactions]);
 
   // Monitor app state changes for automatic refresh
   useEffect(() => {
     const handleAppStateChange = nextAppState => {
-      if (nextAppState === 'active') {
+      if (nextAppState === 'active' && isMountedRef.current) {
         const now = new Date();
         const currentDateString = now.toDateString();
 
-        // Check if the date has changed since last time app was active
-        if (lastActiveDate !== currentDateString) {
-          console.log(
-            'Analytics: Date changed from',
-            lastActiveDate,
-            'to',
-            currentDateString,
-          );
-          setLastActiveDate(currentDateString);
+        // Only reload if it's a new day
+        if (lastActiveDate.current !== currentDateString) {
+          lastActiveDate.current = currentDateString;
+          loadTransactions(true);
         }
-
-        // Always reload data when app becomes active (same date or different)
-        console.log('Analytics: App became active, refreshing data');
-        loadTransactions();
       }
     };
 
@@ -63,34 +85,33 @@ const AnalyticsScreen = () => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [lastActiveDate]);
+  }, [loadTransactions]);
 
-  const loadTransactions = async () => {
-    try {
-      const storedTransactions = await AsyncStorage.getItem('transactions');
-      if (storedTransactions) {
-        const parsedTransactions = JSON.parse(storedTransactions);
-        setTransactions(parsedTransactions);
-      } else {
-        setTransactions([]);
+  // Only reload on focus if data is empty
+  useFocusEffect(
+    useCallback(() => {
+      if (isMountedRef.current && !isLoadingRef.current) {
+        // Only reload if transactions are empty
+        if (transactions.length === 0) {
+          loadTransactions();
+        }
       }
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, [loadTransactions, transactions.length]),
+  );
 
   // Pull-to-refresh handler
-  const onRefresh = async () => {
-    setRefreshing(true);
-    console.log('Analytics: Manual refresh triggered');
-    await loadTransactions();
-    setRefreshing(false);
-  };
+  const onRefresh = useCallback(async () => {
+    if (refreshing) {
+      return;
+    }
 
-  const getPeriodData = () => {
+    setRefreshing(true);
+    await loadTransactions(true);
+    setRefreshing(false);
+  }, [loadTransactions, refreshing]);
+
+  // Memoized expensive calculations
+  const getPeriodData = useCallback(() => {
     if (transactions.length === 0) {
       return [];
     }
@@ -238,84 +259,102 @@ const AnalyticsScreen = () => {
     }
 
     return data;
-  };
+  }, [transactions, selectedPeriod]);
 
-  const data = getPeriodData();
+  // Memoize all derived data
+  const data = useMemo(() => getPeriodData(), [getPeriodData]);
 
-  const getCurrentTotal = () => {
+  const getCurrentTotal = useMemo(() => {
     return data.reduce((sum, item) => sum + item.amount, 0);
-  };
+  }, [data]);
 
-  const getPreviousTotal = () => {
+  const getPreviousTotal = useMemo(() => {
     return data.reduce((sum, item) => sum + item.previousPeriod, 0);
-  };
+  }, [data]);
 
-  const getPercentageChange = () => {
-    const current = getCurrentTotal();
-    const previous = getPreviousTotal();
+  const getPercentageChange = useMemo(() => {
+    const current = getCurrentTotal;
+    const previous = getPreviousTotal;
     if (previous === 0) {
       return 0;
     }
     return ((current - previous) / previous) * 100;
-  };
+  }, [getCurrentTotal, getPreviousTotal]);
 
-  const getAverageSpending = () => {
+  const getAverageSpending = useMemo(() => {
     if (data.length === 0) {
       return 0;
     }
-    return getCurrentTotal() / data.length;
-  };
+    return getCurrentTotal / data.length;
+  }, [data.length, getCurrentTotal]);
 
-  const getHighestSpendingPeriod = () => {
+  const getHighestSpendingPeriod = useMemo(() => {
     if (data.length === 0) {
       return null;
     }
     return data.reduce((max, current) =>
       current.amount > max.amount ? current : max,
     );
-  };
+  }, [data]);
 
-  const chartConfig = {
-    backgroundColor: colors.surface || '#ffffff',
-    backgroundGradientFrom: colors.surface || '#ffffff',
-    backgroundGradientTo: colors.surface || '#ffffff',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '4',
-      strokeWidth: '2',
-      stroke: colors.primary || '#6366F1',
-    },
-  };
-
-  const chartData = {
-    labels: data.map(item => item.label),
-    datasets: [
-      {
-        data: data.map(item => item.amount),
-        color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-        strokeWidth: 3,
+  // Memoize chart configuration
+  const chartConfig = useMemo(
+    () => ({
+      backgroundColor: colors.surface || '#ffffff',
+      backgroundGradientFrom: colors.surface || '#ffffff',
+      backgroundGradientTo: colors.surface || '#ffffff',
+      decimalPlaces: 0,
+      color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+      style: {
+        borderRadius: 16,
       },
-      ...(comparisonMode
-        ? [
-            {
-              data: data.map(item => item.previousPeriod),
-              color: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`,
-              strokeWidth: 2,
-              withDots: false,
-            },
-          ]
-        : []),
-    ],
-  };
+      propsForDots: {
+        r: '4',
+        strokeWidth: '2',
+        stroke: colors.primary || '#6366F1',
+      },
+    }),
+    [],
+  );
 
-  const screenWidth = Dimensions.get('window').width;
+  const chartData = useMemo(
+    () => ({
+      labels: data.map(item => item.label),
+      datasets: [
+        {
+          data: data.map(item => item.amount),
+          color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+          strokeWidth: 3,
+        },
+        ...(comparisonMode
+          ? [
+              {
+                data: data.map(item => item.previousPeriod),
+                color: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`,
+                strokeWidth: 2,
+                withDots: false,
+              },
+            ]
+          : []),
+      ],
+    }),
+    [data, comparisonMode],
+  );
 
-  if (loading) {
+  const screenWidth = useMemo(() => Dimensions.get('window').width, []);
+
+  // Memoized handlers
+  const handlePeriodChange = useCallback(period => {
+    setSelectedPeriod(period);
+  }, []);
+
+  const handleComparisonToggle = useCallback(() => {
+    setComparisonMode(prev => !prev);
+  }, []);
+
+  // Never show loading screen to prevent flicker
+  if (false) {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.loadingText}>Loading analytics...</Text>
@@ -338,10 +377,10 @@ const AnalyticsScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[colors.primary || '#6366F1']} // Android
-            tintColor={colors.primary || '#6366F1'} // iOS
-            title="Pull to refresh..." // iOS
-            titleColor={colors.textSecondary || '#6B7280'} // iOS
+            colors={[colors.primary || '#6366F1']}
+            tintColor={colors.primary || '#6366F1'}
+            title="Pull to refresh..."
+            titleColor={colors.textSecondary || '#6B7280'}
           />
         }>
         {/* Period Selector */}
@@ -350,7 +389,7 @@ const AnalyticsScreen = () => {
             {['daily', 'weekly', 'monthly'].map(period => (
               <TouchableOpacity
                 key={period}
-                onPress={() => setSelectedPeriod(period)}
+                onPress={() => handlePeriodChange(period)}
                 style={[
                   styles.periodButton,
                   selectedPeriod === period && styles.periodButtonActive,
@@ -368,7 +407,7 @@ const AnalyticsScreen = () => {
 
           <TouchableOpacity
             style={styles.comparisonToggle}
-            onPress={() => setComparisonMode(!comparisonMode)}>
+            onPress={handleComparisonToggle}>
             <View
               style={[
                 styles.checkbox,
@@ -386,9 +425,7 @@ const AnalyticsScreen = () => {
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Total Spending</Text>
-            <Text style={styles.statValue}>
-              ${getCurrentTotal().toFixed(2)}
-            </Text>
+            <Text style={styles.statValue}>${getCurrentTotal.toFixed(2)}</Text>
           </View>
 
           <View style={styles.statCard}>
@@ -397,7 +434,7 @@ const AnalyticsScreen = () => {
               Average
             </Text>
             <Text style={styles.statValue}>
-              ${getAverageSpending().toFixed(2)}
+              ${getAverageSpending.toFixed(2)}
             </Text>
           </View>
 
@@ -408,13 +445,13 @@ const AnalyticsScreen = () => {
                 styles.statValue,
                 {
                   color:
-                    getPercentageChange() >= 0
+                    getPercentageChange >= 0
                       ? colors.danger || '#EF4444'
                       : colors.success || '#10B981',
                 },
               ]}>
-              {getPercentageChange() >= 0 ? '+' : ''}
-              {getPercentageChange().toFixed(1)}%
+              {getPercentageChange >= 0 ? '+' : ''}
+              {getPercentageChange.toFixed(1)}%
             </Text>
           </View>
         </View>
@@ -444,13 +481,13 @@ const AnalyticsScreen = () => {
         <View style={styles.insightsContainer}>
           <Text style={styles.insightsTitle}>Key Insights</Text>
 
-          {getHighestSpendingPeriod() && (
+          {getHighestSpendingPeriod && (
             <View
               style={[styles.insightCard, {borderLeftColor: colors.primary}]}>
               <Text style={styles.insightText}>
                 <Text style={styles.insightBold}>Highest spending:</Text>{' '}
-                {getHighestSpendingPeriod().label} with $
-                {getHighestSpendingPeriod().amount.toFixed(2)}
+                {getHighestSpendingPeriod.label} with $
+                {getHighestSpendingPeriod.amount.toFixed(2)}
               </Text>
             </View>
           )}
@@ -460,15 +497,15 @@ const AnalyticsScreen = () => {
               styles.insightCard,
               {
                 borderLeftColor:
-                  getPercentageChange() >= 0
+                  getPercentageChange >= 0
                     ? colors.danger || '#EF4444'
                     : colors.success || '#10B981',
               },
             ]}>
             <Text style={styles.insightText}>
               <Text style={styles.insightBold}>Trend:</Text> You're spending{' '}
-              {Math.abs(getPercentageChange()).toFixed(1)}%{' '}
-              {getPercentageChange() >= 0 ? 'more' : 'less'} than last period
+              {Math.abs(getPercentageChange).toFixed(1)}%{' '}
+              {getPercentageChange >= 0 ? 'more' : 'less'} than last period
             </Text>
           </View>
 
@@ -677,4 +714,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AnalyticsScreen;
+export default React.memo(AnalyticsScreen);

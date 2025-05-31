@@ -1,6 +1,5 @@
-/* eslint-disable no-unused-vars */
 // screens/GoalsScreen.js
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
   StyleSheet,
@@ -9,7 +8,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   AppState,
-  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
@@ -28,14 +26,16 @@ const GoalsScreen = ({navigation}) => {
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [incomeData, setIncomeData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastActiveDate, setLastActiveDate] = useState(
-    new Date().toDateString(),
-  );
+
+  // Refs to prevent multiple simultaneous loads
+  const isLoadingRef = useRef(false);
+  const lastActiveDate = useRef(new Date().toDateString());
+  const isMountedRef = useRef(true);
+  const hasLoadedOnce = useRef(false); // Track if we've loaded at least once
 
   // Hooks
   const {
     goals,
-    loading,
     editingGoal,
     loadGoals,
     saveGoal,
@@ -45,7 +45,6 @@ const GoalsScreen = ({navigation}) => {
     toggleGoalBalanceDisplay,
     updateGoalProgress,
     getBalanceCardGoals,
-    calculateTotalGoalContributions,
     getGoalProgress,
     isGoalOverdue,
     getSmartSuggestions,
@@ -54,30 +53,73 @@ const GoalsScreen = ({navigation}) => {
 
   const {transactions} = useTransactions();
 
-  useEffect(() => {
-    loadGoals();
-    loadIncomeData();
-  }, [loadGoals]);
+  // Consolidated data loading function
+  const loadAllData = useCallback(
+    async (force = false) => {
+      if (isLoadingRef.current && !force) {
+        return;
+      }
 
-  // Initialize last active date on component mount
-  useEffect(() => {
-    setLastActiveDate(new Date().toDateString());
+      isLoadingRef.current = true;
+
+      try {
+        // Load goals and income data in parallel
+        const [, incomeResult] = await Promise.all([
+          loadGoals(force), // Pass force parameter to loadGoals
+          loadIncomeData(),
+        ]);
+
+        if (isMountedRef.current && incomeResult) {
+          setIncomeData(incomeResult);
+        }
+
+        hasLoadedOnce.current = true;
+      } catch (error) {
+        console.warn('Error loading data:', error);
+      } finally {
+        if (isMountedRef.current) {
+          isLoadingRef.current = false;
+        }
+      }
+    },
+    [loadGoals, loadIncomeData],
+  );
+
+  const loadIncomeData = useCallback(async () => {
+    try {
+      const storedData = await AsyncStorage.getItem('userSetup');
+      if (storedData) {
+        return JSON.parse(storedData);
+      }
+      return null;
+    } catch (error) {
+      console.warn('Error loading income data:', error);
+      return null;
+    }
   }, []);
+
+  // Initial load on mount
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadAllData();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadAllData]);
 
   // Monitor app state changes for automatic refresh
   useEffect(() => {
     const handleAppStateChange = nextAppState => {
-      if (nextAppState === 'active') {
+      if (nextAppState === 'active' && isMountedRef.current) {
         const now = new Date();
         const currentDateString = now.toDateString();
 
-        if (lastActiveDate !== currentDateString) {
-          setLastActiveDate(currentDateString);
+        // Only reload if it's a new day or forced
+        if (lastActiveDate.current !== currentDateString) {
+          lastActiveDate.current = currentDateString;
+          loadAllData(true);
         }
-
-        // Always reload data when app becomes active
-        loadGoals();
-        loadIncomeData();
       }
     };
 
@@ -86,137 +128,209 @@ const GoalsScreen = ({navigation}) => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [lastActiveDate, loadGoals]);
+  }, [loadAllData]);
 
-  // Reload data when screen comes into focus
+  // Only reload on focus if data is stale (debounced)
   useFocusEffect(
-    React.useCallback(() => {
-      loadGoals();
-      loadIncomeData();
-    }, [loadGoals]),
+    useCallback(() => {
+      // Remove the delay - load immediately but silently
+      if (isMountedRef.current && !isLoadingRef.current) {
+        // Only reload if goals are empty - no loading state shown
+        if (goals.length === 0 || !incomeData) {
+          loadAllData();
+        }
+      }
+    }, [loadAllData, goals.length, incomeData]),
   );
 
-  const loadIncomeData = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('userSetup');
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        setIncomeData(parsedData);
-      }
-    } catch (error) {
-      // Handle error silently or show user-friendly message
-    }
-  };
-
   // Pull-to-refresh handler
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadGoals();
-    await loadIncomeData();
-    setRefreshing(false);
-  };
+  const onRefresh = useCallback(async () => {
+    if (refreshing) {
+      return;
+    }
 
-  const handleAddGoal = () => {
+    setRefreshing(true);
+    await loadAllData(true);
+    setRefreshing(false);
+  }, [loadAllData, refreshing]);
+
+  const handleAddGoal = useCallback(() => {
     clearEditingGoal();
     setShowAddGoal(true);
-  };
+  }, [clearEditingGoal]);
 
-  const handleEditGoal = async goal => {
-    try {
-      await prepareEditGoal(goal);
-      setShowAddGoal(true);
-    } catch (error) {
-      // Handle error silently or show user-friendly message
-    }
-  };
+  const handleEditGoal = useCallback(
+    async goal => {
+      try {
+        await prepareEditGoal(goal);
+        setShowAddGoal(true);
+      } catch (error) {
+        console.warn('Error preparing edit goal:', error);
+      }
+    },
+    [prepareEditGoal],
+  );
 
-  const handleSaveGoal = async goalData => {
-    try {
-      const result = await saveGoal(goalData);
+  const handleSaveGoal = useCallback(
+    async goalData => {
+      try {
+        const result = await saveGoal(goalData);
 
-      if (result && result.success) {
-        setShowAddGoal(false);
-        clearEditingGoal();
-        return {success: true};
-      } else {
+        if (result && result.success) {
+          setShowAddGoal(false);
+          clearEditingGoal();
+          return {success: true};
+        } else {
+          return {
+            success: false,
+            error: result?.error || 'Failed to save goal. Please try again.',
+          };
+        }
+      } catch (error) {
         return {
           success: false,
-          error: result?.error || 'Failed to save goal. Please try again.',
+          error:
+            error.message || 'An unexpected error occurred. Please try again.',
         };
       }
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error.message || 'An unexpected error occurred. Please try again.',
-      };
-    }
-  };
+    },
+    [saveGoal, clearEditingGoal],
+  );
 
-  const handleDeleteGoal = async goalId => {
-    try {
-      await deleteGoal(goalId);
-    } catch (error) {
-      // Handle error silently or show user-friendly message
-    }
-  };
+  const handleDeleteGoal = useCallback(
+    async goalId => {
+      try {
+        await deleteGoal(goalId);
+      } catch (error) {
+        console.warn('Error deleting goal:', error);
+      }
+    },
+    [deleteGoal],
+  );
 
-  const handleToggleBalanceDisplay = async goalId => {
-    try {
-      await toggleGoalBalanceDisplay(goalId);
-    } catch (error) {
-      // Handle error silently or show user-friendly message
-    }
-  };
+  const handleToggleBalanceDisplay = useCallback(
+    async goalId => {
+      try {
+        await toggleGoalBalanceDisplay(goalId);
+      } catch (error) {
+        console.warn('Error toggling balance display:', error);
+      }
+    },
+    [toggleGoalBalanceDisplay],
+  );
 
-  const handleUpdateProgress = async (goalId, amount) => {
-    try {
-      await updateGoalProgress(goalId, amount);
-    } catch (error) {
-      // Handle error silently or show user-friendly message
-    }
-  };
+  const handleUpdateProgress = useCallback(
+    async (goalId, amount) => {
+      try {
+        await updateGoalProgress(goalId, amount);
+      } catch (error) {
+        console.warn('Error updating progress:', error);
+      }
+    },
+    [updateGoalProgress],
+  );
 
-  const handleCompleteGoal = async goalId => {
-    try {
-      await completeGoal(goalId);
-    } catch (error) {
-      // Handle error silently or show user-friendly message
-    }
-  };
+  const handleCompleteGoal = useCallback(
+    async goalId => {
+      try {
+        await completeGoal(goalId);
+      } catch (error) {
+        console.warn('Error completing goal:', error);
+      }
+    },
+    [completeGoal],
+  );
 
-  const handleCloseAddGoal = () => {
+  const handleCloseAddGoal = useCallback(() => {
     setShowAddGoal(false);
     clearEditingGoal();
-  };
+  }, [clearEditingGoal]);
 
-  const formatCurrency = amount => {
+  const formatCurrency = useCallback(amount => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
       minimumFractionDigits: 0,
     }).format(amount || 0);
-  };
+  }, []);
 
-  // Filter goals by status
-  const activeGoals = goals.filter(goal => goal.isActive !== false);
-  const completedGoals = goals.filter(goal => goal.isActive === false);
-  const balanceCardGoals = getBalanceCardGoals();
-  const totalGoalContributions = calculateTotalGoalContributions();
+  // Memoize expensive calculations
+  const activeGoals = React.useMemo(
+    () => goals.filter(goal => goal.isActive !== false),
+    [goals],
+  );
 
-  // Calculate stats
-  const totalSaved = activeGoals
-    .filter(goal => goal.type === 'savings')
-    .reduce((sum, goal) => sum + goal.current, 0);
+  const completedGoals = React.useMemo(
+    () => goals.filter(goal => goal.isActive === false),
+    [goals],
+  );
 
-  const currentMonthContributions = activeGoals
-    .filter(goal => goal.autoContribute)
-    .reduce((sum, goal) => sum + goal.autoContribute, 0);
+  const balanceCardGoals = React.useMemo(
+    () => getBalanceCardGoals(),
+    [getBalanceCardGoals],
+  );
 
-  // Get smart suggestions
-  const smartSuggestions = getSmartSuggestions(transactions, incomeData);
+  const currentMonthContributions = React.useMemo(
+    () =>
+      activeGoals
+        .filter(goal => goal.autoContribute)
+        .reduce((sum, goal) => sum + goal.autoContribute, 0),
+    [activeGoals],
+  );
 
-  if (loading) {
+  const smartSuggestions = React.useMemo(
+    () => getSmartSuggestions(transactions, incomeData),
+    [getSmartSuggestions, transactions, incomeData],
+  );
+
+  // Memoize rendered goal lists to prevent unnecessary re-renders
+  const renderedActiveGoals = React.useMemo(
+    () =>
+      activeGoals.map(goal => (
+        <GoalCard
+          key={goal.id}
+          goal={goal}
+          onEdit={handleEditGoal}
+          onDelete={handleDeleteGoal}
+          onToggleBalanceDisplay={handleToggleBalanceDisplay}
+          onUpdateProgress={handleUpdateProgress}
+          onComplete={handleCompleteGoal}
+          getGoalProgress={getGoalProgress}
+          isOverdue={isGoalOverdue(goal)}
+          formatCurrency={formatCurrency}
+        />
+      )),
+    [
+      activeGoals,
+      handleEditGoal,
+      handleDeleteGoal,
+      handleToggleBalanceDisplay,
+      handleUpdateProgress,
+      handleCompleteGoal,
+      getGoalProgress,
+      isGoalOverdue,
+      formatCurrency,
+    ],
+  );
+
+  const renderedCompletedGoals = React.useMemo(
+    () =>
+      completedGoals.map(goal => (
+        <GoalCard
+          key={goal.id}
+          goal={goal}
+          isCompleted={true}
+          getGoalProgress={getGoalProgress}
+          formatCurrency={formatCurrency}
+        />
+      )),
+    [completedGoals, getGoalProgress, formatCurrency],
+  );
+
+  // Show loading only on initial load, not on subsequent refreshes
+  // Never show loading screen during navigation - always show content structure
+  if (false) {
+    // Completely disable loading screen
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.loadingText}>Loading goals...</Text>
@@ -318,20 +432,7 @@ const GoalsScreen = ({navigation}) => {
             {activeGoals.length > 0 ? (
               <View style={styles.goalsSection}>
                 <Text style={styles.sectionTitle}>Active Goals</Text>
-                {activeGoals.map(goal => (
-                  <GoalCard
-                    key={goal.id}
-                    goal={goal}
-                    onEdit={handleEditGoal}
-                    onDelete={handleDeleteGoal}
-                    onToggleBalanceDisplay={handleToggleBalanceDisplay}
-                    onUpdateProgress={handleUpdateProgress}
-                    onComplete={handleCompleteGoal}
-                    getGoalProgress={getGoalProgress}
-                    isOverdue={isGoalOverdue(goal)}
-                    formatCurrency={formatCurrency}
-                  />
-                ))}
+                {renderedActiveGoals}
               </View>
             ) : (
               <View style={styles.emptyState}>
@@ -355,15 +456,7 @@ const GoalsScreen = ({navigation}) => {
             {completedGoals.length > 0 ? (
               <>
                 <Text style={styles.sectionTitle}>Completed Goals</Text>
-                {completedGoals.map(goal => (
-                  <GoalCard
-                    key={goal.id}
-                    goal={goal}
-                    isCompleted={true}
-                    getGoalProgress={getGoalProgress}
-                    formatCurrency={formatCurrency}
-                  />
-                ))}
+                {renderedCompletedGoals}
               </>
             ) : (
               <View style={styles.emptyState}>
@@ -406,6 +499,7 @@ const GoalsScreen = ({navigation}) => {
   );
 };
 
+// Styles remain the same...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -575,4 +669,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default GoalsScreen;
+export default React.memo(GoalsScreen);
