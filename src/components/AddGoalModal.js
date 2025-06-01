@@ -425,10 +425,10 @@ const AddGoalModal = ({
             {/* Header */}
             <View style={[styles.header, {paddingTop: insets.top + 20}]}>
               <TouchableOpacity
-                style={styles.closeButton}
+                style={styles.cancelButton}
                 onPress={handleCloseModal}
                 activeOpacity={0.7}>
-                <Icon name="x" size={24} color={colors.textWhite} />
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <Text style={styles.headerTitle}>
                 {editingGoal ? 'Edit Goal' : 'Add New Goal'}
@@ -895,8 +895,10 @@ const AddGoalModal = ({
                     <View style={styles.calendarActions}>
                       <TouchableOpacity
                         onPress={() => setShowDateModal(false)}
-                        style={styles.cancelButton}>
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                        style={styles.calendarCancelButton}>
+                        <Text style={styles.calendarCancelButtonText}>
+                          Cancel
+                        </Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -937,8 +939,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  closeButton: {
-    padding: 8,
+  cancelButton: {
+    padding: 4,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
   },
   headerTitle: {
     fontSize: 18,
@@ -1308,13 +1316,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
-  cancelButton: {
+  calendarCancelButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: colors.overlayLight,
   },
-  cancelButtonText: {
+  calendarCancelButtonText: {
     fontSize: 14,
     fontWeight: '400',
     fontFamily: 'System',
