@@ -12,6 +12,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
 import categoryService from '../services/categoryService';
@@ -79,6 +80,9 @@ const AddTransactionModal = ({
   onSave,
   editingTransaction,
 }) => {
+  // Safe area insets
+  const insets = useSafeAreaInsets();
+
   // Transaction data
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -484,7 +488,7 @@ const AddTransactionModal = ({
             ]}>
             {/* Transaction View */}
             <View style={styles.view}>
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
                   onPress={handleClose}
                   style={styles.cancelButton}>
@@ -495,8 +499,17 @@ const AddTransactionModal = ({
                 </Text>
                 <TouchableOpacity
                   onPress={handleSave}
-                  style={styles.saveButton}>
-                  <Text style={styles.saveText}>
+                  style={[
+                    styles.saveButton,
+                    (!amount || !selectedCategory) && styles.saveButtonDisabled,
+                  ]}
+                  disabled={!amount || !selectedCategory}
+                  activeOpacity={0.7}>
+                  <Text
+                    style={[
+                      styles.saveText,
+                      (!amount || !selectedCategory) && styles.saveTextDisabled,
+                    ]}>
                     {isEditMode ? 'Update' : 'Save'}
                   </Text>
                 </TouchableOpacity>
@@ -621,11 +634,15 @@ const AddTransactionModal = ({
 
             {/* Category Picker View */}
             <View style={styles.view}>
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
                   onPress={hideCategoryPicker}
                   style={styles.cancelButton}>
-                  <Icon name="chevron-back" size={24} color={colors.primary} />
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Select Category</Text>
                 <View style={styles.placeholder} />
@@ -698,11 +715,15 @@ const AddTransactionModal = ({
 
             {/* Recurrence Picker View */}
             <View style={styles.view}>
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
                   onPress={hideRecurrencePicker}
                   style={styles.cancelButton}>
-                  <Icon name="chevron-back" size={24} color={colors.primary} />
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Repeat</Text>
                 <View style={styles.placeholder} />
@@ -733,11 +754,15 @@ const AddTransactionModal = ({
 
             {/* Add Category Form View */}
             <View style={styles.view}>
-              <View style={styles.modalHeader}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
                   onPress={hideAddCategoryForm}
                   style={styles.cancelButton}>
-                  <Icon name="chevron-back" size={24} color={colors.primary} />
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Add Category</Text>
                 <TouchableOpacity
@@ -886,7 +911,6 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     backgroundColor: colors.background,
-    marginTop: 50,
     overflow: 'hidden',
   },
   viewContainer: {
@@ -899,13 +923,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   modalHeader: {
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.overlayLight,
+    paddingBottom: 20,
+    borderBottomWidth: 0,
   },
   cancelButton: {
     padding: 4,
@@ -914,22 +938,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.textWhite,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '500',
     fontFamily: 'System',
-    color: colors.textPrimary,
+    color: colors.textWhite,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
   },
   saveButton: {
-    padding: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.overlayDark,
   },
   saveText: {
     fontSize: 16,
     fontWeight: '500',
     fontFamily: 'System',
-    color: colors.primary,
+    color: colors.textWhite,
   },
   placeholder: {
     width: 32,
@@ -1191,9 +1223,6 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.5,
-  },
-  saveTextDisabled: {
-    color: colors.textSecondary,
   },
 });
 
