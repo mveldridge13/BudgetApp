@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Enhanced with Goals)
+// components/BalanceCard.js (Fixed to always show current pay period)
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -74,11 +74,9 @@ const BalanceCard = ({
     const periodEnd = new Date(nextPayDate);
     periodEnd.setDate(periodEnd.getDate() - 1);
 
-    const monthDiff = selectedDate.getMonth() - new Date().getMonth();
-    if (monthDiff !== 0) {
-      periodStart.setMonth(periodStart.getMonth() + monthDiff);
-      periodEnd.setMonth(periodEnd.getMonth() + monthDiff);
-    }
+    // FIXED: Always show current pay period, don't adjust based on selected date
+    // This ensures the period display matches the expense calculation
+    // The selectedDate should only affect the transaction list, not the balance calculation
 
     const formatDate = dateToFormat => {
       const dayNum = dateToFormat.getDate();

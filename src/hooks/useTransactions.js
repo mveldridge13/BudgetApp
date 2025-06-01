@@ -1,4 +1,4 @@
-// hooks/useTransactions.js
+// hooks/useTransactions.js (Fixed to calculate pay period expenses)
 import {useState, useCallback} from 'react';
 import {Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -191,25 +191,118 @@ const useTransactions = () => {
     setEditingTransaction(null);
   }, []);
 
+  // FIXED: Calculate pay period expenses - always use current pay period, not selected date
   const calculateTotalExpenses = useCallback(
-    selectedDate => {
-      // Filter daily transactions
-      const dailyTransactions = transactions.filter(transaction => {
-        if (transaction.recurrence && transaction.recurrence !== 'none') {
-          return false;
-        }
-        const transactionDate = new Date(transaction.date);
-        const isSameDay = (date1, date2) => {
+    (selectedDate, incomeData) => {
+      // If no income data, we can't calculate pay period, so fallback to daily calculation
+      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
+        // Fallback to original daily calculation
+        const dailyTransactions = transactions.filter(transaction => {
+          if (transaction.recurrence && transaction.recurrence !== 'none') {
+            return false;
+          }
+          const transactionDate = new Date(transaction.date);
+          const isSameDay = (date1, date2) => {
+            return (
+              date1.getDate() === date2.getDate() &&
+              date1.getMonth() === date2.getMonth() &&
+              date1.getFullYear() === date2.getFullYear()
+            );
+          };
+          return isSameDay(transactionDate, selectedDate);
+        });
+
+        const recurringTransactions = transactions.filter(transaction => {
           return (
-            date1.getDate() === date2.getDate() &&
-            date1.getMonth() === date2.getMonth() &&
-            date1.getFullYear() === date2.getFullYear()
+            transaction.recurrence &&
+            transaction.recurrence !== 'none' &&
+            [
+              'monthly',
+              'fortnightly',
+              'sixmonths',
+              'yearly',
+              'weekly',
+            ].includes(transaction.recurrence)
           );
-        };
-        return isSameDay(transactionDate, selectedDate);
+        });
+
+        const dailyExpenses = dailyTransactions.reduce(
+          (sum, transaction) => sum + transaction.amount,
+          0,
+        );
+        const monthlyExpenses = recurringTransactions.reduce(
+          (sum, transaction) => sum + transaction.amount,
+          0,
+        );
+
+        return dailyExpenses + monthlyExpenses;
+      }
+
+      // FIXED: Always calculate based on current date, not selected date
+      // This ensures balance card always shows current pay period expenses
+      const currentDate = new Date();
+
+      // Calculate current pay period dates (based on current date, not selected date)
+      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
+      const nextPayDate = new Date(
+        2000 + parseInt(yearStr, 10),
+        parseInt(monthStr, 10) - 1,
+        parseInt(dayStr, 10),
+      );
+
+      const frequencyDays = {
+        weekly: 7,
+        fortnightly: 14,
+        monthly: 30,
+      };
+
+      const days = frequencyDays[incomeData.frequency] || 30;
+
+      let periodStart;
+      if (incomeData.frequency === 'monthly') {
+        periodStart = new Date(nextPayDate);
+        periodStart.setMonth(periodStart.getMonth() - 1);
+      } else {
+        periodStart = new Date(nextPayDate);
+        periodStart.setDate(periodStart.getDate() - days);
+      }
+
+      const periodEnd = new Date(nextPayDate);
+      periodEnd.setDate(periodEnd.getDate() - 1);
+
+      // REMOVED: No month adjustment based on selected date
+      // The balance should always show current pay period expenses
+
+      // Debug logging
+      console.log('=== EXPENSE CALCULATION DEBUG ===');
+      console.log('Current Date:', currentDate);
+      console.log('Selected Date:', selectedDate);
+      console.log('Period Start:', periodStart);
+      console.log('Period End:', periodEnd);
+      console.log('Income Data:', incomeData);
+
+      // Filter daily transactions within the current pay period
+      const payPeriodTransactions = transactions.filter(transaction => {
+        if (transaction.recurrence && transaction.recurrence !== 'none') {
+          return false; // Handle recurring separately
+        }
+
+        const transactionDate = new Date(transaction.date);
+
+        console.log('Checking transaction:', {
+          date: transaction.date,
+          parsedDate: transactionDate,
+          amount: transaction.amount,
+          description: transaction.description,
+          inPeriod:
+            transactionDate >= periodStart && transactionDate <= periodEnd,
+        });
+
+        // Check if transaction falls within current pay period
+        return transactionDate >= periodStart && transactionDate <= periodEnd;
       });
 
-      // Filter recurring transactions
+      // Filter recurring transactions (these apply to the whole period)
       const recurringTransactions = transactions.filter(transaction => {
         return (
           transaction.recurrence &&
@@ -220,16 +313,26 @@ const useTransactions = () => {
         );
       });
 
-      const dailyExpenses = dailyTransactions.reduce(
+      // Calculate totals
+      const payPeriodExpenses = payPeriodTransactions.reduce(
         (sum, transaction) => sum + transaction.amount,
         0,
       );
-      const monthlyExpenses = recurringTransactions.reduce(
+      const recurringExpenses = recurringTransactions.reduce(
         (sum, transaction) => sum + transaction.amount,
         0,
       );
 
-      return dailyExpenses + monthlyExpenses;
+      const totalExpenses = payPeriodExpenses + recurringExpenses;
+
+      console.log('Pay Period Transactions:', payPeriodTransactions);
+      console.log('Recurring Transactions:', recurringTransactions);
+      console.log('Pay Period Expenses:', payPeriodExpenses);
+      console.log('Recurring Expenses:', recurringExpenses);
+      console.log('Total Expenses:', totalExpenses);
+      console.log('=== END DEBUG ===');
+
+      return totalExpenses;
     },
     [transactions],
   );
