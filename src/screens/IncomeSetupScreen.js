@@ -11,6 +11,8 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import CalendarModal from '../components/CalendarModal';
 
 const frequencies = [
   {id: 'weekly', label: 'Weekly', days: 7},
@@ -36,28 +38,24 @@ const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
   </TouchableOpacity>
 );
 
-// Simple date formatter - just formats as user types
-const formatDate = text => {
-  // Remove all non-numeric characters
-  const cleaned = text.replace(/\D/g, '');
-
-  // Apply formatting based on length
-  if (cleaned.length <= 2) {
-    return cleaned;
-  } else if (cleaned.length <= 4) {
-    return `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-  } else if (cleaned.length <= 8) {
-    return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4)}`;
+// Format date for display
+const formatDateForDisplay = date => {
+  if (!date) {
+    return '';
   }
-
-  // Limit to 8 digits max
-  return `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
+  return date.toLocaleDateString('en-AU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 };
 
 const IncomeSetupScreen = ({navigation, route}) => {
   const [income, setIncome] = useState('');
   const [selectedFrequency, setSelectedFrequency] = useState('');
-  const [nextPayDate, setNextPayDate] = useState('');
+  const [nextPayDate, setNextPayDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [hasSelectedDate, setHasSelectedDate] = useState(false);
 
   // Check if we're in edit mode
   const isEditMode = route?.params?.editMode || false;
@@ -72,7 +70,15 @@ const IncomeSetupScreen = ({navigation, route}) => {
             const parsedData = JSON.parse(existingData);
             setIncome(parsedData.income?.toString() || '');
             setSelectedFrequency(parsedData.frequency || '');
-            setNextPayDate(parsedData.nextPayDate || '');
+
+            // Parse the stored date
+            if (parsedData.nextPayDate) {
+              const storedDate = new Date(parsedData.nextPayDate);
+              if (!isNaN(storedDate.getTime())) {
+                setNextPayDate(storedDate);
+                setHasSelectedDate(true);
+              }
+            }
           }
         } catch (error) {
           console.log('Error loading existing data:', error);
@@ -83,8 +89,17 @@ const IncomeSetupScreen = ({navigation, route}) => {
     loadExistingData();
   }, [isEditMode]);
 
+  const handleDateChange = selectedDate => {
+    setNextPayDate(selectedDate);
+    setHasSelectedDate(true);
+  };
+
+  const handleCalendarClose = () => {
+    setShowDatePicker(false);
+  };
+
   const handleSave = async () => {
-    if (!income || !selectedFrequency || !nextPayDate) {
+    if (!income || !selectedFrequency || !hasSelectedDate) {
       Alert.alert(
         'Missing Information',
         'Please fill in all fields to continue.',
@@ -96,20 +111,18 @@ const IncomeSetupScreen = ({navigation, route}) => {
       const setupData = {
         income: parseFloat(income),
         frequency: selectedFrequency,
-        nextPayDate: nextPayDate,
+        nextPayDate: nextPayDate.toISOString(),
         setupComplete: true,
         createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(), // Track when last updated
+        lastUpdated: new Date().toISOString(),
       };
 
       console.log('Saving setup data:', setupData);
       await AsyncStorage.setItem('userSetup', JSON.stringify(setupData));
 
       if (isEditMode) {
-        // If editing, go back to the previous screen
         navigation.goBack();
       } else {
-        // If initial setup, navigate to main app
         navigation.replace('MainTabs');
       }
     } catch (error) {
@@ -177,21 +190,28 @@ const IncomeSetupScreen = ({navigation, route}) => {
               </View>
             </View>
 
-            {/* Next Pay Date */}
+            {/* Next Pay Date - Calendar Picker */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Next Pay Date</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={nextPayDate}
-                onChangeText={text => setNextPayDate(formatDate(text))}
-                placeholder="DD/MM/YYYY"
-                placeholderTextColor="#A0A0A0"
-                maxLength={10}
-                keyboardType="default"
-                autoCorrect={false}
-                spellCheck={false}
-                textContentType="none"
-              />
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => setShowDatePicker(true)}>
+                <Text
+                  style={[
+                    styles.datePickerText,
+                    !hasSelectedDate && styles.placeholderText,
+                  ]}>
+                  {hasSelectedDate
+                    ? formatDateForDisplay(nextPayDate)
+                    : 'Select date'}
+                </Text>
+                <Icon
+                  name="calendar-today"
+                  size={18}
+                  color="#8E8E93"
+                  style={styles.datePickerIcon}
+                />
+              </TouchableOpacity>
               <Text style={styles.helperText}>
                 This helps us calculate your current budget period
               </Text>
@@ -218,6 +238,14 @@ const IncomeSetupScreen = ({navigation, route}) => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Calendar Modal */}
+        <CalendarModal
+          visible={showDatePicker}
+          selectedDate={nextPayDate}
+          onDateChange={handleDateChange}
+          onClose={handleCalendarClose}
+        />
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
@@ -325,15 +353,29 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: -0.1,
   },
-  dateInput: {
+  datePickerButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontSize: 15,
-    color: '#1A1A1A',
     borderWidth: 1,
     borderColor: '#E5E5E5',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 15,
+    fontWeight: '300',
+    fontFamily: 'System',
+    color: '#1A1A1A',
+    letterSpacing: -0.2,
+  },
+  placeholderText: {
+    color: '#A0A0A0',
+  },
+  datePickerIcon: {
+    marginLeft: 8,
   },
   helperText: {
     fontSize: 11,

@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Fixed to always show current pay period)
+// components/BalanceCard.js (Fixed date handling)
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -47,12 +47,26 @@ const BalanceCard = ({
       return null;
     }
 
-    const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-    const nextPayDate = new Date(
-      2000 + parseInt(yearStr, 10),
-      parseInt(monthStr, 10) - 1,
-      parseInt(dayStr, 10),
-    );
+    let nextPayDate;
+
+    // Handle both ISO string format (from CalendarModal) and DD/MM/YYYY format (legacy)
+    if (incomeData.nextPayDate.includes('T')) {
+      // ISO string format from CalendarModal
+      nextPayDate = new Date(incomeData.nextPayDate);
+    } else {
+      // Legacy DD/MM/YYYY format
+      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
+      nextPayDate = new Date(
+        2000 + parseInt(yearStr, 10),
+        parseInt(monthStr, 10) - 1,
+        parseInt(dayStr, 10),
+      );
+    }
+
+    // Validate the date
+    if (isNaN(nextPayDate.getTime())) {
+      return null;
+    }
 
     const frequencyDays = {
       weekly: 7,
@@ -74,10 +88,6 @@ const BalanceCard = ({
     const periodEnd = new Date(nextPayDate);
     periodEnd.setDate(periodEnd.getDate() - 1);
 
-    // FIXED: Always show current pay period, don't adjust based on selected date
-    // This ensures the period display matches the expense calculation
-    // The selectedDate should only affect the transaction list, not the balance calculation
-
     const formatDate = dateToFormat => {
       const dayNum = dateToFormat.getDate();
       const monthName = dateToFormat.toLocaleDateString('en-AU', {
@@ -88,6 +98,41 @@ const BalanceCard = ({
     };
 
     return `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
+  };
+
+  // Format the next pay date for display
+  const formatNextPayDate = () => {
+    if (!incomeData?.nextPayDate) {
+      return '';
+    }
+
+    let nextPayDate;
+
+    // Handle both ISO string format and DD/MM/YYYY format
+    if (incomeData.nextPayDate.includes('T')) {
+      // ISO string format from CalendarModal
+      nextPayDate = new Date(incomeData.nextPayDate);
+    } else {
+      // Legacy DD/MM/YYYY format
+      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
+      nextPayDate = new Date(
+        2000 + parseInt(yearStr, 10),
+        parseInt(monthStr, 10) - 1,
+        parseInt(dayStr, 10),
+      );
+    }
+
+    // Validate the date
+    if (isNaN(nextPayDate.getTime())) {
+      return incomeData.nextPayDate; // Fallback to original string
+    }
+
+    // Format as DD/MM/YYYY for display
+    return nextPayDate.toLocaleDateString('en-AU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   // Filter goals that should be shown on balance card
@@ -157,7 +202,7 @@ const BalanceCard = ({
             <Text style={styles.payPeriod}>{calculatePayPeriod()}</Text>
           )}
           <Text style={styles.frequencyDisplay}>
-            Paid {incomeData.frequency} • Next: {incomeData.nextPayDate}
+            Paid {incomeData.frequency} • Next: {formatNextPayDate()}
           </Text>
         </TouchableOpacity>
       )}

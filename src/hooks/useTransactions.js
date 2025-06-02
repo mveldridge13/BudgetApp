@@ -1,4 +1,4 @@
-// hooks/useTransactions.js (Fixed to calculate pay period expenses)
+// hooks/useTransactions.js (Fixed date handling for ISO strings)
 import {useState, useCallback} from 'react';
 import {Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -191,7 +191,7 @@ const useTransactions = () => {
     setEditingTransaction(null);
   }, []);
 
-  // FIXED: Calculate pay period expenses - always use current pay period, not selected date
+  // FIXED: Calculate pay period expenses with proper date handling
   const calculateTotalExpenses = useCallback(
     (selectedDate, incomeData) => {
       // If no income data, we can't calculate pay period, so fallback to daily calculation
@@ -238,17 +238,30 @@ const useTransactions = () => {
         return dailyExpenses + monthlyExpenses;
       }
 
-      // FIXED: Always calculate based on current date, not selected date
-      // This ensures balance card always shows current pay period expenses
+      // Always calculate based on current date, not selected date
       const currentDate = new Date();
 
-      // Calculate current pay period dates (based on current date, not selected date)
-      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-      const nextPayDate = new Date(
-        2000 + parseInt(yearStr, 10),
-        parseInt(monthStr, 10) - 1,
-        parseInt(dayStr, 10),
-      );
+      // FIXED: Handle both ISO string format and DD/MM/YYYY format for nextPayDate
+      let nextPayDate;
+
+      if (incomeData.nextPayDate.includes('T')) {
+        // ISO string format from CalendarModal
+        nextPayDate = new Date(incomeData.nextPayDate);
+      } else {
+        // Legacy DD/MM/YYYY format
+        const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
+        nextPayDate = new Date(
+          2000 + parseInt(yearStr, 10),
+          parseInt(monthStr, 10) - 1,
+          parseInt(dayStr, 10),
+        );
+      }
+
+      // Validate the date
+      if (isNaN(nextPayDate.getTime())) {
+        console.error('Invalid nextPayDate:', incomeData.nextPayDate);
+        return 0;
+      }
 
       const frequencyDays = {
         weekly: 7,
@@ -270,16 +283,16 @@ const useTransactions = () => {
       const periodEnd = new Date(nextPayDate);
       periodEnd.setDate(periodEnd.getDate() - 1);
 
-      // REMOVED: No month adjustment based on selected date
-      // The balance should always show current pay period expenses
-
       // Debug logging
       console.log('=== EXPENSE CALCULATION DEBUG ===');
       console.log('Current Date:', currentDate);
       console.log('Selected Date:', selectedDate);
+      console.log('Next Pay Date (raw):', incomeData.nextPayDate);
+      console.log('Next Pay Date (parsed):', nextPayDate);
       console.log('Period Start:', periodStart);
       console.log('Period End:', periodEnd);
       console.log('Income Data:', incomeData);
+      console.log('Total Transactions:', transactions.length);
 
       // Filter daily transactions within the current pay period
       const payPeriodTransactions = transactions.filter(transaction => {
