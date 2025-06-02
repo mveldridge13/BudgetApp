@@ -110,7 +110,19 @@ const AnalyticsScreen = () => {
     setRefreshing(false);
   }, [loadTransactions, refreshing]);
 
-  // Memoized expensive calculations
+  // Helper function to check if transaction is recurring
+  const isRecurringTransaction = useCallback(transaction => {
+    // Check for recurrence field based on your app's structure
+    return (
+      transaction.recurrence &&
+      transaction.recurrence !== 'none' &&
+      ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
+        transaction.recurrence,
+      )
+    );
+  }, []);
+
+  // Updated period data calculation with discretionary spending separation
   const getPeriodData = useCallback(() => {
     if (transactions.length === 0) {
       return [];
@@ -135,10 +147,15 @@ const AnalyticsScreen = () => {
             );
           });
 
+          // Calculate total and discretionary amounts
           const dailyTotal = dayTransactions.reduce(
             (sum, t) => sum + t.amount,
             0,
           );
+
+          const dailyDiscretionary = dayTransactions
+            .filter(t => !isRecurringTransaction(t))
+            .reduce((sum, t) => sum + t.amount, 0);
 
           // Previous week same day for comparison
           const previousWeekDate = new Date(date);
@@ -158,13 +175,19 @@ const AnalyticsScreen = () => {
             0,
           );
 
+          const previousDayDiscretionary = previousDayTransactions
+            .filter(t => !isRecurringTransaction(t))
+            .reduce((sum, t) => sum + t.amount, 0);
+
           data.push({
             label: date.toLocaleDateString('en-US', {
               weekday: 'short',
               day: 'numeric',
             }),
             amount: dailyTotal,
+            discretionaryAmount: dailyDiscretionary,
             previousPeriod: previousDayTotal,
+            previousDiscretionary: previousDayDiscretionary,
           });
         }
         break;
@@ -187,6 +210,10 @@ const AnalyticsScreen = () => {
             0,
           );
 
+          const weeklyDiscretionary = weekTransactions
+            .filter(t => !isRecurringTransaction(t))
+            .reduce((sum, t) => sum + t.amount, 0);
+
           // Previous month same week for comparison
           const previousWeekStart = new Date(weekStart);
           previousWeekStart.setDate(previousWeekStart.getDate() - 28);
@@ -206,10 +233,16 @@ const AnalyticsScreen = () => {
             0,
           );
 
+          const previousWeekDiscretionary = previousWeekTransactions
+            .filter(t => !isRecurringTransaction(t))
+            .reduce((sum, t) => sum + t.amount, 0);
+
           data.push({
             label: `Week ${4 - i}`,
             amount: weeklyTotal,
+            discretionaryAmount: weeklyDiscretionary,
             previousPeriod: previousWeekTotal,
+            previousDiscretionary: previousWeekDiscretionary,
           });
         }
         break;
@@ -232,6 +265,10 @@ const AnalyticsScreen = () => {
             0,
           );
 
+          const monthlyDiscretionary = monthTransactions
+            .filter(t => !isRecurringTransaction(t))
+            .reduce((sum, t) => sum + t.amount, 0);
+
           // Previous year same month for comparison
           const previousYearMonth = new Date(monthDate);
           previousYearMonth.setFullYear(previousYearMonth.getFullYear() - 1);
@@ -249,17 +286,23 @@ const AnalyticsScreen = () => {
             0,
           );
 
+          const previousMonthDiscretionary = previousMonthTransactions
+            .filter(t => !isRecurringTransaction(t))
+            .reduce((sum, t) => sum + t.amount, 0);
+
           data.push({
             label: monthDate.toLocaleDateString('en-US', {month: 'short'}),
             amount: monthlyTotal,
+            discretionaryAmount: monthlyDiscretionary,
             previousPeriod: previousMonthTotal,
+            previousDiscretionary: previousMonthDiscretionary,
           });
         }
         break;
     }
 
     return data;
-  }, [transactions, selectedPeriod]);
+  }, [transactions, selectedPeriod, isRecurringTransaction]);
 
   // Memoize all derived data
   const data = useMemo(() => getPeriodData(), [getPeriodData]);
@@ -268,8 +311,16 @@ const AnalyticsScreen = () => {
     return data.reduce((sum, item) => sum + item.amount, 0);
   }, [data]);
 
+  const getCurrentDiscretionary = useMemo(() => {
+    return data.reduce((sum, item) => sum + item.discretionaryAmount, 0);
+  }, [data]);
+
   const getPreviousTotal = useMemo(() => {
     return data.reduce((sum, item) => sum + item.previousPeriod, 0);
+  }, [data]);
+
+  const getPreviousDiscretionary = useMemo(() => {
+    return data.reduce((sum, item) => sum + item.previousDiscretionary, 0);
   }, [data]);
 
   const getPercentageChange = useMemo(() => {
@@ -281,6 +332,15 @@ const AnalyticsScreen = () => {
     return ((current - previous) / previous) * 100;
   }, [getCurrentTotal, getPreviousTotal]);
 
+  const getDiscretionaryPercentageChange = useMemo(() => {
+    const current = getCurrentDiscretionary;
+    const previous = getPreviousDiscretionary;
+    if (previous === 0) {
+      return 0;
+    }
+    return ((current - previous) / previous) * 100;
+  }, [getCurrentDiscretionary, getPreviousDiscretionary]);
+
   const getAverageSpending = useMemo(() => {
     if (data.length === 0) {
       return 0;
@@ -288,12 +348,28 @@ const AnalyticsScreen = () => {
     return getCurrentTotal / data.length;
   }, [data.length, getCurrentTotal]);
 
+  const getAverageDiscretionary = useMemo(() => {
+    if (data.length === 0) {
+      return 0;
+    }
+    return getCurrentDiscretionary / data.length;
+  }, [data.length, getCurrentDiscretionary]);
+
   const getHighestSpendingPeriod = useMemo(() => {
     if (data.length === 0) {
       return null;
     }
     return data.reduce((max, current) =>
       current.amount > max.amount ? current : max,
+    );
+  }, [data]);
+
+  const getHighestDiscretionaryPeriod = useMemo(() => {
+    if (data.length === 0) {
+      return null;
+    }
+    return data.reduce((max, current) =>
+      current.discretionaryAmount > max.discretionaryAmount ? current : max,
     );
   }, [data]);
 
@@ -456,6 +532,40 @@ const AnalyticsScreen = () => {
           </View>
         </View>
 
+        {/* Discretionary Stats Cards */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Discretionary Spending</Text>
+            <Text style={styles.statValue}>
+              ${getCurrentDiscretionary.toFixed(2)}
+            </Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Discretionary Average</Text>
+            <Text style={styles.statValue}>
+              ${getAverageDiscretionary.toFixed(2)}
+            </Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Discretionary vs Previous</Text>
+            <Text
+              style={[
+                styles.statValue,
+                {
+                  color:
+                    getDiscretionaryPercentageChange >= 0
+                      ? colors.danger || '#EF4444'
+                      : colors.success || '#10B981',
+                },
+              ]}>
+              {getDiscretionaryPercentageChange >= 0 ? '+' : ''}
+              {getDiscretionaryPercentageChange.toFixed(1)}%
+            </Text>
+          </View>
+        </View>
+
         {/* Chart */}
         {data.length > 0 && (
           <View style={styles.chartContainer}>
@@ -485,12 +595,29 @@ const AnalyticsScreen = () => {
             <View
               style={[styles.insightCard, {borderLeftColor: colors.primary}]}>
               <Text style={styles.insightText}>
-                <Text style={styles.insightBold}>Highest spending:</Text>{' '}
+                <Text style={styles.insightBold}>Highest total spending:</Text>{' '}
                 {getHighestSpendingPeriod.label} with $
                 {getHighestSpendingPeriod.amount.toFixed(2)}
               </Text>
             </View>
           )}
+
+          {getHighestDiscretionaryPeriod &&
+            getHighestDiscretionaryPeriod.discretionaryAmount > 0 && (
+              <View
+                style={[
+                  styles.insightCard,
+                  {borderLeftColor: colors.secondary || '#10B981'},
+                ]}>
+                <Text style={styles.insightText}>
+                  <Text style={styles.insightBold}>
+                    Highest discretionary spending:
+                  </Text>{' '}
+                  {getHighestDiscretionaryPeriod.label} with $
+                  {getHighestDiscretionaryPeriod.discretionaryAmount.toFixed(2)}
+                </Text>
+              </View>
+            )}
 
           <View
             style={[
@@ -503,9 +630,28 @@ const AnalyticsScreen = () => {
               },
             ]}>
             <Text style={styles.insightText}>
-              <Text style={styles.insightBold}>Trend:</Text> You're spending{' '}
-              {Math.abs(getPercentageChange).toFixed(1)}%{' '}
+              <Text style={styles.insightBold}>Total spending trend:</Text>{' '}
+              You're spending {Math.abs(getPercentageChange).toFixed(1)}%{' '}
               {getPercentageChange >= 0 ? 'more' : 'less'} than last period
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.insightCard,
+              {
+                borderLeftColor:
+                  getDiscretionaryPercentageChange >= 0
+                    ? colors.danger || '#EF4444'
+                    : colors.success || '#10B981',
+              },
+            ]}>
+            <Text style={styles.insightText}>
+              <Text style={styles.insightBold}>Discretionary trend:</Text> Your
+              discretionary spending is{' '}
+              {Math.abs(getDiscretionaryPercentageChange).toFixed(1)}%{' '}
+              {getDiscretionaryPercentageChange >= 0 ? 'higher' : 'lower'} than
+              last period
             </Text>
           </View>
 
