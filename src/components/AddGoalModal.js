@@ -14,6 +14,7 @@ import {
   Platform,
   Animated,
   Dimensions,
+  Switch,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -713,28 +714,30 @@ const AddGoalModal = ({
               {/* Monthly Budget Toggle (for spending goals) */}
               {formData.type === 'spending' && (
                 <View style={styles.section}>
-                  <TouchableOpacity
-                    style={styles.toggleRow}
-                    onPress={() =>
-                      updateFormData('isMonthly', !formData.isMonthly)
-                    }
-                    activeOpacity={0.7}>
+                  <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
                       <Text style={styles.toggleLabel}>Monthly Budget</Text>
                       <Text style={styles.toggleDescription}>
                         Resets every month vs. one-time limit
                       </Text>
                     </View>
-                    <View
-                      style={[
-                        styles.toggle,
-                        formData.isMonthly && styles.toggleActive,
-                      ]}>
-                      {formData.isMonthly && (
-                        <View style={styles.toggleIndicator} />
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                    <Switch
+                      value={formData.isMonthly}
+                      onValueChange={value =>
+                        updateFormData('isMonthly', value)
+                      }
+                      trackColor={{
+                        false: colors.border,
+                        true: colors.primary,
+                      }}
+                      thumbColor={
+                        formData.isMonthly
+                          ? colors.textWhite
+                          : colors.textSecondary
+                      }
+                      ios_backgroundColor={colors.border}
+                    />
+                  </View>
                 </View>
               )}
 
@@ -1135,25 +1138,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
     fontFamily: 'System',
     color: colors.textSecondary,
-  },
-  toggle: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingHorizontal: 2,
-  },
-  toggleActive: {
-    backgroundColor: colors.primary,
-    alignItems: 'flex-start',
-  },
-  toggleIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.textWhite,
   },
   summarySection: {
     marginTop: 8,
