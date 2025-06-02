@@ -23,10 +23,10 @@ const WelcomeFlow = ({onComplete}) => {
 
   const steps = [
     {
-      title: 'Welcome to Squirrel! 🐿️',
-      subtitle: 'Your smart daily budget companion',
+      title: 'Welcome to Trend',
+      subtitle: 'Your smart expense companion',
       description:
-        'Squirrel helps you stay on track with your daily spending by showing exactly how much you have left to spend each day.',
+        'Trend helps you stay on track with your daily spending by showing exactly how much you have left to spend each day.',
       icon: 'heart',
       iconColor: colors.primary,
     },
