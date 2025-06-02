@@ -45,15 +45,13 @@ const GOAL_TYPES = [
 
 const CATEGORIES = [
   {id: 'Security', label: 'Emergency Fund', icon: 'shield'},
-  {id: 'Travel', label: 'Travel & Vacation', icon: 'map'},
-  {id: 'Tech', label: 'Technology', icon: 'smartphone'},
-  {id: 'Home', label: 'Home & Garden', icon: 'home'},
-  {id: 'Education', label: 'Education', icon: 'book'},
-  {id: 'Health', label: 'Health & Fitness', icon: 'heart'},
-  {id: 'Food', label: 'Food & Dining', icon: 'coffee'},
-  {id: 'Entertainment', label: 'Entertainment', icon: 'film'},
-  {id: 'Transport', label: 'Transport', icon: 'car'},
   {id: 'Debt', label: 'Debt Repayment', icon: 'credit-card'},
+  {id: 'Food', label: 'Food', icon: 'coffee'},
+  {id: 'Transport', label: 'Transport', icon: 'truck'},
+  {id: 'Shopping', label: 'Shopping', icon: 'shopping-bag'},
+  {id: 'Entertainment', label: 'Entertainment', icon: 'film'},
+  {id: 'Bills', label: 'Bills', icon: 'file-text'},
+  {id: 'Health', label: 'Health', icon: 'heart'},
   {id: 'Other', label: 'Other', icon: 'more-horizontal'},
 ];
 
