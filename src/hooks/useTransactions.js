@@ -54,7 +54,7 @@ const useTransactions = () => {
         }
 
         // We're adding a new transaction
-        updatedTransactions = [...transactions, transaction];
+        updatedTransactions = [transaction, ...transactions];
         await saveTransactionsToStorage(updatedTransactions);
         setTransactions(updatedTransactions);
 
