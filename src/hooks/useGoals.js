@@ -209,17 +209,6 @@ const useGoals = () => {
           return {success: true};
         }
 
-        const currentDate = new Date();
-        const transactionDate = new Date(transaction.date);
-
-        // Only update if transaction is in current month
-        if (
-          currentDate.getMonth() !== transactionDate.getMonth() ||
-          currentDate.getFullYear() !== transactionDate.getFullYear()
-        ) {
-          return {success: true}; // Not current month, no update needed
-        }
-
         // Get category name from category service
         const categoryService = require('../services/categoryService').default;
         const categories = await categoryService.getCategories();
@@ -233,11 +222,10 @@ const useGoals = () => {
         const storedGoals = await AsyncStorage.getItem('goals');
         const freshGoals = storedGoals ? JSON.parse(storedGoals) : [];
 
-        // Check if any spending goals need updating
+        // Check if any spending goals need updating - ALL spending goals now work
         const relevantGoals = freshGoals.filter(
           goal =>
             goal.type === 'spending' &&
-            goal.isMonthly &&
             goal.category?.toLowerCase() === transactionCategoryName,
         );
 
@@ -246,7 +234,7 @@ const useGoals = () => {
         }
 
         const updatedGoals = freshGoals.map(goal => {
-          if (goal.type !== 'spending' || !goal.isMonthly) {
+          if (goal.type !== 'spending') {
             return goal;
           }
 

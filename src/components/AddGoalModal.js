@@ -14,7 +14,6 @@ import {
   Platform,
   Animated,
   Dimensions,
-  Switch,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -33,7 +32,7 @@ const GOAL_TYPES = [
     id: 'spending',
     label: 'Spending Budget',
     icon: 'credit-card',
-    description: 'Set monthly spending limits',
+    description: 'Track spending in categories',
   },
   {
     id: 'debt',
@@ -79,7 +78,6 @@ const AddGoalModal = ({
     category: 'Other',
     priority: 'medium',
     autoContribute: '',
-    isMonthly: false,
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -135,7 +133,6 @@ const AddGoalModal = ({
           category: editingGoal.category || 'Other',
           priority: editingGoal.priority || 'medium',
           autoContribute: editingGoal.autoContribute?.toString() || '',
-          isMonthly: editingGoal.isMonthly || false,
         });
       } else {
         // Creating new goal - reset form
@@ -149,7 +146,6 @@ const AddGoalModal = ({
           category: 'Other',
           priority: 'medium',
           autoContribute: '',
-          isMonthly: false,
         });
       }
       setErrors({});
@@ -262,7 +258,6 @@ const AddGoalModal = ({
         autoContribute: formData.autoContribute
           ? parseFloat(formData.autoContribute)
           : 0,
-        isMonthly: formData.isMonthly,
         isActive: true,
       };
 
@@ -709,36 +704,6 @@ const AddGoalModal = ({
                 )}
               </View>
 
-              {/* Monthly Budget Toggle (for spending goals) */}
-              {formData.type === 'spending' && (
-                <View style={styles.section}>
-                  <View style={styles.toggleRow}>
-                    <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Monthly Budget</Text>
-                      <Text style={styles.toggleDescription}>
-                        Resets every month vs. one-time limit
-                      </Text>
-                    </View>
-                    <Switch
-                      value={formData.isMonthly}
-                      onValueChange={value =>
-                        updateFormData('isMonthly', value)
-                      }
-                      trackColor={{
-                        false: colors.border,
-                        true: colors.primary,
-                      }}
-                      thumbColor={
-                        formData.isMonthly
-                          ? colors.textWhite
-                          : colors.textSecondary
-                      }
-                      ios_backgroundColor={colors.border}
-                    />
-                  </View>
-                </View>
-              )}
-
               {/* Goal Summary */}
               <View style={styles.summarySection}>
                 <Text style={styles.summaryTitle}>Goal Summary</Text>
@@ -1110,32 +1075,6 @@ const styles = StyleSheet.create({
   },
   priorityLabelActive: {
     fontWeight: '600',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  toggleInfo: {
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  toggleDescription: {
-    fontSize: 12,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textSecondary,
   },
   summarySection: {
     marginTop: 8,
