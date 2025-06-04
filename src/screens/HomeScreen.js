@@ -1,6 +1,6 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
-// screens/HomeScreen.js (Fixed with proper useEffect dependencies)
+// screens/HomeScreen.js
 import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
@@ -78,24 +78,16 @@ const HomeScreen = ({navigation}) => {
     calculateTotalGoalContributions,
   } = useGoals();
 
-  // FIXED: Initial data loading on component mount
+  // Initial data loading on component mount
   useEffect(() => {
     loadIncomeData();
     loadTransactions();
-  }, []); // Empty dependency array - only run on mount
+  }, []);
 
   // Load goals on component mount
   useEffect(() => {
     loadGoals();
-  }, []); // Empty dependency array - only run on mount
-
-  // Update spending goals when transactions change
-  useEffect(() => {
-    if (transactions.length > 0) {
-      const lastTransaction = transactions[transactions.length - 1];
-      updateSpendingGoals(lastTransaction);
-    }
-  }, [transactions, updateSpendingGoals]);
+  }, []);
 
   // Initialize last active date on component mount
   useEffect(() => {
@@ -138,19 +130,19 @@ const HomeScreen = ({navigation}) => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [lastActiveDate, selectedDate]); // FIXED: Removed function dependencies
+  }, [lastActiveDate, selectedDate]);
 
   // Check onboarding status
   useEffect(() => {
     checkOnboardingStatus();
-  }, []); // FIXED: Empty dependency array
+  }, []);
 
   // Reload income data when screen comes into focus (after editing)
   useFocusEffect(
     React.useCallback(() => {
       loadIncomeData();
       loadGoals();
-    }, []), // FIXED: Empty dependency array
+    }, []),
   );
 
   const loadIncomeData = async () => {
@@ -192,7 +184,7 @@ const HomeScreen = ({navigation}) => {
     } catch (error) {
       console.error('Error checking onboarding status:', error);
     }
-  }, []); // FIXED: Empty dependency array
+  }, []);
 
   const measureBalanceCard = useCallback(() => {
     if (balanceCardRef.current) {
@@ -257,6 +249,9 @@ const HomeScreen = ({navigation}) => {
     try {
       const result = await saveTransaction(transaction);
 
+      // Update spending goals for the new/updated transaction
+      await updateSpendingGoals(transaction);
+
       // Check tutorial status ONLY for new transactions
       if (result.isNewTransaction) {
         const hasSeenTransactionSwipeTour = await AsyncStorage.getItem(
@@ -274,14 +269,31 @@ const HomeScreen = ({navigation}) => {
         }
       }
     } catch (error) {
+      console.error('Error in handleSaveTransaction:', error);
       // Error already handled in hook
     }
   };
 
   const handleDeleteTransaction = async transactionId => {
     try {
+      // Find the transaction before deleting it so we can reverse the goal update
+      const transactionToDelete = transactions.find(
+        t => t.id === transactionId,
+      );
+
+      // Delete the transaction first
       await deleteTransaction(transactionId);
+
+      // Now reverse the goal update by calling updateSpendingGoals with negative amount
+      if (transactionToDelete) {
+        const reverseTransaction = {
+          ...transactionToDelete,
+          amount: -transactionToDelete.amount, // Make amount negative to subtract from goal
+        };
+        await updateSpendingGoals(reverseTransaction);
+      }
     } catch (error) {
+      console.error('Error deleting transaction:', error);
       // Error already handled in hook
     }
   };

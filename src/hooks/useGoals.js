@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const useGoals = () => {
   const [goals, setGoals] = useState([]);
-  const [loading, setLoading] = useState(false); // Start as false
+  const [loading, setLoading] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [processedTransactions, setProcessedTransactions] = useState(new Set());
 
@@ -220,27 +220,38 @@ const useGoals = () => {
           return {success: true}; // Not current month, no update needed
         }
 
+        // Get category name from category service
+        const categoryService = require('../services/categoryService').default;
+        const categories = await categoryService.getCategories();
+        const transactionCategory = categories.find(
+          cat => cat.id === transaction.category,
+        );
+        const transactionCategoryName =
+          transactionCategory?.name?.toLowerCase();
+
+        // Get FRESH goals data from storage instead of using stale state
+        const storedGoals = await AsyncStorage.getItem('goals');
+        const freshGoals = storedGoals ? JSON.parse(storedGoals) : [];
+
         // Check if any spending goals need updating
-        const relevantGoals = goals.filter(
+        const relevantGoals = freshGoals.filter(
           goal =>
             goal.type === 'spending' &&
             goal.isMonthly &&
-            goal.category.toLowerCase() === transaction.category?.toLowerCase(),
+            goal.category?.toLowerCase() === transactionCategoryName,
         );
 
         if (relevantGoals.length === 0) {
           return {success: true};
         }
 
-        const updatedGoals = goals.map(goal => {
+        const updatedGoals = freshGoals.map(goal => {
           if (goal.type !== 'spending' || !goal.isMonthly) {
             return goal;
           }
 
           // Check if transaction category matches goal category
-          if (
-            goal.category.toLowerCase() === transaction.category?.toLowerCase()
-          ) {
+          if (goal.category?.toLowerCase() === transactionCategoryName) {
             return {
               ...goal,
               current: goal.current + transaction.amount,
@@ -263,7 +274,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [goals, processedTransactions, saveGoalsToStorage],
+    [processedTransactions, saveGoalsToStorage],
   );
 
   // Prepare goal for editing
