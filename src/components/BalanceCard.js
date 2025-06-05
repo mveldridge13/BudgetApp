@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Fixed date handling and active goals count)
+// components/BalanceCard.js (Removed redundant Adjust Budget button)
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -250,7 +250,9 @@ const BalanceCard = ({
             <View style={styles.goalsSectionHeader}>
               <View style={styles.goalsTitleContainer}>
                 <Icon name="target" size={14} color={colors.textWhite} />
-                <Text style={styles.goalsTitle}>Active Goals</Text>
+                <Text style={styles.goalsTitle}>
+                  Active Goals ({activeGoalsCount})
+                </Text>
               </View>
               <Text style={styles.goalsCount}>
                 {balanceCardGoals.length} showing
@@ -451,26 +453,17 @@ const BalanceCard = ({
         </TouchableOpacity>
       </View>
 
-      {/* Quick Goal Actions */}
+      {/* Quick Goal Actions - Simplified to only show View Goals button */}
       {balanceCardGoals.length > 0 ? (
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={onGoalsPress}
-            activeOpacity={0.7}>
-            <Icon name="target" size={16} color={colors.textWhite} />
-            <Text style={styles.actionButtonText}>
-              View Goals ({activeGoalsCount})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={onCalendarPress}
-            activeOpacity={0.7}>
-            <Icon name="calendar" size={16} color={colors.textWhite} />
-            <Text style={styles.actionButtonText}>Adjust Budget</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.viewGoalsButton}
+          onPress={onGoalsPress}
+          activeOpacity={0.7}>
+          <Icon name="target" size={16} color={colors.textWhite} />
+          <Text style={styles.viewGoalsButtonText}>
+            View Goals ({activeGoalsCount})
+          </Text>
+        </TouchableOpacity>
       ) : (
         <TouchableOpacity
           style={styles.setupGoalsButton}
@@ -479,9 +472,7 @@ const BalanceCard = ({
           <Icon name="target" size={16} color={colors.textWhite} />
           <Text style={styles.setupGoalsButtonText}>
             {activeGoalsCount > 0
-              ? `${activeGoalsCount} Active Goal${
-                  activeGoalsCount === 1 ? '' : 's'
-                }`
+              ? `Active Goals (${activeGoalsCount})`
               : 'Set Up Goals'}
           </Text>
         </TouchableOpacity>
@@ -857,13 +848,7 @@ const styles = StyleSheet.create({
   bottomPadding: {
     height: 32,
   },
-  quickActions: {
-    flexDirection: 'row',
-    marginTop: 16,
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
+  viewGoalsButton: {
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
     paddingVertical: 12,
@@ -872,10 +857,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: colors.overlayDark,
   },
-  actionButtonText: {
+  viewGoalsButtonText: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'System',
