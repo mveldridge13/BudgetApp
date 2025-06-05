@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Fixed date handling)
+// components/BalanceCard.js (Fixed date handling and active goals count)
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -137,6 +137,23 @@ const BalanceCard = ({
 
   // Filter goals that should be shown on balance card
   const balanceCardGoals = goals.filter(goal => goal.showOnBalanceCard);
+
+  // Calculate active goals count (exclude completed goals)
+  const activeGoalsCount = goals.filter(goal => {
+    // Check if explicitly marked as completed
+    if (goal.completed === true) {
+      return false;
+    }
+
+    // Check if goal is functionally complete based on progress
+    if (goal.type === 'debt') {
+      // For debt goals, complete when current amount reaches 0 or below
+      return goal.current > 0;
+    } else {
+      // For savings/spending goals, complete when current >= target
+      return goal.current < goal.target;
+    }
+  }).length;
 
   // Calculate total goal contributions
   const totalGoalContributions = balanceCardGoals.reduce(
@@ -443,7 +460,7 @@ const BalanceCard = ({
             activeOpacity={0.7}>
             <Icon name="target" size={16} color={colors.textWhite} />
             <Text style={styles.actionButtonText}>
-              View Goals ({balanceCardGoals.length})
+              View Goals ({activeGoalsCount})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -460,7 +477,13 @@ const BalanceCard = ({
           onPress={onGoalsPress}
           activeOpacity={0.7}>
           <Icon name="target" size={16} color={colors.textWhite} />
-          <Text style={styles.setupGoalsButtonText}>Set Up Goals</Text>
+          <Text style={styles.setupGoalsButtonText}>
+            {activeGoalsCount > 0
+              ? `${activeGoalsCount} Active Goal${
+                  activeGoalsCount === 1 ? '' : 's'
+                }`
+              : 'Set Up Goals'}
+          </Text>
         </TouchableOpacity>
       )}
     </View>

@@ -388,7 +388,7 @@ const HomeScreen = ({navigation}) => {
           onEditIncome={handleEditIncome}
           selectedDate={selectedDate}
           balanceCardRef={balanceCardRef}
-          goals={getBalanceCardGoals()}
+          goals={goals}
           onGoalsPress={handleGoalsPress}
         />
       </View>
