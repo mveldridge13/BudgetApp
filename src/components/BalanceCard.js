@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Removed redundant Adjust Budget button)
+// components/BalanceCard.js (Removed redundant Adjust Budget button and No Goals message)
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -395,47 +395,6 @@ const BalanceCard = ({
             </Text>
           )}
 
-          {/* Goal completion projection */}
-          {balanceCardGoals.length > 0 && (
-            <View style={styles.goalProjection}>
-              <View style={styles.projectionRow}>
-                <View style={styles.projectionInfo}>
-                  <Icon name="trending-up" size={12} color={colors.textWhite} />
-                  <Text style={styles.projectionLabel}>
-                    {balanceCardGoals.length === 1
-                      ? 'Goal progress:'
-                      : 'Next completion:'}
-                  </Text>
-                </View>
-                <View style={styles.projectionTarget}>
-                  <Text style={styles.projectionTitle}>
-                    {balanceCardGoals[0]?.title || 'No goals'}
-                  </Text>
-                  <Text style={styles.projectionTime}>
-                    {balanceCardGoals[0]?.type === 'debt'
-                      ? '~6 months'
-                      : '~8 months'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* No goals message */}
-          {balanceCardGoals.length === 0 && (
-            <View style={styles.noGoalsMessage}>
-              <View style={styles.noGoalsRow}>
-                <View style={styles.noGoalsInfo}>
-                  <Icon name="target" size={12} color={colors.textWhite} />
-                  <Text style={styles.noGoalsLabel}>
-                    No goals on balance card
-                  </Text>
-                </View>
-                <Text style={styles.noGoalsHelp}>Enable in Goals screen</Text>
-              </View>
-            </View>
-          )}
-
           <View style={styles.bottomPadding} />
         </View>
 
@@ -763,75 +722,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  goalProjection: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  projectionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  projectionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  projectionLabel: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.8,
-  },
-  projectionTarget: {
-    alignItems: 'flex-end',
-  },
-  projectionTitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.textWhite,
-  },
-  projectionTime: {
-    fontSize: 10,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.7,
-  },
-  noGoalsMessage: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  noGoalsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  noGoalsInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  noGoalsLabel: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.8,
-  },
-  noGoalsHelp: {
-    fontSize: 10,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.7,
-  },
+
   editIcon: {
     position: 'absolute',
     bottom: 8,
