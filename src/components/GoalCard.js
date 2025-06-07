@@ -310,8 +310,8 @@ const GoalCard = ({
         </View>
       </View>
 
-      {/* Progress Insights */}
-      {!isCompleted && (
+      {/* Progress Insights - UPDATED: Hidden for spending goals */}
+      {!isCompleted && !isSpendingGoal && (
         <View style={styles.insightsContainer}>
           <View style={styles.insightRow}>
             <Text style={styles.insightLabel}>Monthly needed:</Text>
@@ -441,15 +441,38 @@ const GoalCard = ({
             </>
           )}
 
-          {safeGoal.type === 'spending' && (
-            <View style={styles.spendingAlert}>
-              <Icon name="alert-circle" size={16} color={colors.warning} />
-              <Text style={styles.spendingAlertText}>
-                {safeCurrency(Math.max(0, safeGoal.target - safeGoal.current))}{' '}
-                remaining this month
-              </Text>
-            </View>
-          )}
+          {/* UPDATED: Improved spending budget alert */}
+          {safeGoal.type === 'spending' &&
+            (() => {
+              const remaining = safeGoal.target - safeGoal.current;
+              const isOverBudget = remaining < 0;
+              const overBudgetAmount = Math.abs(remaining);
+
+              return (
+                <View
+                  style={[
+                    styles.spendingAlert,
+                    isOverBudget && styles.spendingAlertOverBudget,
+                  ]}>
+                  <Icon
+                    name={isOverBudget ? 'alert-triangle' : 'alert-circle'}
+                    size={16}
+                    color={isOverBudget ? colors.danger : colors.warning}
+                  />
+                  <Text
+                    style={[
+                      styles.spendingAlertText,
+                      isOverBudget && styles.spendingAlertTextOverBudget,
+                    ]}>
+                    {isOverBudget
+                      ? `${safeCurrency(
+                          overBudgetAmount,
+                        )} over budget this month`
+                      : `${safeCurrency(remaining)} remaining this month`}
+                  </Text>
+                </View>
+              );
+            })()}
         </View>
       )}
 
@@ -753,11 +776,20 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
+  // NEW: Over budget styling
+  spendingAlertOverBudget: {
+    backgroundColor: colors.dangerLight || '#ffebee',
+  },
   spendingAlertText: {
     fontSize: 12,
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.warning,
+  },
+  // NEW: Over budget text styling
+  spendingAlertTextOverBudget: {
+    color: colors.danger,
+    fontWeight: '500',
   },
   completeButton: {
     flexDirection: 'row',
