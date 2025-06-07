@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Removed redundant Adjust Budget button and No Goals message)
+// components/BalanceCard.js (Improved goal readability with larger fonts and better spacing)
 import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -249,7 +249,7 @@ const BalanceCard = ({
           <View style={styles.goalsSection}>
             <View style={styles.goalsSectionHeader}>
               <View style={styles.goalsTitleContainer}>
-                <Icon name="target" size={14} color={colors.textWhite} />
+                <Icon name="target" size={16} color={colors.textWhite} />
                 <Text style={styles.goalsTitle}>
                   Active Goals ({activeGoalsCount})
                 </Text>
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   },
   goalsSection: {
     marginBottom: 20,
-    paddingTop: 16,
+    paddingTop: 18,
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
@@ -528,73 +528,74 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   goalsTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   goalsTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
   },
   goalsCount: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '300',
     fontFamily: 'System',
     color: colors.textWhite,
     opacity: 0.7,
   },
   goalsList: {
-    gap: 8,
+    gap: 12,
   },
   goalItem: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   goalTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flex: 1,
   },
   goalTitle: {
-    fontSize: 11,
-    fontWeight: '400',
+    fontSize: 13,
+    fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
-    opacity: 0.9,
+    opacity: 0.95,
   },
   goalTypeBadge: {
     backgroundColor: colors.dangerLight,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   goalTypeBadgeText: {
-    fontSize: 8,
-    fontWeight: '500',
+    fontSize: 9,
+    fontWeight: '600',
     fontFamily: 'System',
     color: colors.danger,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   goalAmount: {
-    fontSize: 11,
-    fontWeight: '300',
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textWhite,
-    opacity: 0.8,
+    opacity: 0.85,
   },
   goalProgressContainer: {
-    height: 3,
+    height: 4,
     backgroundColor: colors.overlayLight,
     borderRadius: 2,
     overflow: 'hidden',
@@ -607,32 +608,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
   contributionsLabel: {
-    fontSize: 11,
-    fontWeight: '300',
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textWhite,
     opacity: 0.8,
   },
   contributionsAmount: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
   },
   moreGoalsText: {
-    fontSize: 10,
-    fontWeight: '300',
+    fontSize: 11,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textWhite,
     opacity: 0.6,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 10,
   },
   leftToSpendSection: {
     paddingTop: 15,
