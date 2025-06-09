@@ -1,5 +1,5 @@
 // hooks/useGoals.js
-import {useState, useCallback, useRef, useEffect} from 'react';
+import {useState, useCallback, useRef, useLayoutEffect} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GOALS_STORAGE_KEY = 'goals';
@@ -394,7 +394,7 @@ const useGoals = () => {
     [goals, saveGoalsToStorage],
   );
 
-  // Update spending goals based on transactions
+  // Update spending goals based on transactions - FIXED FOR FLICKER
   const updateSpendingGoals = useCallback(
     async (transaction, originalTransaction = null) => {
       try {
@@ -502,6 +502,7 @@ const useGoals = () => {
         const saveResult = await saveGoalsToStorage(updatedGoals);
 
         if (saveResult.success) {
+          // CRITICAL FIX: Update state immediately and synchronously
           setGoals(saveResult.goals);
           return {success: true};
         } else {
@@ -764,8 +765,8 @@ const useGoals = () => {
     return hasInitiallyLoaded.current;
   }, []);
 
-  // Clean up timeouts on unmount
-  useEffect(() => {
+  // Clean up timeouts on unmount - CRITICAL FIX: useLayoutEffect instead of useEffect
+  useLayoutEffect(() => {
     return () => {
       clearLoadingTimeout();
     };
