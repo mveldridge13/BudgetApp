@@ -180,6 +180,44 @@ const AddTransactionModal = ({
     }
   }, [editingTransaction, visible]);
 
+  // Effect to auto-update description when category changes
+  useEffect(() => {
+    if (!visible || !selectedCategory || categories.length === 0) {
+      return;
+    }
+
+    const newCategoryDisplayName = getCategoryDisplayName(
+      selectedCategory,
+      selectedSubcategory,
+    );
+
+    if (isEditMode && editingTransaction) {
+      const originalCategoryDisplayName = getCategoryDisplayName(
+        editingTransaction.category,
+        editingTransaction.subcategory,
+      );
+
+      if (
+        !description.trim() ||
+        description.trim() === originalCategoryDisplayName
+      ) {
+        setDescription(newCategoryDisplayName);
+      }
+    } else {
+      if (!description.trim()) {
+        setDescription(newCategoryDisplayName);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedCategory,
+    selectedSubcategory,
+    visible,
+    isEditMode,
+    description,
+    categories.length,
+  ]);
+
   const loadCategories = async () => {
     setIsLoading(true);
     try {
@@ -202,12 +240,10 @@ const AddTransactionModal = ({
     slideAnim.setValue(0);
     modalAnim.setValue(screenWidth);
     fadeAnim.setValue(0);
-    // Reset add category form
     setCategoryName('');
     setSelectedIcon('');
     setSelectedColor('');
     setIsSaving(false);
-    // Reset subcategory form
     setSubcategoryName('');
     setSubcategoryIcon('');
     setParentCategoryId(null);
@@ -220,33 +256,28 @@ const AddTransactionModal = ({
       return;
     }
 
+    const finalDescription =
+      description.trim() ||
+      getCategoryDisplayName(selectedCategory, selectedSubcategory);
+
     const transaction = {
-      id: isEditMode ? editingTransaction.id : generateUniqueId(), // Preserve ID when editing
+      id: isEditMode ? editingTransaction.id : generateUniqueId(),
       amount: parseFloat(amount),
-      description:
-        description ||
-        getCategoryDisplayName(selectedCategory, selectedSubcategory),
+      description: finalDescription,
       category: selectedCategory,
       subcategory: selectedSubcategory,
       date: selectedDate,
       recurrence: selectedRecurrence,
-      createdAt: isEditMode ? editingTransaction.createdAt : new Date(), // Preserve original creation time
-      updatedAt: isEditMode ? new Date() : undefined, // Add update timestamp when editing
+      createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
+      updatedAt: isEditMode ? new Date() : undefined,
     };
 
-    console.log(
-      isEditMode ? 'Updating transaction:' : 'Creating transaction:',
-      transaction.id,
-    );
-
-    // Get current slide position to determine which view we're in
     const currentValue = slideAnim._value;
 
     if (currentValue === 0) {
-      // Already in transaction view, animate modal out then save and close
       Animated.parallel([
         Animated.timing(modalAnim, {
-          toValue: screenWidth, // Slide out to right
+          toValue: screenWidth,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -261,7 +292,6 @@ const AddTransactionModal = ({
         onClose();
       });
     } else {
-      // Animate back to transaction view first, then animate modal out
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
@@ -456,7 +486,6 @@ const AddTransactionModal = ({
   };
 
   const openAddCategoryForm = () => {
-    // Reset form
     setCategoryName('');
     setSelectedIcon('');
     setSelectedColor('');
@@ -464,7 +493,6 @@ const AddTransactionModal = ({
   };
 
   const handleSaveCategory = async () => {
-    // Validate form
     const categoryData = {
       name: categoryName.trim(),
       icon: selectedIcon,
@@ -483,17 +511,14 @@ const AddTransactionModal = ({
       const result = await categoryService.addCategory(categoryData);
 
       if (result.success) {
-        // Add to categories list and select it
         setCategories(prevCategories => [...prevCategories, result.category]);
         setSelectedCategory(result.category.id);
         setSelectedSubcategory(null);
 
-        // Reset form
         setCategoryName('');
         setSelectedIcon('');
         setSelectedColor('');
 
-        // Go back to transaction view
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 300,
@@ -513,7 +538,6 @@ const AddTransactionModal = ({
   };
 
   const handleSaveSubcategory = async () => {
-    // Validate form
     const subcategoryData = {
       name: subcategoryName.trim(),
       icon: subcategoryIcon,
@@ -534,19 +558,15 @@ const AddTransactionModal = ({
       );
 
       if (result.success) {
-        // Reload categories to get updated data
         await loadCategories();
 
-        // Select the new subcategory
         setSelectedCategory(parentCategoryId);
         setSelectedSubcategory(result.subcategory.id);
 
-        // Reset form
         setSubcategoryName('');
         setSubcategoryIcon('');
         setParentCategoryId(null);
 
-        // Go back to transaction view
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 300,
@@ -605,7 +625,6 @@ const AddTransactionModal = ({
         sub => sub.id === subcategoryId,
       );
       if (subcategory) {
-        // Return just the subcategory name for cleaner display
         return subcategory.name;
       }
     }
@@ -623,7 +642,6 @@ const AddTransactionModal = ({
       : colors.textSecondary;
   };
 
-  // Don't render if not visible to avoid layout issues
   if (!visible) {
     return null;
   }
@@ -712,7 +730,7 @@ const AddTransactionModal = ({
                     placeholder="0.00"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
-                    autoFocus={!isEditMode} // Only auto-focus for new transactions
+                    autoFocus={!isEditMode}
                   />
                 </View>
 
@@ -1293,7 +1311,7 @@ const styles = StyleSheet.create({
   },
   viewContainer: {
     flexDirection: 'row',
-    width: screenWidth * 6, // Six screens: Transaction, Category, Subcategory, Recurrence, Add Category, Add Subcategory
+    width: screenWidth * 6,
     height: '100%',
   },
   view: {
@@ -1477,7 +1495,6 @@ const styles = StyleSheet.create({
   recurrenceActiveText: {
     color: colors.textPrimary,
   },
-  // Category picker styles
   loadingContainer: {
     paddingVertical: 40,
     alignItems: 'center',
@@ -1536,7 +1553,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginLeft: 8,
   },
-  // Add Category Form styles
   section: {
     marginBottom: 32,
   },
