@@ -394,25 +394,26 @@ const useGoals = () => {
     [goals, saveGoalsToStorage],
   );
 
-  // Update spending goals based on transactions - FIXED FOR FLICKER
+  // FIXED: Update spending goals based on transactions
   const updateSpendingGoals = useCallback(
-    async (transaction, originalTransaction = null) => {
+    async (newTransaction = null, originalTransaction = null) => {
       try {
-        if (!transaction || typeof transaction !== 'object') {
-          throw new Error('Invalid transaction data');
-        }
+        console.log('updateSpendingGoals called with:', {
+          hasNewTransaction: !!newTransaction,
+          hasOriginalTransaction: !!originalTransaction,
+          newAmount: newTransaction?.amount,
+          originalAmount: originalTransaction?.amount,
+          newCategory: newTransaction?.category,
+          originalCategory: originalTransaction?.category,
+        });
 
-        if (!transaction.category) {
-          // If no category, nothing to update
+        // If neither transaction is provided, nothing to do
+        if (!newTransaction && !originalTransaction) {
+          console.log('No transactions provided, skipping goal update');
           return {success: true};
         }
 
-        const transactionAmount = Number(transaction.amount);
-        if (isNaN(transactionAmount)) {
-          throw new Error('Invalid transaction amount');
-        }
-
-        // Get category name from category service
+        // Get category service
         let categoryService;
         try {
           categoryService = require('../services/categoryService').default;
@@ -436,8 +437,10 @@ const useGoals = () => {
 
         let updatedGoals = [...freshGoals];
 
-        // If this is an update (originalTransaction exists), first subtract the original amount
+        // STEP 1: Remove impact of original transaction (for edits and deletes)
         if (originalTransaction && originalTransaction.category) {
+          console.log('Removing impact of original transaction');
+
           const originalCategory = categories.find(
             cat => cat.id === originalTransaction.category,
           );
@@ -445,17 +448,31 @@ const useGoals = () => {
 
           if (originalCategoryName) {
             const originalAmount = Number(originalTransaction.amount);
-            if (!isNaN(originalAmount)) {
+            if (!isNaN(originalAmount) && originalAmount > 0) {
+              console.log(
+                `Removing ${originalAmount} from ${originalCategoryName} goals`,
+              );
+
               updatedGoals = updatedGoals.map(goal => {
                 if (goal.type !== 'spending' || !goal.category) {
                   return goal;
                 }
 
-                // Subtract original transaction amount if category matches
+                // Remove original transaction amount if category matches
                 if (goal.category.toLowerCase() === originalCategoryName) {
+                  const newCurrent = Math.max(
+                    0,
+                    (goal.current || 0) - originalAmount,
+                  );
+                  console.log(
+                    `Goal ${goal.title}: ${
+                      goal.current || 0
+                    } - ${originalAmount} = ${newCurrent}`,
+                  );
+
                   return {
                     ...goal,
-                    current: Math.max(0, (goal.current || 0) - originalAmount),
+                    current: newCurrent,
                     lastUpdated: new Date().toISOString(),
                   };
                 }
@@ -465,45 +482,75 @@ const useGoals = () => {
           }
         }
 
-        // Now add the new/updated transaction amount
-        const transactionCategory = categories.find(
-          cat => cat.id === transaction.category,
-        );
-        const transactionCategoryName =
-          transactionCategory?.name?.toLowerCase();
+        // STEP 2: Add impact of new transaction (for new transactions and edits)
+        if (newTransaction && newTransaction.category) {
+          console.log('Adding impact of new transaction');
 
-        if (transactionCategoryName) {
-          // Check if any spending goals need updating
-          const relevantGoals = updatedGoals.filter(
-            goal =>
-              goal.type === 'spending' &&
-              goal.category?.toLowerCase() === transactionCategoryName,
-          );
+          const newTransactionAmount = Number(newTransaction.amount);
+          if (isNaN(newTransactionAmount) || newTransactionAmount <= 0) {
+            console.warn(
+              'Invalid new transaction amount:',
+              newTransaction.amount,
+            );
+          } else {
+            const transactionCategory = categories.find(
+              cat => cat.id === newTransaction.category,
+            );
+            const transactionCategoryName =
+              transactionCategory?.name?.toLowerCase();
 
-          if (relevantGoals.length > 0) {
-            updatedGoals = updatedGoals.map(goal => {
-              if (goal.type !== 'spending' || !goal.category) {
-                return goal;
+            if (transactionCategoryName) {
+              console.log(
+                `Adding ${newTransactionAmount} to ${transactionCategoryName} goals`,
+              );
+
+              // Check if any spending goals need updating
+              const relevantGoals = updatedGoals.filter(
+                goal =>
+                  goal.type === 'spending' &&
+                  goal.category?.toLowerCase() === transactionCategoryName,
+              );
+
+              if (relevantGoals.length > 0) {
+                updatedGoals = updatedGoals.map(goal => {
+                  if (goal.type !== 'spending' || !goal.category) {
+                    return goal;
+                  }
+
+                  // Add new transaction amount if category matches
+                  if (goal.category.toLowerCase() === transactionCategoryName) {
+                    const newCurrent =
+                      (goal.current || 0) + newTransactionAmount;
+                    console.log(
+                      `Goal ${goal.title}: ${
+                        goal.current || 0
+                      } + ${newTransactionAmount} = ${newCurrent}`,
+                    );
+
+                    return {
+                      ...goal,
+                      current: newCurrent,
+                      lastUpdated: new Date().toISOString(),
+                    };
+                  }
+                  return goal;
+                });
+              } else {
+                console.log(
+                  `No spending goals found for category: ${transactionCategoryName}`,
+                );
               }
-
-              // Add new transaction amount if category matches
-              if (goal.category.toLowerCase() === transactionCategoryName) {
-                return {
-                  ...goal,
-                  current: (goal.current || 0) + transactionAmount,
-                  lastUpdated: new Date().toISOString(),
-                };
-              }
-              return goal;
-            });
+            }
           }
         }
 
+        // STEP 3: Save the updated goals
         const saveResult = await saveGoalsToStorage(updatedGoals);
 
         if (saveResult.success) {
-          // CRITICAL FIX: Update state immediately and synchronously
+          // Update state immediately and synchronously
           setGoals(saveResult.goals);
+          console.log('Goals updated successfully');
           return {success: true};
         } else {
           throw new Error(

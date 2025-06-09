@@ -245,21 +245,51 @@ const HomeScreen = ({navigation}) => {
     navigation.navigate('Goals');
   };
 
+  // Helper function to get current transaction data from AsyncStorage
+  const getCurrentTransactionData = async transactionId => {
+    try {
+      const storedTransactions = await AsyncStorage.getItem('transactions');
+      if (storedTransactions) {
+        const parsedTransactionList = JSON.parse(storedTransactions);
+        return parsedTransactionList.find(t => t.id === transactionId);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting current transaction data:', error);
+      return null;
+    }
+  };
+
   const handleSaveTransaction = async transaction => {
     try {
-      // Store the original transaction BEFORE saving if we're editing
+      // CRITICAL: Store the original transaction BEFORE any save operations
+      // This prevents losing the original data after saveTransaction modifies state
       const originalTransaction = editingTransaction
-        ? {...editingTransaction}
+        ? {...editingTransaction} // Make a deep copy of the original
         : null;
 
+      console.log('Saving transaction:', {
+        isEdit: !!originalTransaction,
+        originalAmount: originalTransaction?.amount,
+        newAmount: transaction.amount,
+        transactionId: transaction.id,
+        originalGoalId: originalTransaction?.goalId,
+        newGoalId: transaction.goalId,
+      });
+
+      // Save the transaction first
       const result = await saveTransaction(transaction);
 
-      // Update spending goals with both original and new transaction data
+      // Update spending goals with proper before/after handling
       if (originalTransaction) {
-        // This is an edit - pass both original and new transaction to prevent double-counting
+        // EDITING: Pass both new and original transaction data
+        console.log(
+          'Editing transaction - updating goals with both old and new data',
+        );
         await updateSpendingGoals(transaction, originalTransaction);
       } else {
-        // This is a new transaction - just pass the new transaction
+        // NEW TRANSACTION: Just add the impact
+        console.log('New transaction - adding to goals');
         await updateSpendingGoals(transaction);
       }
 
@@ -287,22 +317,48 @@ const HomeScreen = ({navigation}) => {
 
   const handleDeleteTransaction = async transactionId => {
     try {
-      // Find the transaction before deleting it so we can reverse the goal update
-      const transactionToDelete = transactions.find(
+      console.log('Deleting transaction:', transactionId);
+
+      // CRITICAL FIX: Get the CURRENT transaction from AsyncStorage, not from state
+      // This ensures we get the most up-to-date version after any edits
+      const storedTransactions = await AsyncStorage.getItem('transactions');
+      let currentTransactionList = [];
+
+      if (storedTransactions) {
+        currentTransactionList = JSON.parse(storedTransactions);
+      } else {
+        console.error('No transactions found in storage');
+        return;
+      }
+
+      // Find the CURRENT version of the transaction from storage
+      const transactionToDelete = currentTransactionList.find(
         t => t.id === transactionId,
       );
 
-      // Delete the transaction first
+      if (!transactionToDelete) {
+        console.error('Transaction not found for deletion:', transactionId);
+        return;
+      }
+
+      console.log('Current transaction to delete (from AsyncStorage):', {
+        id: transactionToDelete.id,
+        currentAmount: transactionToDelete.amount, // This should be the updated amount ($11, not $10)
+        description: transactionToDelete.description,
+        goalId: transactionToDelete.goalId,
+        lastUpdated: transactionToDelete.updatedAt,
+        createdAt: transactionToDelete.createdAt,
+      });
+
+      // Delete the transaction first (this updates AsyncStorage and state)
       await deleteTransaction(transactionId);
 
-      // Now reverse the goal update by calling updateSpendingGoals with negative amount
-      if (transactionToDelete) {
-        const reverseTransaction = {
-          ...transactionToDelete,
-          amount: -transactionToDelete.amount, // Make amount negative to subtract from goal
-        };
-        await updateSpendingGoals(reverseTransaction);
-      }
+      // Update goals by removing the impact of the CURRENT transaction data
+      console.log(
+        'Removing transaction impact from goals using current amount:',
+        transactionToDelete.amount,
+      );
+      await updateSpendingGoals(null, transactionToDelete);
     } catch (error) {
       console.error('Error deleting transaction:', error);
       // Error already handled in hook
