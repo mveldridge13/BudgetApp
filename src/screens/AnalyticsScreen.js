@@ -8,12 +8,21 @@ import {
   Dimensions,
   RefreshControl,
   AppState,
+  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {LineChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
+import DiscretionaryBreakdown from '../components/DiscretionaryBreakdown';
+
+// Pro Badge Component - moved outside to prevent recreation on each render
+const ProBadge = () => (
+  <View style={styles.proBadge}>
+    <Text style={styles.proBadgeText}>PRO</Text>
+  </View>
+);
 
 const AnalyticsScreen = () => {
   const insets = useSafeAreaInsets();
@@ -21,12 +30,42 @@ const AnalyticsScreen = () => {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   // Refs to prevent multiple simultaneous loads and flicker
   const isLoadingRef = useRef(false);
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
   const hasLoadedOnce = useRef(false);
+
+  // Check Pro status on mount and when screen is focused
+  useEffect(() => {
+    const checkProStatus = async () => {
+      try {
+        const proStatus = await AsyncStorage.getItem('isPro');
+        setIsPro(proStatus === 'true');
+      } catch (error) {
+        console.error('Error checking Pro status:', error);
+      }
+    };
+    checkProStatus();
+  }, []);
+
+  // Re-check Pro status when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const checkProStatus = async () => {
+        try {
+          const proStatus = await AsyncStorage.getItem('isPro');
+          setIsPro(proStatus === 'true');
+        } catch (error) {
+          console.error('Error checking Pro status:', error);
+        }
+      };
+      checkProStatus();
+    }, []),
+  );
 
   // Consolidated data loading function
   const loadTransactions = useCallback(async (force = false) => {
@@ -188,6 +227,7 @@ const AnalyticsScreen = () => {
             discretionaryAmount: dailyDiscretionary,
             previousPeriod: previousDayTotal,
             previousDiscretionary: previousDayDiscretionary,
+            date: new Date(date),
           });
         }
         break;
@@ -243,6 +283,8 @@ const AnalyticsScreen = () => {
             discretionaryAmount: weeklyDiscretionary,
             previousPeriod: previousWeekTotal,
             previousDiscretionary: previousWeekDiscretionary,
+            startDate: new Date(weekStart),
+            endDate: new Date(weekEnd),
           });
         }
         break;
@@ -296,6 +338,7 @@ const AnalyticsScreen = () => {
             discretionaryAmount: monthlyDiscretionary,
             previousPeriod: previousMonthTotal,
             previousDiscretionary: previousMonthDiscretionary,
+            monthDate: new Date(monthDate),
           });
         }
         break;
@@ -429,21 +472,39 @@ const AnalyticsScreen = () => {
     setComparisonMode(prev => !prev);
   }, []);
 
-  // Never show loading screen to prevent flicker
-  if (false) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading analytics...</Text>
-      </View>
-    );
-  }
+  const handleDiscretionaryClick = useCallback(() => {
+    if (isPro) {
+      setShowBreakdown(true);
+    } else {
+      // Show upgrade prompt
+      Alert.alert(
+        'Upgrade to Pro',
+        'Access advanced analytics and detailed breakdowns with Pro features!',
+        [
+          {text: 'Maybe Later', style: 'cancel'},
+          {text: 'Learn More', style: 'default'},
+        ],
+      );
+    }
+  }, [isPro]);
+
+  const handleCloseBreakdown = useCallback(() => {
+    setShowBreakdown(false);
+  }, []);
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
-        <Text style={styles.headerTitle}>Analytics</Text>
-        <Text style={styles.headerSubtitle}>Track your spending patterns</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Analytics</Text>
+            <Text style={styles.headerSubtitle}>
+              Track your spending patterns
+            </Text>
+          </View>
+          {isPro && <ProBadge />}
+        </View>
       </View>
 
       <ScrollView
@@ -604,19 +665,32 @@ const AnalyticsScreen = () => {
 
           {getHighestDiscretionaryPeriod &&
             getHighestDiscretionaryPeriod.discretionaryAmount > 0 && (
-              <View
+              <TouchableOpacity
                 style={[
                   styles.insightCard,
+                  styles.clickableInsight,
                   {borderLeftColor: colors.secondary || '#10B981'},
-                ]}>
-                <Text style={styles.insightText}>
-                  <Text style={styles.insightBold}>
-                    Highest discretionary spending:
-                  </Text>{' '}
-                  {getHighestDiscretionaryPeriod.label} with $
-                  {getHighestDiscretionaryPeriod.discretionaryAmount.toFixed(2)}
-                </Text>
-              </View>
+                ]}
+                onPress={handleDiscretionaryClick}>
+                <View style={styles.insightContentClean}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>
+                      Highest discretionary spending:
+                    </Text>{' '}
+                    {getHighestDiscretionaryPeriod.label} with $
+                    {getHighestDiscretionaryPeriod.discretionaryAmount.toFixed(
+                      2,
+                    )}
+                  </Text>
+                  {isPro ? (
+                    <Text style={styles.tapHint}>Tap for breakdown</Text>
+                  ) : (
+                    <View style={styles.proIndicator}>
+                      <ProBadge />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
             )}
 
           <View
@@ -669,6 +743,16 @@ const AnalyticsScreen = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Discretionary Breakdown Modal */}
+      <DiscretionaryBreakdown
+        visible={showBreakdown}
+        onClose={handleCloseBreakdown}
+        transactions={transactions}
+        selectedPeriod={selectedPeriod}
+        periodData={data}
+        isRecurringTransaction={isRecurringTransaction}
+      />
     </View>
   );
 };
@@ -678,19 +762,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background || '#F8FAFC',
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: 'System',
-    color: colors.textSecondary || '#6B7280',
-  },
   header: {
     backgroundColor: colors.primary || '#6366F1',
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
@@ -704,6 +784,18 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite || '#FFFFFF',
     opacity: 0.9,
+  },
+  proBadge: {
+    backgroundColor: colors.warning || '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  proBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.textWhite || '#FFFFFF',
+    fontFamily: 'System',
   },
   content: {
     flex: 1,
@@ -848,11 +940,50 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     marginBottom: 12,
   },
+  clickableInsight: {
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  insightContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insightContentClean: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  insightAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  insightActionText: {
+    fontSize: 12,
+    color: colors.primary || '#6366F1',
+    fontWeight: '500',
+    fontFamily: 'System',
+  },
+  tapHint: {
+    fontSize: 12,
+    color: colors.primary || '#6366F1',
+    fontWeight: '500',
+    fontFamily: 'System',
+    alignSelf: 'flex-end',
+    fontStyle: 'italic',
+  },
+  proIndicator: {
+    alignSelf: 'flex-end',
+  },
   insightText: {
     fontSize: 14,
     fontFamily: 'System',
     color: colors.text || '#1F2937',
     lineHeight: 20,
+    flex: 1,
   },
   insightBold: {
     fontWeight: '600',

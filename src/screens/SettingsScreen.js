@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unstable-nested-components */
 // screens/SettingsScreen.js
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
@@ -33,6 +34,9 @@ const SettingsScreen = ({navigation}) => {
     expenseCategories: true,
   });
 
+  // Pro feature state
+  const [isPro, setIsPro] = useState(false);
+
   // App state tracking
   const [appVersion] = useState('1.0');
   const [dataSize, setDataSize] = useState(0);
@@ -52,14 +56,21 @@ const SettingsScreen = ({navigation}) => {
     isLoadingRef.current = true;
 
     try {
-      const [userSetup, storedSettings, backupInfo, transactions, goals] =
-        await Promise.all([
-          AsyncStorage.getItem('userSetup'),
-          AsyncStorage.getItem('appSettings'),
-          AsyncStorage.getItem('lastBackup'),
-          AsyncStorage.getItem('transactions'),
-          AsyncStorage.getItem('goals'),
-        ]);
+      const [
+        userSetup,
+        storedSettings,
+        backupInfo,
+        transactions,
+        goals,
+        proStatus,
+      ] = await Promise.all([
+        AsyncStorage.getItem('userSetup'),
+        AsyncStorage.getItem('appSettings'),
+        AsyncStorage.getItem('lastBackup'),
+        AsyncStorage.getItem('transactions'),
+        AsyncStorage.getItem('goals'),
+        AsyncStorage.getItem('isPro'),
+      ]);
 
       if (isMountedRef.current) {
         // Set user profile
@@ -71,6 +82,9 @@ const SettingsScreen = ({navigation}) => {
         if (storedSettings) {
           setAppSettings(prev => ({...prev, ...JSON.parse(storedSettings)}));
         }
+
+        // Set Pro status
+        setIsPro(proStatus === 'true');
 
         // Calculate data size
         const transactionSize = transactions
@@ -124,6 +138,26 @@ const SettingsScreen = ({navigation}) => {
       Alert.alert('Error', 'Failed to save settings. Please try again.');
     }
   }, []);
+
+  // Toggle Pro status
+  const handleTogglePro = useCallback(async () => {
+    try {
+      const newProStatus = !isPro;
+      await AsyncStorage.setItem('isPro', newProStatus.toString());
+      setIsPro(newProStatus);
+
+      Alert.alert(
+        'Pro Status Updated',
+        `Pro features are now ${
+          newProStatus ? 'enabled' : 'disabled'
+        }. This change will take effect throughout the app.`,
+        [{text: 'OK'}],
+      );
+    } catch (error) {
+      console.error('Error toggling Pro status:', error);
+      Alert.alert('Error', 'Failed to update Pro status. Please try again.');
+    }
+  }, [isPro]);
 
   // Settings handlers
   const handleToggleSetting = useCallback(
@@ -200,6 +234,7 @@ const SettingsScreen = ({navigation}) => {
                 'hasSeenAddTransactionTour',
                 'hasSeenTransactionSwipeTour',
                 'lastBackup',
+                'isPro',
               ]);
 
               Alert.alert('Success', 'All data has been cleared.', [
@@ -225,10 +260,12 @@ const SettingsScreen = ({navigation}) => {
   const handleContactSupport = useCallback(() => {
     const email = 'support@budgetapp.com';
     const subject = 'Budget App Support Request';
-    const body = `App Version: ${appVersion}\nDevice: ${Platform.OS}\n\nDescribe your issue:\n`;
+    const body = `App Version: ${appVersion}\nDevice: ${
+      Platform.OS
+    }\nPro Status: ${isPro ? 'Enabled' : 'Disabled'}\n\nDescribe your issue:\n`;
 
     Linking.openURL(`mailto:${email}?subject=${subject}&body=${body}`);
-  }, [appVersion]);
+  }, [appVersion, isPro]);
 
   const handleRateApp = useCallback(() => {
     Alert.alert(
@@ -291,6 +328,25 @@ const SettingsScreen = ({navigation}) => {
     return `${(sizeInKB / 1024).toFixed(1)} MB`;
   }, []);
 
+  // Pro Badge Component
+  const ProBadge = ({size = 'small'}) => (
+    <View
+      style={[
+        styles.proBadge,
+        size === 'large' ? styles.proBadgeLarge : styles.proBadgeSmall,
+      ]}>
+      <Text
+        style={[
+          styles.proBadgeText,
+          size === 'large'
+            ? styles.proBadgeTextLarge
+            : styles.proBadgeTextSmall,
+        ]}>
+        PRO
+      </Text>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -303,8 +359,15 @@ const SettingsScreen = ({navigation}) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <Text style={styles.headerSubtitle}>Customize your app experience</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Settings</Text>
+            <Text style={styles.headerSubtitle}>
+              Customize your app experience
+            </Text>
+          </View>
+          {isPro && <ProBadge size="large" />}
+        </View>
 
         {/* User Profile Card */}
         {userProfile && (
@@ -333,6 +396,46 @@ const SettingsScreen = ({navigation}) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
+        {/* Pro Features Section - Testing Only */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Pro Features (Testing)</Text>
+
+          <View style={styles.settingCard}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <View
+                  style={[
+                    styles.settingIconContainer,
+                    styles.proIconContainer,
+                  ]}>
+                  <Icon name="star" size={18} color={colors.warning} />
+                </View>
+                <View style={styles.settingText}>
+                  <View style={styles.settingLabelRow}>
+                    <Text style={styles.settingLabel}>Pro Mode</Text>
+                    {isPro && <ProBadge />}
+                  </View>
+                  <Text style={styles.settingDescription}>
+                    {isPro
+                      ? 'Advanced analytics and features enabled'
+                      : 'Enable to test Pro features and analytics'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={isPro}
+                onValueChange={handleTogglePro}
+                trackColor={{
+                  false: colors.border,
+                  true: colors.warning,
+                }}
+                thumbColor={isPro ? colors.textWhite : colors.textSecondary}
+                ios_backgroundColor={colors.border}
+              />
+            </View>
+          </View>
+        </View>
+
         {/* App Settings Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Settings</Text>
@@ -650,6 +753,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: '400',
@@ -665,7 +774,32 @@ const styles = StyleSheet.create({
     color: colors.textWhite,
     opacity: 0.9,
     letterSpacing: -0.1,
-    marginBottom: 20,
+  },
+  proBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proBadgeSmall: {
+    backgroundColor: colors.warning || '#F59E0B',
+  },
+  proBadgeLarge: {
+    backgroundColor: colors.warning || '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  proBadgeText: {
+    fontWeight: 'bold',
+    color: colors.textWhite || '#FFFFFF',
+    fontFamily: 'System',
+  },
+  proBadgeTextSmall: {
+    fontSize: 10,
+  },
+  proBadgeTextLarge: {
+    fontSize: 12,
   },
   profileCard: {
     backgroundColor: colors.overlayLight,
@@ -676,7 +810,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: colors.overlayDark,
-    marginBottom: 20,
   },
   profileInfo: {
     flexDirection: 'row',
@@ -715,7 +848,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 100,
   },
-
   section: {
     marginBottom: 32,
   },
@@ -756,15 +888,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 16,
   },
+  proIconContainer: {
+    backgroundColor: colors.warningLight || '#FEF3C7',
+  },
   settingText: {
     flex: 1,
+  },
+  settingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
   },
   settingLabel: {
     fontSize: 16,
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.text,
-    marginBottom: 2,
   },
   settingDescription: {
     fontSize: 14,
