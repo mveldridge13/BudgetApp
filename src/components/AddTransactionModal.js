@@ -87,6 +87,7 @@ const AddTransactionModal = ({
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
 
@@ -102,11 +103,19 @@ const AddTransactionModal = ({
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Current subcategory view data
+  const [currentSubcategoryData, setCurrentSubcategoryData] = useState(null);
+
   // Add Category form data
   const [categoryName, setCategoryName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Add Subcategory form data
+  const [subcategoryName, setSubcategoryName] = useState('');
+  const [subcategoryIcon, setSubcategoryIcon] = useState('');
+  const [parentCategoryId, setParentCategoryId] = useState(null);
 
   const recurrenceOptions = [
     {id: 'none', name: 'Does not repeat'},
@@ -157,6 +166,7 @@ const AddTransactionModal = ({
       setAmount(editingTransaction.amount.toString());
       setDescription(editingTransaction.description || '');
       setSelectedCategory(editingTransaction.category);
+      setSelectedSubcategory(editingTransaction.subcategory || null);
       setSelectedDate(new Date(editingTransaction.date));
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
     } else if (!editingTransaction && visible) {
@@ -164,6 +174,7 @@ const AddTransactionModal = ({
       setAmount('');
       setDescription('');
       setSelectedCategory(null);
+      setSelectedSubcategory(null);
       setSelectedDate(new Date());
       setSelectedRecurrence('none');
     }
@@ -185,6 +196,7 @@ const AddTransactionModal = ({
     setAmount('');
     setDescription('');
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
     setSelectedDate(new Date());
     setSelectedRecurrence('none');
     slideAnim.setValue(0);
@@ -195,6 +207,11 @@ const AddTransactionModal = ({
     setSelectedIcon('');
     setSelectedColor('');
     setIsSaving(false);
+    // Reset subcategory form
+    setSubcategoryName('');
+    setSubcategoryIcon('');
+    setParentCategoryId(null);
+    setCurrentSubcategoryData(null);
   };
 
   const handleSave = () => {
@@ -207,8 +224,10 @@ const AddTransactionModal = ({
       id: isEditMode ? editingTransaction.id : generateUniqueId(), // Preserve ID when editing
       amount: parseFloat(amount),
       description:
-        description || categories.find(c => c.id === selectedCategory)?.name,
+        description ||
+        getCategoryDisplayName(selectedCategory, selectedSubcategory),
       category: selectedCategory,
+      subcategory: selectedSubcategory,
       date: selectedDate,
       recurrence: selectedRecurrence,
       createdAt: isEditMode ? editingTransaction.createdAt : new Date(), // Preserve original creation time
@@ -324,7 +343,8 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const showRecurrencePicker = () => {
+  const showSubcategoryPicker = category => {
+    setCurrentSubcategoryData(category);
     Animated.timing(slideAnim, {
       toValue: -screenWidth * 2,
       duration: 300,
@@ -332,9 +352,28 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const showAddCategoryForm = () => {
+  const showRecurrencePicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth * 3,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const showAddCategoryForm = () => {
+    Animated.timing(slideAnim, {
+      toValue: -screenWidth * 4,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const showAddSubcategoryForm = categoryId => {
+    setParentCategoryId(categoryId);
+    setSubcategoryName('');
+    setSubcategoryIcon('');
+    Animated.timing(slideAnim, {
+      toValue: -screenWidth * 5,
       duration: 300,
       useNativeDriver: true,
     }).start();
@@ -343,6 +382,14 @@ const AddTransactionModal = ({
   const hideCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const hideSubcategoryPicker = () => {
+    Animated.timing(slideAnim, {
+      toValue: -screenWidth,
       duration: 300,
       useNativeDriver: true,
     }).start();
@@ -364,10 +411,43 @@ const AddTransactionModal = ({
     }).start();
   };
 
+  const hideAddSubcategoryForm = () => {
+    Animated.timing(slideAnim, {
+      toValue: -screenWidth * 2,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const handleCategorySelect = categoryId => {
-    setSelectedCategory(categoryId);
+    const category = getCategoryById(categoryId);
+
+    if (
+      category &&
+      category.hasSubcategories &&
+      category.subcategories?.length > 0
+    ) {
+      // Show subcategory picker
+      showSubcategoryPicker(category);
+    } else {
+      // Select category directly
+      setSelectedCategory(categoryId);
+      setSelectedSubcategory(null);
+      loadCategories();
+      hideCategoryPicker();
+    }
+  };
+
+  const handleSubcategorySelect = subcategoryId => {
+    setSelectedCategory(currentSubcategoryData.id);
+    setSelectedSubcategory(subcategoryId);
     loadCategories();
-    hideCategoryPicker();
+    // Go back to transaction view
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleRecurrenceSelect = recurrenceId => {
@@ -406,6 +486,7 @@ const AddTransactionModal = ({
         // Add to categories list and select it
         setCategories(prevCategories => [...prevCategories, result.category]);
         setSelectedCategory(result.category.id);
+        setSelectedSubcategory(null);
 
         // Reset form
         setCategoryName('');
@@ -431,6 +512,76 @@ const AddTransactionModal = ({
     }
   };
 
+  const handleSaveSubcategory = async () => {
+    // Validate form
+    const subcategoryData = {
+      name: subcategoryName.trim(),
+      icon: subcategoryIcon,
+    };
+
+    const validation = categoryService.validateSubcategory(subcategoryData);
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.errors.join('\n'));
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const result = await categoryService.addSubcategory(
+        parentCategoryId,
+        subcategoryData,
+      );
+
+      if (result.success) {
+        // Reload categories to get updated data
+        await loadCategories();
+
+        // Select the new subcategory
+        setSelectedCategory(parentCategoryId);
+        setSelectedSubcategory(result.subcategory.id);
+
+        // Reset form
+        setSubcategoryName('');
+        setSubcategoryIcon('');
+        setParentCategoryId(null);
+
+        // Go back to transaction view
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+
+        Alert.alert('Success', 'Subcategory created successfully!');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to create subcategory');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred');
+      console.error('Error creating subcategory:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Helper function to create dynamic category icon style
+  const getCategoryIconStyle = color => {
+    return {
+      ...styles.categoryIconContainer,
+      backgroundColor: `${color}26`,
+    };
+  };
+
+  // Helper function to create dynamic color option style
+  const getColorOptionStyle = (color, isSelected) => {
+    return {
+      ...styles.colorOption,
+      backgroundColor: color,
+      ...(isSelected && styles.selectedColorOption),
+    };
+  };
+
   // Helper functions
   const formatDate = date => {
     return date.toLocaleDateString('en-AU', {
@@ -442,6 +593,25 @@ const AddTransactionModal = ({
 
   const getCategoryById = id => categories.find(cat => cat.id === id);
   const getRecurrenceById = id => recurrenceOptions.find(opt => opt.id === id);
+
+  const getCategoryDisplayName = (categoryId, subcategoryId) => {
+    const category = getCategoryById(categoryId);
+    if (!category) {
+      return '';
+    }
+
+    if (subcategoryId && category.subcategories) {
+      const subcategory = category.subcategories.find(
+        sub => sub.id === subcategoryId,
+      );
+      if (subcategory) {
+        // Return just the subcategory name for cleaner display
+        return subcategory.name;
+      }
+    }
+
+    return category.name;
+  };
 
   const getRecurrenceIcon = () => {
     return selectedRecurrence !== 'none' ? 'repeat' : 'repeat-outline';
@@ -564,22 +734,29 @@ const AddTransactionModal = ({
                     {selectedCategory ? (
                       <>
                         <View
-                          style={[
-                            styles.categoryIconContainer,
-                            {
-                              backgroundColor: `${
-                                getCategoryById(selectedCategory)?.color
-                              }26`,
-                            },
-                          ]}>
+                          style={getCategoryIconStyle(
+                            getCategoryById(selectedCategory)?.color,
+                          )}>
                           <Icon
-                            name={getCategoryById(selectedCategory)?.icon}
+                            name={
+                              selectedSubcategory
+                                ? getCategoryById(
+                                    selectedCategory,
+                                  )?.subcategories?.find(
+                                    sub => sub.id === selectedSubcategory,
+                                  )?.icon ||
+                                  getCategoryById(selectedCategory)?.icon
+                                : getCategoryById(selectedCategory)?.icon
+                            }
                             size={18}
                             color={getCategoryById(selectedCategory)?.color}
                           />
                         </View>
                         <Text style={styles.categoryText}>
-                          {getCategoryById(selectedCategory)?.name}
+                          {getCategoryDisplayName(
+                            selectedCategory,
+                            selectedSubcategory,
+                          )}
                         </Text>
                       </>
                     ) : (
@@ -670,11 +847,7 @@ const AddTransactionModal = ({
                         onPress={() => handleCategorySelect(category.id)}
                         activeOpacity={0.7}>
                         <View style={styles.categoryLeft}>
-                          <View
-                            style={[
-                              styles.categoryIconContainer,
-                              {backgroundColor: `${category.color}26`},
-                            ]}>
+                          <View style={getCategoryIconStyle(category.color)}>
                             <Icon
                               name={category.icon}
                               size={20}
@@ -690,13 +863,23 @@ const AddTransactionModal = ({
                             )}
                           </View>
                         </View>
-                        {selectedCategory === category.id && (
-                          <Icon
-                            name="checkmark"
-                            size={20}
-                            color={colors.primary}
-                          />
-                        )}
+                        <View style={styles.categoryRight}>
+                          {selectedCategory === category.id &&
+                            !category.hasSubcategories && (
+                              <Icon
+                                name="checkmark"
+                                size={20}
+                                color={colors.primary}
+                              />
+                            )}
+                          {category.hasSubcategories && (
+                            <Icon
+                              name="chevron-forward"
+                              size={20}
+                              color={colors.textSecondary}
+                            />
+                          )}
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </>
@@ -709,6 +892,77 @@ const AddTransactionModal = ({
                   activeOpacity={0.7}>
                   <Icon name="add" size={20} color={colors.primary} />
                   <Text style={styles.addCategoryText}>Add Category</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+
+            {/* Subcategory Picker View */}
+            <View style={styles.view}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+                <TouchableOpacity
+                  onPress={hideSubcategoryPicker}
+                  style={styles.cancelButton}>
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>
+                  {currentSubcategoryData?.name || 'Select Subcategory'}
+                </Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.formContainer}
+                showsVerticalScrollIndicator={false}>
+                {/* Subcategories */}
+                {currentSubcategoryData?.subcategories?.map(subcategory => (
+                  <TouchableOpacity
+                    key={subcategory.id}
+                    style={[
+                      styles.categoryOption,
+                      selectedSubcategory === subcategory.id &&
+                        styles.selectedOption,
+                    ]}
+                    onPress={() => handleSubcategorySelect(subcategory.id)}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      <View
+                        style={getCategoryIconStyle(
+                          currentSubcategoryData.color,
+                        )}>
+                        <Icon
+                          name={subcategory.icon}
+                          size={20}
+                          color={currentSubcategoryData.color}
+                        />
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.categoryName}>
+                          {subcategory.name}
+                        </Text>
+                        {subcategory.isCustom && (
+                          <Text style={styles.customLabel}>Custom</Text>
+                        )}
+                      </View>
+                    </View>
+                    {selectedSubcategory === subcategory.id && (
+                      <Icon name="checkmark" size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+
+                {/* Add Subcategory Button */}
+                <TouchableOpacity
+                  style={styles.addCategoryButton}
+                  onPress={() =>
+                    showAddSubcategoryForm(currentSubcategoryData?.id)
+                  }
+                  activeOpacity={0.7}>
+                  <Icon name="add" size={20} color={colors.primary} />
+                  <Text style={styles.addCategoryText}>Add Subcategory</Text>
                 </TouchableOpacity>
               </ScrollView>
             </View>
@@ -849,11 +1103,10 @@ const AddTransactionModal = ({
                     {categoryColors.map((color, index) => (
                       <TouchableOpacity
                         key={index}
-                        style={[
-                          styles.colorOption,
-                          {backgroundColor: color},
-                          selectedColor === color && styles.selectedColorOption,
-                        ]}
+                        style={getColorOptionStyle(
+                          color,
+                          selectedColor === color,
+                        )}
                         onPress={() => setSelectedColor(color)}
                         activeOpacity={0.8}>
                         {selectedColor === color && (
@@ -869,11 +1122,7 @@ const AddTransactionModal = ({
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Preview</Text>
                     <View style={styles.previewContainer}>
-                      <View
-                        style={[
-                          styles.categoryIconContainer,
-                          {backgroundColor: `${selectedColor}26`},
-                        ]}>
+                      <View style={getCategoryIconStyle(selectedColor)}>
                         <Icon
                           name={selectedIcon}
                           size={20}
@@ -882,6 +1131,135 @@ const AddTransactionModal = ({
                       </View>
                       <Text style={styles.categoryName}>
                         {categoryName.trim()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+
+            {/* Add Subcategory Form View */}
+            <View style={styles.view}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+                <TouchableOpacity
+                  onPress={hideAddSubcategoryForm}
+                  style={styles.cancelButton}>
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Add Subcategory</Text>
+                <TouchableOpacity
+                  onPress={handleSaveSubcategory}
+                  style={[
+                    styles.saveButton,
+                    (!subcategoryName.trim() || !subcategoryIcon) &&
+                      styles.saveButtonDisabled,
+                  ]}
+                  disabled={
+                    !subcategoryName.trim() || !subcategoryIcon || isSaving
+                  }>
+                  {isSaving ? (
+                    <Text style={styles.saveText}>Saving...</Text>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.saveText,
+                        (!subcategoryName.trim() || !subcategoryIcon) &&
+                          styles.saveTextDisabled,
+                      ]}>
+                      Save
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                style={styles.formContainer}
+                showsVerticalScrollIndicator={false}>
+                {/* Parent Category Info */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Parent Category</Text>
+                  <View style={styles.parentCategoryInfo}>
+                    <View
+                      style={getCategoryIconStyle(
+                        getCategoryById(parentCategoryId)?.color,
+                      )}>
+                      <Icon
+                        name={getCategoryById(parentCategoryId)?.icon}
+                        size={20}
+                        color={getCategoryById(parentCategoryId)?.color}
+                      />
+                    </View>
+                    <Text style={styles.categoryName}>
+                      {getCategoryById(parentCategoryId)?.name}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Subcategory Name Input */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Subcategory Name</Text>
+                  <TextInput
+                    style={styles.nameInput}
+                    value={subcategoryName}
+                    onChangeText={setSubcategoryName}
+                    placeholder="Enter subcategory name"
+                    placeholderTextColor={colors.textSecondary}
+                    maxLength={30}
+                    autoFocus={true}
+                  />
+                  <Text style={styles.characterCount}>
+                    {subcategoryName.length}/30
+                  </Text>
+                </View>
+
+                {/* Icon Selection */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Choose Icon</Text>
+                  <View style={styles.iconGrid}>
+                    {categoryIcons.map((icon, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.iconOption,
+                          subcategoryIcon === icon && styles.selectedIconOption,
+                        ]}
+                        onPress={() => setSubcategoryIcon(icon)}
+                        activeOpacity={0.7}>
+                        <Icon
+                          name={icon}
+                          size={24}
+                          color={
+                            subcategoryIcon === icon
+                              ? colors.primary
+                              : colors.textSecondary
+                          }
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Preview */}
+                {subcategoryIcon && subcategoryName.trim() && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Preview</Text>
+                    <View style={styles.previewContainer}>
+                      <View
+                        style={getCategoryIconStyle(
+                          getCategoryById(parentCategoryId)?.color,
+                        )}>
+                        <Icon
+                          name={subcategoryIcon}
+                          size={20}
+                          color={getCategoryById(parentCategoryId)?.color}
+                        />
+                      </View>
+                      <Text style={styles.categoryName}>
+                        {subcategoryName.trim()}
                       </Text>
                     </View>
                   </View>
@@ -915,7 +1293,7 @@ const styles = StyleSheet.create({
   },
   viewContainer: {
     flexDirection: 'row',
-    width: screenWidth * 4, // Four screens: Transaction, Category, Recurrence, Add Category
+    width: screenWidth * 6, // Six screens: Transaction, Category, Subcategory, Recurrence, Add Category, Add Subcategory
     height: '100%',
   },
   view: {
@@ -962,6 +1340,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveTextDisabled: {
+    opacity: 0.5,
   },
   placeholder: {
     width: 32,
@@ -1036,6 +1420,7 @@ const styles = StyleSheet.create({
   categoryLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   categoryIconContainer: {
     width: 28,
@@ -1059,6 +1444,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textPrimary,
+    flex: 1,
   },
   categoryPlaceholder: {
     fontSize: 16,
@@ -1113,6 +1499,10 @@ const styles = StyleSheet.create({
   },
   selectedOption: {
     backgroundColor: colors.overlayLight,
+  },
+  categoryRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   categoryInfo: {
     flex: 1,
@@ -1221,8 +1611,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
   },
-  saveButtonDisabled: {
-    opacity: 0.5,
+  parentCategoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+  },
+  resetCategoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    marginTop: 10,
+    borderRadius: 12,
+    backgroundColor: '#FF6B6B26',
+  },
+  resetCategoryText: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: '#FF6B6B',
+    marginLeft: 8,
   },
 });
 

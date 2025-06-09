@@ -247,10 +247,21 @@ const HomeScreen = ({navigation}) => {
 
   const handleSaveTransaction = async transaction => {
     try {
+      // Store the original transaction BEFORE saving if we're editing
+      const originalTransaction = editingTransaction
+        ? {...editingTransaction}
+        : null;
+
       const result = await saveTransaction(transaction);
 
-      // Update spending goals for the new/updated transaction
-      await updateSpendingGoals(transaction);
+      // Update spending goals with both original and new transaction data
+      if (originalTransaction) {
+        // This is an edit - pass both original and new transaction to prevent double-counting
+        await updateSpendingGoals(transaction, originalTransaction);
+      } else {
+        // This is a new transaction - just pass the new transaction
+        await updateSpendingGoals(transaction);
+      }
 
       // Check tutorial status ONLY for new transactions
       if (result.isNewTransaction) {
