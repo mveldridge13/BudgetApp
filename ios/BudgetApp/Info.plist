@@ -33,6 +33,11 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
+	<!-- Camera and Photo Library Permissions for Receipt Photos -->
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos of receipts to attach to your expenses</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select receipt images from your photo library to attach to expenses</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Feather.ttf</string>

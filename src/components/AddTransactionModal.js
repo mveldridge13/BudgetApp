@@ -10,9 +10,14 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Image,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
+import RNFS from 'react-native-fs';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
 import categoryService from '../services/categoryService';
@@ -90,6 +95,7 @@ const AddTransactionModal = ({
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
+  const [attachedImage, setAttachedImage] = useState(null); // New state for image
 
   // Use useRef for animation values to prevent recreation on renders
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -169,6 +175,7 @@ const AddTransactionModal = ({
       setSelectedSubcategory(editingTransaction.subcategory || null);
       setSelectedDate(new Date(editingTransaction.date));
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
+      setAttachedImage(editingTransaction.attachedImage || null); // Load existing image
     } else if (!editingTransaction && visible) {
       // Reset form for new transaction
       setAmount('');
@@ -177,6 +184,7 @@ const AddTransactionModal = ({
       setSelectedSubcategory(null);
       setSelectedDate(new Date());
       setSelectedRecurrence('none');
+      setAttachedImage(null); // Reset image
     }
   }, [editingTransaction, visible]);
 
@@ -230,13 +238,19 @@ const AddTransactionModal = ({
     }
   };
 
-  const resetForm = () => {
+  const resetForm = async () => {
+    // If there's an attached image and we're canceling, clean it up
+    if (attachedImage && attachedImage.isLocal && !isEditMode) {
+      await deleteImageFile(attachedImage.uri);
+    }
+
     setAmount('');
     setDescription('');
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setSelectedDate(new Date());
     setSelectedRecurrence('none');
+    setAttachedImage(null); // Reset image
     slideAnim.setValue(0);
     modalAnim.setValue(screenWidth);
     fadeAnim.setValue(0);
@@ -250,7 +264,163 @@ const AddTransactionModal = ({
     setCurrentSubcategoryData(null);
   };
 
-  const handleSave = () => {
+  // Camera and Image functionality
+  const saveImagePermanently = async (tempUri, transactionId) => {
+    try {
+      // Create receipts directory if it doesn't exist
+      const receiptsDir = `${RNFS.DocumentDirectoryPath}/receipts`;
+      const dirExists = await RNFS.exists(receiptsDir);
+      if (!dirExists) {
+        await RNFS.mkdir(receiptsDir);
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const fileName = `receipt_${transactionId}_${timestamp}.jpg`;
+      const permanentPath = `${receiptsDir}/${fileName}`;
+
+      // Copy from temp location to permanent storage
+      await RNFS.copyFile(tempUri, permanentPath);
+
+      console.log('Image saved permanently to:', permanentPath);
+      return permanentPath;
+    } catch (error) {
+      console.error('Error saving image permanently:', error);
+      Alert.alert('Error', 'Failed to save image. Please try again.');
+      return null;
+    }
+  };
+
+  const deleteImageFile = async imagePath => {
+    try {
+      if (imagePath && (await RNFS.exists(imagePath))) {
+        await RNFS.unlink(imagePath);
+        console.log('Image file deleted:', imagePath);
+      }
+    } catch (error) {
+      console.error('Error deleting image file:', error);
+    }
+  };
+
+  const showImagePicker = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: [
+            'Cancel',
+            'Take Photo',
+            'Choose from Library',
+            'Remove Photo',
+          ],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: attachedImage ? 3 : -1,
+        },
+        buttonIndex => {
+          if (buttonIndex === 1) {
+            openCamera();
+          } else if (buttonIndex === 2) {
+            openImageLibrary();
+          } else if (buttonIndex === 3 && attachedImage) {
+            removeImage();
+          }
+        },
+      );
+    } else {
+      // For Android, you might want to use a custom modal or ActionSheet library
+      Alert.alert('Select Image', 'Choose an option', [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Take Photo', onPress: openCamera},
+        {text: 'Choose from Library', onPress: openImageLibrary},
+        ...(attachedImage
+          ? [{text: 'Remove Photo', onPress: removeImage, style: 'destructive'}]
+          : []),
+      ]);
+    }
+  };
+
+  const openCamera = async () => {
+    const options = {
+      mediaType: 'photo',
+      quality: 0.8,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      storageOptions: {
+        skipBackup: true,
+        path: 'images',
+      },
+    };
+
+    launchCamera(options, async response => {
+      if (response.didCancel || response.errorMessage) {
+        return;
+      }
+
+      if (response.assets && response.assets[0]) {
+        const tempUri = response.assets[0].uri;
+        const tempId = generateUniqueId(); // Generate temp ID for saving
+
+        // Save image permanently
+        const permanentPath = await saveImagePermanently(tempUri, tempId);
+
+        if (permanentPath) {
+          const imageData = {
+            uri: permanentPath, // Use permanent path instead of temp
+            type: response.assets[0].type,
+            fileName: `receipt_${tempId}_${Date.now()}.jpg`,
+            fileSize: response.assets[0].fileSize,
+            isLocal: true, // Flag to indicate this is locally stored
+          };
+          setAttachedImage(imageData);
+        }
+      }
+    });
+  };
+
+  const openImageLibrary = async () => {
+    const options = {
+      mediaType: 'photo',
+      quality: 0.8,
+      maxWidth: 1200,
+      maxHeight: 1200,
+    };
+
+    launchImageLibrary(options, async response => {
+      if (response.didCancel || response.errorMessage) {
+        return;
+      }
+
+      if (response.assets && response.assets[0]) {
+        const tempUri = response.assets[0].uri;
+        const tempId = generateUniqueId(); // Generate temp ID for saving
+
+        // Save image permanently
+        const permanentPath = await saveImagePermanently(tempUri, tempId);
+
+        if (permanentPath) {
+          const imageData = {
+            uri: permanentPath, // Use permanent path instead of temp
+            type: response.assets[0].type,
+            fileName:
+              response.assets[0].fileName ||
+              `receipt_${tempId}_${Date.now()}.jpg`,
+            fileSize: response.assets[0].fileSize,
+            isLocal: true, // Flag to indicate this is locally stored
+          };
+          setAttachedImage(imageData);
+        }
+      }
+    });
+  };
+
+  const removeImage = async () => {
+    if (attachedImage && attachedImage.uri && attachedImage.isLocal) {
+      // Delete the physical file when removing
+      await deleteImageFile(attachedImage.uri);
+    }
+    setAttachedImage(null);
+  };
+
+  const handleSave = async () => {
     if (!amount || !selectedCategory) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -260,43 +430,46 @@ const AddTransactionModal = ({
       description.trim() ||
       getCategoryDisplayName(selectedCategory, selectedSubcategory);
 
-    const transaction = {
-      id: isEditMode ? editingTransaction.id : generateUniqueId(),
-      amount: parseFloat(amount),
-      description: finalDescription,
-      category: selectedCategory,
-      subcategory: selectedSubcategory,
-      date: selectedDate,
-      recurrence: selectedRecurrence,
-      createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
-      updatedAt: isEditMode ? new Date() : undefined,
-    };
+    let finalAttachedImage = attachedImage;
 
-    const currentValue = slideAnim._value;
+    // If we have an image and we're creating a new transaction,
+    // update the filename with the actual transaction ID
+    if (attachedImage && !isEditMode) {
+      const actualTransactionId = generateUniqueId();
+      const newPermanentPath = await saveImagePermanently(
+        attachedImage.uri,
+        actualTransactionId,
+      );
 
-    if (currentValue === 0) {
-      Animated.parallel([
-        Animated.timing(modalAnim, {
-          toValue: screenWidth,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        onSave(transaction);
-        resetForm();
-        onClose();
-      });
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
+      if (newPermanentPath) {
+        // Delete the old temp file
+        if (attachedImage.isLocal) {
+          await deleteImageFile(attachedImage.uri);
+        }
+
+        // Update image data with new path
+        finalAttachedImage = {
+          ...attachedImage,
+          uri: newPermanentPath,
+          fileName: `receipt_${actualTransactionId}_${Date.now()}.jpg`,
+        };
+      }
+
+      const transaction = {
+        id: actualTransactionId,
+        amount: parseFloat(amount),
+        description: finalDescription,
+        category: selectedCategory,
+        subcategory: selectedSubcategory,
+        date: selectedDate,
+        recurrence: selectedRecurrence,
+        attachedImage: finalAttachedImage,
+        createdAt: new Date(),
+      };
+
+      const currentValue = slideAnim._value;
+
+      if (currentValue === 0) {
         Animated.parallel([
           Animated.timing(modalAnim, {
             toValue: screenWidth,
@@ -313,7 +486,88 @@ const AddTransactionModal = ({
           resetForm();
           onClose();
         });
-      });
+      } else {
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          Animated.parallel([
+            Animated.timing(modalAnim, {
+              toValue: screenWidth,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            onSave(transaction);
+            resetForm();
+            onClose();
+          });
+        });
+      }
+    } else {
+      // Edit mode - keep existing transaction ID
+      const transaction = {
+        id: isEditMode ? editingTransaction.id : generateUniqueId(),
+        amount: parseFloat(amount),
+        description: finalDescription,
+        category: selectedCategory,
+        subcategory: selectedSubcategory,
+        date: selectedDate,
+        recurrence: selectedRecurrence,
+        attachedImage: finalAttachedImage,
+        createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
+        updatedAt: isEditMode ? new Date() : undefined,
+      };
+
+      const currentValue = slideAnim._value;
+
+      if (currentValue === 0) {
+        Animated.parallel([
+          Animated.timing(modalAnim, {
+            toValue: screenWidth,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          onSave(transaction);
+          resetForm();
+          onClose();
+        });
+      } else {
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          Animated.parallel([
+            Animated.timing(modalAnim, {
+              toValue: screenWidth,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            onSave(transaction);
+            resetForm();
+            onClose();
+          });
+        });
+      }
     }
   };
 
@@ -611,6 +865,16 @@ const AddTransactionModal = ({
     });
   };
 
+  const formatFileSize = bytes => {
+    if (bytes === 0) {
+      return '0 Bytes';
+    }
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   const getCategoryById = id => categories.find(cat => cat.id === id);
   const getRecurrenceById = id => recurrenceOptions.find(opt => opt.id === id);
 
@@ -730,7 +994,6 @@ const AddTransactionModal = ({
                     placeholder="0.00"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
-                    autoFocus={!isEditMode}
                   />
                 </View>
 
@@ -824,6 +1087,63 @@ const AddTransactionModal = ({
                     color={colors.textSecondary}
                   />
                 </TouchableOpacity>
+
+                {/* Image Attachment Section */}
+                <View style={styles.attachmentSection}>
+                  <Text style={styles.attachmentTitle}>Receipt Photo</Text>
+
+                  {attachedImage ? (
+                    <View style={styles.imageContainer}>
+                      <Image
+                        source={{uri: attachedImage.uri}}
+                        style={styles.attachedImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.imageOverlay}>
+                        <View style={styles.imageInfo}>
+                          <Icon
+                            name="document-outline"
+                            size={16}
+                            color={colors.textWhite}
+                          />
+                          <Text style={styles.imageFileName}>
+                            {attachedImage.fileName}
+                          </Text>
+                          {attachedImage.fileSize && (
+                            <Text style={styles.imageFileSize}>
+                              {formatFileSize(attachedImage.fileSize)}
+                            </Text>
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          style={styles.imageActionButton}
+                          onPress={showImagePicker}
+                          activeOpacity={0.7}>
+                          <Icon
+                            name="pencil"
+                            size={16}
+                            color={colors.textWhite}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.addImageButton}
+                      onPress={showImagePicker}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="camera-outline"
+                        size={24}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.addImageText}>Add Receipt Photo</Text>
+                      <Text style={styles.addImageSubtext}>
+                        Take photo or choose from library
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </ScrollView>
             </View>
 
@@ -1080,7 +1400,6 @@ const AddTransactionModal = ({
                     placeholder="Enter category name"
                     placeholderTextColor={colors.textSecondary}
                     maxLength={30}
-                    autoFocus={true}
                   />
                   <Text style={styles.characterCount}>
                     {categoryName.length}/30
@@ -1227,7 +1546,6 @@ const AddTransactionModal = ({
                     placeholder="Enter subcategory name"
                     placeholderTextColor={colors.textSecondary}
                     maxLength={30}
-                    autoFocus={true}
                   />
                   <Text style={styles.characterCount}>
                     {subcategoryName.length}/30
@@ -1478,6 +1796,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
+    marginBottom: 32, // Increased from 20 to 32 for more space
   },
   recurrenceLeft: {
     flexDirection: 'row',
@@ -1494,6 +1813,92 @@ const styles = StyleSheet.create({
   },
   recurrenceActiveText: {
     color: colors.textPrimary,
+  },
+  // Image attachment styles
+  attachmentSection: {
+    marginBottom: 20,
+  },
+  attachmentTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  addImageButton: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+    borderStyle: 'dashed',
+  },
+  addImageText: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.primary,
+    marginTop: 8,
+  },
+  addImageSubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  imageContainer: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  attachedImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  imageInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  imageFileName: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    marginLeft: 8,
+    flex: 1,
+  },
+  imageFileSize: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite + 'CC',
+    marginLeft: 8,
+    marginTop: 2,
+  },
+  imageActionButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 8,
   },
   loadingContainer: {
     paddingVertical: 40,
@@ -1634,22 +2039,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
-  },
-  resetCategoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    marginTop: 10,
-    borderRadius: 12,
-    backgroundColor: '#FF6B6B26',
-  },
-  resetCategoryText: {
-    fontSize: 16,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: '#FF6B6B',
-    marginLeft: 8,
   },
 });
 
