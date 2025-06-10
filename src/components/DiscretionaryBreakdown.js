@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 import React, {useRef, useMemo, useState, useEffect, useCallback} from 'react';
 import {
   View,
@@ -15,6 +16,7 @@ import {PieChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
 import CategoryService from '../services/categoryService';
+import InsightsService from '../services/InsightsService';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -76,6 +78,8 @@ const DiscretionaryBreakdown = ({
   selectedPeriod,
   periodData,
   isRecurringTransaction,
+  allTransactions, // Complete transaction history
+  previousPeriodData, // Previous period data for comparison
 }) => {
   // Animations
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
@@ -118,6 +122,73 @@ const DiscretionaryBreakdown = ({
       setRefreshing(false);
     }
   }, [refreshing]);
+
+  // Helper to get transactions for current period
+  const getCurrentPeriodTransactions = useCallback(
+    period => {
+      return InsightsService.getTransactionsForPeriod(
+        allTransactions || transactions,
+        period,
+        selectedPeriod,
+        isRecurringTransaction,
+      );
+    },
+    [allTransactions, transactions, selectedPeriod, isRecurringTransaction],
+  );
+
+  // Helper to get previous period
+  const getPreviousPeriod = useCallback(
+    currentPeriod => {
+      if (previousPeriodData && previousPeriodData.length > 0) {
+        // Try to find matching previous period from provided data
+        if (selectedPeriod === 'daily' && currentPeriod.date) {
+          const targetDate = new Date(currentPeriod.date);
+          targetDate.setDate(targetDate.getDate() - 1);
+          return previousPeriodData.find(p => {
+            if (!p.date) {
+              return false;
+            }
+            return (
+              p.date.getDate() === targetDate.getDate() &&
+              p.date.getMonth() === targetDate.getMonth() &&
+              p.date.getFullYear() === targetDate.getFullYear()
+            );
+          });
+        } else if (selectedPeriod === 'weekly' && currentPeriod.startDate) {
+          const targetStart = new Date(currentPeriod.startDate);
+          targetStart.setDate(targetStart.getDate() - 7);
+          return previousPeriodData.find(p => {
+            if (!p.startDate) {
+              return false;
+            }
+            return (
+              Math.abs(p.startDate.getTime() - targetStart.getTime()) <
+              24 * 60 * 60 * 1000
+            );
+          });
+        } else if (selectedPeriod === 'monthly' && currentPeriod.monthDate) {
+          const targetMonth = new Date(currentPeriod.monthDate);
+          targetMonth.setMonth(targetMonth.getMonth() - 1);
+          return previousPeriodData.find(p => {
+            if (!p.monthDate) {
+              return false;
+            }
+            return (
+              p.monthDate.getMonth() === targetMonth.getMonth() &&
+              p.monthDate.getFullYear() === targetMonth.getFullYear()
+            );
+          });
+        }
+      }
+
+      // Fallback: calculate previous period
+      return InsightsService.calculatePreviousPeriod(
+        currentPeriod,
+        selectedPeriod,
+      );
+    },
+    [previousPeriodData, selectedPeriod],
+  );
 
   // Function to get category color based on category name
   const getCategoryColor = categoryName => {
@@ -219,54 +290,6 @@ const DiscretionaryBreakdown = ({
     },
     [categories, getCategoryIdFromName],
   );
-
-  // Generate insights based on spending patterns
-  const generateInsights = useCallback(categoryData => {
-    const insights = [];
-
-    // Food insights
-    const foodCategory = categoryData.find(cat =>
-      ['food', 'restaurant', 'dining', 'groceries'].includes(
-        cat.name.toLowerCase(),
-      ),
-    );
-
-    if (foodCategory && foodCategory.transactions.length > 0) {
-      const totalFood = foodCategory.amount;
-
-      if (totalFood > 200) {
-        insights.push({
-          type: 'info',
-          icon: 'restaurant-outline',
-          message: `Food spending: $${totalFood.toFixed(0)} this period`,
-          suggestion: 'Consider meal planning to optimize food expenses',
-          amount: totalFood,
-        });
-      }
-    }
-
-    // Transport insights
-    const transportCategory = categoryData.find(cat =>
-      ['transport', 'transportation', 'gas', 'fuel', 'car'].includes(
-        cat.name.toLowerCase(),
-      ),
-    );
-
-    if (transportCategory) {
-      const totalTransport = transportCategory.amount;
-      if (totalTransport > 200) {
-        insights.push({
-          type: 'info',
-          icon: 'car-outline',
-          message: `Transport costs: $${totalTransport.toFixed(0)} this period`,
-          suggestion: 'Consider public transport or carpooling options',
-          amount: totalTransport,
-        });
-      }
-    }
-
-    return insights;
-  }, []);
 
   // Handle category expand/collapse
   const handleCategoryPress = useCallback(
@@ -584,8 +607,33 @@ const DiscretionaryBreakdown = ({
       })
       .sort((a, b) => b.amount - a.amount);
 
-    // Generate insights
-    const insights = generateInsights(processedCategories);
+    // Generate insights using InsightsService
+    const currentTransactions = getCurrentPeriodTransactions(targetPeriod);
+    const previousPeriod = getPreviousPeriod(targetPeriod);
+    const previousTransactions = previousPeriod
+      ? getCurrentPeriodTransactions(previousPeriod)
+      : [];
+
+    const insights = InsightsService.generateInsights(
+      processedCategories,
+      targetPeriod,
+      previousPeriod,
+      currentTransactions,
+      previousTransactions,
+      selectedPeriod,
+    );
+
+    // ADD DEBUG LOGS:
+    console.log('=== INSIGHT DEBUG ===');
+    console.log('selectedPeriod:', selectedPeriod);
+    console.log('targetPeriod:', targetPeriod);
+    console.log('previousPeriod:', previousPeriod);
+    console.log('currentTransactions count:', currentTransactions.length);
+    console.log('previousTransactions count:', previousTransactions.length);
+    console.log('currentTransactions:', currentTransactions);
+    console.log('previousTransactions:', previousTransactions);
+    console.log('insights generated:', insights);
+    console.log('===================');
 
     return {
       period: targetPeriod,
@@ -599,8 +647,9 @@ const DiscretionaryBreakdown = ({
     selectedPeriod,
     isRecurringTransaction,
     selectedDate,
-    generateInsights,
     getCategoryInfo,
+    getCurrentPeriodTransactions,
+    getPreviousPeriod,
   ]);
 
   // Chart configuration
@@ -627,23 +676,103 @@ const DiscretionaryBreakdown = ({
 
     return (
       <View style={styles.insightsContainer}>
-        <Text style={styles.insightsTitle}>💡 Spending Insights</Text>
+        <Text style={styles.insightsTitle}>Spending Insights</Text>
         {breakdownData.insights.map((insight, index) => (
-          <View key={index} style={styles.insightCard}>
-            <View style={styles.insightHeader}>
-              <Icon
-                name={insight.icon}
-                size={20}
-                color={insight.type === 'warning' ? '#FF6B6B' : '#4ECDC4'}
-              />
-              <Text style={styles.insightAmount}>
-                ${insight.amount.toFixed(0)}
+          <View
+            key={index}
+            style={[
+              styles.insightCard,
+              {
+                borderLeftColor:
+                  insight.type === 'warning'
+                    ? '#FF6B6B'
+                    : insight.type === 'success'
+                    ? '#10B981'
+                    : '#6366F1',
+              },
+            ]}>
+            <View style={styles.insightContent}>
+              <Text style={styles.insightText}>
+                <Text style={styles.insightBold}>{insight.category}:</Text>{' '}
+                {insight.message}
               </Text>
             </View>
-            <Text style={styles.insightMessage}>{insight.message}</Text>
             <Text style={styles.insightSuggestion}>{insight.suggestion}</Text>
           </View>
         ))}
+      </View>
+    );
+  };
+
+  // Helper to get period label for no data message
+  const getCurrentPeriodLabel = () => {
+    switch (selectedPeriod) {
+      case 'daily':
+        return 'today';
+      case 'weekly':
+        return 'this week';
+      case 'monthly':
+        return 'this month';
+      default:
+        return 'this period';
+    }
+  };
+
+  // Render no data state with calendar access
+  const renderNoDataState = () => {
+    const periodLabel = getCurrentPeriodLabel();
+
+    // Create a mock period for display purposes
+    const displayPeriod = {
+      label:
+        selectedPeriod === 'daily'
+          ? selectedDate.toLocaleDateString('en-US', {
+              weekday: 'short',
+              day: 'numeric',
+            })
+          : selectedPeriod === 'weekly'
+          ? `Week of ${selectedDate.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            })}`
+          : selectedDate.toLocaleDateString('en-US', {
+              month: 'long',
+              year: 'numeric',
+            }),
+      discretionaryAmount: 0,
+    };
+
+    return (
+      <View style={styles.noDataFullContainer}>
+        {/* Period Summary - consistent with data state */}
+        <TouchableOpacity
+          style={styles.summaryCard}
+          onPress={() => setShowCalendar(true)}
+          activeOpacity={0.7}>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryLabel}>Selected Period</Text>
+            <Icon
+              name="calendar-outline"
+              size={16}
+              color={colors.primary || '#6366F1'}
+            />
+          </View>
+          <Text style={styles.summaryTitle}>{displayPeriod.label}</Text>
+          <Text style={styles.summaryAmount}>$0.00</Text>
+          <Text style={styles.summarySubtext}>in discretionary spending</Text>
+          <Text style={styles.tapHint}>Tap to change date</Text>
+        </TouchableOpacity>
+
+        {/* No data message */}
+        <View style={styles.noDataMessageContainer}>
+          <Text style={styles.noDataText}>
+            No transaction data {periodLabel}.
+          </Text>
+          <Text style={styles.noDataSubtext}>
+            Try checking a different date or add some transactions to see the
+            breakdown.
+          </Text>
+        </View>
       </View>
     );
   };
@@ -744,9 +873,6 @@ const DiscretionaryBreakdown = ({
                       />
                     </View>
 
-                    {/* Insights */}
-                    {renderInsights()}
-
                     {/* Category List */}
                     <View style={styles.categoriesContainer}>
                       <Text style={styles.categoriesTitle}>
@@ -839,6 +965,9 @@ const DiscretionaryBreakdown = ({
                         );
                       })}
                     </View>
+
+                    {/* Insights */}
+                    {renderInsights()}
                   </>
                 ) : (
                   <View style={styles.noDataContainer}>
@@ -850,14 +979,7 @@ const DiscretionaryBreakdown = ({
                 )}
               </>
             ) : (
-              <View style={styles.noDataContainer}>
-                <Text style={styles.noDataText}>
-                  No discretionary spending data available.
-                </Text>
-                <Text style={styles.noDataSubtext}>
-                  Add some non-recurring transactions to see the breakdown.
-                </Text>
-              </View>
+              renderNoDataState()
             )}
           </ScrollView>
         </Animated.View>
@@ -995,41 +1117,45 @@ const styles = StyleSheet.create({
     color: colors.text || '#1F2937',
   },
   insightCard: {
-    backgroundColor: colors.surface || '#FFFFFF',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    padding: 12,
+    backgroundColor: colors.background || '#F8FAFC',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    marginBottom: 12,
   },
-  insightHeader: {
+  insightContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
-  insightAmount: {
-    fontSize: 16,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.text || '#1F2937',
-  },
-  insightMessage: {
+  insightText: {
     fontSize: 14,
-    fontWeight: '300',
     fontFamily: 'System',
     color: colors.text || '#1F2937',
-    marginBottom: 5,
+    lineHeight: 20,
+    flex: 1,
+    marginRight: 8,
+  },
+  insightBold: {
+    fontWeight: '600',
+    fontFamily: 'System',
+  },
+  insightFrequency: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.primary || '#6366F1',
+    backgroundColor: `${colors.primary || '#6366F1'}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   insightSuggestion: {
     fontSize: 13,
-    fontWeight: '300',
     fontFamily: 'System',
     color: colors.textSecondary || '#6B7280',
-    fontStyle: 'italic',
+    lineHeight: 18,
   },
   categoriesContainer: {
     marginBottom: 20,
@@ -1147,6 +1273,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+  },
+  noDataFullContainer: {
+    flex: 1,
+  },
+  noDataMessageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  calendarAccessCard: {
+    backgroundColor: colors.surface || '#FFFFFF',
+    padding: 24,
+    borderRadius: 12,
+    marginBottom: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+    width: '100%',
+  },
+  calendarIcon: {
+    marginBottom: 12,
+  },
+  calendarAccessTitle: {
+    fontSize: 18,
+    fontWeight: '300',
+    color: colors.text || '#1F2937',
+    marginBottom: 8,
+    fontFamily: 'System',
+  },
+  calendarAccessSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary || '#6B7280',
+    textAlign: 'center',
+    fontFamily: 'System',
   },
   noDataText: {
     fontSize: 16,

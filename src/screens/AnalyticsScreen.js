@@ -752,6 +752,8 @@ const AnalyticsScreen = () => {
         selectedPeriod={selectedPeriod}
         periodData={data}
         isRecurringTransaction={isRecurringTransaction}
+        allTransactions={transactions}
+        previousPeriodData={data}
       />
     </View>
   );
