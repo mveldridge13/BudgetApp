@@ -217,11 +217,12 @@ const DiscretionaryBreakdown = ({
       case 'health':
       case 'medical':
       case 'pharmacy':
-        return '#FECA57';
+        return '#FF9FF3';
       case 'home':
       case 'utilities':
       case 'household':
-        return '#FF9FF3';
+      case 'bills':
+        return '#FECA57';
       case 'education':
       case 'books':
       case 'learning':
@@ -237,7 +238,7 @@ const DiscretionaryBreakdown = ({
       case 'cafe':
         return '#FD79A8';
       default:
-        return '#FDCB6E';
+        return '#A8A8A8';
     }
   };
 
