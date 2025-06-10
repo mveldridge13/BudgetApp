@@ -78,8 +78,8 @@ const DiscretionaryBreakdown = ({
   selectedPeriod,
   periodData,
   isRecurringTransaction,
-  allTransactions, // Complete transaction history
-  previousPeriodData, // Previous period data for comparison
+  allTransactions,
+  previousPeriodData,
 }) => {
   // Animations
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
@@ -140,7 +140,6 @@ const DiscretionaryBreakdown = ({
   const getPreviousPeriod = useCallback(
     currentPeriod => {
       if (previousPeriodData && previousPeriodData.length > 0) {
-        // Try to find matching previous period from provided data
         if (selectedPeriod === 'daily' && currentPeriod.date) {
           const targetDate = new Date(currentPeriod.date);
           targetDate.setDate(targetDate.getDate() - 1);
@@ -181,7 +180,6 @@ const DiscretionaryBreakdown = ({
         }
       }
 
-      // Fallback: calculate previous period
       return InsightsService.calculatePreviousPeriod(
         currentPeriod,
         selectedPeriod,
@@ -374,7 +372,6 @@ const DiscretionaryBreakdown = ({
     let targetPeriod = null;
     let isCustomDate = false;
 
-    // Check if we should show data for the selected date instead of highest period
     if (selectedDate) {
       if (selectedPeriod === 'daily') {
         targetPeriod = periodData.find(p => {
@@ -411,7 +408,6 @@ const DiscretionaryBreakdown = ({
       }
     }
 
-    // If no custom date period found, use highest spending period
     if (!targetPeriod) {
       targetPeriod = periodData.reduce((max, current) =>
         current.discretionaryAmount > max.discretionaryAmount ? current : max,
@@ -422,7 +418,6 @@ const DiscretionaryBreakdown = ({
       return {period: null, categories: [], insights: [], isCustomDate};
     }
 
-    // Get transactions for the target period
     let periodTransactions = [];
 
     if (selectedPeriod === 'daily' && targetPeriod.date) {
@@ -502,25 +497,20 @@ const DiscretionaryBreakdown = ({
           const subcategoryMap = {};
 
           categoryTransactionList.forEach(transaction => {
-            // Use CategoryService subcategories instead of hardcoded logic
             let subcategoryName = 'General';
             const desc = (transaction.description || '').toLowerCase();
 
-            // Check against all subcategories in the CategoryService
             if (
               categoryInfo.subcategories &&
               categoryInfo.subcategories.length > 0
             ) {
-              // Try to match transaction description to subcategory names
               const matchedSubcategory = categoryInfo.subcategories.find(
                 sub => {
                   const subName = sub.name.toLowerCase();
-                  // Direct name match
                   if (desc.includes(subName)) {
                     return true;
                   }
 
-                  // Additional keyword matching based on subcategory names
                   if (
                     subName.includes('takeout') &&
                     (desc.includes('uber') ||
@@ -581,7 +571,6 @@ const DiscretionaryBreakdown = ({
               (subcategoryMap[subcategoryName] || 0) + subAmount;
           });
 
-          // Convert to subcategory array
           Object.entries(subcategoryMap).forEach(([subName, subAmount]) => {
             subcategories.push({
               name: subName,
@@ -590,7 +579,6 @@ const DiscretionaryBreakdown = ({
             });
           });
 
-          // Sort subcategories by amount
           subcategories.sort((a, b) => b.amount - a.amount);
         }
 
@@ -625,18 +613,6 @@ const DiscretionaryBreakdown = ({
       selectedPeriod,
     );
 
-    // ADD DEBUG LOGS:
-    console.log('=== INSIGHT DEBUG ===');
-    console.log('selectedPeriod:', selectedPeriod);
-    console.log('targetPeriod:', targetPeriod);
-    console.log('previousPeriod:', previousPeriod);
-    console.log('currentTransactions count:', currentTransactions.length);
-    console.log('previousTransactions count:', previousTransactions.length);
-    console.log('currentTransactions:', currentTransactions);
-    console.log('previousTransactions:', previousTransactions);
-    console.log('insights generated:', insights);
-    console.log('===================');
-
     return {
       period: targetPeriod,
       categories: processedCategories,
@@ -656,32 +632,15 @@ const DiscretionaryBreakdown = ({
 
   // Donut Chart Renderer
   const renderDonutChart = () => {
-    const chartWidth = screenWidth - 40; // Less padding for bigger chart
-    const chartHeight = 280; // Increased from 220
+    const chartWidth = screenWidth - 40;
+    const chartHeight = 280;
     const radius = Math.min(chartWidth, chartHeight) / 2 - 20;
-    const strokeWidth = 50; // Thick but proportional to larger chart
+    const strokeWidth = 50;
     const innerRadius = radius - strokeWidth;
     const centerX = chartWidth / 2;
     const centerY = chartHeight / 2;
 
-    // Debug logging
-    console.log('=== DONUT CHART DEBUG ===');
-    console.log('currentData:', currentData);
-    console.log('currentData length:', currentData.length);
-    console.log('breakdownData.period:', breakdownData.period);
-    console.log('chartWidth:', chartWidth, 'chartHeight:', chartHeight);
-    console.log(
-      'radius:',
-      radius,
-      'innerRadius:',
-      innerRadius,
-      'strokeWidth:',
-      strokeWidth,
-    );
-
-    // Check if we have data
     if (!currentData || currentData.length === 0) {
-      console.log('No currentData available');
       return (
         <View style={[styles.chartContainer, {height: chartHeight}]}>
           <View style={styles.donutCenterContent}>
@@ -693,7 +652,6 @@ const DiscretionaryBreakdown = ({
       );
     }
 
-    // Calculate total value and expense count
     const total = currentData.reduce(
       (sum, item) => sum + (item.amount || 0),
       0,
@@ -702,7 +660,6 @@ const DiscretionaryBreakdown = ({
       (sum, item) => sum + (item.transactions?.length || 0),
       0,
     );
-    console.log('Total amount:', total, 'Total expenses:', totalExpenses);
 
     if (total === 0) {
       return (
@@ -716,7 +673,6 @@ const DiscretionaryBreakdown = ({
       );
     }
 
-    // Calculate angles for each segment
     let currentAngle = 0;
     const segments = currentData.map((item, index) => {
       const amount = item.amount || 0;
@@ -729,38 +685,22 @@ const DiscretionaryBreakdown = ({
       };
       currentAngle += angle;
 
-      console.log(`Segment ${index}:`, {
-        name: item.name,
-        amount: amount,
-        angle: angle,
-        startAngle: segment.startAngle,
-        endAngle: segment.endAngle,
-        color: item.color,
-      });
-
       return segment;
     });
 
-    // Convert degrees to radians
     const toRadians = degrees => degrees * (Math.PI / 180);
 
-    // Create SVG path for donut segment
     // eslint-disable-next-line no-shadow
     const createPath = (startAngle, endAngle, outerRadius, innerRadius) => {
-      // Skip tiny segments
       if (endAngle - startAngle < 0.1) {
         return '';
       }
 
-      // Ensure we don't have invalid radii
       if (innerRadius <= 0 || outerRadius <= innerRadius) {
-        console.log('Invalid radii:', {innerRadius, outerRadius});
         return '';
       }
 
-      // Handle full circle (360 degree) case
       if (endAngle - startAngle >= 359.9) {
-        // Create a full circle donut using two semi-circles
         const pathData = `
           M 0,${-outerRadius}
           A ${outerRadius},${outerRadius} 0 1,1 0,${outerRadius}
@@ -771,7 +711,6 @@ const DiscretionaryBreakdown = ({
           Z`
           .replace(/\s+/g, ' ')
           .trim();
-        console.log('Full circle path data:', pathData);
         return pathData;
       }
 
@@ -800,7 +739,6 @@ const DiscretionaryBreakdown = ({
         2,
       )},${y4.toFixed(2)} Z`;
 
-      console.log('Path data:', pathData);
       return pathData;
     };
 
@@ -829,15 +767,8 @@ const DiscretionaryBreakdown = ({
                 );
 
                 if (!pathData) {
-                  console.log(`Skipping segment ${index} - invalid path`);
                   return null;
                 }
-
-                console.log(`Rendering segment ${index}:`, {
-                  name: segment.name,
-                  color: segment.color,
-                  angle: segment.angle,
-                });
 
                 return (
                   <Path
@@ -852,7 +783,6 @@ const DiscretionaryBreakdown = ({
             </G>
           </Svg>
 
-          {/* Center content - like screenshot 2 */}
           <View style={styles.donutCenterContent}>
             <Text style={styles.donutCenterNumber}>{totalExpenses}</Text>
             <Text style={styles.donutCenterLabel}>Expenses</Text>
@@ -916,7 +846,6 @@ const DiscretionaryBreakdown = ({
   const renderNoDataState = () => {
     const periodLabel = getCurrentPeriodLabel();
 
-    // Create a mock period for display purposes
     const displayPeriod = {
       label:
         selectedPeriod === 'daily'
@@ -938,7 +867,6 @@ const DiscretionaryBreakdown = ({
 
     return (
       <View style={styles.noDataFullContainer}>
-        {/* Period Summary - consistent with data state */}
         <TouchableOpacity
           style={styles.summaryCard}
           onPress={() => setShowCalendar(true)}
@@ -957,7 +885,6 @@ const DiscretionaryBreakdown = ({
           <Text style={styles.tapHint}>Tap to change date</Text>
         </TouchableOpacity>
 
-        {/* No data message */}
         <View style={styles.noDataMessageContainer}>
           <Text style={styles.noDataText}>
             No transaction data {periodLabel}.
@@ -998,7 +925,6 @@ const DiscretionaryBreakdown = ({
               transform: [{translateX: modalAnim}],
             },
           ]}>
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Discretionary Spending Breakdown</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
@@ -1006,7 +932,6 @@ const DiscretionaryBreakdown = ({
             </TouchableOpacity>
           </View>
 
-          {/* Content */}
           <ScrollView
             style={styles.content}
             showsVerticalScrollIndicator={false}
@@ -1022,7 +947,6 @@ const DiscretionaryBreakdown = ({
             }>
             {breakdownData.period ? (
               <>
-                {/* Period Summary */}
                 <TouchableOpacity
                   style={styles.summaryCard}
                   onPress={() => setShowCalendar(true)}
@@ -1053,10 +977,8 @@ const DiscretionaryBreakdown = ({
 
                 {currentData.length > 0 ? (
                   <>
-                    {/* Donut Chart */}
                     {renderDonutChart()}
 
-                    {/* Category List */}
                     <View style={styles.categoriesContainer}>
                       <Text style={styles.categoriesTitle}>
                         Category Breakdown
@@ -1118,7 +1040,6 @@ const DiscretionaryBreakdown = ({
                               </View>
                             </TouchableOpacity>
 
-                            {/* Subcategory breakdown */}
                             {isExpanded && item.subcategories.length > 0 && (
                               <View style={styles.subcategoriesContainer}>
                                 {item.subcategories.map((subItem, subIndex) => (
@@ -1149,7 +1070,6 @@ const DiscretionaryBreakdown = ({
                       })}
                     </View>
 
-                    {/* Insights */}
                     {renderInsights()}
                   </>
                 ) : (
@@ -1168,7 +1088,6 @@ const DiscretionaryBreakdown = ({
         </Animated.View>
       </Animated.View>
 
-      {/* Calendar Modal */}
       <CalendarModal
         visible={showCalendar}
         onClose={() => setShowCalendar(false)}
