@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import {PieChart} from 'react-native-chart-kit';
+import Svg, {Path, G} from 'react-native-svg';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
 import CategoryService from '../services/categoryService';
@@ -278,6 +278,7 @@ const DiscretionaryBreakdown = ({
       home: 'bills',
       utilities: 'bills',
       household: 'bills',
+      bills: 'bills',
     };
     return categoryMap[categoryName.toLowerCase()] || 'other';
   }, []);
@@ -652,21 +653,213 @@ const DiscretionaryBreakdown = ({
     getPreviousPeriod,
   ]);
 
-  // Chart configuration
-  const chartConfig = useMemo(
-    () => ({
-      backgroundColor: colors.surface || '#ffffff',
-      backgroundGradientFrom: colors.surface || '#ffffff',
-      backgroundGradientTo: colors.surface || '#ffffff',
-      decimalPlaces: 0,
-      color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-      style: {
-        borderRadius: 16,
-      },
-    }),
-    [],
-  );
+  // Donut Chart Renderer
+  const renderDonutChart = () => {
+    const chartWidth = screenWidth - 40; // Less padding for bigger chart
+    const chartHeight = 280; // Increased from 220
+    const radius = Math.min(chartWidth, chartHeight) / 2 - 20;
+    const strokeWidth = 50; // Thick but proportional to larger chart
+    const innerRadius = radius - strokeWidth;
+    const centerX = chartWidth / 2;
+    const centerY = chartHeight / 2;
+
+    // Debug logging
+    console.log('=== DONUT CHART DEBUG ===');
+    console.log('currentData:', currentData);
+    console.log('currentData length:', currentData.length);
+    console.log('breakdownData.period:', breakdownData.period);
+    console.log('chartWidth:', chartWidth, 'chartHeight:', chartHeight);
+    console.log(
+      'radius:',
+      radius,
+      'innerRadius:',
+      innerRadius,
+      'strokeWidth:',
+      strokeWidth,
+    );
+
+    // Check if we have data
+    if (!currentData || currentData.length === 0) {
+      console.log('No currentData available');
+      return (
+        <View style={[styles.chartContainer, {height: chartHeight}]}>
+          <View style={styles.donutCenterContent}>
+            <Text style={styles.donutCenterNumber}>0</Text>
+            <Text style={styles.donutCenterLabel}>Expenses</Text>
+          </View>
+          <Text style={styles.noDataText}>No category data available</Text>
+        </View>
+      );
+    }
+
+    // Calculate total value and expense count
+    const total = currentData.reduce(
+      (sum, item) => sum + (item.amount || 0),
+      0,
+    );
+    const totalExpenses = currentData.reduce(
+      (sum, item) => sum + (item.transactions?.length || 0),
+      0,
+    );
+    console.log('Total amount:', total, 'Total expenses:', totalExpenses);
+
+    if (total === 0) {
+      return (
+        <View style={[styles.chartContainer, {height: chartHeight}]}>
+          <View style={styles.donutCenterContent}>
+            <Text style={styles.donutCenterNumber}>0</Text>
+            <Text style={styles.donutCenterLabel}>Expenses</Text>
+          </View>
+          <Text style={styles.noDataText}>No spending data available</Text>
+        </View>
+      );
+    }
+
+    // Calculate angles for each segment
+    let currentAngle = 0;
+    const segments = currentData.map((item, index) => {
+      const amount = item.amount || 0;
+      const angle = (amount / total) * 360;
+      const segment = {
+        ...item,
+        startAngle: currentAngle,
+        endAngle: currentAngle + angle,
+        angle: angle,
+      };
+      currentAngle += angle;
+
+      console.log(`Segment ${index}:`, {
+        name: item.name,
+        amount: amount,
+        angle: angle,
+        startAngle: segment.startAngle,
+        endAngle: segment.endAngle,
+        color: item.color,
+      });
+
+      return segment;
+    });
+
+    // Convert degrees to radians
+    const toRadians = degrees => degrees * (Math.PI / 180);
+
+    // Create SVG path for donut segment
+    // eslint-disable-next-line no-shadow
+    const createPath = (startAngle, endAngle, outerRadius, innerRadius) => {
+      // Skip tiny segments
+      if (endAngle - startAngle < 0.1) {
+        return '';
+      }
+
+      // Ensure we don't have invalid radii
+      if (innerRadius <= 0 || outerRadius <= innerRadius) {
+        console.log('Invalid radii:', {innerRadius, outerRadius});
+        return '';
+      }
+
+      // Handle full circle (360 degree) case
+      if (endAngle - startAngle >= 359.9) {
+        // Create a full circle donut using two semi-circles
+        const pathData = `
+          M 0,${-outerRadius}
+          A ${outerRadius},${outerRadius} 0 1,1 0,${outerRadius}
+          A ${outerRadius},${outerRadius} 0 1,1 0,${-outerRadius}
+          M 0,${-innerRadius}
+          A ${innerRadius},${innerRadius} 0 1,0 0,${innerRadius}
+          A ${innerRadius},${innerRadius} 0 1,0 0,${-innerRadius}
+          Z`
+          .replace(/\s+/g, ' ')
+          .trim();
+        console.log('Full circle path data:', pathData);
+        return pathData;
+      }
+
+      const start = toRadians(startAngle - 90);
+      const end = toRadians(endAngle - 90);
+
+      const x1 = Math.cos(start) * outerRadius;
+      const y1 = Math.sin(start) * outerRadius;
+      const x2 = Math.cos(end) * outerRadius;
+      const y2 = Math.sin(end) * outerRadius;
+
+      const x3 = Math.cos(end) * innerRadius;
+      const y3 = Math.sin(end) * innerRadius;
+      const x4 = Math.cos(start) * innerRadius;
+      const y4 = Math.sin(start) * innerRadius;
+
+      const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+
+      const pathData = `M ${x1.toFixed(2)},${y1.toFixed(
+        2,
+      )} A ${outerRadius},${outerRadius} 0 ${largeArc},1 ${x2.toFixed(
+        2,
+      )},${y2.toFixed(2)} L ${x3.toFixed(2)},${y3.toFixed(
+        2,
+      )} A ${innerRadius},${innerRadius} 0 ${largeArc},0 ${x4.toFixed(
+        2,
+      )},${y4.toFixed(2)} Z`;
+
+      console.log('Path data:', pathData);
+      return pathData;
+    };
+
+    return (
+      <View style={styles.chartContainer}>
+        <View
+          style={{
+            position: 'relative',
+            width: chartWidth,
+            height: chartHeight,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+          <Svg
+            width={chartWidth}
+            height={chartHeight}
+            style={{position: 'absolute'}}
+            viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+            <G transform={`translate(${centerX}, ${centerY})`}>
+              {segments.map((segment, index) => {
+                const pathData = createPath(
+                  segment.startAngle,
+                  segment.endAngle,
+                  radius,
+                  innerRadius,
+                );
+
+                if (!pathData) {
+                  console.log(`Skipping segment ${index} - invalid path`);
+                  return null;
+                }
+
+                console.log(`Rendering segment ${index}:`, {
+                  name: segment.name,
+                  color: segment.color,
+                  angle: segment.angle,
+                });
+
+                return (
+                  <Path
+                    key={index}
+                    d={pathData}
+                    fill={segment.color || '#CCCCCC'}
+                    stroke="#ffffff"
+                    strokeWidth="4"
+                  />
+                );
+              })}
+            </G>
+          </Svg>
+
+          {/* Center content - like screenshot 2 */}
+          <View style={styles.donutCenterContent}>
+            <Text style={styles.donutCenterNumber}>{totalExpenses}</Text>
+            <Text style={styles.donutCenterLabel}>Expenses</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   // Render insights
   const renderInsights = () => {
@@ -859,19 +1052,8 @@ const DiscretionaryBreakdown = ({
 
                 {currentData.length > 0 ? (
                   <>
-                    {/* Pie Chart */}
-                    <View style={styles.chartContainer}>
-                      <PieChart
-                        data={currentData}
-                        width={screenWidth - 80}
-                        height={220}
-                        chartConfig={chartConfig}
-                        accessor="amount"
-                        backgroundColor="transparent"
-                        paddingLeft="15"
-                        absolute
-                      />
-                    </View>
+                    {/* Donut Chart */}
+                    {renderDonutChart()}
 
                     {/* Category List */}
                     <View style={styles.categoriesContainer}>
@@ -1105,6 +1287,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+  },
+  donutCenterContent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  donutCenterNumber: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: colors.text || '#1F2937',
+    fontFamily: 'System',
+  },
+  donutCenterLabel: {
+    fontSize: 14,
+    color: colors.textSecondary || '#6B7280',
+    fontWeight: '500',
+    fontFamily: 'System',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  donutCenterValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.primary || '#6366F1',
+    fontFamily: 'System',
+    marginTop: 4,
   },
   insightsContainer: {
     marginBottom: 24,
