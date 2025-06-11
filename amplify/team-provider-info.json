@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-trendapp-dev-3afca-authRole",
+      "UnauthRoleArn": "arn:aws:iam::352364310012:role/amplify-trendapp-dev-3afca-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::352364310012:role/amplify-trendapp-dev-3afca-authRole",
+      "Region": "ap-southeast-2",
+      "DeploymentBucketName": "amplify-trendapp-dev-3afca-deployment",
+      "UnauthRoleName": "amplify-trendapp-dev-3afca-unauthRole",
+      "StackName": "amplify-trendapp-dev-3afca",
+      "StackId": "arn:aws:cloudformation:ap-southeast-2:352364310012:stack/amplify-trendapp-dev-3afca/5ba14820-4680-11f0-ab72-06047c03c771",
+      "AmplifyAppId": "ddod5geomhy7p"
+    },
+    "categories": {
+      "auth": {
+        "trendappc0a7f72a": {}
+      },
+      "storage": {
+        "storage": {}
+      }
+    }
+  }
+}

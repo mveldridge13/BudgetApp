@@ -1,5 +1,5 @@
 import {uploadData, downloadData, list, remove} from 'aws-amplify/storage';
-import * as FileSystem from 'expo-file-system';
+import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Platform} from 'react-native';
 import {
@@ -13,10 +13,12 @@ import {StorageConstants} from '../constants';
 /**
  * BackupManager - Handles all backup and restore operations
  * Supports both AWS and iCloud storage with chunking for large datasets
+ * Uses react-native-fs for proper iOS iCloud Drive integration
  */
 export class BackupManager implements IBackupManager {
   private backupConfig: BackupConfig;
   private localStorage: ILocalStorage;
+  private iCloudAvailable: boolean = false;
 
   constructor(localStorage: ILocalStorage) {
     this.localStorage = localStorage;
@@ -27,6 +29,35 @@ export class BackupManager implements IBackupManager {
       backupProvider: 'both',
     };
     this.initializeConfig();
+    this.checkiCloudAvailability();
+  }
+
+  /**
+   * Check if iCloud Drive is available and accessible
+   * @private
+   */
+  private async checkiCloudAvailability(): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      this.iCloudAvailable = false;
+      return;
+    }
+
+    try {
+      // Check if iCloud Drive is available by trying to access the Documents directory
+      const iCloudPath = RNFS.DocumentDirectoryPath + '/iCloud';
+
+      // Try to create iCloud backup directory if it doesn't exist
+      const exists = await RNFS.exists(iCloudPath);
+      if (!exists) {
+        await RNFS.mkdir(iCloudPath);
+      }
+
+      this.iCloudAvailable = true;
+      console.log('iCloud backup available');
+    } catch (error) {
+      console.warn('iCloud backup not available:', error);
+      this.iCloudAvailable = false;
+    }
   }
 
   /**
@@ -90,22 +121,37 @@ export class BackupManager implements IBackupManager {
       this.backupConfig.backupProvider === 'aws' ||
       this.backupConfig.backupProvider === 'both'
     ) {
-      await uploadData({
-        key: `backups/${timestamp}.json`,
-        data: JSON.stringify(backupData),
-        options: {
-          contentType: 'application/json',
-        },
-      }).result;
+      try {
+        await uploadData({
+          key: `backups/${timestamp}.json`,
+          data: JSON.stringify(backupData),
+          options: {
+            contentType: 'application/json',
+          },
+        }).result;
+        console.log('AWS backup completed successfully');
+      } catch (error) {
+        console.error('AWS backup failed:', error);
+        throw error;
+      }
     }
 
-    // Save to iCloud if configured and on iOS
+    // Save to iCloud if configured and available
     if (
       (this.backupConfig.backupProvider === 'icloud' ||
         this.backupConfig.backupProvider === 'both') &&
-      Platform.OS === 'ios'
+      this.iCloudAvailable
     ) {
-      await this.saveToICloud(backupData, `backup_${timestamp}.json`);
+      try {
+        await this.saveToiCloud(backupData, `backup_${timestamp}.json`);
+        console.log('iCloud backup completed successfully');
+      } catch (error) {
+        console.error('iCloud backup failed:', error);
+        // Don't throw error for iCloud failures if AWS succeeded
+        if (this.backupConfig.backupProvider === 'icloud') {
+          throw error;
+        }
+      }
     }
   }
 
@@ -160,30 +206,43 @@ export class BackupManager implements IBackupManager {
           config: this.backupConfig,
         };
 
-        // Upload chunk to cloud
+        // Upload chunk to AWS
         if (
           this.backupConfig.backupProvider === 'aws' ||
           this.backupConfig.backupProvider === 'both'
         ) {
-          await uploadData({
-            key: `backups/${timestamp}_chunk_${chunkIndex}.json`,
-            data: JSON.stringify(chunkData),
-            options: {
-              contentType: 'application/json',
-            },
-          }).result;
+          try {
+            await uploadData({
+              key: `backups/${timestamp}_chunk_${chunkIndex}.json`,
+              data: JSON.stringify(chunkData),
+              options: {
+                contentType: 'application/json',
+              },
+            }).result;
+          } catch (error) {
+            console.error(`AWS chunk ${chunkIndex} backup failed:`, error);
+            throw error;
+          }
         }
 
-        // Save to iCloud if configured
+        // Save to iCloud if configured and available
         if (
           (this.backupConfig.backupProvider === 'icloud' ||
             this.backupConfig.backupProvider === 'both') &&
-          Platform.OS === 'ios'
+          this.iCloudAvailable
         ) {
-          await this.saveToICloud(
-            chunkData,
-            `backup_${timestamp}_chunk_${chunkIndex}.json`,
-          );
+          try {
+            await this.saveToiCloud(
+              chunkData,
+              `backup_${timestamp}_chunk_${chunkIndex}.json`,
+            );
+          } catch (error) {
+            console.error(`iCloud chunk ${chunkIndex} backup failed:`, error);
+            // Don't throw error for iCloud failures if AWS is also configured
+            if (this.backupConfig.backupProvider === 'icloud') {
+              throw error;
+            }
+          }
         }
 
         // Reset for next chunk
@@ -208,6 +267,11 @@ export class BackupManager implements IBackupManager {
     source: 'aws' | 'icloud' = 'aws',
   ): Promise<void> {
     try {
+      // Check if source is available
+      if (source === 'icloud' && !this.iCloudAvailable) {
+        throw new Error(StorageConstants.ERROR_MESSAGES.ICLOUD_NOT_AVAILABLE);
+      }
+
       // Check if this is a chunked backup
       const isChunkedBackup = backupId.includes('_chunk_');
 
@@ -235,17 +299,27 @@ export class BackupManager implements IBackupManager {
     let backup: any;
 
     if (source === 'aws') {
-      const {body} = await downloadData({key: `backups/${backupId}.json`})
-        .result;
-      const backupText = await body.text();
-      if (!backupText) {
-        throw new Error('AWS backup not found');
+      try {
+        const {body} = await downloadData({key: `backups/${backupId}.json`})
+          .result;
+        const backupText = await body.text();
+        if (!backupText) {
+          throw new Error('AWS backup not found');
+        }
+        backup = JSON.parse(backupText);
+      } catch (error) {
+        console.error('Failed to download AWS backup:', error);
+        throw error;
       }
-      backup = JSON.parse(backupText);
     } else {
-      backup = await this.readFromICloud(`backup_${backupId}.json`);
-      if (!backup) {
-        throw new Error('iCloud backup not found');
+      try {
+        backup = await this.readFromiCloud(`backup_${backupId}.json`);
+        if (!backup) {
+          throw new Error('iCloud backup not found');
+        }
+      } catch (error) {
+        console.error('Failed to read iCloud backup:', error);
+        throw error;
       }
     }
 
@@ -289,15 +363,25 @@ export class BackupManager implements IBackupManager {
     // First, get chunk 0 to determine total chunks
     let firstChunk: any;
     if (source === 'aws') {
-      const {body} = await downloadData({
-        key: `backups/${timestamp}_chunk_0.json`,
-      }).result;
-      const chunkText = await body.text();
-      firstChunk = JSON.parse(chunkText);
+      try {
+        const {body} = await downloadData({
+          key: `backups/${timestamp}_chunk_0.json`,
+        }).result;
+        const chunkText = await body.text();
+        firstChunk = JSON.parse(chunkText);
+      } catch (error) {
+        console.error('Failed to download first AWS chunk:', error);
+        throw error;
+      }
     } else {
-      firstChunk = await this.readFromICloud(
-        `backup_${timestamp}_chunk_0.json`,
-      );
+      try {
+        firstChunk = await this.readFromiCloud(
+          `backup_${timestamp}_chunk_0.json`,
+        );
+      } catch (error) {
+        console.error('Failed to read first iCloud chunk:', error);
+        throw error;
+      }
     }
 
     if (!firstChunk) {
@@ -322,7 +406,7 @@ export class BackupManager implements IBackupManager {
           const chunkText = await body.text();
           chunkData = JSON.parse(chunkText);
         } else {
-          chunkData = await this.readFromICloud(
+          chunkData = await this.readFromiCloud(
             `backup_${timestamp}_chunk_${chunkIndex}.json`,
           );
         }
@@ -398,21 +482,35 @@ export class BackupManager implements IBackupManager {
           .slice(0, limit);
       } else {
         // List iCloud backups
-        const files = await FileSystem.readDirectoryAsync(
-          StorageConstants.ICLOUD_CONTAINER,
-        );
-        return files
-          .filter((file: string) => file.startsWith('backup_'))
-          .map((file: string) => ({
-            id: file,
-            timestamp: file.replace('backup_', '').replace('.json', ''),
-          }))
-          .sort((a, b) => {
-            return (
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            );
-          })
-          .slice(0, limit);
+        if (!this.iCloudAvailable) {
+          return [];
+        }
+
+        try {
+          const iCloudPath = RNFS.DocumentDirectoryPath + '/iCloud';
+          const files = await RNFS.readDir(iCloudPath);
+
+          return files
+            .filter(
+              file =>
+                file.name.startsWith('backup_') && file.name.endsWith('.json'),
+            )
+            .map((file: any) => ({
+              id: file.name,
+              timestamp: file.name.replace('backup_', '').replace('.json', ''),
+              lastModified: new Date(file.mtime),
+            }))
+            .sort((a, b) => {
+              return (
+                new Date(b.timestamp).getTime() -
+                new Date(a.timestamp).getTime()
+              );
+            })
+            .slice(0, limit);
+        } catch (error) {
+          console.error('Failed to list iCloud backups:', error);
+          return [];
+        }
       }
     } catch (error) {
       console.error('List backups error:', error);
@@ -480,8 +578,17 @@ export class BackupManager implements IBackupManager {
         }
       } else {
         // Delete from iCloud
-        const iCloudUri = `${StorageConstants.ICLOUD_CONTAINER}/backup_${backupId}.json`;
-        await FileSystem.deleteAsync(iCloudUri);
+        if (!this.iCloudAvailable) {
+          throw new Error(StorageConstants.ERROR_MESSAGES.ICLOUD_NOT_AVAILABLE);
+        }
+
+        const iCloudPath = RNFS.DocumentDirectoryPath + '/iCloud';
+        const filePath = `${iCloudPath}/backup_${backupId}.json`;
+
+        const exists = await RNFS.exists(filePath);
+        if (exists) {
+          await RNFS.unlink(filePath);
+        }
       }
     } catch (error) {
       console.error(`Failed to delete backup ${backupId}:`, error);
@@ -500,8 +607,9 @@ export class BackupManager implements IBackupManager {
   }> {
     try {
       const awsBackups = await this.listBackups('aws', 50);
-      const iCloudBackups =
-        Platform.OS === 'ios' ? await this.listBackups('icloud', 50) : [];
+      const iCloudBackups = this.iCloudAvailable
+        ? await this.listBackups('icloud', 50)
+        : [];
 
       const allBackups = [...awsBackups, ...iCloudBackups];
       const lastBackup =
@@ -591,27 +699,27 @@ export class BackupManager implements IBackupManager {
   }
 
   /**
-   * Save data to iCloud
+   * Save data to iCloud using react-native-fs
    * @private
    */
-  private async saveToICloud(data: unknown, filename: string): Promise<void> {
-    if (Platform.OS !== 'ios') {
-      return;
+  private async saveToiCloud(data: unknown, filename: string): Promise<void> {
+    if (!this.iCloudAvailable) {
+      throw new Error(StorageConstants.ERROR_MESSAGES.ICLOUD_NOT_AVAILABLE);
     }
 
     try {
       const jsonString = JSON.stringify(data);
-      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+      const iCloudPath = RNFS.DocumentDirectoryPath + '/iCloud';
+      const filePath = `${iCloudPath}/${filename}`;
 
-      // Write to local file first
-      await FileSystem.writeAsStringAsync(fileUri, jsonString);
+      // Ensure directory exists
+      const dirExists = await RNFS.exists(iCloudPath);
+      if (!dirExists) {
+        await RNFS.mkdir(iCloudPath);
+      }
 
-      // Move to iCloud
-      const iCloudUri = `${StorageConstants.ICLOUD_CONTAINER}/${filename}`;
-      await FileSystem.moveAsync({
-        from: fileUri,
-        to: iCloudUri,
-      });
+      // Write file to iCloud directory
+      await RNFS.writeFile(filePath, jsonString, 'utf8');
     } catch (error: unknown) {
       console.error('iCloud save error:', error);
       throw error;
@@ -619,17 +727,24 @@ export class BackupManager implements IBackupManager {
   }
 
   /**
-   * Read data from iCloud
+   * Read data from iCloud using react-native-fs
    * @private
    */
-  private async readFromICloud(filename: string): Promise<unknown> {
-    if (Platform.OS !== 'ios') {
+  private async readFromiCloud(filename: string): Promise<unknown> {
+    if (!this.iCloudAvailable) {
       return null;
     }
 
     try {
-      const iCloudUri = `${StorageConstants.ICLOUD_CONTAINER}/${filename}`;
-      const content = await FileSystem.readAsStringAsync(iCloudUri);
+      const iCloudPath = RNFS.DocumentDirectoryPath + '/iCloud';
+      const filePath = `${iCloudPath}/${filename}`;
+
+      const exists = await RNFS.exists(filePath);
+      if (!exists) {
+        return null;
+      }
+
+      const content = await RNFS.readFile(filePath, 'utf8');
       return JSON.parse(content);
     } catch (error) {
       console.error('iCloud read error:', error);

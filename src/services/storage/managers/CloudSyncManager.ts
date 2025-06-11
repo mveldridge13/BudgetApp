@@ -344,7 +344,20 @@ export class CloudSyncManager implements ICloudSync {
         }
       }
       return null;
-    } catch (error) {
+    } catch (error: any) {
+      // Handle "NoSuchKey" errors gracefully - this is normal for new users
+      if (
+        error?.name === 'NoSuchKey' ||
+        error?.code === 'NoSuchKey' ||
+        (error?.message && error.message.includes('NoSuchKey')) ||
+        error?.$metadata?.httpStatusCode === 404
+      ) {
+        console.log(
+          `Key ${key} not found in cloud storage (normal for new users)`,
+        );
+        return null;
+      }
+
       console.error(`Cloud fetch error for key ${key}:`, error);
       return null;
     }

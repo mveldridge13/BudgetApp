@@ -10,11 +10,12 @@ import {
 import {LocalStorageManager} from './managers/LocalStorageManager';
 import {CloudSyncManager} from './managers/CloudSyncManager';
 import {BackupManager} from './managers/BackupManager';
+import {UserStorageManager} from './managers/UserStorageManager';
 
 /**
  * StorageCoordinator - Main orchestrator for all storage operations
  * Replaces the original StorageService with a clean, modular architecture
- * Coordinates between local storage, cloud sync, and backup operations
+ * Coordinates between local storage, cloud sync, backup operations, and user-specific storage
  */
 export class StorageCoordinator {
   private static instance: StorageCoordinator;
@@ -22,6 +23,10 @@ export class StorageCoordinator {
   private localStorage: ILocalStorage;
   private cloudSync: ICloudSync;
   private backupManager: IBackupManager;
+
+  // NEW: User-specific storage management
+  private userStorageManager?: UserStorageManager;
+  private currentUserId?: string;
 
   private constructor() {
     // Initialize all managers
@@ -38,6 +43,138 @@ export class StorageCoordinator {
       StorageCoordinator.instance = new StorageCoordinator();
     }
     return StorageCoordinator.instance;
+  }
+
+  // ===========================================
+  // USER STORAGE MANAGEMENT
+  // ===========================================
+
+  /**
+   * Initialize user-specific storage manager
+   */
+  async initializeUserStorage(userId: string): Promise<UserStorageManager> {
+    try {
+      console.log(
+        '🔑 StorageCoordinator: Initializing user storage for:',
+        userId,
+      );
+
+      this.currentUserId = userId;
+      this.userStorageManager = new UserStorageManager(this, userId);
+
+      // Attempt to migrate any legacy data
+      console.log('🔄 StorageCoordinator: Starting data migration...');
+      const migrationResults =
+        await this.userStorageManager.migrateLegacyData();
+
+      const migratedCount = Object.values(migrationResults).filter(
+        result => result === true,
+      ).length;
+      if (migratedCount > 0) {
+        console.log(
+          `✅ StorageCoordinator: Migrated ${migratedCount} data items for user ${userId}`,
+        );
+      } else {
+        console.log('ℹ️ StorageCoordinator: No legacy data found to migrate');
+      }
+
+      console.log(
+        '✅ StorageCoordinator: User storage initialized and migration completed',
+      );
+      return this.userStorageManager;
+    } catch (error) {
+      console.error(
+        '❌ StorageCoordinator: Failed to initialize user storage:',
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get the current user storage manager
+   */
+  getUserStorageManager(): UserStorageManager | null {
+    if (!this.userStorageManager) {
+      console.warn(
+        '⚠️ StorageCoordinator: User storage manager not initialized',
+      );
+      return null;
+    }
+    return this.userStorageManager;
+  }
+
+  /**
+   * Check if user storage is initialized
+   */
+  isUserStorageInitialized(): boolean {
+    return !!this.userStorageManager && !!this.currentUserId;
+  }
+
+  /**
+   * Clear user storage manager (for logout)
+   */
+  clearUserStorage(): void {
+    console.log('🧹 StorageCoordinator: Clearing user storage manager');
+    this.userStorageManager = undefined;
+    this.currentUserId = undefined;
+  }
+
+  /**
+   * Get current user ID
+   */
+  getCurrentUserId(): string | undefined {
+    return this.currentUserId;
+  }
+
+  /**
+   * Get user-specific data (convenience method)
+   */
+  async getUserData(dataType: string): Promise<any> {
+    if (!this.userStorageManager) {
+      console.warn(
+        '⚠️ StorageCoordinator: User storage not initialized, cannot get user data',
+      );
+      return null;
+    }
+    return this.userStorageManager.getUserData(dataType);
+  }
+
+  /**
+   * Set user-specific data (convenience method)
+   */
+  async setUserData(dataType: string, data: any): Promise<boolean> {
+    if (!this.userStorageManager) {
+      console.warn(
+        '⚠️ StorageCoordinator: User storage not initialized, cannot set user data',
+      );
+      return false;
+    }
+    return this.userStorageManager.setUserData(dataType, data);
+  }
+
+  /**
+   * Check if current user has existing data
+   */
+  async hasUserData(): Promise<boolean> {
+    if (!this.userStorageManager) {
+      return false;
+    }
+    const existingData = await this.userStorageManager.hasExistingData();
+    return existingData.hasData;
+  }
+
+  /**
+   * Get current user profile
+   */
+  async getUserProfile() {
+    if (!this.userStorageManager) {
+      console.warn(
+        '⚠️ StorageCoordinator: User storage not initialized, cannot get user profile',
+      );
+      return null;
+    }
+    return this.userStorageManager.getUserProfile();
   }
 
   // ===========================================
@@ -125,6 +262,14 @@ export class StorageCoordinator {
     try {
       await this.localStorage.clear();
       await this.cloudSync.clearCloudData();
+
+      // Also clear user storage if initialized
+      if (this.userStorageManager) {
+        console.log(
+          '🧹 StorageCoordinator: Clearing user data as part of full clear',
+        );
+        await this.userStorageManager.deleteAllUserData();
+      }
     } catch (error) {
       console.error('Error clearing storage:', error);
       throw error;
@@ -386,11 +531,54 @@ export class StorageCoordinator {
       config: BackupConfig;
       stats: Awaited<ReturnType<StorageCoordinator['getBackupStats']>>;
     };
+    userStorage: {
+      isInitialized: boolean;
+      currentUserId?: string;
+      hasUserData: boolean;
+      userProfile?: any;
+    };
   }> {
     const [storageInfo, backupStats] = await Promise.all([
       this.getStorageInfo(),
       this.getBackupStats(),
     ]);
+
+    // Get user storage status
+    let userStorageStatus: {
+      isInitialized: boolean;
+      currentUserId?: string;
+      hasUserData: boolean;
+      userProfile?: any;
+    } = {
+      isInitialized: this.isUserStorageInitialized(),
+      currentUserId: this.currentUserId,
+      hasUserData: false,
+      userProfile: undefined,
+    };
+
+    if (this.userStorageManager) {
+      try {
+        const hasData = await this.hasUserData();
+        userStorageStatus.hasUserData = hasData;
+
+        // Safely try to get user profile
+        try {
+          const profile = await this.getUserProfile();
+          userStorageStatus.userProfile = profile; // profile can be null, which is fine
+        } catch (profileError) {
+          console.warn(
+            '⚠️ StorageCoordinator: Failed to get user profile:',
+            profileError,
+          );
+          userStorageStatus.userProfile = null;
+        }
+      } catch (error) {
+        console.warn(
+          '⚠️ StorageCoordinator: Failed to get user storage status:',
+          error,
+        );
+      }
+    }
 
     return {
       localStorage: storageInfo,
@@ -402,6 +590,7 @@ export class StorageCoordinator {
         config: this.getBackupConfig(),
         stats: backupStats,
       },
+      userStorage: userStorageStatus,
     };
   }
 
@@ -413,12 +602,15 @@ export class StorageCoordinator {
     localStorage: 'healthy' | 'error';
     cloudSync: 'healthy' | 'warning' | 'error';
     backup: 'healthy' | 'warning' | 'error';
+    userStorage: 'healthy' | 'warning' | 'error' | 'not_initialized';
     details: string[];
   }> {
     const details: string[] = [];
     let localStorage: 'healthy' | 'error' = 'healthy';
     let cloudSync: 'healthy' | 'warning' | 'error' = 'healthy';
     let backup: 'healthy' | 'warning' | 'error' = 'healthy';
+    let userStorage: 'healthy' | 'warning' | 'error' | 'not_initialized' =
+      'not_initialized';
 
     try {
       // Test local storage
@@ -485,15 +677,54 @@ export class StorageCoordinator {
       );
     }
 
+    // Check user storage status
+    if (this.isUserStorageInitialized()) {
+      try {
+        if (this.userStorageManager) {
+          // Test user storage operations
+          const profile = await this.userStorageManager.getUserProfile();
+          if (profile && profile.userId === this.currentUserId) {
+            userStorage = 'healthy';
+            details.push(
+              `User storage healthy for user: ${this.currentUserId}`,
+            );
+          } else {
+            userStorage = 'warning';
+            details.push('User storage profile mismatch');
+          }
+        } else {
+          userStorage = 'error';
+          details.push('User storage initialized but manager is null');
+        }
+      } catch (error) {
+        userStorage = 'error';
+        details.push(
+          `User storage error: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
+        );
+      }
+    } else {
+      userStorage = 'not_initialized';
+      details.push(
+        'User storage not initialized (normal if no user logged in)',
+      );
+    }
+
     // Determine overall health
     let overall: 'healthy' | 'warning' | 'error' = 'healthy';
     if (
       localStorage === 'error' ||
       cloudSync === 'error' ||
-      backup === 'error'
+      backup === 'error' ||
+      userStorage === 'error'
     ) {
       overall = 'error';
-    } else if (cloudSync === 'warning' || backup === 'warning') {
+    } else if (
+      cloudSync === 'warning' ||
+      backup === 'warning' ||
+      userStorage === 'warning'
+    ) {
       overall = 'warning';
     }
 
@@ -506,6 +737,7 @@ export class StorageCoordinator {
       localStorage,
       cloudSync,
       backup,
+      userStorage,
       details,
     };
   }
@@ -514,6 +746,9 @@ export class StorageCoordinator {
    * Clean up resources and stop all managers
    */
   destroy(): void {
+    // Clear user storage
+    this.clearUserStorage();
+
     if ('destroy' in this.cloudSync) {
       (this.cloudSync as CloudSyncManager).destroy();
     }

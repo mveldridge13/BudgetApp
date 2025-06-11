@@ -15,7 +15,7 @@ import {colors} from '../styles/colors';
 // eslint-disable-next-line no-unused-vars
 const {width, height} = Dimensions.get('window');
 
-const WelcomeFlow = ({onComplete}) => {
+const WelcomeFlow = ({onComplete, storageCoordinator}) => {
   const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState(0);
   const scrollViewRef = useRef(null);
@@ -69,15 +69,78 @@ const WelcomeFlow = ({onComplete}) => {
     },
   );
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    console.log('🎯 WelcomeFlow: User skipped welcome');
+
+    // Save that user has seen welcome using UserStorageManager if available
+    if (storageCoordinator) {
+      try {
+        const userStorage = storageCoordinator.getUserStorageManager();
+
+        if (userStorage) {
+          console.log(
+            '💾 WelcomeFlow: Saving welcome completion via UserStorageManager...',
+          );
+          await userStorage.setWelcomeComplete();
+        } else {
+          console.log(
+            '💾 WelcomeFlow: Saving welcome completion via StorageCoordinator (fallback)...',
+          );
+          await storageCoordinator.setItem('app.hasSeenWelcome', true);
+        }
+
+        console.log('✅ WelcomeFlow: Welcome completion saved');
+      } catch (error) {
+        console.warn(
+          '⚠️ WelcomeFlow: Failed to save welcome completion:',
+          error.message,
+        );
+      }
+    }
+
     onComplete();
   };
 
-  const handleGetStarted = () => {
+  const handleGetStarted = async () => {
+    console.log('🎯 WelcomeFlow: User completed welcome flow');
+
+    // Save that user has seen welcome using UserStorageManager if available
+    if (storageCoordinator) {
+      try {
+        const userStorage = storageCoordinator.getUserStorageManager();
+
+        if (userStorage) {
+          console.log(
+            '💾 WelcomeFlow: Saving welcome completion via UserStorageManager...',
+          );
+          await userStorage.setWelcomeComplete();
+        } else {
+          console.log(
+            '💾 WelcomeFlow: Saving welcome completion via StorageCoordinator (fallback)...',
+          );
+          await storageCoordinator.setItem('app.hasSeenWelcome', true);
+        }
+
+        console.log('✅ WelcomeFlow: Welcome completion saved');
+      } catch (error) {
+        console.warn(
+          '⚠️ WelcomeFlow: Failed to save welcome completion:',
+          error.message,
+        );
+      }
+    }
+
     onComplete();
   };
 
   const isLastStep = currentStep === steps.length - 1;
+
+  // Debug log to see what props are being passed
+  console.log('🔍 WelcomeFlow Debug:', {
+    hasStorageCoordinator: !!storageCoordinator,
+    hasUserStorage: !!storageCoordinator?.getUserStorageManager?.(),
+    userId: storageCoordinator?.getCurrentUserId?.() || 'No userId',
+  });
 
   return (
     <View style={[styles.container, {paddingTop: insets.top}]}>
