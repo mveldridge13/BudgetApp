@@ -194,12 +194,18 @@ const useTransactions = () => {
         }
         setDeletingIds(prev => [...prev, transactionId]);
 
-        const updatedTransactions = transactions.filter(
+        const currentTransactions = await userStorageManager.getUserData('transactions');
+        const freshTransactions = currentTransactions && Array.isArray(currentTransactions)
+          ? currentTransactions
+          : [];
+
+        const updatedTransactions = freshTransactions.filter(
           t => t.id !== transactionId,
         );
 
         await saveTransactionsToStorage(updatedTransactions);
         setTransactions(updatedTransactions);
+        await createTransactionBackup(updatedTransactions);
         setDeletingIds(prev => prev.filter(id => id !== transactionId));
 
         return updatedTransactions;
@@ -210,7 +216,7 @@ const useTransactions = () => {
         throw error;
       }
     },
-    [deletingIds, transactions, saveTransactionsToStorage, userStorageManager],
+    [deletingIds, saveTransactionsToStorage, userStorageManager, createTransactionBackup],
   );
 
   const prepareEditTransaction = useCallback(
@@ -256,8 +262,7 @@ const useTransactions = () => {
     setEditingTransaction(null);
   }, []);
 
-  const calculateTotalExpenses = useCallback(
-    (selectedDate, incomeData) => {
+  const calculateTotalExpenses = useCallback(() => {
       return transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
     },
     [transactions],

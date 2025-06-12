@@ -14,6 +14,7 @@ import {colors} from '../styles';
 
 const GoalCard = ({
   goal,
+  categories = [],
   isCompleted = false,
   onEdit,
   onDelete,
@@ -41,10 +42,19 @@ const GoalCard = ({
     }
   };
 
+  const getCategoryName = categoryId => {
+    if (!categoryId || !categories.length) {
+      return 'Other';
+    }
+    const category = categories.find(cat => cat.id === categoryId);
+    return category?.name || 'Other';
+  };
+
   // FIXED: Add safe goal data access
   const safeGoal = {
     title: goal?.title || 'Untitled Goal',
-    category: goal?.category || 'Other',
+    category: getCategoryName(goal?.categoryId),
+    categoryId: goal?.categoryId || 'Other',
     type: goal?.type || 'savings',
     current: goal?.current || 0,
     target: goal?.target || 0,
@@ -167,7 +177,6 @@ const GoalCard = ({
     );
   };
 
-  // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
     const amount = parseFloat(customAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -197,7 +206,6 @@ const GoalCard = ({
     );
   };
 
-  // NEW: Cancel custom amount input
   const handleCancelCustomAmount = () => {
     setCustomAmount('');
     setShowProgressUpdate(false);
@@ -310,7 +318,7 @@ const GoalCard = ({
         </View>
       </View>
 
-      {/* Progress Insights - UPDATED: Hidden for spending goals */}
+      {/* Progress Insights */}
       {!isCompleted && !isSpendingGoal && (
         <View style={styles.insightsContainer}>
           <View style={styles.insightRow}>
@@ -368,7 +376,7 @@ const GoalCard = ({
         </Text>
       )}
 
-      {/* NEW: Custom Amount Input Section */}
+      {/* Custom Amount Input Section */}
       {showProgressUpdate && !isCompleted && (
         <View style={styles.customAmountContainer}>
           <Text style={styles.customAmountTitle}>
@@ -441,7 +449,6 @@ const GoalCard = ({
             </>
           )}
 
-          {/* UPDATED: Improved spending budget alert */}
           {safeGoal.type === 'spending' &&
             (() => {
               const remaining = safeGoal.target - safeGoal.current;
@@ -680,7 +687,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 16,
   },
-  // NEW: Custom Amount Input Styles
   customAmountContainer: {
     backgroundColor: colors.background,
     borderRadius: 8,
@@ -776,7 +782,6 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  // NEW: Over budget styling
   spendingAlertOverBudget: {
     backgroundColor: colors.dangerLight || '#ffebee',
   },
@@ -786,7 +791,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.warning,
   },
-  // NEW: Over budget text styling
   spendingAlertTextOverBudget: {
     color: colors.danger,
     fontWeight: '500',

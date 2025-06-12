@@ -308,26 +308,7 @@ const HomeScreen = ({navigation}) => {
 
   const handleDeleteTransaction = async transactionId => {
     try {
-      if (!isStorageReady || !userStorageManager) {
-        console.error(
-          '❌ HomeScreen: Storage not ready, cannot delete transaction',
-        );
-        return;
-      }
-
-      const storedTransactions = await userStorageManager.getUserData(
-        'transactions',
-      );
-      let currentTransactionList = [];
-
-      if (storedTransactions && Array.isArray(storedTransactions)) {
-        currentTransactionList = storedTransactions;
-      } else {
-        console.error('No transactions found in storage');
-        return;
-      }
-
-      const transactionToDelete = currentTransactionList.find(
+      const transactionToDelete = transactions.find(
         t => t.id === transactionId,
       );
 
@@ -337,7 +318,6 @@ const HomeScreen = ({navigation}) => {
       }
 
       await deleteTransaction(transactionId);
-
       await updateSpendingGoals(null, transactionToDelete);
     } catch (error) {
       console.error('Error deleting transaction:', error);
@@ -437,7 +417,7 @@ const HomeScreen = ({navigation}) => {
         <BalanceCard
           incomeData={incomeData}
           loading={loading}
-          totalExpenses={calculateTotalExpenses(selectedDate, incomeData)}
+          totalExpenses={calculateTotalExpenses()}
           onCalendarPress={() => setShowCalendar(true)}
           onEditIncome={handleEditIncome}
           selectedDate={selectedDate}

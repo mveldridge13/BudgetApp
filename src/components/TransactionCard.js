@@ -52,7 +52,6 @@ const TransactionCard = ({
 }) => {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
   const translateX = useRef(new Animated.Value(0)).current;
@@ -99,14 +98,7 @@ const TransactionCard = ({
   };
 
   const performDelete = () => {
-    setIsDeleting(true);
-
-    // Call onDelete immediately
-    if (onDelete) {
-      onDelete(transaction.id);
-    }
-
-    // Animate card out (just for visual effect)
+    // Animate card out first
     Animated.parallel([
       Animated.timing(cardOpacity, {
         toValue: 0,
@@ -128,7 +120,11 @@ const TransactionCard = ({
         duration: 150,
         useNativeDriver: true,
       }),
-    ]).start();
+    ]).start(() => {
+      if (onDelete) {
+        onDelete(transaction.id);
+      }
+    });
   };
 
   const performEdit = () => {
@@ -306,10 +302,6 @@ const TransactionCard = ({
 
   const isRecurring =
     transaction.recurrence && transaction.recurrence !== 'none';
-
-  if (isDeleting) {
-    return null;
-  }
 
   return (
     <View style={styles.outerContainer}>

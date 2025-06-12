@@ -104,10 +104,21 @@ const useGoals = () => {
     if (typeof sanitized.title === 'string') {
       sanitized.title = sanitized.title.trim();
     }
-    if (typeof sanitized.category === 'string') {
-      sanitized.category = sanitized.category.trim();
+
+    if (sanitized.categoryId) {
+      // New format - keep categoryId
+      if (typeof sanitized.categoryId === 'string') {
+        sanitized.categoryId = sanitized.categoryId.trim();
+      } else {
+        sanitized.categoryId = 'Other';
+      }
+    } else if (sanitized.category) {
+      // Legacy format - convert category name to categoryId if needed
+      // For now, treat category as categoryId to maintain compatibility
+      sanitized.categoryId = sanitized.category;
+      delete sanitized.category; // Remove old field
     } else {
-      sanitized.category = 'Other';
+      sanitized.categoryId = 'Other';
     }
 
     return sanitized;
@@ -398,48 +409,68 @@ const useGoals = () => {
           return {success: true};
         }
 
-        let categoryService;
-        try {
-          categoryService = require('../services/categoryService').default;
-        } catch (error) {
-          return {success: true};
-        }
-
-        const categories = await categoryService.getCategories();
-        if (!Array.isArray(categories)) {
-          throw new Error('Invalid categories data');
-        }
-
         const storedGoals = await userStorageManager.getUserData('goals');
         const freshGoals =
           storedGoals && Array.isArray(storedGoals) ? storedGoals : [];
-
-        if (!Array.isArray(freshGoals)) {
-          throw new Error('Invalid stored goals data');
-        }
-
         let updatedGoals = [...freshGoals];
 
-        if (originalTransaction && originalTransaction.category) {
-          const originalCategory = categories.find(
-            cat => cat.id === originalTransaction.category,
-          );
-          const originalCategoryName = originalCategory?.name?.toLowerCase();
+        const getTransactionCategoryId = transaction => {
+          return transaction.categoryId || transaction.category;
+        };
 
-          if (originalCategoryName) {
+        const getMainCategoryId = categoryId => {
+          if (!categoryId) {
+            return null;
+          }
+          // If it contains a dash, it's a subcategory - extract the main category
+          if (categoryId.includes('-')) {
+            return categoryId.split('-')[0];
+          }
+          // Otherwise it's already a main category
+          return categoryId;
+        };
+
+        const doesGoalMatchTransaction = (goal, transactionCategoryId) => {
+          if (!goal.categoryId || !transactionCategoryId) {
+            return false;
+          }
+
+          const goalCategoryId = String(goal.categoryId).toLowerCase();
+          const transactionCategoryIdLower = String(
+            transactionCategoryId,
+          ).toLowerCase();
+          const mainTransactionCategoryId = getMainCategoryId(
+            transactionCategoryIdLower,
+          );
+
+
+          // Direct match (both main categories or exact subcategory match)
+          if (goalCategoryId === transactionCategoryIdLower) {
+            return true;
+          }
+
+          // Goal is main category, transaction is subcategory of that main category
+          if (goalCategoryId === mainTransactionCategoryId) {
+            return true;
+          }
+
+          return false;
+        };
+
+        // Handle removing original transaction amount
+        if (originalTransaction) {
+          const originalCategoryId =
+            getTransactionCategoryId(originalTransaction);
+          if (originalCategoryId) {
             const originalAmount = Number(originalTransaction.amount);
             if (!isNaN(originalAmount) && originalAmount > 0) {
               updatedGoals = updatedGoals.map(goal => {
-                if (goal.type !== 'spending' || !goal.category) {
-                  return goal;
-                }
-
-                if (goal.category.toLowerCase() === originalCategoryName) {
-                  const newCurrent = Math.max(
-                    0,
-                    (goal.current || 0) - originalAmount,
-                  );
-
+                if (
+                  goal.type === 'spending' &&
+                  doesGoalMatchTransaction(goal, originalCategoryId)
+                ) {
+                  const oldCurrent = goal.current || 0;
+                  const newCurrent = Math.max(0, oldCurrent - originalAmount);
                   return {
                     ...goal,
                     current: newCurrent,
@@ -452,42 +483,27 @@ const useGoals = () => {
           }
         }
 
-        if (newTransaction && newTransaction.category) {
-          const newTransactionAmount = Number(newTransaction.amount);
-          if (isNaN(newTransactionAmount) || newTransactionAmount <= 0) {
-          } else {
-            const transactionCategory = categories.find(
-              cat => cat.id === newTransaction.category,
-            );
-            const transactionCategoryName =
-              transactionCategory?.name?.toLowerCase();
-
-            if (transactionCategoryName) {
-              const relevantGoals = updatedGoals.filter(
-                goal =>
+        // Handle adding new transaction amount
+        if (newTransaction) {
+          const newCategoryId = getTransactionCategoryId(newTransaction);
+          if (newCategoryId) {
+            const newAmount = Number(newTransaction.amount);
+            if (!isNaN(newAmount) && newAmount > 0) {
+              updatedGoals = updatedGoals.map(goal => {
+                if (
                   goal.type === 'spending' &&
-                  goal.category?.toLowerCase() === transactionCategoryName,
-              );
-
-              if (relevantGoals.length > 0) {
-                updatedGoals = updatedGoals.map(goal => {
-                  if (goal.type !== 'spending' || !goal.category) {
-                    return goal;
-                  }
-
-                  if (goal.category.toLowerCase() === transactionCategoryName) {
-                    const newCurrent =
-                      (goal.current || 0) + newTransactionAmount;
-
-                    return {
-                      ...goal,
-                      current: newCurrent,
-                      lastUpdated: new Date().toISOString(),
-                    };
-                  }
-                  return goal;
-                });
-              }
+                  doesGoalMatchTransaction(goal, newCategoryId)
+                ) {
+                  const oldCurrent = goal.current || 0;
+                  const newCurrent = oldCurrent + newAmount;
+                  return {
+                    ...goal,
+                    current: newCurrent,
+                    lastUpdated: new Date().toISOString(),
+                  };
+                }
+                return goal;
+              });
             }
           }
         }
@@ -683,7 +699,7 @@ const useGoals = () => {
               goal &&
               goal.type === 'savings' &&
               (goal.title?.toLowerCase().includes('emergency') ||
-                goal.category?.toLowerCase().includes('emergency')),
+                goal.categoryId?.toLowerCase().includes('emergency')),
           );
 
           if (
@@ -696,7 +712,7 @@ const useGoals = () => {
               target: emergencyTarget,
               reason: 'Recommended based on your monthly spending',
               priority: 'high',
-              category: 'Security',
+              categoryId: 'Security',
               suggestedContribution: Math.min(
                 availableForGoals * 0.2,
                 monthlySpending * 0.1,
@@ -709,7 +725,7 @@ const useGoals = () => {
           const existingVacationGoal = goals.find(
             goal =>
               goal &&
-              (goal.category?.toLowerCase().includes('travel') ||
+              (goal.categoryId?.toLowerCase().includes('travel') ||
                 goal.title?.toLowerCase().includes('vacation')),
           );
 
@@ -720,7 +736,7 @@ const useGoals = () => {
               target: 2000,
               reason: 'Build memories with a getaway',
               priority: 'medium',
-              category: 'Travel',
+              categoryId: 'Travel',
               suggestedContribution: Math.min(availableForGoals * 0.15, 300),
             });
           }

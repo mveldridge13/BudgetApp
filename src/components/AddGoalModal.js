@@ -130,7 +130,7 @@ const AddGoalModal = ({
           current: editingGoal.current?.toString() || '0',
           originalAmount: editingGoal.originalAmount?.toString() || '',
           deadline: editingGoal.deadline || '',
-          category: editingGoal.category || 'Other',
+          category: editingGoal.categoryId || 'Other',
           priority: editingGoal.priority || 'medium',
           autoContribute: editingGoal.autoContribute?.toString() || '',
         });
@@ -253,7 +253,7 @@ const AddGoalModal = ({
             ? parseFloat(formData.originalAmount)
             : undefined,
         deadline: formData.deadline,
-        category: formData.category,
+        categoryId: formData.category,
         priority: formData.priority,
         autoContribute: formData.autoContribute
           ? parseFloat(formData.autoContribute)

@@ -9,15 +9,48 @@ export type RecurrenceType =
   | 'yearly';
 export type IncomeFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly';
 export type InsightType = 'success' | 'warning' | 'info';
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'AUD' | 'CAD' | 'CHF' | 'CNY' | 'INR';
+export type CurrencyCode =
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'JPY'
+  | 'AUD'
+  | 'CAD'
+  | 'CHF'
+  | 'CNY'
+  | 'INR';
 export type SharePermission = 'view' | 'edit' | 'admin';
-export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
-export type AnalyticsMetric = 'spending' | 'savings' | 'income' | 'budget' | 'goals';
-export type AIRecommendationType = 'savings' | 'spending' | 'investment' | 'budget' | 'goal';
+export type AnalyticsPeriod =
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'quarterly'
+  | 'yearly';
+export type AnalyticsMetric =
+  | 'spending'
+  | 'savings'
+  | 'income'
+  | 'budget'
+  | 'goals';
+export type AIRecommendationType =
+  | 'savings'
+  | 'spending'
+  | 'investment'
+  | 'budget'
+  | 'goal';
 export type AIPredictionConfidence = 'high' | 'medium' | 'low';
-export type AILearningModel = 'transaction' | 'spending' | 'savings' | 'budget' | 'goal';
+export type AILearningModel =
+  | 'transaction'
+  | 'spending'
+  | 'savings'
+  | 'budget'
+  | 'goal';
 export type AttachmentType = 'image' | 'pdf' | 'voice' | 'video' | 'document';
-export type VoiceTransactionStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type VoiceTransactionStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed';
 export type VoiceTransactionSource = 'app' | 'assistant' | 'phone' | 'other';
 
 export const GOAL_TYPES = [
@@ -150,7 +183,7 @@ export interface Goal extends SharedEntity {
   originalAmount?: number;
   currency: CurrencyCode;
   deadline: string;
-  category: string;
+  categoryId: string; // ✅ CHANGED: from "category" to "categoryId"
   priority: PriorityLevel;
   autoContribute: number;
   isActive: boolean;
@@ -317,7 +350,7 @@ export interface Transaction extends SharedEntity {
   currency: CurrencyCode;
   originalCurrency?: CurrencyCode;
   description: string;
-  category: string;
+  categoryId: string; // ✅ CHANGED: from "category" to "categoryId"
   subcategory?: string;
   date: string;
   recurrence: RecurrenceType;
@@ -515,22 +548,31 @@ export interface Insight extends SharedEntity {
 export interface AnalyticsData {
   userId: string;
   period: AnalyticsPeriod;
-  metrics: Record<AnalyticsMetric, {
-    value: number;
-    currency: CurrencyCode;
-    trend: number;
-    breakdown: Record<string, number>;
-  }>;
-  categories: Record<string, {
-    total: number;
-    percentage: number;
-    trend: number;
-  }>;
-  goals: Record<string, {
-    progress: number;
-    remaining: number;
-    onTrack: boolean;
-  }>;
+  metrics: Record<
+    AnalyticsMetric,
+    {
+      value: number;
+      currency: CurrencyCode;
+      trend: number;
+      breakdown: Record<string, number>;
+    }
+  >;
+  categories: Record<
+    string,
+    {
+      total: number;
+      percentage: number;
+      trend: number;
+    }
+  >;
+  goals: Record<
+    string,
+    {
+      progress: number;
+      remaining: number;
+      onTrack: boolean;
+    }
+  >;
   generatedAt: string;
 }
 
@@ -601,12 +643,15 @@ export interface StorageSchema {
   exchangeRates?: ExchangeRate[];
   aiModels?: {
     lastTrained: string;
-    models: Record<AILearningModel, {
-      version: string;
-      accuracy: number;
-      lastUpdated: string;
-      features: string[];
-    }>;
+    models: Record<
+      AILearningModel,
+      {
+        version: string;
+        accuracy: number;
+        lastUpdated: string;
+        features: string[];
+      }
+    >;
     learningData: AILearningData[];
   };
   aiRecommendations?: {
@@ -694,7 +739,8 @@ export const VALIDATION_RULES = {
     deadline: {
       required: true,
     },
-    category: {
+    categoryId: {
+      // ✅ CHANGED: from "category" to "categoryId"
       required: true,
     },
     priority: {
@@ -712,7 +758,8 @@ export const VALIDATION_RULES = {
       required: true,
       maxLength: 100,
     },
-    category: {
+    categoryId: {
+      // ✅ CHANGED: from "category" to "categoryId"
       required: true,
     },
     date: {
