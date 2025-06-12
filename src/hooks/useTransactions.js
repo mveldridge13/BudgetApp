@@ -17,6 +17,7 @@ const useTransactions = () => {
 
   useEffect(() => {
     let mounted = true;
+    let retryCount = 0;
 
     const checkAndLoad = async () => {
       if (!mounted || hasAttemptedLoadRef.current || isLoadingRef.current) {
@@ -57,12 +58,14 @@ const useTransactions = () => {
         } finally {
           isLoadingRef.current = false;
         }
-      } else if (!isReady) {
+      } else if (!isReady && retryCount < 20) {
+        retryCount++;
+        const delay = Math.min(500 * Math.pow(1.3, retryCount), 5000);
         setTimeout(() => {
           if (mounted) {
             checkAndLoad();
           }
-        }, 500);
+        }, delay);
       }
     };
 

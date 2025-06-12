@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import {
   View,
   Text,
@@ -14,29 +14,34 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import CalendarModal from '../components/CalendarModal';
 import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 
+// Static frequency data - no need to recreate on every render
 const frequencies = [
   {id: 'weekly', label: 'Weekly', days: 7},
   {id: 'fortnightly', label: 'Fortnightly', days: 14},
   {id: 'monthly', label: 'Monthly', days: 30},
 ];
 
-const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
-  <TouchableOpacity
-    style={[
-      styles.frequencyButton,
-      selectedFrequency === frequency.id && styles.selectedFrequency,
-    ]}
-    onPress={() => onSelect(frequency.id)}>
-    <Text
+// Memoized FrequencyButton component
+const FrequencyButton = React.memo(
+  ({frequency, selectedFrequency, onSelect}) => (
+    <TouchableOpacity
       style={[
-        styles.frequencyText,
-        selectedFrequency === frequency.id && styles.selectedFrequencyText,
-      ]}>
-      {frequency.label}
-    </Text>
-  </TouchableOpacity>
+        styles.frequencyButton,
+        selectedFrequency === frequency.id && styles.selectedFrequency,
+      ]}
+      onPress={() => onSelect(frequency.id)}>
+      <Text
+        style={[
+          styles.frequencyText,
+          selectedFrequency === frequency.id && styles.selectedFrequencyText,
+        ]}>
+        {frequency.label}
+      </Text>
+    </TouchableOpacity>
+  ),
 );
 
+// Date formatter function moved outside component
 const formatDateForDisplay = date => {
   if (!date) {
     return '';
@@ -55,68 +60,139 @@ const IncomeSetupScreen = ({navigation, route}) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hasSelectedDate, setHasSelectedDate] = useState(false);
   const [isStorageReady, setIsStorageReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const isEditMode = route?.params?.editMode || false;
+  const isMountedRef = useRef(true);
 
-  const storageCoordinator = StorageCoordinator.getInstance();
-  const userStorageManager = storageCoordinator.getUserStorageManager();
+  // Memoized storage instances
+  const storageCoordinator = useMemo(
+    () => StorageCoordinator.getInstance(),
+    [],
+  );
+  const userStorageManager = useMemo(
+    () => storageCoordinator.getUserStorageManager(),
+    [storageCoordinator],
+  );
 
+  // Progressive storage ready check
   useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 15;
+    let timeoutId;
+
     const checkStorageReady = () => {
       const isReady =
         storageCoordinator.isUserStorageInitialized() && userStorageManager;
-      setIsStorageReady(isReady);
 
-    };
+      if (isMountedRef.current) {
+        setIsStorageReady(isReady);
+      }
 
-    checkStorageReady();
-    const interval = setInterval(checkStorageReady, 1000);
+      if (!isReady && retryCount < maxRetries) {
+        retryCount++;
 
-    return () => clearInterval(interval);
-  }, [storageCoordinator, userStorageManager]);
-
-  useEffect(() => {
-    const loadExistingData = async () => {
-      if (isEditMode && isStorageReady && userStorageManager) {
-        try {
-          const existingData = await userStorageManager.getUserData(
-            'user_setup',
-          );
-          if (existingData) {
-            setIncome(existingData.income?.toString() || '');
-            setSelectedFrequency(existingData.frequency || '');
-
-            if (existingData.nextPayDate) {
-              const storedDate = new Date(existingData.nextPayDate);
-              if (!isNaN(storedDate.getTime())) {
-                setNextPayDate(storedDate);
-                setHasSelectedDate(true);
-              }
-            }
-          }
-        } catch (error) {
+        // Progressive delays: 50ms -> 200ms -> 500ms
+        let delay;
+        if (retryCount <= 3) {
+          delay = 50;
+        } else if (retryCount <= 8) {
+          delay = 200;
+        } else {
+          delay = 500;
         }
+
+        timeoutId = setTimeout(checkStorageReady, delay);
       }
     };
 
-    loadExistingData();
+    checkStorageReady();
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [storageCoordinator, userStorageManager]);
+
+  // Optimized data loading with error handling
+  const loadExistingData = useCallback(async () => {
+    if (!isEditMode || !isStorageReady || !userStorageManager) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const existingData = await userStorageManager.getUserData('user_setup');
+
+      if (existingData && isMountedRef.current) {
+        setIncome(existingData.income?.toString() || '');
+        setSelectedFrequency(existingData.frequency || '');
+
+        if (existingData.nextPayDate) {
+          const storedDate = new Date(existingData.nextPayDate);
+          if (!isNaN(storedDate.getTime())) {
+            setNextPayDate(storedDate);
+            setHasSelectedDate(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading existing data:', error);
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
+    }
   }, [isEditMode, isStorageReady, userStorageManager]);
 
-  const handleDateChange = selectedDate => {
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadExistingData();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadExistingData]);
+
+  // Memoized event handlers
+  const handleDateChange = useCallback(selectedDate => {
     setNextPayDate(selectedDate);
     setHasSelectedDate(true);
-  };
+  }, []);
 
-  const handleCalendarClose = () => {
+  const handleCalendarClose = useCallback(() => {
     setShowDatePicker(false);
-  };
+  }, []);
 
-  const handleSave = async () => {
+  const handleShowDatePicker = useCallback(() => {
+    setShowDatePicker(true);
+  }, []);
+
+  const handleFrequencySelect = useCallback(frequencyId => {
+    setSelectedFrequency(frequencyId);
+  }, []);
+
+  const handleIncomeChange = useCallback(text => {
+    // Basic validation to prevent non-numeric input
+    const numericText = text.replace(/[^0-9.]/g, '');
+    setIncome(numericText);
+  }, []);
+
+  // Optimized save handler with better error handling
+  const handleSave = useCallback(async () => {
+    // Validate inputs
     if (!income || !selectedFrequency || !hasSelectedDate) {
       Alert.alert(
         'Missing Information',
         'Please fill in all fields to continue.',
       );
+      return;
+    }
+
+    const incomeValue = parseFloat(income);
+    if (isNaN(incomeValue) || incomeValue <= 0) {
+      Alert.alert('Invalid Income', 'Please enter a valid income amount.');
       return;
     }
 
@@ -126,8 +202,10 @@ const IncomeSetupScreen = ({navigation, route}) => {
     }
 
     try {
+      setIsLoading(true);
+
       const setupData = {
-        income: parseFloat(income),
+        income: incomeValue,
         frequency: selectedFrequency,
         nextPayDate: nextPayDate.toISOString(),
         setupComplete: true,
@@ -144,28 +222,81 @@ const IncomeSetupScreen = ({navigation, route}) => {
         throw new Error('Failed to save data to user storage');
       }
 
-
-      if (isEditMode) {
-        navigation.goBack();
-      } else {
-        navigation.replace('MainTabs');
+      if (isMountedRef.current) {
+        if (isEditMode) {
+          navigation.goBack();
+        } else {
+          navigation.replace('MainTabs');
+        }
       }
     } catch (error) {
+      console.error('Error saving data:', error);
       Alert.alert(
         'Error',
         'Failed to save your information. Please try again.',
       );
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [
+    income,
+    selectedFrequency,
+    hasSelectedDate,
+    nextPayDate,
+    isStorageReady,
+    userStorageManager,
+    isEditMode,
+    navigation,
+  ]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     if (isEditMode) {
       navigation.goBack();
     }
-  };
+  }, [isEditMode, navigation]);
+
+  // Memoized keyboard dismiss handler
+  const dismissKeyboard = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
+  // Memoized computed values
+  const isFormValid = useMemo(() => {
+    return income && selectedFrequency && hasSelectedDate && isStorageReady;
+  }, [income, selectedFrequency, hasSelectedDate, isStorageReady]);
+
+  const buttonText = useMemo(() => {
+    if (isLoading) {
+      return 'Saving...';
+    }
+    if (!isStorageReady) {
+      return 'Loading...';
+    }
+    return isEditMode ? 'Save Changes' : 'Get Started';
+  }, [isLoading, isStorageReady, isEditMode]);
+
+  const formattedDate = useMemo(() => {
+    return hasSelectedDate ? formatDateForDisplay(nextPayDate) : 'Select date';
+  }, [hasSelectedDate, nextPayDate]);
+
+  // Memoized frequency buttons to prevent recreation
+  const frequencyButtons = useMemo(
+    () =>
+      frequencies.map(frequency => (
+        <FrequencyButton
+          key={frequency.id}
+          frequency={frequency}
+          selectedFrequency={selectedFrequency}
+          onSelect={handleFrequencySelect}
+        />
+      )),
+    [selectedFrequency, handleFrequencySelect],
+  );
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <TouchableWithoutFeedback onPress={dismissKeyboard}>
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
@@ -187,44 +318,39 @@ const IncomeSetupScreen = ({navigation, route}) => {
                 <TextInput
                   style={styles.incomeInput}
                   value={income}
-                  onChangeText={setIncome}
-                  keyboardType="number-pad"
+                  onChangeText={handleIncomeChange}
+                  keyboardType="numeric"
                   placeholder="0"
                   placeholderTextColor="#A0A0A0"
                   autoCorrect={false}
                   spellCheck={false}
                   textContentType="none"
+                  editable={!isLoading}
+                  maxLength={10} // Prevent overly long input
                 />
               </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>How often are you paid?</Text>
-              <View style={styles.frequencyContainer}>
-                {frequencies.map(frequency => (
-                  <FrequencyButton
-                    key={frequency.id}
-                    frequency={frequency}
-                    selectedFrequency={selectedFrequency}
-                    onSelect={setSelectedFrequency}
-                  />
-                ))}
-              </View>
+              <View style={styles.frequencyContainer}>{frequencyButtons}</View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Next Pay Date</Text>
               <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowDatePicker(true)}>
+                style={[
+                  styles.datePickerButton,
+                  isLoading && styles.disabledInput,
+                ]}
+                onPress={handleShowDatePicker}
+                disabled={isLoading}>
                 <Text
                   style={[
                     styles.datePickerText,
                     !hasSelectedDate && styles.placeholderText,
                   ]}>
-                  {hasSelectedDate
-                    ? formatDateForDisplay(nextPayDate)
-                    : 'Select date'}
+                  {formattedDate}
                 </Text>
                 <Icon
                   name="calendar-today"
@@ -242,8 +368,9 @@ const IncomeSetupScreen = ({navigation, route}) => {
           <View style={styles.buttonContainer}>
             {isEditMode && (
               <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={handleCancel}>
+                style={[styles.cancelButton, isLoading && styles.disabledInput]}
+                onPress={handleCancel}
+                disabled={isLoading}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             )}
@@ -252,20 +379,16 @@ const IncomeSetupScreen = ({navigation, route}) => {
               style={[
                 styles.saveButton,
                 isEditMode && styles.editSaveButton,
-                !isStorageReady && styles.disabledButton,
+                (!isFormValid || isLoading) && styles.disabledButton,
               ]}
               onPress={handleSave}
-              disabled={!isStorageReady}>
+              disabled={!isFormValid || isLoading}>
               <Text
                 style={[
                   styles.saveButtonText,
-                  !isStorageReady && styles.disabledButtonText,
+                  (!isFormValid || isLoading) && styles.disabledButtonText,
                 ]}>
-                {!isStorageReady
-                  ? 'Loading...'
-                  : isEditMode
-                  ? 'Save Changes'
-                  : 'Get Started'}
+                {buttonText}
               </Text>
             </TouchableOpacity>
           </View>
@@ -444,6 +567,7 @@ const styles = StyleSheet.create({
     minWidth: 140,
   },
   editSaveButton: {
+    // No additional styles needed
   },
   saveButtonText: {
     color: '#FFFFFF',
@@ -456,6 +580,9 @@ const styles = StyleSheet.create({
   disabledButtonText: {
     color: '#8E8E93',
   },
+  disabledInput: {
+    opacity: 0.6,
+  },
 });
 
-export default IncomeSetupScreen;
+export default React.memo(IncomeSetupScreen);

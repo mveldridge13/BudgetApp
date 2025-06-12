@@ -521,4 +521,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default TransactionCard;
+export default React.memo(TransactionCard);

@@ -17,16 +17,29 @@ const useGoals = () => {
   const userStorageManager = storageCoordinator.getUserStorageManager();
 
   useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 10;
+    let timeoutId;
+
     const checkStorageReady = () => {
       const isReady =
         storageCoordinator.isUserStorageInitialized() && userStorageManager;
       setIsStorageReady(isReady);
+
+      if (!isReady && retryCount < maxRetries) {
+        retryCount++;
+        const delay = Math.min(1000 * Math.pow(1.5, retryCount), 8000);
+        timeoutId = setTimeout(checkStorageReady, delay);
+      }
     };
 
     checkStorageReady();
-    const interval = setInterval(checkStorageReady, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [storageCoordinator, userStorageManager]);
 
   useEffect(() => {
@@ -245,7 +258,7 @@ const useGoals = () => {
         } else {
           isNewGoal = true;
           const newGoal = {
-            id: `goal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: `goal_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
             createdAt: new Date().toISOString(),
             ...sanitizedData,
           };

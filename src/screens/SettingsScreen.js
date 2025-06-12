@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
   StyleSheet,
@@ -7,185 +7,165 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
-  Share,
-  Linking,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
-import {Platform} from 'react-native';
 import {StorageCoordinator} from '../services/storage/StorageCoordinator';
+
+// ProBadge component
+const ProBadge = React.memo(({size = 'small'}) => (
+  <View
+    style={[
+      styles.proBadge,
+      size === 'large' ? styles.proBadgeLarge : styles.proBadgeSmall,
+    ]}>
+    <Text
+      style={[
+        styles.proBadgeText,
+        size === 'large' ? styles.proBadgeTextLarge : styles.proBadgeTextSmall,
+      ]}>
+      PRO
+    </Text>
+  </View>
+));
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
 
   const [userProfile, setUserProfile] = useState(null);
-  const [appSettings, setAppSettings] = useState({
-    notifications: true,
-    biometricAuth: false,
-    darkMode: false,
-    currency: 'AUD',
-    budgetPeriod: 'monthly',
-    dataBackup: true,
-    expenseCategories: true,
-  });
-
   const [isPro, setIsPro] = useState(false);
-
-  const [appVersion] = useState('1.0');
-  const [dataSize, setDataSize] = useState(0);
-  const [lastBackup, setLastBackup] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isStorageReady, setIsStorageReady] = useState(false);
+  const [storageError, setStorageError] = useState(null);
 
-  const storageCoordinator = StorageCoordinator.getInstance();
-  const userStorageManager = storageCoordinator.getUserStorageManager();
+  // Memoize storage instances
+  const storageCoordinator = useMemo(
+    () => StorageCoordinator.getInstance(),
+    [],
+  );
+  const userStorageManager = useMemo(
+    () => storageCoordinator.getUserStorageManager(),
+    [storageCoordinator],
+  );
 
   const isMountedRef = useRef(true);
-  const isLoadingRef = useRef(false);
 
-  useEffect(() => {
-    const checkStorageReady = () => {
-      const isReady =
-        storageCoordinator.isUserStorageInitialized() && userStorageManager;
-      setIsStorageReady(isReady);
-    };
+  // Progressive storage ready check
+  const checkStorageReady = useCallback(async () => {
+    const maxRetries = 15;
+    let retries = 0;
 
-    checkStorageReady();
-    const interval = setInterval(checkStorageReady, 1000);
+    return new Promise(resolve => {
+      const check = () => {
+        const isReady =
+          storageCoordinator.isUserStorageInitialized() && userStorageManager;
 
-    return () => clearInterval(interval);
+        if (isReady) {
+          resolve(true);
+        } else if (retries >= maxRetries) {
+          setStorageError('Storage initialization timeout');
+          resolve(false);
+        } else {
+          retries++;
+
+          // Progressive retry intervals
+          let delay;
+          if (retries <= 3) {
+            delay = 50;
+          } else if (retries <= 8) {
+            delay = 200;
+          } else {
+            delay = 500;
+          }
+
+          setTimeout(check, delay);
+        }
+      };
+      check();
+    });
   }, [storageCoordinator, userStorageManager]);
 
+  // Simple data loading - only what we actually use
   const loadSettingsData = useCallback(async () => {
-    if (isLoadingRef.current) {
-      return;
-    }
-
-    if (!isStorageReady || !userStorageManager) {
-      return;
-    }
-
-    isLoadingRef.current = true;
-
     try {
-      const [
-        userSetup,
-        storedSettings,
-        backupInfo,
-        transactions,
-        goals,
-        proStatus,
-      ] = await Promise.all([
-        userStorageManager.getUserData('user_setup'),
-        userStorageManager.getUserData('appSettings'),
-        userStorageManager.getUserData('lastBackup'),
-        userStorageManager.getUserData('transactions'),
-        userStorageManager.getUserData('goals'),
-        userStorageManager.getUserData('isPro'),
+      const isStorageReady = await checkStorageReady();
+
+      if (!isStorageReady || !isMountedRef.current) {
+        return;
+      }
+
+      // Load only essential data
+      const [userSetup, proStatus] = await Promise.all([
+        userStorageManager.getUserData('user_setup').catch(() => null),
+        userStorageManager.getUserData('isPro').catch(() => false),
       ]);
 
-      if (isMountedRef.current) {
-        if (userSetup) {
-          setUserProfile(userSetup);
-        }
-
-        if (storedSettings) {
-          setAppSettings(prev => ({...prev, ...storedSettings}));
-        }
-
-        setIsPro(proStatus === true || proStatus === 'true');
-
-        const transactionSize =
-          transactions && Array.isArray(transactions)
-            ? JSON.stringify(transactions).length
-            : 0;
-        const goalsSize =
-          goals && Array.isArray(goals) ? JSON.stringify(goals).length : 0;
-        const totalSize = (transactionSize + goalsSize) / 1024;
-        setDataSize(totalSize);
-
-        if (backupInfo) {
-          const backupDate =
-            typeof backupInfo === 'string'
-              ? new Date(backupInfo)
-              : new Date(backupInfo);
-          if (!isNaN(backupDate.getTime())) {
-            setLastBackup(backupDate);
-          }
-        }
+      if (!isMountedRef.current) {
+        return;
       }
+
+      // Update UI
+      if (userSetup) {
+        setUserProfile(userSetup);
+      }
+
+      setIsPro(proStatus === true || proStatus === 'true');
+      setLoading(false);
     } catch (error) {
       console.error('Error loading settings:', error);
-    } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-        isLoadingRef.current = false;
-      }
+      setStorageError('Failed to load settings');
+      setLoading(false);
     }
-  }, [isStorageReady, userStorageManager]);
+  }, [checkStorageReady, userStorageManager]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    if (isStorageReady) {
-      loadSettingsData();
-    }
+    loadSettingsData();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadSettingsData, isStorageReady]);
+  }, [loadSettingsData]);
 
+  // Focus effect - reload user profile on focus
   useFocusEffect(
     useCallback(() => {
-      if (isMountedRef.current && isStorageReady) {
-        loadSettingsData();
-      }
-    }, [loadSettingsData, isStorageReady]),
-  );
+      if (isMountedRef.current && userStorageManager) {
+        const timeoutId = setTimeout(() => {
+          userStorageManager
+            .getUserData('user_setup')
+            .then(userSetup => {
+              if (isMountedRef.current && userSetup) {
+                setUserProfile(userSetup);
+              }
+            })
+            .catch(console.error);
+        }, 100);
 
-  const saveAppSettings = useCallback(
-    async newSettings => {
-      try {
-        if (!isStorageReady || !userStorageManager) {
-          Alert.alert('Error', 'Storage not ready. Please try again.');
-          return;
-        }
-
-        const success = await userStorageManager.setUserData(
-          'appSettings',
-          newSettings,
-        );
-        if (success) {
-          setAppSettings(newSettings);
-        } else {
-          throw new Error('Failed to save settings to user storage');
-        }
-      } catch (error) {
-        console.error('Error saving settings:', error);
-        Alert.alert('Error', 'Failed to save settings. Please try again.');
+        return () => clearTimeout(timeoutId);
       }
-    },
-    [isStorageReady, userStorageManager],
+    }, [userStorageManager]),
   );
 
   const handleTogglePro = useCallback(async () => {
     try {
-      if (!isStorageReady || !userStorageManager) {
+      if (!userStorageManager) {
         Alert.alert('Error', 'Storage not ready. Please try again.');
         return;
       }
 
       const newProStatus = !isPro;
+
+      // Update UI immediately
+      setIsPro(newProStatus);
+
       const success = await userStorageManager.setUserData(
         'isPro',
         newProStatus,
       );
 
       if (success) {
-        setIsPro(newProStatus);
-
         Alert.alert(
           'Pro Status Updated',
           `Pro features are now ${
@@ -194,184 +174,46 @@ const SettingsScreen = ({navigation}) => {
           [{text: 'OK'}],
         );
       } else {
+        // Revert on failure
+        setIsPro(!newProStatus);
         throw new Error('Failed to save Pro status to user storage');
       }
     } catch (error) {
       console.error('Error toggling Pro status:', error);
       Alert.alert('Error', 'Failed to update Pro status. Please try again.');
     }
-  }, [isPro, isStorageReady, userStorageManager]);
-
-  const handleToggleSetting = useCallback(
-    key => {
-      const newSettings = {...appSettings, [key]: !appSettings[key]};
-      saveAppSettings(newSettings);
-    },
-    [appSettings, saveAppSettings],
-  );
+  }, [isPro, userStorageManager]);
 
   const handleEditProfile = useCallback(() => {
     navigation.navigate('IncomeSetup', {editMode: true});
   }, [navigation]);
 
-  const handleManageCategories = useCallback(() => {
-    Alert.alert(
-      'Coming Soon',
-      'Category management will be available in a future update.',
-    );
+  // Format currency
+  const formatCurrency = useCallback(amount => {
+    return new Intl.NumberFormat('en-AU', {
+      style: 'currency',
+      currency: 'AUD',
+      minimumFractionDigits: 0,
+    }).format(amount || 0);
   }, []);
 
-  const handleExportData = useCallback(async () => {
-    try {
-      if (!isStorageReady || !userStorageManager) {
-        Alert.alert('Error', 'Storage not ready. Please try again.');
-        return;
-      }
-
-      const [transactions, goals, userSetup] = await Promise.all([
-        userStorageManager.getUserData('transactions'),
-        userStorageManager.getUserData('goals'),
-        userStorageManager.getUserData('user_setup'),
-      ]);
-
-      const exportData = {
-        transactions:
-          transactions && Array.isArray(transactions) ? transactions : [],
-        goals: goals && Array.isArray(goals) ? goals : [],
-        userSetup: userSetup || null,
-        exportDate: new Date().toISOString(),
-        appVersion,
-      };
-
-      const dataString = JSON.stringify(exportData, null, 2);
-
-      await Share.share({
-        message: dataString,
-        title: 'Budget App Data Export',
-      });
-
-      const backupTime = new Date().toISOString();
-      const success = await userStorageManager.setUserData(
-        'lastBackup',
-        backupTime,
-      );
-      if (success) {
-        setLastBackup(new Date());
-      }
-    } catch (error) {
-      console.error('Error exporting data:', error);
-      Alert.alert('Error', 'Failed to export data. Please try again.');
-    }
-  }, [appVersion, isStorageReady, userStorageManager]);
-
-  const handleClearData = useCallback(() => {
-    Alert.alert(
-      'Clear All Data',
-      'This will permanently delete all your transactions, goals, and settings. This action cannot be undone.',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Clear Data',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (!isStorageReady || !userStorageManager) {
-                Alert.alert('Error', 'Storage not ready. Please try again.');
-                return;
-              }
-
-              const dataKeys = [
-                'transactions',
-                'goals',
-                'user_setup',
-                'appSettings',
-                'tours.balanceCard',
-                'tours.addTransaction',
-                'tours.transactionSwipe',
-                'lastBackup',
-                'isPro',
-              ];
-
-              const clearPromises = dataKeys.map(key =>
-                userStorageManager.removeUserData(key),
-              );
-
-              await Promise.all(clearPromises);
-
-              Alert.alert('Success', 'All data has been cleared.', [
-                {
-                  text: 'OK',
-                  onPress: () =>
-                    navigation.reset({
-                      index: 0,
-                      routes: [{name: 'Welcome'}],
-                    }),
-                },
-              ]);
-            } catch (error) {
-              console.error('Error clearing data:', error);
-              Alert.alert('Error', 'Failed to clear data. Please try again.');
-            }
-          },
-        },
-      ],
-    );
-  }, [navigation, isStorageReady, userStorageManager]);
-
-  const handleContactSupport = useCallback(() => {
-    const email = 'support@budgetapp.com';
-    const subject = 'Budget App Support Request';
-    const body = `App Version: ${appVersion}\nDevice: ${
-      Platform.OS
-    }\nPro Status: ${isPro ? 'Enabled' : 'Disabled'}\n\nDescribe your issue:\n`;
-
-    Linking.openURL(`mailto:${email}?subject=${subject}&body=${body}`);
-  }, [appVersion, isPro]);
-
-  const handleRateApp = useCallback(() => {
-    Alert.alert(
-      'Rate App',
-      'Thank you for using our app! Please rate us on the App Store.',
-    );
-  }, []);
-
-  const handlePrivacyPolicy = useCallback(() => {
-    Linking.openURL('https://budgetapp.com/privacy');
-  }, []);
-
-  const handleTermsOfService = useCallback(() => {
-    Linking.openURL('https://budgetapp.com/terms');
-  }, []);
-
-  const formatCurrency = useCallback(
-    amount => {
-      return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: appSettings.currency,
-        minimumFractionDigits: 0,
-      }).format(amount || 0);
-    },
-    [appSettings.currency],
-  );
-
+  // Format income display
   const formatIncomeDisplay = useCallback(
     incomeData => {
-      if (!incomeData || !incomeData.monthlyIncome) {
+      if (!incomeData || !incomeData.income) {
         return '';
       }
 
-      const amount = incomeData.monthlyIncome;
-      const period = incomeData.payPeriod || 'monthly';
+      const amount = incomeData.income;
+      const frequency = incomeData.frequency || 'monthly';
 
-      switch (period) {
+      switch (frequency) {
         case 'weekly':
-          return `${formatCurrency(amount / 4.33)} / week`;
-        case 'bi-weekly':
-          return `${formatCurrency(amount / 2.17)} / bi-weekly`;
+          return `${formatCurrency(amount)} / week`;
+        case 'fortnightly':
+          return `${formatCurrency(amount)} / fortnight`;
         case 'monthly':
           return `${formatCurrency(amount)} / month`;
-        case 'annually':
-          return `${formatCurrency(amount * 12)} / year`;
         default:
           return `${formatCurrency(amount)} / month`;
       }
@@ -379,41 +221,37 @@ const SettingsScreen = ({navigation}) => {
     [formatCurrency],
   );
 
-  const formatDataSize = useCallback(sizeInKB => {
-    if (sizeInKB < 1) {
-      return '< 1 KB';
-    }
-    if (sizeInKB < 1024) {
-      return `${sizeInKB.toFixed(1)} KB`;
-    }
-    return `${(sizeInKB / 1024).toFixed(1)} MB`;
-  }, []);
+  const handleRetry = useCallback(() => {
+    setStorageError(null);
+    setLoading(true);
+    loadSettingsData();
+  }, [loadSettingsData]);
 
-  // eslint-disable-next-line react/no-unstable-nested-components
-  const ProBadge = ({size = 'small'}) => (
-    <View
-      style={[
-        styles.proBadge,
-        size === 'large' ? styles.proBadgeLarge : styles.proBadgeSmall,
-      ]}>
-      <Text
-        style={[
-          styles.proBadgeText,
-          size === 'large'
-            ? styles.proBadgeTextLarge
-            : styles.proBadgeTextSmall,
-        ]}>
-        PRO
-      </Text>
-    </View>
-  );
-
-  if (loading || !isStorageReady) {
+  // Show error state
+  if (storageError) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>
-          {!isStorageReady ? 'Initializing storage...' : 'Loading settings...'}
-        </Text>
+        <Icon name="alert-circle" size={48} color={colors.danger} />
+        <Text style={styles.errorText}>{storageError}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Simple loading state
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, {paddingTop: insets.top + 20}]}>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.headerTitle}>Settings</Text>
+              <Text style={styles.headerSubtitle}>Loading...</Text>
+            </View>
+          </View>
+        </View>
       </View>
     );
   }
@@ -458,8 +296,7 @@ const SettingsScreen = ({navigation}) => {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pro Features (Testing)</Text>
-
+          <Text style={styles.sectionTitle}>Pro Features</Text>
           <View style={styles.settingCard}>
             <View style={styles.settingRow}>
               <View style={styles.settingInfo}>
@@ -478,7 +315,7 @@ const SettingsScreen = ({navigation}) => {
                   <Text style={styles.settingDescription}>
                     {isPro
                       ? 'Advanced analytics and features enabled'
-                      : 'Enable to test Pro features and analytics'}
+                      : 'Enable advanced features and analytics'}
                   </Text>
                 </View>
               </View>
@@ -496,292 +333,9 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>App Settings</Text>
-
-          <View style={styles.settingCard}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="bell" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Notifications</Text>
-                  <Text style={styles.settingDescription}>
-                    Receive reminders and updates
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={appSettings.notifications}
-                onValueChange={() => handleToggleSetting('notifications')}
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary,
-                }}
-                thumbColor={
-                  appSettings.notifications
-                    ? colors.textWhite
-                    : colors.textSecondary
-                }
-                ios_backgroundColor={colors.border}
-              />
-            </View>
-
-            <View style={styles.settingDivider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="shield" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>
-                    Biometric Authentication
-                  </Text>
-                  <Text style={styles.settingDescription}>
-                    Use fingerprint or face unlock
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={appSettings.biometricAuth}
-                onValueChange={() => handleToggleSetting('biometricAuth')}
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary,
-                }}
-                thumbColor={
-                  appSettings.biometricAuth
-                    ? colors.textWhite
-                    : colors.textSecondary
-                }
-                ios_backgroundColor={colors.border}
-              />
-            </View>
-
-            <View style={styles.settingDivider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="moon" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Dark Mode</Text>
-                  <Text style={styles.settingDescription}>
-                    Use dark theme throughout the app
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={appSettings.darkMode}
-                onValueChange={() => handleToggleSetting('darkMode')}
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary,
-                }}
-                thumbColor={
-                  appSettings.darkMode ? colors.textWhite : colors.textSecondary
-                }
-                ios_backgroundColor={colors.border}
-              />
-            </View>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleManageCategories}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="tag" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Expense Categories</Text>
-                  <Text style={styles.settingDescription}>
-                    Manage spending categories
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data & Privacy</Text>
-
-          <View style={styles.settingCard}>
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleExportData}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="download" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Export Data</Text>
-                  <Text style={styles.settingDescription}>
-                    Backup your transactions and goals
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.settingMeta}>
-                <Text style={styles.dataSize}>{formatDataSize(dataSize)}</Text>
-                <Icon
-                  name="chevron-right"
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.settingDivider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="cloud" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Last Backup</Text>
-                  <Text style={styles.settingDescription}>
-                    {lastBackup
-                      ? lastBackup.toLocaleDateString('en-AU', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })
-                      : 'Never'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleClearData}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="trash-2" size={18} color={colors.danger} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={[styles.settingLabel, {color: colors.danger}]}>
-                    Clear All Data
-                  </Text>
-                  <Text style={styles.settingDescription}>
-                    Permanently delete all app data
-                  </Text>
-                </View>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.danger} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
-
-          <View style={styles.settingCard}>
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleContactSupport}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="mail" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Contact Support</Text>
-                  <Text style={styles.settingDescription}>
-                    Get help with the app
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity style={styles.settingRow} onPress={handleRateApp}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="star" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Rate App</Text>
-                  <Text style={styles.settingDescription}>
-                    Leave a review on the App Store
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Legal</Text>
-
-          <View style={styles.settingCard}>
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handlePrivacyPolicy}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="shield" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Privacy Policy</Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleTermsOfService}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="file-text" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Terms of Service</Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.appInfoCard}>
-          <Text style={styles.appVersion}>Version {appVersion}</Text>
-          <Text style={styles.appCopyright}>
-            © 2025 Trend. All rights reserved.
+        <View style={styles.placeholderSection}>
+          <Text style={styles.placeholderText}>
+            More settings will be added here as features are developed.
           </Text>
         </View>
       </ScrollView>
@@ -797,11 +351,26 @@ const styles = StyleSheet.create({
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
-  loadingText: {
+  errorText: {
     fontSize: 16,
     fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: colors.textWhite,
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     backgroundColor: colors.primary,
@@ -968,48 +537,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 18,
   },
-  settingMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dataSize: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-  },
-  settingDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginLeft: 68,
-  },
-  appInfoCard: {
+  placeholderSection: {
     backgroundColor: colors.surface,
     borderRadius: 12,
-    padding: 24,
+    padding: 32,
     alignItems: 'center',
-    marginTop: 16,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  appVersion: {
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'System',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  appCopyright: {
+  placeholderText: {
     fontSize: 14,
-    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    fontStyle: 'italic',
   },
 });
 

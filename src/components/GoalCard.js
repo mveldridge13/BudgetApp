@@ -813,4 +813,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default GoalCard;
+export default React.memo(GoalCard);

@@ -1,5 +1,5 @@
 // eslint-disable-next-line no-unused-vars
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useMemo} from 'react';
 import {View, Text, StyleSheet, FlatList} from 'react-native';
 import {colors} from '../styles';
 import TransactionCard from './TransactionCard';
@@ -23,24 +23,26 @@ const TransactionList = ({
     }
   }, [transactions.length, transactionRef, onTransactionLayout]);
 
-  // Filter transactions for the selected date
-  const dailyTransactions = transactions.filter(transaction => {
-    if (transaction.recurrence && transaction.recurrence !== 'none') {
-      return false;
-    }
-    const transactionDate = new Date(transaction.date);
-    const isSameDay = (date1, date2) => {
-      return (
-        date1.getDate() === date2.getDate() &&
-        date1.getMonth() === date2.getMonth() &&
-        date1.getFullYear() === date2.getFullYear()
-      );
-    };
-    return isSameDay(transactionDate, selectedDate);
-  });
+  // Filter transactions for the selected date - Memoized for performance
+  const dailyTransactions = useMemo(() => {
+    return transactions.filter(transaction => {
+      if (transaction.recurrence && transaction.recurrence !== 'none') {
+        return false;
+      }
+      const transactionDate = new Date(transaction.date);
+      const isSameDay = (date1, date2) => {
+        return (
+          date1.getDate() === date2.getDate() &&
+          date1.getMonth() === date2.getMonth() &&
+          date1.getFullYear() === date2.getFullYear()
+        );
+      };
+      return isSameDay(transactionDate, selectedDate);
+    });
+  }, [transactions, selectedDate]);
 
-  // Filter and group recurring transactions by frequency
-  const getRecurringTransactionsByFrequency = () => {
+  // Filter and group recurring transactions by frequency - Memoized for performance
+  const recurringGroups = useMemo(() => {
     const recurringTransactions = transactions.filter(transaction => {
       return (
         transaction.recurrence &&
@@ -67,9 +69,7 @@ const TransactionList = ({
     });
 
     return grouped;
-  };
-
-  const recurringGroups = getRecurringTransactionsByFrequency();
+  }, [transactions]);
 
   // Helper function to get section title
   const getSectionTitle = frequency => {

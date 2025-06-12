@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
   StyleSheet,
@@ -19,6 +19,47 @@ import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
 import GoalSuggestionsCard from '../components/GoalSuggestionsCard';
 
+// Memoized components to prevent unnecessary re-renders
+const EmptyStateActive = React.memo(() => (
+  <View style={styles.emptyState}>
+    <Icon
+      name="target"
+      size={48}
+      color={colors.textSecondary}
+      style={styles.emptyIcon}
+    />
+    <Text style={styles.emptyTitle}>No Goals Yet</Text>
+    <Text style={styles.emptySubtitle}>
+      Set your first financial goal to start tracking your progress
+    </Text>
+  </View>
+));
+
+const EmptyStateCompleted = React.memo(() => (
+  <View style={styles.emptyState}>
+    <Icon
+      name="check-circle"
+      size={48}
+      color={colors.textSecondary}
+      style={styles.emptyIcon}
+    />
+    <Text style={styles.emptyTitle}>No Completed Goals</Text>
+    <Text style={styles.emptySubtitle}>Completed goals will appear here</Text>
+  </View>
+));
+
+const AddGoalButton = React.memo(({onPress}) => (
+  <TouchableOpacity style={styles.addGoalButton} onPress={onPress}>
+    <View style={styles.addGoalIconContainer}>
+      <Icon name="plus" size={24} color={colors.primary} />
+    </View>
+    <Text style={styles.addGoalText}>Add New Goal</Text>
+    <Text style={styles.addGoalSubtext}>
+      Set a savings, spending, or debt target
+    </Text>
+  </TouchableOpacity>
+));
+
 const GoalsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState('active');
@@ -27,8 +68,15 @@ const GoalsScreen = ({navigation}) => {
   const [refreshing, setRefreshing] = useState(false);
   const [isStorageReady, setIsStorageReady] = useState(false);
 
-  const storageCoordinator = StorageCoordinator.getInstance();
-  const userStorageManager = storageCoordinator.getUserStorageManager();
+  // Memoized storage instances
+  const storageCoordinator = useMemo(
+    () => StorageCoordinator.getInstance(),
+    [],
+  );
+  const userStorageManager = useMemo(
+    () => storageCoordinator.getUserStorageManager(),
+    [storageCoordinator],
+  );
 
   const isLoadingRef = useRef(false);
   const lastActiveDate = useRef(new Date().toDateString());
@@ -54,6 +102,59 @@ const GoalsScreen = ({navigation}) => {
 
   const {transactions} = useTransactions();
 
+  // Progressive storage ready check
+  useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 15;
+    let timeoutId;
+
+    const checkStorageReady = () => {
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+      setIsStorageReady(isReady);
+
+      if (!isReady && retryCount < maxRetries) {
+        retryCount++;
+
+        // Progressive delays: 50ms -> 200ms -> 500ms
+        let delay;
+        if (retryCount <= 3) {
+          delay = 50;
+        } else if (retryCount <= 8) {
+          delay = 200;
+        } else {
+          delay = 500;
+        }
+
+        timeoutId = setTimeout(checkStorageReady, delay);
+      }
+    };
+
+    checkStorageReady();
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [storageCoordinator, userStorageManager]);
+
+  // Optimized income data loading
+  const loadIncomeData = useCallback(async () => {
+    try {
+      if (!isStorageReady || !userStorageManager) {
+        return null;
+      }
+
+      const storedData = await userStorageManager.getUserData('user_setup');
+      return storedData || null;
+    } catch (error) {
+      console.error('Error loading income data:', error);
+      return null;
+    }
+  }, [isStorageReady, userStorageManager]);
+
+  // Optimized data loading with better error handling
   const loadAllData = useCallback(
     async (force = false) => {
       if (isLoadingRef.current && !force) {
@@ -67,17 +168,18 @@ const GoalsScreen = ({navigation}) => {
       isLoadingRef.current = true;
 
       try {
-        const [, incomeResult] = await Promise.all([
-          loadGoals(force),
-          loadIncomeData(),
-        ]);
+        // Load goals first (critical data), then income in background
+        await loadGoals(force);
 
-        if (isMountedRef.current && incomeResult) {
+        // Load income data in background
+        const incomeResult = await loadIncomeData();
+        if (isMountedRef.current) {
           setIncomeData(incomeResult);
         }
 
         hasLoadedOnce.current = true;
       } catch (error) {
+        console.error('Error loading all data:', error);
       } finally {
         if (isMountedRef.current) {
           isLoadingRef.current = false;
@@ -86,35 +188,6 @@ const GoalsScreen = ({navigation}) => {
     },
     [loadGoals, loadIncomeData, isStorageReady],
   );
-
-  useEffect(() => {
-    const checkStorageReady = () => {
-      const isReady =
-        storageCoordinator.isUserStorageInitialized() && userStorageManager;
-      setIsStorageReady(isReady);
-    };
-
-    checkStorageReady();
-    const interval = setInterval(checkStorageReady, 1000);
-
-    return () => clearInterval(interval);
-  }, [storageCoordinator, userStorageManager]);
-
-  const loadIncomeData = useCallback(async () => {
-    try {
-      if (!isStorageReady || !userStorageManager) {
-        return null;
-      }
-
-      const storedData = await userStorageManager.getUserData('user_setup');
-      if (storedData) {
-        return storedData;
-      }
-      return null;
-    } catch (error) {
-      return null;
-    }
-  }, [isStorageReady, userStorageManager]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -127,7 +200,10 @@ const GoalsScreen = ({navigation}) => {
     };
   }, [loadAllData, isStorageReady]);
 
+  // Debounced app state change handler
   useEffect(() => {
+    let timeoutId;
+
     const handleAppStateChange = nextAppState => {
       if (nextAppState === 'active' && isMountedRef.current && isStorageReady) {
         const now = new Date();
@@ -135,7 +211,9 @@ const GoalsScreen = ({navigation}) => {
 
         if (lastActiveDate.current !== currentDateString) {
           lastActiveDate.current = currentDateString;
-          loadAllData(true);
+          // Debounce to prevent rapid calls
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => loadAllData(true), 200);
         }
       }
     };
@@ -144,19 +222,34 @@ const GoalsScreen = ({navigation}) => {
       'change',
       handleAppStateChange,
     );
-    return () => subscription?.remove();
+    return () => {
+      subscription?.remove();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [loadAllData, isStorageReady]);
 
+  // Simplified focus effect with debouncing
   useFocusEffect(
     useCallback(() => {
+      let timeoutId;
+
       if (isMountedRef.current && !isLoadingRef.current && isStorageReady) {
         if (goals.length === 0 || !incomeData) {
-          loadAllData();
+          timeoutId = setTimeout(() => loadAllData(), 100);
         }
       }
+
+      return () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
     }, [loadAllData, goals.length, incomeData, isStorageReady]),
   );
 
+  // Optimized refresh handler
   const onRefresh = useCallback(async () => {
     if (refreshing) {
       return;
@@ -167,6 +260,7 @@ const GoalsScreen = ({navigation}) => {
     setRefreshing(false);
   }, [loadAllData, refreshing]);
 
+  // Memoized event handlers
   const handleAddGoal = useCallback(() => {
     clearEditingGoal();
     setShowAddGoal(true);
@@ -177,7 +271,9 @@ const GoalsScreen = ({navigation}) => {
       try {
         await prepareEditGoal(goal);
         setShowAddGoal(true);
-      } catch (error) {}
+      } catch (error) {
+        console.error('Error preparing edit goal:', error);
+      }
     },
     [prepareEditGoal],
   );
@@ -212,7 +308,9 @@ const GoalsScreen = ({navigation}) => {
     async goalId => {
       try {
         await deleteGoal(goalId);
-      } catch (error) {}
+      } catch (error) {
+        console.error('Error deleting goal:', error);
+      }
     },
     [deleteGoal],
   );
@@ -221,7 +319,9 @@ const GoalsScreen = ({navigation}) => {
     async goalId => {
       try {
         await toggleGoalBalanceDisplay(goalId);
-      } catch (error) {}
+      } catch (error) {
+        console.error('Error toggling balance display:', error);
+      }
     },
     [toggleGoalBalanceDisplay],
   );
@@ -230,7 +330,9 @@ const GoalsScreen = ({navigation}) => {
     async (goalId, amount) => {
       try {
         await updateGoalProgress(goalId, amount);
-      } catch (error) {}
+      } catch (error) {
+        console.error('Error updating progress:', error);
+      }
     },
     [updateGoalProgress],
   );
@@ -239,7 +341,9 @@ const GoalsScreen = ({navigation}) => {
     async goalId => {
       try {
         await completeGoal(goalId);
-      } catch (error) {}
+      } catch (error) {
+        console.error('Error completing goal:', error);
+      }
     },
     [completeGoal],
   );
@@ -249,6 +353,7 @@ const GoalsScreen = ({navigation}) => {
     clearEditingGoal();
   }, [clearEditingGoal]);
 
+  // Memoized currency formatter
   const formatCurrency = useCallback(amount => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
@@ -257,76 +362,78 @@ const GoalsScreen = ({navigation}) => {
     }).format(amount || 0);
   }, []);
 
-  const activeGoals = React.useMemo(
-    () => goals.filter(goal => goal.isActive !== false),
-    [goals],
-  );
+  // Optimized goal filtering and calculations - combined to reduce iterations
+  const goalData = useMemo(() => {
+    const activeGoals = goals.filter(goal => goal.isActive !== false);
+    const completedGoals = goals.filter(goal => goal.isActive === false);
 
-  const completedGoals = React.useMemo(
-    () => goals.filter(goal => goal.isActive === false),
-    [goals],
-  );
+    const balanceCardGoals = getBalanceCardGoals();
 
-  const balanceCardGoals = React.useMemo(
-    () => getBalanceCardGoals(),
-    [getBalanceCardGoals],
-  );
+    const currentMonthContributions = activeGoals
+      .filter(goal => goal.autoContribute)
+      .reduce((sum, goal) => sum + goal.autoContribute, 0);
 
-  const currentMonthContributions = React.useMemo(
-    () =>
-      activeGoals
-        .filter(goal => goal.autoContribute)
-        .reduce((sum, goal) => sum + goal.autoContribute, 0),
-    [activeGoals],
-  );
+    const smartSuggestions = getSmartSuggestions(transactions, incomeData);
 
-  const smartSuggestions = React.useMemo(
-    () => getSmartSuggestions(transactions, incomeData),
-    [getSmartSuggestions, transactions, incomeData],
-  );
-
-  const renderedActiveGoals = React.useMemo(
-    () =>
-      activeGoals.map(goal => (
-        <GoalCard
-          key={goal.id}
-          goal={goal}
-          onEdit={handleEditGoal}
-          onDelete={handleDeleteGoal}
-          onToggleBalanceDisplay={handleToggleBalanceDisplay}
-          onUpdateProgress={handleUpdateProgress}
-          onComplete={handleCompleteGoal}
-          getGoalProgress={getGoalProgress}
-          isOverdue={isGoalOverdue(goal)}
-          formatCurrency={formatCurrency}
-        />
-      )),
-    [
+    return {
       activeGoals,
-      handleEditGoal,
-      handleDeleteGoal,
-      handleToggleBalanceDisplay,
-      handleUpdateProgress,
-      handleCompleteGoal,
-      getGoalProgress,
-      isGoalOverdue,
-      formatCurrency,
-    ],
-  );
+      completedGoals,
+      balanceCardGoals,
+      currentMonthContributions,
+      smartSuggestions,
+    };
+  }, [
+    goals,
+    getBalanceCardGoals,
+    getSmartSuggestions,
+    transactions,
+    incomeData,
+  ]);
 
-  const renderedCompletedGoals = React.useMemo(
-    () =>
-      completedGoals.map(goal => (
-        <GoalCard
-          key={goal.id}
-          goal={goal}
-          isCompleted={true}
-          getGoalProgress={getGoalProgress}
-          formatCurrency={formatCurrency}
-        />
-      )),
-    [completedGoals, getGoalProgress, formatCurrency],
-  );
+  // Memoized rendered goal lists to prevent unnecessary re-renders
+  const renderedActiveGoals = useMemo(() => {
+    return goalData.activeGoals.map(goal => (
+      <GoalCard
+        key={goal.id}
+        goal={goal}
+        onEdit={handleEditGoal}
+        onDelete={handleDeleteGoal}
+        onToggleBalanceDisplay={handleToggleBalanceDisplay}
+        onUpdateProgress={handleUpdateProgress}
+        onComplete={handleCompleteGoal}
+        getGoalProgress={getGoalProgress}
+        isOverdue={isGoalOverdue(goal)}
+        formatCurrency={formatCurrency}
+      />
+    ));
+  }, [
+    goalData.activeGoals,
+    handleEditGoal,
+    handleDeleteGoal,
+    handleToggleBalanceDisplay,
+    handleUpdateProgress,
+    handleCompleteGoal,
+    getGoalProgress,
+    isGoalOverdue,
+    formatCurrency,
+  ]);
+
+  const renderedCompletedGoals = useMemo(() => {
+    return goalData.completedGoals.map(goal => (
+      <GoalCard
+        key={goal.id}
+        goal={goal}
+        isCompleted={true}
+        getGoalProgress={getGoalProgress}
+        formatCurrency={formatCurrency}
+      />
+    ));
+  }, [goalData.completedGoals, getGoalProgress, formatCurrency]);
+
+  // Memoized tab change handler
+  const handleTabChange = useCallback(tab => {
+    setActiveTab(tab);
+  }, []);
 
   if (!isStorageReady) {
     return (
@@ -350,7 +457,7 @@ const GoalsScreen = ({navigation}) => {
               <Icon name="target" size={16} color={colors.textWhite} />
               <Text style={styles.statLabel}>Active Goals</Text>
             </View>
-            <Text style={styles.statValue}>{activeGoals.length}</Text>
+            <Text style={styles.statValue}>{goalData.activeGoals.length}</Text>
           </View>
 
           <View style={styles.statCard}>
@@ -358,7 +465,9 @@ const GoalsScreen = ({navigation}) => {
               <Icon name="eye" size={16} color={colors.textWhite} />
               <Text style={styles.statLabel}>On Balance Card</Text>
             </View>
-            <Text style={styles.statValue}>{balanceCardGoals.length}</Text>
+            <Text style={styles.statValue}>
+              {goalData.balanceCardGoals.length}
+            </Text>
           </View>
 
           <View style={styles.statCard}>
@@ -367,7 +476,7 @@ const GoalsScreen = ({navigation}) => {
               <Text style={styles.statLabel}>This Month</Text>
             </View>
             <Text style={styles.statValue}>
-              {formatCurrency(currentMonthContributions)}
+              {formatCurrency(goalData.currentMonthContributions)}
             </Text>
           </View>
         </View>
@@ -376,25 +485,25 @@ const GoalsScreen = ({navigation}) => {
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
-          onPress={() => setActiveTab('active')}>
+          onPress={() => handleTabChange('active')}>
           <Text
             style={[
               styles.tabText,
               activeTab === 'active' && styles.activeTabText,
             ]}>
-            Active Goals ({activeGoals.length})
+            Active Goals ({goalData.activeGoals.length})
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-          onPress={() => setActiveTab('completed')}>
+          onPress={() => handleTabChange('completed')}>
           <Text
             style={[
               styles.tabText,
               activeTab === 'completed' && styles.activeTabText,
             ]}>
-            Completed ({completedGoals.length})
+            Completed ({goalData.completedGoals.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -413,69 +522,39 @@ const GoalsScreen = ({navigation}) => {
         }>
         {activeTab === 'active' && (
           <>
-            {smartSuggestions.length > 0 && (
+            {goalData.smartSuggestions.length > 0 && (
               <GoalSuggestionsCard
-                suggestions={smartSuggestions}
+                suggestions={goalData.smartSuggestions}
                 onCreateGoal={handleAddGoal}
                 formatCurrency={formatCurrency}
               />
             )}
 
-            {activeGoals.length > 0 ? (
+            {goalData.activeGoals.length > 0 ? (
               <View style={styles.goalsSection}>
                 <Text style={styles.sectionTitle}>Active Goals</Text>
                 {renderedActiveGoals}
               </View>
             ) : (
-              <View style={styles.emptyState}>
-                <Icon
-                  name="target"
-                  size={48}
-                  color={colors.textSecondary}
-                  style={styles.emptyIcon}
-                />
-                <Text style={styles.emptyTitle}>No Goals Yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  Set your first financial goal to start tracking your progress
-                </Text>
-              </View>
+              <EmptyStateActive />
             )}
           </>
         )}
 
         {activeTab === 'completed' && (
           <View style={styles.goalsSection}>
-            {completedGoals.length > 0 ? (
+            {goalData.completedGoals.length > 0 ? (
               <>
                 <Text style={styles.sectionTitle}>Completed Goals</Text>
                 {renderedCompletedGoals}
               </>
             ) : (
-              <View style={styles.emptyState}>
-                <Icon
-                  name="check-circle"
-                  size={48}
-                  color={colors.textSecondary}
-                  style={styles.emptyIcon}
-                />
-                <Text style={styles.emptyTitle}>No Completed Goals</Text>
-                <Text style={styles.emptySubtitle}>
-                  Completed goals will appear here
-                </Text>
-              </View>
+              <EmptyStateCompleted />
             )}
           </View>
         )}
 
-        <TouchableOpacity style={styles.addGoalButton} onPress={handleAddGoal}>
-          <View style={styles.addGoalIconContainer}>
-            <Icon name="plus" size={24} color={colors.primary} />
-          </View>
-          <Text style={styles.addGoalText}>Add New Goal</Text>
-          <Text style={styles.addGoalSubtext}>
-            Set a savings, spending, or debt target
-          </Text>
-        </TouchableOpacity>
+        <AddGoalButton onPress={handleAddGoal} />
       </ScrollView>
 
       <AddGoalModal
