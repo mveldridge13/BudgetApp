@@ -36,6 +36,7 @@ const SettingsScreen = ({navigation}) => {
 
   const [userProfile, setUserProfile] = useState(null);
   const [isPro, setIsPro] = useState(false);
+  const [appVersion] = useState('1.0');
   const [loading, setLoading] = useState(true);
   const [storageError, setStorageError] = useState(null);
 
@@ -338,6 +339,13 @@ const SettingsScreen = ({navigation}) => {
             More settings will be added here as features are developed.
           </Text>
         </View>
+
+        <View style={styles.appInfoCard}>
+          <Text style={styles.appVersion}>Version {appVersion}</Text>
+          <Text style={styles.appCopyright}>
+            © 2025 Trend. All rights reserved.
+          </Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -554,6 +562,33 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  appInfoCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  appVersion: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  appCopyright: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 
