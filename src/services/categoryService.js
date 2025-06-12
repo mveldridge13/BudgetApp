@@ -1,9 +1,5 @@
-// categoryService.js
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {StorageCoordinator} from './storage/StorageCoordinator';
 
-const CATEGORIES_STORAGE_KEY = '@fintech_app_categories';
-
-// Default categories with subcategories
 const defaultCategories = [
   {
     id: 'food',
@@ -119,7 +115,6 @@ const defaultCategories = [
   },
 ];
 
-// Predefined colors for new categories
 export const categoryColors = [
   '#FF6B6B',
   '#4ECDC4',
@@ -139,7 +134,6 @@ export const categoryColors = [
   '#0984E3',
 ];
 
-// Predefined icons for categories
 export const categoryIcons = [
   'restaurant-outline',
   'car-outline',
@@ -168,48 +162,65 @@ export const categoryIcons = [
 ];
 
 class CategoryService {
-  // Get all categories
+  constructor() {
+    this.storageCoordinator = StorageCoordinator.getInstance();
+  }
+
+  getUserStorageManager() {
+    const userStorageManager = this.storageCoordinator.getUserStorageManager();
+    const isReady =
+      this.storageCoordinator.isUserStorageInitialized() && userStorageManager;
+
+    if (!isReady) {
+      return null;
+    }
+
+    return userStorageManager;
+  }
+
+  isReady() {
+    return this.getUserStorageManager() !== null;
+  }
+
   async getCategories() {
     try {
-      const storedCategories = await AsyncStorage.getItem(
-        CATEGORIES_STORAGE_KEY,
+      const userStorageManager = this.getUserStorageManager();
+
+      if (!userStorageManager) {
+        return defaultCategories;
+      }
+
+      const storedCategories = await userStorageManager.getUserData(
+        'categories',
       );
-      if (storedCategories) {
-        const categories = JSON.parse(storedCategories);
-        // Check if we need to migrate existing categories to include subcategories
-        const needsMigration = await this.needsCategoryMigration(categories);
+
+      if (storedCategories && Array.isArray(storedCategories)) {
+        const needsMigration = await this.needsCategoryMigration(
+          storedCategories,
+        );
         if (needsMigration) {
-          console.log('Migrating categories to include subcategories...');
           const migratedCategories =
-            await this.migrateCategoriesWithSubcategories(categories);
+            await this.migrateCategoriesWithSubcategories(storedCategories);
           await this.saveCategories(migratedCategories);
           return migratedCategories;
         }
-        return categories;
+        return storedCategories;
       }
-      // Return default categories if none stored
+
       await this.saveCategories(defaultCategories);
       return defaultCategories;
     } catch (error) {
-      console.error('Error loading categories:', error);
       return defaultCategories;
     }
   }
 
-  // Check if categories need migration to include subcategories
   async needsCategoryMigration(categories) {
-    // Check if any default category is missing subcategories
-    // eslint-disable-next-line no-unused-vars
-    const defaultCategoryIds = defaultCategories.map(cat => cat.id);
-
     for (const defaultCat of defaultCategories) {
       const existingCat = categories.find(cat => cat.id === defaultCat.id);
       if (existingCat) {
-        // If the category exists but doesn't have subcategories when it should
         if (defaultCat.hasSubcategories && !existingCat.hasSubcategories) {
           return true;
         }
-        // If the category has subcategories but the structure is different
         if (defaultCat.hasSubcategories && existingCat.hasSubcategories) {
           if (
             !existingCat.subcategories ||
@@ -223,7 +234,6 @@ class CategoryService {
     return false;
   }
 
-  // Migrate existing categories to include subcategories
   async migrateCategoriesWithSubcategories(existingCategories) {
     const migratedCategories = [...existingCategories];
 
@@ -233,7 +243,6 @@ class CategoryService {
       );
 
       if (existingIndex !== -1) {
-        // Update existing category with subcategories if needed
         const existingCat = migratedCategories[existingIndex];
         if (defaultCat.hasSubcategories && !existingCat.hasSubcategories) {
           migratedCategories[existingIndex] = {
@@ -245,7 +254,6 @@ class CategoryService {
           defaultCat.hasSubcategories &&
           existingCat.hasSubcategories
         ) {
-          // Merge subcategories, keeping custom ones and adding missing default ones
           const existingSubcategoryIds =
             existingCat.subcategories?.map(sub => sub.id) || [];
           const newSubcategories = [...(existingCat.subcategories || [])];
@@ -263,7 +271,6 @@ class CategoryService {
           };
         }
       } else {
-        // Add missing default category
         migratedCategories.push(defaultCat);
       }
     }
@@ -271,37 +278,42 @@ class CategoryService {
     return migratedCategories;
   }
 
-  // Force reset categories to defaults (useful for testing)
   async resetCategoriesToDefaults() {
     try {
       await this.saveCategories(defaultCategories);
       return {success: true, categories: defaultCategories};
     } catch (error) {
-      console.error('Error resetting categories:', error);
       return {success: false, error: error.message};
     }
   }
 
-  // Save categories to storage
   async saveCategories(categories) {
     try {
-      await AsyncStorage.setItem(
-        CATEGORIES_STORAGE_KEY,
-        JSON.stringify(categories),
+      const userStorageManager = this.getUserStorageManager();
+
+      if (!userStorageManager) {
+        return false;
+      }
+
+      const success = await userStorageManager.setUserData(
+        'categories',
+        categories,
       );
-      return true;
+      return success;
     } catch (error) {
-      console.error('Error saving categories:', error);
       return false;
     }
   }
 
-  // Add new category
   async addCategory(categoryData) {
     try {
+      const userStorageManager = this.getUserStorageManager();
+      if (!userStorageManager) {
+        return {success: false, error: 'User storage not ready'};
+      }
+
       const categories = await this.getCategories();
 
-      // Generate unique ID
       const newId =
         categoryData.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
 
@@ -312,7 +324,7 @@ class CategoryService {
         color: categoryData.color,
         hasSubcategories: categoryData.hasSubcategories || false,
         subcategories: categoryData.subcategories || [],
-        isCustom: true, // Mark as user-created
+        isCustom: true,
         createdAt: new Date().toISOString(),
       };
 
@@ -325,14 +337,17 @@ class CategoryService {
         return {success: false, error: 'Failed to save category'};
       }
     } catch (error) {
-      console.error('Error adding category:', error);
       return {success: false, error: error.message};
     }
   }
 
-  // Add subcategory to existing category
   async addSubcategory(categoryId, subcategoryData) {
     try {
+      const userStorageManager = this.getUserStorageManager();
+      if (!userStorageManager) {
+        return {success: false, error: 'User storage not ready'};
+      }
+
       const categories = await this.getCategories();
       const categoryIndex = categories.findIndex(cat => cat.id === categoryId);
 
@@ -342,7 +357,6 @@ class CategoryService {
 
       const category = categories[categoryIndex];
 
-      // Generate unique subcategory ID
       const newSubcategoryId = `${categoryId}_${subcategoryData.name
         .toLowerCase()
         .replace(/\s+/g, '_')}_${Date.now()}`;
@@ -355,7 +369,6 @@ class CategoryService {
         createdAt: new Date().toISOString(),
       };
 
-      // Ensure category has subcategories array
       if (!category.subcategories) {
         category.subcategories = [];
       }
@@ -371,14 +384,17 @@ class CategoryService {
         return {success: false, error: 'Failed to save subcategory'};
       }
     } catch (error) {
-      console.error('Error adding subcategory:', error);
       return {success: false, error: error.message};
     }
   }
 
-  // Update category
   async updateCategory(categoryId, updates) {
     try {
+      const userStorageManager = this.getUserStorageManager();
+      if (!userStorageManager) {
+        return {success: false, error: 'User storage not ready'};
+      }
+
       const categories = await this.getCategories();
       const categoryIndex = categories.findIndex(cat => cat.id === categoryId);
 
@@ -391,14 +407,17 @@ class CategoryService {
 
       return {success: saved, category: categories[categoryIndex]};
     } catch (error) {
-      console.error('Error updating category:', error);
       return {success: false, error: error.message};
     }
   }
 
-  // Delete category (only custom categories)
   async deleteCategory(categoryId) {
     try {
+      const userStorageManager = this.getUserStorageManager();
+      if (!userStorageManager) {
+        return {success: false, error: 'User storage not ready'};
+      }
+
       const categories = await this.getCategories();
       const category = categories.find(cat => cat.id === categoryId);
 
@@ -415,14 +434,17 @@ class CategoryService {
 
       return {success: saved};
     } catch (error) {
-      console.error('Error deleting category:', error);
       return {success: false, error: error.message};
     }
   }
 
-  // Delete subcategory (only custom subcategories)
   async deleteSubcategory(categoryId, subcategoryId) {
     try {
+      const userStorageManager = this.getUserStorageManager();
+      if (!userStorageManager) {
+        return {success: false, error: 'User storage not ready'};
+      }
+
       const categories = await this.getCategories();
       const categoryIndex = categories.findIndex(cat => cat.id === categoryId);
 
@@ -447,7 +469,6 @@ class CategoryService {
 
       category.subcategories.splice(subcategoryIndex, 1);
 
-      // If no subcategories left, set hasSubcategories to false
       if (category.subcategories.length === 0) {
         category.hasSubcategories = false;
       }
@@ -456,18 +477,15 @@ class CategoryService {
 
       return {success: saved};
     } catch (error) {
-      console.error('Error deleting subcategory:', error);
       return {success: false, error: error.message};
     }
   }
 
-  // Get category by ID
   async getCategoryById(id) {
     const categories = await this.getCategories();
     return categories.find(cat => cat.id === id);
   }
 
-  // Get subcategory by ID
   async getSubcategoryById(categoryId, subcategoryId) {
     const category = await this.getCategoryById(categoryId);
     if (!category || !category.subcategories) {
@@ -476,7 +494,6 @@ class CategoryService {
     return category.subcategories.find(sub => sub.id === subcategoryId);
   }
 
-  // Get full category and subcategory info for a transaction
   async getCategoryInfo(categoryId, subcategoryId = null) {
     const category = await this.getCategoryById(categoryId);
     if (!category) {
@@ -497,7 +514,6 @@ class CategoryService {
     return result;
   }
 
-  // Validate category data
   validateCategory(categoryData) {
     const errors = [];
 
@@ -523,7 +539,6 @@ class CategoryService {
     };
   }
 
-  // Validate subcategory data
   validateSubcategory(subcategoryData) {
     const errors = [];
 

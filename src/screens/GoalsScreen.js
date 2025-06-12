@@ -1,4 +1,3 @@
-// screens/GoalsScreen.js
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
@@ -11,9 +10,9 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 import useGoals from '../hooks/useGoals';
 import useTransactions from '../hooks/useTransactions';
 import AddGoalModal from '../components/AddGoalModal';
@@ -26,14 +25,16 @@ const GoalsScreen = ({navigation}) => {
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [incomeData, setIncomeData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Refs to prevent multiple simultaneous loads
+  const storageCoordinator = StorageCoordinator.getInstance();
+  const userStorageManager = storageCoordinator.getUserStorageManager();
+
   const isLoadingRef = useRef(false);
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
-  const hasLoadedOnce = useRef(false); // Track if we've loaded at least once
+  const hasLoadedOnce = useRef(false);
 
-  // Hooks
   const {
     goals,
     editingGoal,
@@ -53,19 +54,21 @@ const GoalsScreen = ({navigation}) => {
 
   const {transactions} = useTransactions();
 
-  // Consolidated data loading function
   const loadAllData = useCallback(
     async (force = false) => {
       if (isLoadingRef.current && !force) {
         return;
       }
 
+      if (!isStorageReady) {
+        return;
+      }
+
       isLoadingRef.current = true;
 
       try {
-        // Load goals and income data in parallel
         const [, incomeResult] = await Promise.all([
-          loadGoals(force), // Pass force parameter to loadGoals
+          loadGoals(force),
           loadIncomeData(),
         ]);
 
@@ -75,47 +78,61 @@ const GoalsScreen = ({navigation}) => {
 
         hasLoadedOnce.current = true;
       } catch (error) {
-        console.warn('Error loading data:', error);
       } finally {
         if (isMountedRef.current) {
           isLoadingRef.current = false;
         }
       }
     },
-    [loadGoals, loadIncomeData],
+    [loadGoals, loadIncomeData, isStorageReady],
   );
+
+  useEffect(() => {
+    const checkStorageReady = () => {
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+      setIsStorageReady(isReady);
+    };
+
+    checkStorageReady();
+    const interval = setInterval(checkStorageReady, 1000);
+
+    return () => clearInterval(interval);
+  }, [storageCoordinator, userStorageManager]);
 
   const loadIncomeData = useCallback(async () => {
     try {
-      const storedData = await AsyncStorage.getItem('userSetup');
+      if (!isStorageReady || !userStorageManager) {
+        return null;
+      }
+
+      const storedData = await userStorageManager.getUserData('user_setup');
       if (storedData) {
-        return JSON.parse(storedData);
+        return storedData;
       }
       return null;
     } catch (error) {
-      console.warn('Error loading income data:', error);
       return null;
     }
-  }, []);
+  }, [isStorageReady, userStorageManager]);
 
-  // Initial load on mount
   useEffect(() => {
     isMountedRef.current = true;
-    loadAllData();
+    if (isStorageReady) {
+      loadAllData();
+    }
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadAllData]);
+  }, [loadAllData, isStorageReady]);
 
-  // Monitor app state changes for automatic refresh
   useEffect(() => {
     const handleAppStateChange = nextAppState => {
-      if (nextAppState === 'active' && isMountedRef.current) {
+      if (nextAppState === 'active' && isMountedRef.current && isStorageReady) {
         const now = new Date();
         const currentDateString = now.toDateString();
 
-        // Only reload if it's a new day or forced
         if (lastActiveDate.current !== currentDateString) {
           lastActiveDate.current = currentDateString;
           loadAllData(true);
@@ -128,22 +145,18 @@ const GoalsScreen = ({navigation}) => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [loadAllData]);
+  }, [loadAllData, isStorageReady]);
 
-  // Only reload on focus if data is stale (debounced)
   useFocusEffect(
     useCallback(() => {
-      // Remove the delay - load immediately but silently
-      if (isMountedRef.current && !isLoadingRef.current) {
-        // Only reload if goals are empty - no loading state shown
+      if (isMountedRef.current && !isLoadingRef.current && isStorageReady) {
         if (goals.length === 0 || !incomeData) {
           loadAllData();
         }
       }
-    }, [loadAllData, goals.length, incomeData]),
+    }, [loadAllData, goals.length, incomeData, isStorageReady]),
   );
 
-  // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
     if (refreshing) {
       return;
@@ -164,9 +177,7 @@ const GoalsScreen = ({navigation}) => {
       try {
         await prepareEditGoal(goal);
         setShowAddGoal(true);
-      } catch (error) {
-        console.warn('Error preparing edit goal:', error);
-      }
+      } catch (error) {}
     },
     [prepareEditGoal],
   );
@@ -201,9 +212,7 @@ const GoalsScreen = ({navigation}) => {
     async goalId => {
       try {
         await deleteGoal(goalId);
-      } catch (error) {
-        console.warn('Error deleting goal:', error);
-      }
+      } catch (error) {}
     },
     [deleteGoal],
   );
@@ -212,9 +221,7 @@ const GoalsScreen = ({navigation}) => {
     async goalId => {
       try {
         await toggleGoalBalanceDisplay(goalId);
-      } catch (error) {
-        console.warn('Error toggling balance display:', error);
-      }
+      } catch (error) {}
     },
     [toggleGoalBalanceDisplay],
   );
@@ -223,9 +230,7 @@ const GoalsScreen = ({navigation}) => {
     async (goalId, amount) => {
       try {
         await updateGoalProgress(goalId, amount);
-      } catch (error) {
-        console.warn('Error updating progress:', error);
-      }
+      } catch (error) {}
     },
     [updateGoalProgress],
   );
@@ -234,9 +239,7 @@ const GoalsScreen = ({navigation}) => {
     async goalId => {
       try {
         await completeGoal(goalId);
-      } catch (error) {
-        console.warn('Error completing goal:', error);
-      }
+      } catch (error) {}
     },
     [completeGoal],
   );
@@ -254,7 +257,6 @@ const GoalsScreen = ({navigation}) => {
     }).format(amount || 0);
   }, []);
 
-  // Memoize expensive calculations
   const activeGoals = React.useMemo(
     () => goals.filter(goal => goal.isActive !== false),
     [goals],
@@ -283,7 +285,6 @@ const GoalsScreen = ({navigation}) => {
     [getSmartSuggestions, transactions, incomeData],
   );
 
-  // Memoize rendered goal lists to prevent unnecessary re-renders
   const renderedActiveGoals = React.useMemo(
     () =>
       activeGoals.map(goal => (
@@ -327,27 +328,22 @@ const GoalsScreen = ({navigation}) => {
     [completedGoals, getGoalProgress, formatCurrency],
   );
 
-  // Show loading only on initial load, not on subsequent refreshes
-  // Never show loading screen during navigation - always show content structure
-  if (false) {
-    // Completely disable loading screen
+  if (!isStorageReady) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading goals...</Text>
+        <Text style={styles.loadingText}>Initializing storage...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
         <Text style={styles.headerTitle}>Goals</Text>
         <Text style={styles.headerSubtitle}>
           Track your financial objectives
         </Text>
 
-        {/* Quick Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <View style={styles.statIconContainer}>
@@ -377,7 +373,6 @@ const GoalsScreen = ({navigation}) => {
         </View>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
@@ -404,7 +399,6 @@ const GoalsScreen = ({navigation}) => {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -419,7 +413,6 @@ const GoalsScreen = ({navigation}) => {
         }>
         {activeTab === 'active' && (
           <>
-            {/* Smart Suggestions */}
             {smartSuggestions.length > 0 && (
               <GoalSuggestionsCard
                 suggestions={smartSuggestions}
@@ -428,7 +421,6 @@ const GoalsScreen = ({navigation}) => {
               />
             )}
 
-            {/* Active Goals */}
             {activeGoals.length > 0 ? (
               <View style={styles.goalsSection}>
                 <Text style={styles.sectionTitle}>Active Goals</Text>
@@ -475,7 +467,6 @@ const GoalsScreen = ({navigation}) => {
           </View>
         )}
 
-        {/* Add Goal Button */}
         <TouchableOpacity style={styles.addGoalButton} onPress={handleAddGoal}>
           <View style={styles.addGoalIconContainer}>
             <Icon name="plus" size={24} color={colors.primary} />
@@ -487,7 +478,6 @@ const GoalsScreen = ({navigation}) => {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Add/Edit Goal Modal */}
       <AddGoalModal
         visible={showAddGoal}
         onClose={handleCloseAddGoal}
@@ -499,7 +489,6 @@ const GoalsScreen = ({navigation}) => {
   );
 };
 
-// Styles remain the same...
 const styles = StyleSheet.create({
   container: {
     flex: 1,

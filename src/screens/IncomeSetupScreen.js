@@ -10,9 +10,9 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CalendarModal from '../components/CalendarModal';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 
 const frequencies = [
   {id: 'weekly', label: 'Weekly', days: 7},
@@ -20,7 +20,6 @@ const frequencies = [
   {id: 'monthly', label: 'Monthly', days: 30},
 ];
 
-// Move FrequencyButton outside the main component
 const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
   <TouchableOpacity
     style={[
@@ -38,7 +37,6 @@ const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
   </TouchableOpacity>
 );
 
-// Format date for display
 const formatDateForDisplay = date => {
   if (!date) {
     return '';
@@ -56,24 +54,40 @@ const IncomeSetupScreen = ({navigation, route}) => {
   const [nextPayDate, setNextPayDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hasSelectedDate, setHasSelectedDate] = useState(false);
+  const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Check if we're in edit mode
   const isEditMode = route?.params?.editMode || false;
 
-  // Load existing data if in edit mode
+  const storageCoordinator = StorageCoordinator.getInstance();
+  const userStorageManager = storageCoordinator.getUserStorageManager();
+
+  useEffect(() => {
+    const checkStorageReady = () => {
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+      setIsStorageReady(isReady);
+
+    };
+
+    checkStorageReady();
+    const interval = setInterval(checkStorageReady, 1000);
+
+    return () => clearInterval(interval);
+  }, [storageCoordinator, userStorageManager]);
+
   useEffect(() => {
     const loadExistingData = async () => {
-      if (isEditMode) {
+      if (isEditMode && isStorageReady && userStorageManager) {
         try {
-          const existingData = await AsyncStorage.getItem('userSetup');
+          const existingData = await userStorageManager.getUserData(
+            'user_setup',
+          );
           if (existingData) {
-            const parsedData = JSON.parse(existingData);
-            setIncome(parsedData.income?.toString() || '');
-            setSelectedFrequency(parsedData.frequency || '');
+            setIncome(existingData.income?.toString() || '');
+            setSelectedFrequency(existingData.frequency || '');
 
-            // Parse the stored date
-            if (parsedData.nextPayDate) {
-              const storedDate = new Date(parsedData.nextPayDate);
+            if (existingData.nextPayDate) {
+              const storedDate = new Date(existingData.nextPayDate);
               if (!isNaN(storedDate.getTime())) {
                 setNextPayDate(storedDate);
                 setHasSelectedDate(true);
@@ -81,13 +95,12 @@ const IncomeSetupScreen = ({navigation, route}) => {
             }
           }
         } catch (error) {
-          console.log('Error loading existing data:', error);
         }
       }
     };
 
     loadExistingData();
-  }, [isEditMode]);
+  }, [isEditMode, isStorageReady, userStorageManager]);
 
   const handleDateChange = selectedDate => {
     setNextPayDate(selectedDate);
@@ -107,6 +120,11 @@ const IncomeSetupScreen = ({navigation, route}) => {
       return;
     }
 
+    if (!isStorageReady || !userStorageManager) {
+      Alert.alert('Storage Not Ready', 'Please wait a moment and try again.');
+      return;
+    }
+
     try {
       const setupData = {
         income: parseFloat(income),
@@ -117,8 +135,15 @@ const IncomeSetupScreen = ({navigation, route}) => {
         lastUpdated: new Date().toISOString(),
       };
 
-      console.log('Saving setup data:', setupData);
-      await AsyncStorage.setItem('userSetup', JSON.stringify(setupData));
+      const success = await userStorageManager.setUserData(
+        'user_setup',
+        setupData,
+      );
+
+      if (!success) {
+        throw new Error('Failed to save data to user storage');
+      }
+
 
       if (isEditMode) {
         navigation.goBack();
@@ -126,7 +151,6 @@ const IncomeSetupScreen = ({navigation, route}) => {
         navigation.replace('MainTabs');
       }
     } catch (error) {
-      console.log('Save error:', error);
       Alert.alert(
         'Error',
         'Failed to save your information. Please try again.',
@@ -156,7 +180,6 @@ const IncomeSetupScreen = ({navigation, route}) => {
           </View>
 
           <View style={styles.form}>
-            {/* Income Input */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Income Amount</Text>
               <View style={styles.incomeInputContainer}>
@@ -175,7 +198,6 @@ const IncomeSetupScreen = ({navigation, route}) => {
               </View>
             </View>
 
-            {/* Frequency Selection */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>How often are you paid?</Text>
               <View style={styles.frequencyContainer}>
@@ -190,7 +212,6 @@ const IncomeSetupScreen = ({navigation, route}) => {
               </View>
             </View>
 
-            {/* Next Pay Date - Calendar Picker */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Next Pay Date</Text>
               <TouchableOpacity
@@ -219,7 +240,6 @@ const IncomeSetupScreen = ({navigation, route}) => {
           </View>
 
           <View style={styles.buttonContainer}>
-            {/* Cancel Button - only show in edit mode */}
             {isEditMode && (
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -228,18 +248,29 @@ const IncomeSetupScreen = ({navigation, route}) => {
               </TouchableOpacity>
             )}
 
-            {/* Save Button */}
             <TouchableOpacity
-              style={[styles.saveButton, isEditMode && styles.editSaveButton]}
-              onPress={handleSave}>
-              <Text style={styles.saveButtonText}>
-                {isEditMode ? 'Save Changes' : 'Get Started'}
+              style={[
+                styles.saveButton,
+                isEditMode && styles.editSaveButton,
+                !isStorageReady && styles.disabledButton,
+              ]}
+              onPress={handleSave}
+              disabled={!isStorageReady}>
+              <Text
+                style={[
+                  styles.saveButtonText,
+                  !isStorageReady && styles.disabledButtonText,
+                ]}>
+                {!isStorageReady
+                  ? 'Loading...'
+                  : isEditMode
+                  ? 'Save Changes'
+                  : 'Get Started'}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Calendar Modal */}
         <CalendarModal
           visible={showDatePicker}
           selectedDate={nextPayDate}
@@ -413,12 +444,17 @@ const styles = StyleSheet.create({
     minWidth: 140,
   },
   editSaveButton: {
-    // Additional styling when in edit mode if needed
   },
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: '#E5E5E5',
+  },
+  disabledButtonText: {
+    color: '#8E8E93',
   },
 });
 

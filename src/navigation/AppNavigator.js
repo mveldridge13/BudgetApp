@@ -2,13 +2,12 @@ import React, {useState, useEffect} from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createStackNavigator} from '@react-navigation/stack';
 import {View, Text, ActivityIndicator, StyleSheet} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from 'react-native-vector-icons/Feather';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 
-// Import your components
 import WelcomeFlow from '../components/WelcomeFlow';
 import IncomeSetupScreen from '../screens/IncomeSetupScreen';
-import HomeScreen from '../screens/HomeScreen'; // <- IMPORT YOUR REAL HOMESCREEN
+import HomeScreen from '../screens/HomeScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -16,7 +15,6 @@ import SettingsScreen from '../screens/SettingsScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Icon components
 const HomeIcon = ({color, size}) => (
   <Feather name="home" size={size} color={color} />
 );
@@ -33,9 +31,6 @@ const SettingsIcon = ({color, size}) => (
   <Feather name="menu" size={size} color={color} />
 );
 
-// REMOVED THE TEMPORARY SCREEN COMPONENTS - NOW USING REAL IMPORTS
-
-// Main Tab Navigator
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -57,7 +52,7 @@ function MainTabs() {
       }}>
       <Tab.Screen
         name="Home"
-        component={HomeScreen} // <- NOW USING YOUR REAL HOMESCREEN
+        component={HomeScreen}
         options={{
           tabBarIcon: HomeIcon,
         }}
@@ -87,14 +82,17 @@ function MainTabs() {
   );
 }
 
-// Welcome Screen Wrapper
 function WelcomeScreen({navigation}) {
   const handleWelcomeComplete = async () => {
     try {
-      await AsyncStorage.setItem('hasSeenWelcome', 'true');
+      const storageCoordinator = StorageCoordinator.getInstance();
+      const userStorageManager = storageCoordinator.getUserStorageManager();
+
+      if (userStorageManager) {
+        await userStorageManager.setUserData('hasSeenWelcome', true);
+      }
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     } catch (error) {
-      console.error('Error saving welcome status:', error);
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     }
   };
@@ -102,49 +100,68 @@ function WelcomeScreen({navigation}) {
   return <WelcomeFlow onComplete={handleWelcomeComplete} />;
 }
 
-// Main App Navigator
 export default function AppNavigator() {
   const [initialRoute, setInitialRoute] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkInitialRoute();
-  }, []);
+    let isMounted = true;
 
-  const checkInitialRoute = async () => {
-    try {
-      console.log('Checking initial route...');
-      const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
-      const setupData = await AsyncStorage.getItem('userSetup');
+    const initializeApp = async () => {
+      try {
+        const storageCoordinator = StorageCoordinator.getInstance();
+        let userStorageManager = storageCoordinator.getUserStorageManager();
 
-      console.log('hasSeenWelcome:', hasSeenWelcome);
-      console.log('setupData:', setupData);
+        while (
+          !storageCoordinator.isUserStorageInitialized() ||
+          !userStorageManager
+        ) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          userStorageManager = storageCoordinator.getUserStorageManager();
+          if (!isMounted) {
+            return;
+          }
+        }
 
-      if (!hasSeenWelcome) {
-        console.log('New user detected - showing welcome');
-        setInitialRoute('Welcome');
-      } else if (!setupData) {
-        console.log('User needs income setup');
-        setInitialRoute('IncomeSetup');
-      } else {
-        const parsedData = JSON.parse(setupData);
-        const isComplete =
-          parsedData.setupComplete === true && parsedData.income;
-        if (isComplete) {
-          console.log('Setup complete - showing main app');
-          setInitialRoute('MainTabs');
-        } else {
-          console.log('Setup incomplete - showing income setup');
+        if (!isMounted) {
+          return;
+        }
+
+        const hasSeenWelcome = await userStorageManager.getUserData(
+          'hasSeenWelcome',
+        );
+        const setupData = await userStorageManager.getUserData('user_setup');
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!hasSeenWelcome) {
+          setInitialRoute('Welcome');
+        } else if (!setupData) {
           setInitialRoute('IncomeSetup');
+        } else {
+          const isComplete =
+            setupData.setupComplete === true && setupData.income;
+          setInitialRoute(isComplete ? 'MainTabs' : 'IncomeSetup');
+        }
+      } catch (error) {
+        if (isMounted) {
+          setInitialRoute('Welcome');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
         }
       }
-    } catch (error) {
-      console.log('Error checking initial route:', error);
-      setInitialRoute('Welcome');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+
+    initializeApp();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (isLoading) {
     return (

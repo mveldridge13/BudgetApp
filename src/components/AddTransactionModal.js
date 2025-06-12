@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
   Text,
@@ -24,15 +24,12 @@ import categoryService from '../services/categoryService';
 
 const {width: screenWidth} = Dimensions.get('window');
 
-// Generate truly unique IDs to prevent deletion issues
 const generateUniqueId = () => {
-  // Combine timestamp with random string to ensure uniqueness
   const timestamp = Date.now();
   const randomPart = Math.random().toString(36).substr(2, 9);
   return `${timestamp}_${randomPart}`;
 };
 
-// Category creation constants
 const categoryColors = [
   '#FF6B6B',
   '#4ECDC4',
@@ -79,72 +76,61 @@ const categoryIcons = [
   'map-outline',
 ];
 
+const recurrenceOptions = [
+  {id: 'none', name: 'Does not repeat'},
+  {id: 'weekly', name: 'Weekly'},
+  {id: 'fortnightly', name: 'Fortnightly'},
+  {id: 'monthly', name: 'Monthly'},
+  {id: 'sixmonths', name: 'Every six months'},
+  {id: 'yearly', name: 'Yearly'},
+];
+
 const AddTransactionModal = ({
   visible,
   onClose,
   onSave,
   editingTransaction,
 }) => {
-  // Safe area insets
   const insets = useSafeAreaInsets();
 
-  // Transaction data
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
-  const [attachedImage, setAttachedImage] = useState(null); // New state for image
+  const [attachedImage, setAttachedImage] = useState(null);
 
-  // Use useRef for animation values to prevent recreation on renders
   const slideAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Other modals
   const [showCalendar, setShowCalendar] = useState(false);
 
-  // Data
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Current subcategory view data
   const [currentSubcategoryData, setCurrentSubcategoryData] = useState(null);
 
-  // Add Category form data
   const [categoryName, setCategoryName] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Add Subcategory form data
   const [subcategoryName, setSubcategoryName] = useState('');
   const [subcategoryIcon, setSubcategoryIcon] = useState('');
   const [parentCategoryId, setParentCategoryId] = useState(null);
 
-  const recurrenceOptions = [
-    {id: 'none', name: 'Does not repeat'},
-    {id: 'weekly', name: 'Weekly'},
-    {id: 'fortnightly', name: 'Fortnightly'},
-    {id: 'monthly', name: 'Monthly'},
-    {id: 'sixmonths', name: 'Every six months'},
-    {id: 'yearly', name: 'Yearly'},
-  ];
-
-  // Check if we're in edit mode
   const isEditMode = !!editingTransaction;
 
   useEffect(() => {
     if (visible) {
       loadCategories();
 
-      // Reset animations to starting positions
       slideAnim.setValue(0);
       modalAnim.setValue(screenWidth);
       fadeAnim.setValue(0);
 
-      // Animate modal in from right with fade
       Animated.parallel([
         Animated.timing(modalAnim, {
           toValue: 0,
@@ -158,37 +144,32 @@ const AddTransactionModal = ({
         }),
       ]).start();
     } else {
-      // Reset positions when modal is closed
       slideAnim.setValue(0);
       modalAnim.setValue(screenWidth);
       fadeAnim.setValue(0);
     }
   }, [visible, slideAnim, modalAnim, fadeAnim]);
 
-  // Effect to populate form when editing
   useEffect(() => {
     if (editingTransaction && visible) {
-      // Pre-populate all fields with existing transaction data
       setAmount(editingTransaction.amount.toString());
       setDescription(editingTransaction.description || '');
       setSelectedCategory(editingTransaction.category);
       setSelectedSubcategory(editingTransaction.subcategory || null);
       setSelectedDate(new Date(editingTransaction.date));
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
-      setAttachedImage(editingTransaction.attachedImage || null); // Load existing image
+      setAttachedImage(editingTransaction.attachedImage || null);
     } else if (!editingTransaction && visible) {
-      // Reset form for new transaction
       setAmount('');
       setDescription('');
       setSelectedCategory(null);
       setSelectedSubcategory(null);
       setSelectedDate(new Date());
       setSelectedRecurrence('none');
-      setAttachedImage(null); // Reset image
+      setAttachedImage(null);
     }
   }, [editingTransaction, visible]);
 
-  // Effect to auto-update description when category changes
   useEffect(() => {
     if (!visible || !selectedCategory || categories.length === 0) {
       return;
@@ -216,7 +197,6 @@ const AddTransactionModal = ({
         setDescription(newCategoryDisplayName);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     selectedCategory,
     selectedSubcategory,
@@ -224,6 +204,8 @@ const AddTransactionModal = ({
     isEditMode,
     description,
     categories.length,
+    editingTransaction,
+    getCategoryDisplayName,
   ]);
 
   const loadCategories = async () => {
@@ -239,7 +221,6 @@ const AddTransactionModal = ({
   };
 
   const resetForm = async () => {
-    // If there's an attached image and we're canceling, clean it up
     if (attachedImage && attachedImage.isLocal && !isEditMode) {
       await deleteImageFile(attachedImage.uri);
     }
@@ -250,7 +231,7 @@ const AddTransactionModal = ({
     setSelectedSubcategory(null);
     setSelectedDate(new Date());
     setSelectedRecurrence('none');
-    setAttachedImage(null); // Reset image
+    setAttachedImage(null);
     slideAnim.setValue(0);
     modalAnim.setValue(screenWidth);
     fadeAnim.setValue(0);
@@ -264,25 +245,20 @@ const AddTransactionModal = ({
     setCurrentSubcategoryData(null);
   };
 
-  // Camera and Image functionality
   const saveImagePermanently = async (tempUri, transactionId) => {
     try {
-      // Create receipts directory if it doesn't exist
       const receiptsDir = `${RNFS.DocumentDirectoryPath}/receipts`;
       const dirExists = await RNFS.exists(receiptsDir);
       if (!dirExists) {
         await RNFS.mkdir(receiptsDir);
       }
 
-      // Generate unique filename
       const timestamp = Date.now();
       const fileName = `receipt_${transactionId}_${timestamp}.jpg`;
       const permanentPath = `${receiptsDir}/${fileName}`;
 
-      // Copy from temp location to permanent storage
       await RNFS.copyFile(tempUri, permanentPath);
 
-      console.log('Image saved permanently to:', permanentPath);
       return permanentPath;
     } catch (error) {
       console.error('Error saving image permanently:', error);
@@ -295,7 +271,6 @@ const AddTransactionModal = ({
     try {
       if (imagePath && (await RNFS.exists(imagePath))) {
         await RNFS.unlink(imagePath);
-        console.log('Image file deleted:', imagePath);
       }
     } catch (error) {
       console.error('Error deleting image file:', error);
@@ -326,7 +301,6 @@ const AddTransactionModal = ({
         },
       );
     } else {
-      // For Android, you might want to use a custom modal or ActionSheet library
       Alert.alert('Select Image', 'Choose an option', [
         {text: 'Cancel', style: 'cancel'},
         {text: 'Take Photo', onPress: openCamera},
@@ -357,18 +331,17 @@ const AddTransactionModal = ({
 
       if (response.assets && response.assets[0]) {
         const tempUri = response.assets[0].uri;
-        const tempId = generateUniqueId(); // Generate temp ID for saving
+        const tempId = generateUniqueId();
 
-        // Save image permanently
         const permanentPath = await saveImagePermanently(tempUri, tempId);
 
         if (permanentPath) {
           const imageData = {
-            uri: permanentPath, // Use permanent path instead of temp
+            uri: permanentPath,
             type: response.assets[0].type,
             fileName: `receipt_${tempId}_${Date.now()}.jpg`,
             fileSize: response.assets[0].fileSize,
-            isLocal: true, // Flag to indicate this is locally stored
+            isLocal: true,
           };
           setAttachedImage(imageData);
         }
@@ -391,20 +364,19 @@ const AddTransactionModal = ({
 
       if (response.assets && response.assets[0]) {
         const tempUri = response.assets[0].uri;
-        const tempId = generateUniqueId(); // Generate temp ID for saving
+        const tempId = generateUniqueId();
 
-        // Save image permanently
         const permanentPath = await saveImagePermanently(tempUri, tempId);
 
         if (permanentPath) {
           const imageData = {
-            uri: permanentPath, // Use permanent path instead of temp
+            uri: permanentPath,
             type: response.assets[0].type,
             fileName:
               response.assets[0].fileName ||
               `receipt_${tempId}_${Date.now()}.jpg`,
             fileSize: response.assets[0].fileSize,
-            isLocal: true, // Flag to indicate this is locally stored
+            isLocal: true,
           };
           setAttachedImage(imageData);
         }
@@ -414,7 +386,6 @@ const AddTransactionModal = ({
 
   const removeImage = async () => {
     if (attachedImage && attachedImage.uri && attachedImage.isLocal) {
-      // Delete the physical file when removing
       await deleteImageFile(attachedImage.uri);
     }
     setAttachedImage(null);
@@ -430,156 +401,100 @@ const AddTransactionModal = ({
       description.trim() ||
       getCategoryDisplayName(selectedCategory, selectedSubcategory);
 
+    const transactionId = isEditMode
+      ? editingTransaction.id
+      : generateUniqueId();
+
     let finalAttachedImage = attachedImage;
 
-    // If we have an image and we're creating a new transaction,
-    // update the filename with the actual transaction ID
     if (attachedImage && !isEditMode) {
-      const actualTransactionId = generateUniqueId();
       const newPermanentPath = await saveImagePermanently(
         attachedImage.uri,
-        actualTransactionId,
+        transactionId,
       );
 
       if (newPermanentPath) {
-        // Delete the old temp file
-        if (attachedImage.isLocal) {
+        if (attachedImage.isLocal && attachedImage.uri !== newPermanentPath) {
           await deleteImageFile(attachedImage.uri);
         }
 
-        // Update image data with new path
         finalAttachedImage = {
           ...attachedImage,
           uri: newPermanentPath,
-          fileName: `receipt_${actualTransactionId}_${Date.now()}.jpg`,
+          fileName: `receipt_${transactionId}_${Date.now()}.jpg`,
         };
       }
-
-      const transaction = {
-        id: actualTransactionId,
-        amount: parseFloat(amount),
-        description: finalDescription,
-        category: selectedCategory,
-        subcategory: selectedSubcategory,
-        date: selectedDate,
-        recurrence: selectedRecurrence,
-        attachedImage: finalAttachedImage,
-        createdAt: new Date(),
-      };
-
-      const currentValue = slideAnim._value;
-
-      if (currentValue === 0) {
-        Animated.parallel([
-          Animated.timing(modalAnim, {
-            toValue: screenWidth,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          onSave(transaction);
-          resetForm();
-          onClose();
-        });
-      } else {
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
-          Animated.parallel([
-            Animated.timing(modalAnim, {
-              toValue: screenWidth,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.timing(fadeAnim, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-          ]).start(() => {
-            onSave(transaction);
-            resetForm();
-            onClose();
-          });
-        });
-      }
-    } else {
-      // Edit mode - keep existing transaction ID
-      const transaction = {
-        id: isEditMode ? editingTransaction.id : generateUniqueId(),
-        amount: parseFloat(amount),
-        description: finalDescription,
-        category: selectedCategory,
-        subcategory: selectedSubcategory,
-        date: selectedDate,
-        recurrence: selectedRecurrence,
-        attachedImage: finalAttachedImage,
-        createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
-        updatedAt: isEditMode ? new Date() : undefined,
-      };
-
-      const currentValue = slideAnim._value;
-
-      if (currentValue === 0) {
-        Animated.parallel([
-          Animated.timing(modalAnim, {
-            toValue: screenWidth,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          onSave(transaction);
-          resetForm();
-          onClose();
-        });
-      } else {
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => {
-          Animated.parallel([
-            Animated.timing(modalAnim, {
-              toValue: screenWidth,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.timing(fadeAnim, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-          ]).start(() => {
-            onSave(transaction);
-            resetForm();
-            onClose();
-          });
-        });
-      }
     }
+
+    const transaction = {
+      id: transactionId,
+      amount: parseFloat(amount),
+      description: finalDescription,
+      category: selectedCategory,
+      subcategory: selectedSubcategory,
+      date: selectedDate,
+      recurrence: selectedRecurrence,
+      attachedImage: finalAttachedImage,
+      createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
+      updatedAt: isEditMode ? new Date() : undefined,
+    };
+
+    const currentValue = slideAnim._value;
+
+    const animateAndSave = () => {
+      if (currentValue === 0) {
+        Animated.parallel([
+          Animated.timing(modalAnim, {
+            toValue: screenWidth,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          onSave(transaction);
+          resetForm();
+          onClose();
+        });
+      } else {
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          Animated.parallel([
+            Animated.timing(modalAnim, {
+              toValue: screenWidth,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            onSave(transaction);
+            resetForm();
+            onClose();
+          });
+        });
+      }
+    };
+
+    animateAndSave();
   };
 
   const handleClose = () => {
-    // Get current slide position to determine which view we're in
     const currentValue = slideAnim._value;
 
     if (currentValue === 0) {
-      // Already in transaction view, animate modal out then close
       Animated.parallel([
         Animated.timing(modalAnim, {
-          toValue: screenWidth, // Slide out to right
+          toValue: screenWidth,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -593,7 +508,6 @@ const AddTransactionModal = ({
         onClose();
       });
     } else {
-      // Animate back to transaction view first, then animate modal out
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
@@ -618,7 +532,6 @@ const AddTransactionModal = ({
     }
   };
 
-  // Navigation functions
   const showCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth,
@@ -711,10 +624,8 @@ const AddTransactionModal = ({
       category.hasSubcategories &&
       category.subcategories?.length > 0
     ) {
-      // Show subcategory picker
       showSubcategoryPicker(category);
     } else {
-      // Select category directly
       setSelectedCategory(categoryId);
       setSelectedSubcategory(null);
       loadCategories();
@@ -726,7 +637,6 @@ const AddTransactionModal = ({
     setSelectedCategory(currentSubcategoryData.id);
     setSelectedSubcategory(subcategoryId);
     loadCategories();
-    // Go back to transaction view
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 300,
@@ -839,7 +749,6 @@ const AddTransactionModal = ({
     }
   };
 
-  // Helper function to create dynamic category icon style
   const getCategoryIconStyle = color => {
     return {
       ...styles.categoryIconContainer,
@@ -847,7 +756,6 @@ const AddTransactionModal = ({
     };
   };
 
-  // Helper function to create dynamic color option style
   const getColorOptionStyle = (color, isSelected) => {
     return {
       ...styles.colorOption,
@@ -856,7 +764,6 @@ const AddTransactionModal = ({
     };
   };
 
-  // Helper functions
   const formatDate = date => {
     return date.toLocaleDateString('en-AU', {
       day: 'numeric',
@@ -875,26 +782,35 @@ const AddTransactionModal = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getCategoryById = id => categories.find(cat => cat.id === id);
-  const getRecurrenceById = id => recurrenceOptions.find(opt => opt.id === id);
+  const getCategoryById = useCallback(
+    id => categories.find(cat => cat.id === id),
+    [categories],
+  );
+  const getRecurrenceById = useCallback(
+    id => recurrenceOptions.find(opt => opt.id === id),
+    [],
+  );
 
-  const getCategoryDisplayName = (categoryId, subcategoryId) => {
-    const category = getCategoryById(categoryId);
-    if (!category) {
-      return '';
-    }
-
-    if (subcategoryId && category.subcategories) {
-      const subcategory = category.subcategories.find(
-        sub => sub.id === subcategoryId,
-      );
-      if (subcategory) {
-        return subcategory.name;
+  const getCategoryDisplayName = useCallback(
+    (categoryId, subcategoryId) => {
+      const category = getCategoryById(categoryId);
+      if (!category) {
+        return '';
       }
-    }
 
-    return category.name;
-  };
+      if (subcategoryId && category.subcategories) {
+        const subcategory = category.subcategories.find(
+          sub => sub.id === subcategoryId,
+        );
+        if (subcategory) {
+          return subcategory.name;
+        }
+      }
+
+      return category.name;
+    },
+    [getCategoryById],
+  );
 
   const getRecurrenceIcon = () => {
     return selectedRecurrence !== 'none' ? 'repeat' : 'repeat-outline';
@@ -930,7 +846,6 @@ const AddTransactionModal = ({
               transform: [{translateX: modalAnim}],
             },
           ]}>
-          {/* Container for all views */}
           <Animated.View
             style={[
               styles.viewContainer,
@@ -938,7 +853,6 @@ const AddTransactionModal = ({
                 transform: [{translateX: slideAnim}],
               },
             ]}>
-            {/* Transaction View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -968,7 +882,6 @@ const AddTransactionModal = ({
               </View>
 
               <ScrollView style={styles.formContainer}>
-                {/* Date Field */}
                 <TouchableOpacity
                   style={styles.dateField}
                   onPress={() => setShowCalendar(true)}
@@ -984,7 +897,6 @@ const AddTransactionModal = ({
                   </Text>
                 </TouchableOpacity>
 
-                {/* Amount Field */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.currencySymbol}>$</Text>
                   <TextInput
@@ -997,7 +909,6 @@ const AddTransactionModal = ({
                   />
                 </View>
 
-                {/* Description Field */}
                 <TextInput
                   style={styles.descriptionInput}
                   value={description}
@@ -1006,7 +917,6 @@ const AddTransactionModal = ({
                   placeholderTextColor={colors.textSecondary}
                 />
 
-                {/* Category Field */}
                 <TouchableOpacity
                   style={styles.categoryField}
                   onPress={showCategoryPicker}
@@ -1060,7 +970,6 @@ const AddTransactionModal = ({
                   />
                 </TouchableOpacity>
 
-                {/* Recurrence Field */}
                 <TouchableOpacity
                   style={styles.recurrenceField}
                   onPress={showRecurrencePicker}
@@ -1088,7 +997,6 @@ const AddTransactionModal = ({
                   />
                 </TouchableOpacity>
 
-                {/* Image Attachment Section */}
                 <View style={styles.attachmentSection}>
                   <Text style={styles.attachmentTitle}>Receipt Photo</Text>
 
@@ -1147,7 +1055,6 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Category Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -1223,7 +1130,6 @@ const AddTransactionModal = ({
                   </>
                 )}
 
-                {/* Add Category Button */}
                 <TouchableOpacity
                   style={styles.addCategoryButton}
                   onPress={openAddCategoryForm}
@@ -1234,7 +1140,6 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Subcategory Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -1255,7 +1160,6 @@ const AddTransactionModal = ({
               <ScrollView
                 style={styles.formContainer}
                 showsVerticalScrollIndicator={false}>
-                {/* Subcategories */}
                 {currentSubcategoryData?.subcategories?.map(subcategory => (
                   <TouchableOpacity
                     key={subcategory.id}
@@ -1292,7 +1196,6 @@ const AddTransactionModal = ({
                   </TouchableOpacity>
                 ))}
 
-                {/* Add Subcategory Button */}
                 <TouchableOpacity
                   style={styles.addCategoryButton}
                   onPress={() =>
@@ -1305,7 +1208,6 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Recurrence Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -1344,7 +1246,6 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Add Category Form View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -1390,7 +1291,6 @@ const AddTransactionModal = ({
               <ScrollView
                 style={styles.formContainer}
                 showsVerticalScrollIndicator={false}>
-                {/* Category Name Input */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Category Name</Text>
                   <TextInput
@@ -1406,7 +1306,6 @@ const AddTransactionModal = ({
                   </Text>
                 </View>
 
-                {/* Icon Selection */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Choose Icon</Text>
                   <View style={styles.iconGrid}>
@@ -1433,7 +1332,6 @@ const AddTransactionModal = ({
                   </View>
                 </View>
 
-                {/* Color Selection */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Choose Color</Text>
                   <View style={styles.colorGrid}>
@@ -1454,7 +1352,6 @@ const AddTransactionModal = ({
                   </View>
                 </View>
 
-                {/* Preview */}
                 {selectedIcon && selectedColor && categoryName.trim() && (
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Preview</Text>
@@ -1475,7 +1372,6 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Add Subcategory Form View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -1516,7 +1412,6 @@ const AddTransactionModal = ({
               <ScrollView
                 style={styles.formContainer}
                 showsVerticalScrollIndicator={false}>
-                {/* Parent Category Info */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Parent Category</Text>
                   <View style={styles.parentCategoryInfo}>
@@ -1536,7 +1431,6 @@ const AddTransactionModal = ({
                   </View>
                 </View>
 
-                {/* Subcategory Name Input */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Subcategory Name</Text>
                   <TextInput
@@ -1552,7 +1446,6 @@ const AddTransactionModal = ({
                   </Text>
                 </View>
 
-                {/* Icon Selection */}
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Choose Icon</Text>
                   <View style={styles.iconGrid}>
@@ -1579,7 +1472,6 @@ const AddTransactionModal = ({
                   </View>
                 </View>
 
-                {/* Preview */}
                 {subcategoryIcon && subcategoryName.trim() && (
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Preview</Text>
@@ -1606,7 +1498,6 @@ const AddTransactionModal = ({
         </Animated.View>
       </Animated.View>
 
-      {/* Calendar Modal */}
       <CalendarModal
         visible={showCalendar}
         onClose={() => setShowCalendar(false)}
@@ -1796,7 +1687,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
-    marginBottom: 32, // Increased from 20 to 32 for more space
+    marginBottom: 32,
   },
   recurrenceLeft: {
     flexDirection: 'row',
@@ -1814,7 +1705,6 @@ const styles = StyleSheet.create({
   recurrenceActiveText: {
     color: colors.textPrimary,
   },
-  // Image attachment styles
   attachmentSection: {
     marginBottom: 20,
   },

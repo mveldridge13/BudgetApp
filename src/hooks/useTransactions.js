@@ -1,38 +1,143 @@
-// hooks/useTransactions.js (Fixed date handling for ISO strings)
-import {useState, useCallback} from 'react';
+import {useState, useCallback, useEffect, useRef} from 'react';
 import {Alert} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 
 const useTransactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [deletingIds, setDeletingIds] = useState([]);
   const [editingIds, setEditingIds] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [isStorageReady, setIsStorageReady] = useState(false);
+
+  const hasAttemptedLoadRef = useRef(false);
+  const isLoadingRef = useRef(false);
+
+  const storageCoordinator = StorageCoordinator.getInstance();
+  const userStorageManager = storageCoordinator.getUserStorageManager();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkAndLoad = async () => {
+      if (!mounted || hasAttemptedLoadRef.current || isLoadingRef.current) {
+        return;
+      }
+
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+
+      if (isReady && !hasAttemptedLoadRef.current) {
+        isLoadingRef.current = true;
+        hasAttemptedLoadRef.current = true;
+
+        try {
+          const storedTransactions = await userStorageManager.getUserData(
+            'transactions',
+          );
+
+          if (mounted) {
+            if (
+              storedTransactions &&
+              Array.isArray(storedTransactions) &&
+              storedTransactions.length > 0
+            ) {
+              setTransactions(storedTransactions);
+              setIsStorageReady(true);
+            } else {
+              setTransactions([]);
+              setIsStorageReady(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error loading transactions:', error);
+          if (mounted) {
+            setTransactions([]);
+            setIsStorageReady(true);
+          }
+        } finally {
+          isLoadingRef.current = false;
+        }
+      } else if (!isReady) {
+        setTimeout(() => {
+          if (mounted) {
+            checkAndLoad();
+          }
+        }, 500);
+      }
+    };
+
+    checkAndLoad();
+
+    return () => {
+      mounted = false;
+    };
+  }, [storageCoordinator, userStorageManager]);
 
   const loadTransactions = useCallback(async () => {
+    if (!userStorageManager) {
+      console.warn('Cannot load transactions - no storage manager');
+      return;
+    }
+
     try {
-      const storedTransactions = await AsyncStorage.getItem('transactions');
-      if (storedTransactions) {
-        const parsedTransactions = JSON.parse(storedTransactions);
-        setTransactions(parsedTransactions);
+      const storedTransactions = await userStorageManager.getUserData(
+        'transactions',
+      );
+
+      if (storedTransactions && Array.isArray(storedTransactions)) {
+        setTransactions(storedTransactions);
       } else {
         setTransactions([]);
       }
     } catch (error) {
-      console.error('Error loading transactions:', error);
+      console.error('Error in manual load transactions:', error);
       setTransactions([]);
     }
-  }, []);
+  }, [userStorageManager]);
 
-  const saveTransactionsToStorage = useCallback(async updatedTransactions => {
+  const saveTransactionsToStorage = useCallback(
+    async updatedTransactions => {
+      if (!userStorageManager) {
+        throw new Error('User storage not ready');
+      }
+
+      try {
+        const success = await userStorageManager.setUserData(
+          'transactions',
+          updatedTransactions,
+        );
+
+        if (!success) {
+          throw new Error('Failed to save transactions');
+        }
+      } catch (error) {
+        console.error('Error saving transactions:', error);
+        throw error;
+      }
+    },
+    [userStorageManager],
+  );
+
+  const createTransactionBackup = useCallback(async transactionsData => {
     try {
+      if (!transactionsData || !Array.isArray(transactionsData)) {
+        return;
+      }
+
+      const AsyncStorage =
+        require('@react-native-async-storage/async-storage').default;
+      const backupData = {
+        timestamp: new Date().toISOString(),
+        transactions: transactionsData,
+        count: transactionsData.length,
+      };
+
       await AsyncStorage.setItem(
-        'transactions',
-        JSON.stringify(updatedTransactions),
+        'transaction_backup_latest',
+        JSON.stringify(backupData),
       );
     } catch (error) {
-      console.error('Error saving transactions:', error);
-      throw error;
+      console.error('Backup failed:', error);
     }
   }, []);
 
@@ -42,88 +147,57 @@ const useTransactions = () => {
         let updatedTransactions;
 
         if (editingTransaction) {
-          // We're editing an existing transaction
           updatedTransactions = transactions.map(t =>
             t.id === editingTransaction.id ? transaction : t,
           );
-
-          await saveTransactionsToStorage(updatedTransactions);
-          setTransactions(updatedTransactions);
-          setEditingTransaction(null);
-          return {isNewTransaction: false, updatedTransactions};
+        } else {
+          updatedTransactions = [transaction, ...transactions];
         }
 
-        // We're adding a new transaction
-        updatedTransactions = [transaction, ...transactions];
         await saveTransactionsToStorage(updatedTransactions);
         setTransactions(updatedTransactions);
 
-        return {isNewTransaction: true, updatedTransactions};
+        if (editingTransaction) {
+          setEditingTransaction(null);
+        }
+
+        await createTransactionBackup(updatedTransactions);
+
+        return {
+          isNewTransaction: !editingTransaction,
+          updatedTransactions,
+        };
       } catch (error) {
         console.error('Error saving transaction:', error);
         Alert.alert('Error', 'Failed to save transaction.');
         throw error;
       }
     },
-    [editingTransaction, transactions, saveTransactionsToStorage],
+    [
+      editingTransaction,
+      transactions,
+      saveTransactionsToStorage,
+      createTransactionBackup,
+    ],
   );
 
   const deleteTransaction = useCallback(
     async transactionId => {
+      if (!userStorageManager) {
+        Alert.alert('Error', 'Storage not ready.');
+        return;
+      }
+
       try {
-        // Prevent multiple deletes of the same transaction
         if (deletingIds.includes(transactionId)) {
           return;
         }
-
         setDeletingIds(prev => [...prev, transactionId]);
 
-        // Get fresh transaction data from AsyncStorage before deleting
-        const storedTransactions = await AsyncStorage.getItem('transactions');
-        let currentTransactions = [];
-
-        if (storedTransactions) {
-          currentTransactions = JSON.parse(storedTransactions);
-        } else {
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'No transactions found.');
-          return;
-        }
-
-        // Find the transaction to delete
-        const transactionToDelete = currentTransactions.find(
-          t => t.id === transactionId,
+        const updatedTransactions = transactions.filter(
+          t => t.id !== transactionId,
         );
-        if (!transactionToDelete) {
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'Transaction not found.');
-          return;
-        }
 
-        // Get index and create updated array
-        const indexToDelete = currentTransactions.findIndex(
-          t => t.id === transactionId,
-        );
-        if (indexToDelete === -1) {
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'Transaction not found.');
-          return;
-        }
-
-        const updatedTransactions = [
-          ...currentTransactions.slice(0, indexToDelete),
-          ...currentTransactions.slice(indexToDelete + 1),
-        ];
-
-        // Verify deletion worked correctly
-        if (updatedTransactions.length !== currentTransactions.length - 1) {
-          console.error('Delete operation failed - incorrect result');
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'Delete operation failed. Please try again.');
-          return;
-        }
-
-        // Save and update state
         await saveTransactionsToStorage(updatedTransactions);
         setTransactions(updatedTransactions);
         setDeletingIds(prev => prev.filter(id => id !== transactionId));
@@ -132,37 +206,30 @@ const useTransactions = () => {
       } catch (error) {
         console.error('Error deleting transaction:', error);
         setDeletingIds(prev => prev.filter(id => id !== transactionId));
-        Alert.alert('Error', 'Failed to delete transaction. Please try again.');
+        Alert.alert('Error', 'Failed to delete transaction.');
         throw error;
       }
     },
-    [deletingIds, saveTransactionsToStorage],
+    [deletingIds, transactions, saveTransactionsToStorage, userStorageManager],
   );
 
   const prepareEditTransaction = useCallback(
     async transaction => {
+      if (!userStorageManager) {
+        Alert.alert('Error', 'Storage not ready.');
+        return null;
+      }
+
       try {
-        // Prevent multiple edits of the same transaction
         if (editingIds.includes(transaction.id)) {
           return null;
         }
-
         setEditingIds(prev => [...prev, transaction.id]);
 
-        // Get fresh transaction data from AsyncStorage
-        const storedTransactions = await AsyncStorage.getItem('transactions');
-        let currentTransactions = [];
-
-        if (storedTransactions) {
-          currentTransactions = JSON.parse(storedTransactions);
-        } else {
-          setEditingIds(prev => prev.filter(id => id !== transaction.id));
-          Alert.alert('Error', 'No transactions found.');
-          return null;
-        }
-
-        // Find the most current version of the transaction
-        const currentTransaction = currentTransactions.find(
+        const storedTransactions = await userStorageManager.getUserData(
+          'transactions',
+        );
+        const currentTransaction = storedTransactions?.find(
           t => t.id === transaction.id,
         );
 
@@ -172,192 +239,36 @@ const useTransactions = () => {
           return null;
         }
 
-        // Set the transaction for editing
         setEditingTransaction(currentTransaction);
         setEditingIds(prev => prev.filter(id => id !== transaction.id));
-
         return currentTransaction;
       } catch (error) {
-        console.error('Error preparing edit transaction:', error);
+        console.error('Error preparing edit:', error);
         setEditingIds(prev => prev.filter(id => id !== transaction.id));
         Alert.alert('Error', 'Failed to prepare transaction for editing.');
         return null;
       }
     },
-    [editingIds],
+    [editingIds, userStorageManager],
   );
 
   const clearEditingTransaction = useCallback(() => {
     setEditingTransaction(null);
   }, []);
 
-  // FIXED: Calculate pay period expenses with proper date handling
   const calculateTotalExpenses = useCallback(
     (selectedDate, incomeData) => {
-      // If no income data, we can't calculate pay period, so fallback to daily calculation
-      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-        // Fallback to original daily calculation
-        const dailyTransactions = transactions.filter(transaction => {
-          if (transaction.recurrence && transaction.recurrence !== 'none') {
-            return false;
-          }
-          const transactionDate = new Date(transaction.date);
-          const isSameDay = (date1, date2) => {
-            return (
-              date1.getDate() === date2.getDate() &&
-              date1.getMonth() === date2.getMonth() &&
-              date1.getFullYear() === date2.getFullYear()
-            );
-          };
-          return isSameDay(transactionDate, selectedDate);
-        });
-
-        const recurringTransactions = transactions.filter(transaction => {
-          return (
-            transaction.recurrence &&
-            transaction.recurrence !== 'none' &&
-            [
-              'monthly',
-              'fortnightly',
-              'sixmonths',
-              'yearly',
-              'weekly',
-            ].includes(transaction.recurrence)
-          );
-        });
-
-        const dailyExpenses = dailyTransactions.reduce(
-          (sum, transaction) => sum + transaction.amount,
-          0,
-        );
-        const monthlyExpenses = recurringTransactions.reduce(
-          (sum, transaction) => sum + transaction.amount,
-          0,
-        );
-
-        return dailyExpenses + monthlyExpenses;
-      }
-
-      // Always calculate based on current date, not selected date
-      const currentDate = new Date();
-
-      // FIXED: Handle both ISO string format and DD/MM/YYYY format for nextPayDate
-      let nextPayDate;
-
-      if (incomeData.nextPayDate.includes('T')) {
-        // ISO string format from CalendarModal
-        nextPayDate = new Date(incomeData.nextPayDate);
-      } else {
-        // Legacy DD/MM/YYYY format
-        const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-        nextPayDate = new Date(
-          2000 + parseInt(yearStr, 10),
-          parseInt(monthStr, 10) - 1,
-          parseInt(dayStr, 10),
-        );
-      }
-
-      // Validate the date
-      if (isNaN(nextPayDate.getTime())) {
-        console.error('Invalid nextPayDate:', incomeData.nextPayDate);
-        return 0;
-      }
-
-      const frequencyDays = {
-        weekly: 7,
-        fortnightly: 14,
-        monthly: 30,
-      };
-
-      const days = frequencyDays[incomeData.frequency] || 30;
-
-      let periodStart;
-      if (incomeData.frequency === 'monthly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setMonth(periodStart.getMonth() - 1);
-      } else {
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - days);
-      }
-
-      const periodEnd = new Date(nextPayDate);
-      periodEnd.setDate(periodEnd.getDate() - 1);
-
-      // Debug logging
-      console.log('=== EXPENSE CALCULATION DEBUG ===');
-      console.log('Current Date:', currentDate);
-      console.log('Selected Date:', selectedDate);
-      console.log('Next Pay Date (raw):', incomeData.nextPayDate);
-      console.log('Next Pay Date (parsed):', nextPayDate);
-      console.log('Period Start:', periodStart);
-      console.log('Period End:', periodEnd);
-      console.log('Income Data:', incomeData);
-      console.log('Total Transactions:', transactions.length);
-
-      // Filter daily transactions within the current pay period
-      const payPeriodTransactions = transactions.filter(transaction => {
-        if (transaction.recurrence && transaction.recurrence !== 'none') {
-          return false; // Handle recurring separately
-        }
-
-        const transactionDate = new Date(transaction.date);
-
-        console.log('Checking transaction:', {
-          date: transaction.date,
-          parsedDate: transactionDate,
-          amount: transaction.amount,
-          description: transaction.description,
-          inPeriod:
-            transactionDate >= periodStart && transactionDate <= periodEnd,
-        });
-
-        // Check if transaction falls within current pay period
-        return transactionDate >= periodStart && transactionDate <= periodEnd;
-      });
-
-      // Filter recurring transactions (these apply to the whole period)
-      const recurringTransactions = transactions.filter(transaction => {
-        return (
-          transaction.recurrence &&
-          transaction.recurrence !== 'none' &&
-          ['monthly', 'fortnightly', 'sixmonths', 'yearly', 'weekly'].includes(
-            transaction.recurrence,
-          )
-        );
-      });
-
-      // Calculate totals
-      const payPeriodExpenses = payPeriodTransactions.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0,
-      );
-      const recurringExpenses = recurringTransactions.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0,
-      );
-
-      const totalExpenses = payPeriodExpenses + recurringExpenses;
-
-      console.log('Pay Period Transactions:', payPeriodTransactions);
-      console.log('Recurring Transactions:', recurringTransactions);
-      console.log('Pay Period Expenses:', payPeriodExpenses);
-      console.log('Recurring Expenses:', recurringExpenses);
-      console.log('Total Expenses:', totalExpenses);
-      console.log('=== END DEBUG ===');
-
-      return totalExpenses;
+      return transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
     },
     [transactions],
   );
 
   return {
-    // State
     transactions,
     deletingIds,
     editingIds,
     editingTransaction,
-
-    // Actions
+    isStorageReady,
     loadTransactions,
     saveTransaction,
     deleteTransaction,

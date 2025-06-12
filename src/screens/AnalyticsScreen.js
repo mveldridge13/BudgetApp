@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {
   View,
@@ -12,12 +13,11 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {LineChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 import DiscretionaryBreakdown from '../components/DiscretionaryBreakdown';
 
-// Pro Badge Component - moved outside to prevent recreation on each render
 const ProBadge = () => (
   <View style={styles.proBadge}>
     <Text style={styles.proBadgeText}>PRO</Text>
@@ -32,86 +32,124 @@ const AnalyticsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Refs to prevent multiple simultaneous loads and flicker
+  const storageCoordinator = StorageCoordinator.getInstance();
+  const userStorageManager = storageCoordinator.getUserStorageManager();
+
   const isLoadingRef = useRef(false);
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
   const hasLoadedOnce = useRef(false);
 
-  // Check Pro status on mount and when screen is focused
+  useEffect(() => {
+    const checkStorageReady = () => {
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+      setIsStorageReady(isReady);
+    };
+
+    checkStorageReady();
+    const interval = setInterval(checkStorageReady, 1000);
+
+    return () => clearInterval(interval);
+  }, [storageCoordinator, userStorageManager]);
+
   useEffect(() => {
     const checkProStatus = async () => {
+      if (!isStorageReady || !userStorageManager) {
+        return;
+      }
+
       try {
-        const proStatus = await AsyncStorage.getItem('isPro');
-        setIsPro(proStatus === 'true');
+        const proStatus = await userStorageManager.getUserData('isPro');
+        setIsPro(proStatus === true || proStatus === 'true');
       } catch (error) {
         console.error('Error checking Pro status:', error);
       }
     };
-    checkProStatus();
-  }, []);
 
-  // Re-check Pro status when screen comes into focus
+    if (isStorageReady) {
+      checkProStatus();
+    }
+  }, [isStorageReady, userStorageManager]);
+
   useFocusEffect(
     useCallback(() => {
       const checkProStatus = async () => {
+        if (!isStorageReady || !userStorageManager) {
+          return;
+        }
+
         try {
-          const proStatus = await AsyncStorage.getItem('isPro');
-          setIsPro(proStatus === 'true');
+          const proStatus = await userStorageManager.getUserData('isPro');
+          setIsPro(proStatus === true || proStatus === 'true');
         } catch (error) {
           console.error('Error checking Pro status:', error);
         }
       };
-      checkProStatus();
-    }, []),
+
+      if (isStorageReady) {
+        checkProStatus();
+      }
+    }, [isStorageReady, userStorageManager]),
   );
 
-  // Consolidated data loading function
-  const loadTransactions = useCallback(async (force = false) => {
-    if (isLoadingRef.current && !force) {
-      return;
-    }
-
-    isLoadingRef.current = true;
-
-    try {
-      const storedTransactions = await AsyncStorage.getItem('transactions');
-      if (storedTransactions && isMountedRef.current) {
-        const parsedTransactions = JSON.parse(storedTransactions);
-        setTransactions(parsedTransactions);
-      } else if (isMountedRef.current) {
-        setTransactions([]);
+  const loadTransactions = useCallback(
+    async (force = false) => {
+      if (isLoadingRef.current && !force) {
+        return;
       }
-      hasLoadedOnce.current = true;
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-      if (isMountedRef.current) {
-        setTransactions([]);
-      }
-    } finally {
-      isLoadingRef.current = false;
-    }
-  }, []);
 
-  // Initial load on mount
+      if (!isStorageReady || !userStorageManager) {
+        return;
+      }
+
+      isLoadingRef.current = true;
+
+      try {
+        const storedTransactions = await userStorageManager.getUserData(
+          'transactions',
+        );
+        if (
+          storedTransactions &&
+          Array.isArray(storedTransactions) &&
+          isMountedRef.current
+        ) {
+          setTransactions(storedTransactions);
+        } else if (isMountedRef.current) {
+          setTransactions([]);
+        }
+        hasLoadedOnce.current = true;
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+        if (isMountedRef.current) {
+          setTransactions([]);
+        }
+      } finally {
+        isLoadingRef.current = false;
+      }
+    },
+    [isStorageReady, userStorageManager],
+  );
+
   useEffect(() => {
     isMountedRef.current = true;
-    loadTransactions();
+    if (isStorageReady) {
+      loadTransactions();
+    }
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadTransactions]);
+  }, [loadTransactions, isStorageReady]);
 
-  // Monitor app state changes for automatic refresh
   useEffect(() => {
     const handleAppStateChange = nextAppState => {
-      if (nextAppState === 'active' && isMountedRef.current) {
+      if (nextAppState === 'active' && isMountedRef.current && isStorageReady) {
         const now = new Date();
         const currentDateString = now.toDateString();
 
-        // Only reload if it's a new day
         if (lastActiveDate.current !== currentDateString) {
           lastActiveDate.current = currentDateString;
           loadTransactions(true);
@@ -124,21 +162,18 @@ const AnalyticsScreen = () => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [loadTransactions]);
+  }, [loadTransactions, isStorageReady]);
 
-  // Only reload on focus if data is empty
   useFocusEffect(
     useCallback(() => {
-      if (isMountedRef.current && !isLoadingRef.current) {
-        // Only reload if transactions are empty
+      if (isMountedRef.current && !isLoadingRef.current && isStorageReady) {
         if (transactions.length === 0) {
           loadTransactions();
         }
       }
-    }, [loadTransactions, transactions.length]),
+    }, [loadTransactions, transactions.length, isStorageReady]),
   );
 
-  // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
     if (refreshing) {
       return;
@@ -149,9 +184,7 @@ const AnalyticsScreen = () => {
     setRefreshing(false);
   }, [loadTransactions, refreshing]);
 
-  // Helper function to check if transaction is recurring
   const isRecurringTransaction = useCallback(transaction => {
-    // Check for recurrence field based on your app's structure
     return (
       transaction.recurrence &&
       transaction.recurrence !== 'none' &&
@@ -161,7 +194,6 @@ const AnalyticsScreen = () => {
     );
   }, []);
 
-  // Updated period data calculation with discretionary spending separation
   const getPeriodData = useCallback(() => {
     if (transactions.length === 0) {
       return [];
@@ -172,7 +204,6 @@ const AnalyticsScreen = () => {
 
     switch (selectedPeriod) {
       case 'daily':
-        // Last 7 days
         for (let i = 6; i >= 0; i--) {
           const date = new Date(now);
           date.setDate(date.getDate() - i);
@@ -186,7 +217,6 @@ const AnalyticsScreen = () => {
             );
           });
 
-          // Calculate total and discretionary amounts
           const dailyTotal = dayTransactions.reduce(
             (sum, t) => sum + t.amount,
             0,
@@ -196,7 +226,6 @@ const AnalyticsScreen = () => {
             .filter(t => !isRecurringTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0);
 
-          // Previous week same day for comparison
           const previousWeekDate = new Date(date);
           previousWeekDate.setDate(previousWeekDate.getDate() - 7);
 
@@ -233,7 +262,6 @@ const AnalyticsScreen = () => {
         break;
 
       case 'weekly':
-        // Last 4 weeks
         for (let i = 3; i >= 0; i--) {
           const weekStart = new Date(now);
           weekStart.setDate(weekStart.getDate() - (weekStart.getDay() + 7 * i));
@@ -254,7 +282,6 @@ const AnalyticsScreen = () => {
             .filter(t => !isRecurringTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0);
 
-          // Previous month same week for comparison
           const previousWeekStart = new Date(weekStart);
           previousWeekStart.setDate(previousWeekStart.getDate() - 28);
           const previousWeekEnd = new Date(previousWeekStart);
@@ -290,7 +317,6 @@ const AnalyticsScreen = () => {
         break;
 
       case 'monthly':
-        // Last 5 months
         for (let i = 4; i >= 0; i--) {
           const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
 
@@ -311,7 +337,6 @@ const AnalyticsScreen = () => {
             .filter(t => !isRecurringTransaction(t))
             .reduce((sum, t) => sum + t.amount, 0);
 
-          // Previous year same month for comparison
           const previousYearMonth = new Date(monthDate);
           previousYearMonth.setFullYear(previousYearMonth.getFullYear() - 1);
 
@@ -347,7 +372,6 @@ const AnalyticsScreen = () => {
     return data;
   }, [transactions, selectedPeriod, isRecurringTransaction]);
 
-  // Memoize all derived data
   const data = useMemo(() => getPeriodData(), [getPeriodData]);
 
   const getCurrentTotal = useMemo(() => {
@@ -416,7 +440,6 @@ const AnalyticsScreen = () => {
     );
   }, [data]);
 
-  // Memoize chart configuration
   const chartConfig = useMemo(
     () => ({
       backgroundColor: colors.surface || '#ffffff',
@@ -463,7 +486,6 @@ const AnalyticsScreen = () => {
 
   const screenWidth = useMemo(() => Dimensions.get('window').width, []);
 
-  // Memoized handlers
   const handlePeriodChange = useCallback(period => {
     setSelectedPeriod(period);
   }, []);
@@ -476,7 +498,6 @@ const AnalyticsScreen = () => {
     if (isPro) {
       setShowBreakdown(true);
     } else {
-      // Show upgrade prompt
       Alert.alert(
         'Upgrade to Pro',
         'Access advanced analytics and detailed breakdowns with Pro features!',
@@ -492,9 +513,22 @@ const AnalyticsScreen = () => {
     setShowBreakdown(false);
   }, []);
 
+  if (!isStorageReady) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {justifyContent: 'center', alignItems: 'center'},
+        ]}>
+        <Text style={{fontSize: 16, color: colors.textSecondary}}>
+          Initializing storage...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
         <View style={styles.headerContent}>
           <View>
@@ -520,7 +554,6 @@ const AnalyticsScreen = () => {
             titleColor={colors.textSecondary || '#6B7280'}
           />
         }>
-        {/* Period Selector */}
         <View style={styles.selectorContainer}>
           <View style={styles.periodButtons}>
             {['daily', 'weekly', 'monthly'].map(period => (
@@ -558,7 +591,6 @@ const AnalyticsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Total Spending</Text>
@@ -593,7 +625,6 @@ const AnalyticsScreen = () => {
           </View>
         </View>
 
-        {/* Discretionary Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Discretionary Spending</Text>
@@ -627,7 +658,6 @@ const AnalyticsScreen = () => {
           </View>
         </View>
 
-        {/* Chart */}
         {data.length > 0 && (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Spending Over Time</Text>
@@ -648,7 +678,6 @@ const AnalyticsScreen = () => {
           </View>
         )}
 
-        {/* Insights */}
         <View style={styles.insightsContainer}>
           <Text style={styles.insightsTitle}>Key Insights</Text>
 
@@ -744,7 +773,6 @@ const AnalyticsScreen = () => {
         </View>
       </ScrollView>
 
-      {/* Discretionary Breakdown Modal */}
       <DiscretionaryBreakdown
         visible={showBreakdown}
         onClose={handleCloseBreakdown}

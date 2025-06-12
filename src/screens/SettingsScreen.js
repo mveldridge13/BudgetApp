@@ -1,5 +1,3 @@
-/* eslint-disable react/no-unstable-nested-components */
-// screens/SettingsScreen.js
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View,
@@ -14,15 +12,14 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import {Platform} from 'react-native';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
 
-  // User settings state
   const [userProfile, setUserProfile] = useState(null);
   const [appSettings, setAppSettings] = useState({
     notifications: true,
@@ -34,22 +31,39 @@ const SettingsScreen = ({navigation}) => {
     expenseCategories: true,
   });
 
-  // Pro feature state
   const [isPro, setIsPro] = useState(false);
 
-  // App state tracking
   const [appVersion] = useState('1.0');
   const [dataSize, setDataSize] = useState(0);
   const [lastBackup, setLastBackup] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Refs for component lifecycle
+  const storageCoordinator = StorageCoordinator.getInstance();
+  const userStorageManager = storageCoordinator.getUserStorageManager();
+
   const isMountedRef = useRef(true);
   const isLoadingRef = useRef(false);
 
-  // Load all settings data
+  useEffect(() => {
+    const checkStorageReady = () => {
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+      setIsStorageReady(isReady);
+    };
+
+    checkStorageReady();
+    const interval = setInterval(checkStorageReady, 1000);
+
+    return () => clearInterval(interval);
+  }, [storageCoordinator, userStorageManager]);
+
   const loadSettingsData = useCallback(async () => {
     if (isLoadingRef.current) {
+      return;
+    }
+
+    if (!isStorageReady || !userStorageManager) {
       return;
     }
 
@@ -64,39 +78,42 @@ const SettingsScreen = ({navigation}) => {
         goals,
         proStatus,
       ] = await Promise.all([
-        AsyncStorage.getItem('userSetup'),
-        AsyncStorage.getItem('appSettings'),
-        AsyncStorage.getItem('lastBackup'),
-        AsyncStorage.getItem('transactions'),
-        AsyncStorage.getItem('goals'),
-        AsyncStorage.getItem('isPro'),
+        userStorageManager.getUserData('user_setup'),
+        userStorageManager.getUserData('appSettings'),
+        userStorageManager.getUserData('lastBackup'),
+        userStorageManager.getUserData('transactions'),
+        userStorageManager.getUserData('goals'),
+        userStorageManager.getUserData('isPro'),
       ]);
 
       if (isMountedRef.current) {
-        // Set user profile
         if (userSetup) {
-          setUserProfile(JSON.parse(userSetup));
+          setUserProfile(userSetup);
         }
 
-        // Set app settings
         if (storedSettings) {
-          setAppSettings(prev => ({...prev, ...JSON.parse(storedSettings)}));
+          setAppSettings(prev => ({...prev, ...storedSettings}));
         }
 
-        // Set Pro status
-        setIsPro(proStatus === 'true');
+        setIsPro(proStatus === true || proStatus === 'true');
 
-        // Calculate data size
-        const transactionSize = transactions
-          ? JSON.stringify(transactions).length
-          : 0;
-        const goalsSize = goals ? JSON.stringify(goals).length : 0;
-        const totalSize = (transactionSize + goalsSize) / 1024; // KB
+        const transactionSize =
+          transactions && Array.isArray(transactions)
+            ? JSON.stringify(transactions).length
+            : 0;
+        const goalsSize =
+          goals && Array.isArray(goals) ? JSON.stringify(goals).length : 0;
+        const totalSize = (transactionSize + goalsSize) / 1024;
         setDataSize(totalSize);
 
-        // Set last backup
         if (backupInfo) {
-          setLastBackup(new Date(JSON.parse(backupInfo)));
+          const backupDate =
+            typeof backupInfo === 'string'
+              ? new Date(backupInfo)
+              : new Date(backupInfo);
+          if (!isNaN(backupDate.getTime())) {
+            setLastBackup(backupDate);
+          }
         }
       }
     } catch (error) {
@@ -107,59 +124,84 @@ const SettingsScreen = ({navigation}) => {
         isLoadingRef.current = false;
       }
     }
-  }, []);
+  }, [isStorageReady, userStorageManager]);
 
-  // Initial load
   useEffect(() => {
     isMountedRef.current = true;
-    loadSettingsData();
+    if (isStorageReady) {
+      loadSettingsData();
+    }
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadSettingsData]);
+  }, [loadSettingsData, isStorageReady]);
 
-  // Reload on focus
   useFocusEffect(
     useCallback(() => {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isStorageReady) {
         loadSettingsData();
       }
-    }, [loadSettingsData]),
+    }, [loadSettingsData, isStorageReady]),
   );
 
-  // Save app settings
-  const saveAppSettings = useCallback(async newSettings => {
-    try {
-      await AsyncStorage.setItem('appSettings', JSON.stringify(newSettings));
-      setAppSettings(newSettings);
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Failed to save settings. Please try again.');
-    }
-  }, []);
+  const saveAppSettings = useCallback(
+    async newSettings => {
+      try {
+        if (!isStorageReady || !userStorageManager) {
+          Alert.alert('Error', 'Storage not ready. Please try again.');
+          return;
+        }
 
-  // Toggle Pro status
+        const success = await userStorageManager.setUserData(
+          'appSettings',
+          newSettings,
+        );
+        if (success) {
+          setAppSettings(newSettings);
+        } else {
+          throw new Error('Failed to save settings to user storage');
+        }
+      } catch (error) {
+        console.error('Error saving settings:', error);
+        Alert.alert('Error', 'Failed to save settings. Please try again.');
+      }
+    },
+    [isStorageReady, userStorageManager],
+  );
+
   const handleTogglePro = useCallback(async () => {
     try {
-      const newProStatus = !isPro;
-      await AsyncStorage.setItem('isPro', newProStatus.toString());
-      setIsPro(newProStatus);
+      if (!isStorageReady || !userStorageManager) {
+        Alert.alert('Error', 'Storage not ready. Please try again.');
+        return;
+      }
 
-      Alert.alert(
-        'Pro Status Updated',
-        `Pro features are now ${
-          newProStatus ? 'enabled' : 'disabled'
-        }. This change will take effect throughout the app.`,
-        [{text: 'OK'}],
+      const newProStatus = !isPro;
+      const success = await userStorageManager.setUserData(
+        'isPro',
+        newProStatus,
       );
+
+      if (success) {
+        setIsPro(newProStatus);
+
+        Alert.alert(
+          'Pro Status Updated',
+          `Pro features are now ${
+            newProStatus ? 'enabled' : 'disabled'
+          }. This change will take effect throughout the app.`,
+          [{text: 'OK'}],
+        );
+      } else {
+        throw new Error('Failed to save Pro status to user storage');
+      }
     } catch (error) {
       console.error('Error toggling Pro status:', error);
       Alert.alert('Error', 'Failed to update Pro status. Please try again.');
     }
-  }, [isPro]);
+  }, [isPro, isStorageReady, userStorageManager]);
 
-  // Settings handlers
   const handleToggleSetting = useCallback(
     key => {
       const newSettings = {...appSettings, [key]: !appSettings[key]};
@@ -181,16 +223,22 @@ const SettingsScreen = ({navigation}) => {
 
   const handleExportData = useCallback(async () => {
     try {
+      if (!isStorageReady || !userStorageManager) {
+        Alert.alert('Error', 'Storage not ready. Please try again.');
+        return;
+      }
+
       const [transactions, goals, userSetup] = await Promise.all([
-        AsyncStorage.getItem('transactions'),
-        AsyncStorage.getItem('goals'),
-        AsyncStorage.getItem('userSetup'),
+        userStorageManager.getUserData('transactions'),
+        userStorageManager.getUserData('goals'),
+        userStorageManager.getUserData('user_setup'),
       ]);
 
       const exportData = {
-        transactions: transactions ? JSON.parse(transactions) : [],
-        goals: goals ? JSON.parse(goals) : [],
-        userSetup: userSetup ? JSON.parse(userSetup) : null,
+        transactions:
+          transactions && Array.isArray(transactions) ? transactions : [],
+        goals: goals && Array.isArray(goals) ? goals : [],
+        userSetup: userSetup || null,
         exportDate: new Date().toISOString(),
         appVersion,
       };
@@ -202,17 +250,19 @@ const SettingsScreen = ({navigation}) => {
         title: 'Budget App Data Export',
       });
 
-      // Update last backup
-      await AsyncStorage.setItem(
+      const backupTime = new Date().toISOString();
+      const success = await userStorageManager.setUserData(
         'lastBackup',
-        JSON.stringify(new Date().toISOString()),
+        backupTime,
       );
-      setLastBackup(new Date());
+      if (success) {
+        setLastBackup(new Date());
+      }
     } catch (error) {
       console.error('Error exporting data:', error);
       Alert.alert('Error', 'Failed to export data. Please try again.');
     }
-  }, [appVersion]);
+  }, [appVersion, isStorageReady, userStorageManager]);
 
   const handleClearData = useCallback(() => {
     Alert.alert(
@@ -225,17 +275,28 @@ const SettingsScreen = ({navigation}) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove([
+              if (!isStorageReady || !userStorageManager) {
+                Alert.alert('Error', 'Storage not ready. Please try again.');
+                return;
+              }
+
+              const dataKeys = [
                 'transactions',
                 'goals',
-                'userSetup',
+                'user_setup',
                 'appSettings',
-                'hasSeenBalanceCardTour',
-                'hasSeenAddTransactionTour',
-                'hasSeenTransactionSwipeTour',
+                'tours.balanceCard',
+                'tours.addTransaction',
+                'tours.transactionSwipe',
                 'lastBackup',
                 'isPro',
-              ]);
+              ];
+
+              const clearPromises = dataKeys.map(key =>
+                userStorageManager.removeUserData(key),
+              );
+
+              await Promise.all(clearPromises);
 
               Alert.alert('Success', 'All data has been cleared.', [
                 {
@@ -255,7 +316,7 @@ const SettingsScreen = ({navigation}) => {
         },
       ],
     );
-  }, [navigation]);
+  }, [navigation, isStorageReady, userStorageManager]);
 
   const handleContactSupport = useCallback(() => {
     const email = 'support@budgetapp.com';
@@ -328,7 +389,7 @@ const SettingsScreen = ({navigation}) => {
     return `${(sizeInKB / 1024).toFixed(1)} MB`;
   }, []);
 
-  // Pro Badge Component
+  // eslint-disable-next-line react/no-unstable-nested-components
   const ProBadge = ({size = 'small'}) => (
     <View
       style={[
@@ -347,17 +408,18 @@ const SettingsScreen = ({navigation}) => {
     </View>
   );
 
-  if (loading) {
+  if (loading || !isStorageReady) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading settings...</Text>
+        <Text style={styles.loadingText}>
+          {!isStorageReady ? 'Initializing storage...' : 'Loading settings...'}
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
         <View style={styles.headerContent}>
           <View>
@@ -369,7 +431,6 @@ const SettingsScreen = ({navigation}) => {
           {isPro && <ProBadge size="large" />}
         </View>
 
-        {/* User Profile Card */}
         {userProfile && (
           <TouchableOpacity
             style={styles.profileCard}
@@ -396,7 +457,6 @@ const SettingsScreen = ({navigation}) => {
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
-        {/* Pro Features Section - Testing Only */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pro Features (Testing)</Text>
 
@@ -436,7 +496,6 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
-        {/* App Settings Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App Settings</Text>
 
@@ -554,7 +613,6 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
-        {/* Data & Privacy Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data & Privacy</Text>
 
@@ -628,7 +686,6 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
-        {/* Support Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
 
@@ -677,7 +734,6 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
-        {/* Legal Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Legal</Text>
 
@@ -722,7 +778,6 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
-        {/* App Info */}
         <View style={styles.appInfoCard}>
           <Text style={styles.appVersion}>Version {appVersion}</Text>
           <Text style={styles.appCopyright}>

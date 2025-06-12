@@ -1,22 +1,40 @@
-// hooks/useGoals.js
-import {useState, useCallback, useRef, useLayoutEffect} from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {useState, useCallback, useRef, useLayoutEffect, useEffect} from 'react';
+import {StorageCoordinator} from '../services/storage/StorageCoordinator';
 
-const GOALS_STORAGE_KEY = 'goals';
-const LOADING_TIMEOUT = 10000; // 10 second timeout for operations
+const LOADING_TIMEOUT = 10000;
 
 const useGoals = () => {
-  // State
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
+  const [isStorageReady, setIsStorageReady] = useState(false);
 
-  // Refs for managing load state
   const hasInitiallyLoaded = useRef(false);
   const isLoadingRef = useRef(false);
   const loadingTimeoutRef = useRef(null);
 
-  // Helper: Clear loading timeout
+  const storageCoordinator = StorageCoordinator.getInstance();
+  const userStorageManager = storageCoordinator.getUserStorageManager();
+
+  useEffect(() => {
+    const checkStorageReady = () => {
+      const isReady =
+        storageCoordinator.isUserStorageInitialized() && userStorageManager;
+      setIsStorageReady(isReady);
+    };
+
+    checkStorageReady();
+    const interval = setInterval(checkStorageReady, 1000);
+
+    return () => clearInterval(interval);
+  }, [storageCoordinator, userStorageManager]);
+
+  useEffect(() => {
+    if (isStorageReady) {
+      loadGoals();
+    }
+  }, [isStorageReady, loadGoals]);
+
   const clearLoadingTimeout = useCallback(() => {
     if (loadingTimeoutRef.current) {
       clearTimeout(loadingTimeoutRef.current);
@@ -24,7 +42,6 @@ const useGoals = () => {
     }
   }, []);
 
-  // Helper: Set loading with timeout protection
   const setLoadingWithTimeout = useCallback(
     isLoading => {
       clearLoadingTimeout();
@@ -32,7 +49,6 @@ const useGoals = () => {
 
       if (isLoading) {
         loadingTimeoutRef.current = setTimeout(() => {
-          console.warn('Goals loading timeout reached');
           setLoading(false);
           isLoadingRef.current = false;
         }, LOADING_TIMEOUT);
@@ -41,13 +57,11 @@ const useGoals = () => {
     [clearLoadingTimeout],
   );
 
-  // Helper: Validate goal data structure
   const validateGoalData = useCallback(goal => {
     if (!goal || typeof goal !== 'object') {
       return false;
     }
 
-    // Required fields
     if (!goal.title || typeof goal.title !== 'string') {
       return false;
     }
@@ -55,7 +69,6 @@ const useGoals = () => {
       return false;
     }
 
-    // Type-specific validation
     if (goal.type === 'debt') {
       if (!goal.originalAmount || goal.originalAmount <= 0) {
         return false;
@@ -69,7 +82,6 @@ const useGoals = () => {
     return true;
   }, []);
 
-  // Helper: Sanitize goal data
   const sanitizeGoalData = useCallback(goal => {
     const sanitized = {
       showOnBalanceCard: false,
@@ -80,7 +92,6 @@ const useGoals = () => {
       ...goal,
     };
 
-    // Ensure numeric fields are numbers
     sanitized.current = Number(sanitized.current) || 0;
     if (sanitized.target) {
       sanitized.target = Number(sanitized.target);
@@ -90,7 +101,6 @@ const useGoals = () => {
     }
     sanitized.autoContribute = Number(sanitized.autoContribute) || 0;
 
-    // Ensure strings are trimmed
     if (typeof sanitized.title === 'string') {
       sanitized.title = sanitized.title.trim();
     }
@@ -103,48 +113,49 @@ const useGoals = () => {
     return sanitized;
   }, []);
 
-  // Save goals to AsyncStorage with error handling
   const saveGoalsToStorage = useCallback(
     async updatedGoals => {
+      if (!isStorageReady || !userStorageManager) {
+        return {success: false, error: 'User storage not ready'};
+      }
+
       try {
         if (!Array.isArray(updatedGoals)) {
           throw new Error('Goals must be an array');
         }
 
-        // Validate all goals before saving
         const validGoals = updatedGoals.filter(goal => validateGoalData(goal));
 
-        if (validGoals.length !== updatedGoals.length) {
-          console.warn(
-            `Filtered out ${
-              updatedGoals.length - validGoals.length
-            } invalid goals`,
-          );
+        const success = await userStorageManager.setUserData(
+          'goals',
+          validGoals,
+        );
+        if (!success) {
+          throw new Error('Failed to save goals to user storage');
         }
 
-        const jsonString = JSON.stringify(validGoals);
-        await AsyncStorage.setItem(GOALS_STORAGE_KEY, jsonString);
         return {success: true, goals: validGoals};
       } catch (error) {
-        console.error('Error saving goals to AsyncStorage:', error);
         return {success: false, error: error.message};
       }
     },
-    [validateGoalData],
+    [validateGoalData, isStorageReady, userStorageManager],
   );
 
-  // Load goals from AsyncStorage
   const loadGoals = useCallback(
     async (forceLoading = false) => {
-      // Prevent multiple simultaneous loads
       if (isLoadingRef.current) {
         return {success: true, goals};
+      }
+
+      if (!isStorageReady || !userStorageManager) {
+        setGoals([]);
+        return {success: false, error: 'Storage not ready'};
       }
 
       try {
         isLoadingRef.current = true;
 
-        // Only show loading state on initial load or forced reload with no existing data
         if (
           (!hasInitiallyLoaded.current || forceLoading) &&
           goals.length === 0
@@ -152,17 +163,10 @@ const useGoals = () => {
           setLoadingWithTimeout(true);
         }
 
-        const storedGoals = await AsyncStorage.getItem(GOALS_STORAGE_KEY);
+        const storedGoals = await userStorageManager.getUserData('goals');
 
-        if (storedGoals) {
-          const parsedGoals = JSON.parse(storedGoals);
-
-          if (!Array.isArray(parsedGoals)) {
-            throw new Error('Stored goals data is not an array');
-          }
-
-          // Sanitize and validate all goals
-          const validatedGoals = parsedGoals
+        if (storedGoals && Array.isArray(storedGoals)) {
+          const validatedGoals = storedGoals
             .map(goal => sanitizeGoalData(goal))
             .filter(goal => validateGoalData(goal));
 
@@ -176,7 +180,6 @@ const useGoals = () => {
           return {success: true, goals: []};
         }
       } catch (error) {
-        console.error('Error loading goals:', error);
         setGoals([]);
         hasInitiallyLoaded.current = true;
         return {success: false, error: error.message};
@@ -192,10 +195,11 @@ const useGoals = () => {
       validateGoalData,
       setLoadingWithTimeout,
       clearLoadingTimeout,
+      isStorageReady,
+      userStorageManager,
     ],
   );
 
-  // Save or update a goal
   const saveGoal = useCallback(
     async goalData => {
       try {
@@ -214,7 +218,6 @@ const useGoals = () => {
         let isNewGoal = false;
 
         if (editingGoal && editingGoal.id) {
-          // Update existing goal
           const goalIndex = currentGoals.findIndex(
             goal => goal.id === editingGoal.id,
           );
@@ -229,7 +232,6 @@ const useGoals = () => {
               : goal,
           );
         } else {
-          // Create new goal
           isNewGoal = true;
           const newGoal = {
             id: `goal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -256,7 +258,6 @@ const useGoals = () => {
           throw new Error(saveResult.error || 'Failed to save goal to storage');
         }
       } catch (error) {
-        console.error('Error saving goal:', error);
         return {success: false, error: error.message};
       }
     },
@@ -269,7 +270,6 @@ const useGoals = () => {
     ],
   );
 
-  // Delete a goal
   const deleteGoal = useCallback(
     async goalId => {
       try {
@@ -292,14 +292,12 @@ const useGoals = () => {
           throw new Error(saveResult.error || 'Failed to delete goal');
         }
       } catch (error) {
-        console.error('Error deleting goal:', error);
         return {success: false, error: error.message};
       }
     },
     [goals, saveGoalsToStorage],
   );
 
-  // Toggle goal display on balance card
   const toggleGoalBalanceDisplay = useCallback(
     async goalId => {
       try {
@@ -331,14 +329,12 @@ const useGoals = () => {
           throw new Error(saveResult.error || 'Failed to update goal');
         }
       } catch (error) {
-        console.error('Error toggling goal display:', error);
         return {success: false, error: error.message};
       }
     },
     [goals, saveGoalsToStorage],
   );
 
-  // Update goal progress (for savings/debt goals)
   const updateGoalProgress = useCallback(
     async (goalId, amount) => {
       try {
@@ -364,10 +360,8 @@ const useGoals = () => {
           let newCurrent = currentGoal.current || 0;
 
           if (currentGoal.type === 'debt') {
-            // For debt, subtract the payment amount
             newCurrent = Math.max(0, newCurrent - parsedAmount);
           } else {
-            // For savings, add the contribution
             newCurrent = newCurrent + parsedAmount;
           }
 
@@ -387,39 +381,28 @@ const useGoals = () => {
           throw new Error(saveResult.error || 'Failed to update goal progress');
         }
       } catch (error) {
-        console.error('Error updating goal progress:', error);
         return {success: false, error: error.message};
       }
     },
     [goals, saveGoalsToStorage],
   );
 
-  // FIXED: Update spending goals based on transactions
   const updateSpendingGoals = useCallback(
     async (newTransaction = null, originalTransaction = null) => {
-      try {
-        console.log('updateSpendingGoals called with:', {
-          hasNewTransaction: !!newTransaction,
-          hasOriginalTransaction: !!originalTransaction,
-          newAmount: newTransaction?.amount,
-          originalAmount: originalTransaction?.amount,
-          newCategory: newTransaction?.category,
-          originalCategory: originalTransaction?.category,
-        });
+      if (!isStorageReady || !userStorageManager) {
+        return {success: false, error: 'Storage not ready'};
+      }
 
-        // If neither transaction is provided, nothing to do
+      try {
         if (!newTransaction && !originalTransaction) {
-          console.log('No transactions provided, skipping goal update');
           return {success: true};
         }
 
-        // Get category service
         let categoryService;
         try {
           categoryService = require('../services/categoryService').default;
         } catch (error) {
-          console.warn('Category service not available:', error);
-          return {success: true}; // Gracefully handle missing service
+          return {success: true};
         }
 
         const categories = await categoryService.getCategories();
@@ -427,9 +410,9 @@ const useGoals = () => {
           throw new Error('Invalid categories data');
         }
 
-        // Get FRESH goals data from storage to avoid stale state
-        const storedGoals = await AsyncStorage.getItem(GOALS_STORAGE_KEY);
-        const freshGoals = storedGoals ? JSON.parse(storedGoals) : [];
+        const storedGoals = await userStorageManager.getUserData('goals');
+        const freshGoals =
+          storedGoals && Array.isArray(storedGoals) ? storedGoals : [];
 
         if (!Array.isArray(freshGoals)) {
           throw new Error('Invalid stored goals data');
@@ -437,10 +420,7 @@ const useGoals = () => {
 
         let updatedGoals = [...freshGoals];
 
-        // STEP 1: Remove impact of original transaction (for edits and deletes)
         if (originalTransaction && originalTransaction.category) {
-          console.log('Removing impact of original transaction');
-
           const originalCategory = categories.find(
             cat => cat.id === originalTransaction.category,
           );
@@ -449,25 +429,15 @@ const useGoals = () => {
           if (originalCategoryName) {
             const originalAmount = Number(originalTransaction.amount);
             if (!isNaN(originalAmount) && originalAmount > 0) {
-              console.log(
-                `Removing ${originalAmount} from ${originalCategoryName} goals`,
-              );
-
               updatedGoals = updatedGoals.map(goal => {
                 if (goal.type !== 'spending' || !goal.category) {
                   return goal;
                 }
 
-                // Remove original transaction amount if category matches
                 if (goal.category.toLowerCase() === originalCategoryName) {
                   const newCurrent = Math.max(
                     0,
                     (goal.current || 0) - originalAmount,
-                  );
-                  console.log(
-                    `Goal ${goal.title}: ${
-                      goal.current || 0
-                    } - ${originalAmount} = ${newCurrent}`,
                   );
 
                   return {
@@ -482,16 +452,9 @@ const useGoals = () => {
           }
         }
 
-        // STEP 2: Add impact of new transaction (for new transactions and edits)
         if (newTransaction && newTransaction.category) {
-          console.log('Adding impact of new transaction');
-
           const newTransactionAmount = Number(newTransaction.amount);
           if (isNaN(newTransactionAmount) || newTransactionAmount <= 0) {
-            console.warn(
-              'Invalid new transaction amount:',
-              newTransaction.amount,
-            );
           } else {
             const transactionCategory = categories.find(
               cat => cat.id === newTransaction.category,
@@ -500,11 +463,6 @@ const useGoals = () => {
               transactionCategory?.name?.toLowerCase();
 
             if (transactionCategoryName) {
-              console.log(
-                `Adding ${newTransactionAmount} to ${transactionCategoryName} goals`,
-              );
-
-              // Check if any spending goals need updating
               const relevantGoals = updatedGoals.filter(
                 goal =>
                   goal.type === 'spending' &&
@@ -517,15 +475,9 @@ const useGoals = () => {
                     return goal;
                   }
 
-                  // Add new transaction amount if category matches
                   if (goal.category.toLowerCase() === transactionCategoryName) {
                     const newCurrent =
                       (goal.current || 0) + newTransactionAmount;
-                    console.log(
-                      `Goal ${goal.title}: ${
-                        goal.current || 0
-                      } + ${newTransactionAmount} = ${newCurrent}`,
-                    );
 
                     return {
                       ...goal,
@@ -535,22 +487,15 @@ const useGoals = () => {
                   }
                   return goal;
                 });
-              } else {
-                console.log(
-                  `No spending goals found for category: ${transactionCategoryName}`,
-                );
               }
             }
           }
         }
 
-        // STEP 3: Save the updated goals
         const saveResult = await saveGoalsToStorage(updatedGoals);
 
         if (saveResult.success) {
-          // Update state immediately and synchronously
           setGoals(saveResult.goals);
-          console.log('Goals updated successfully');
           return {success: true};
         } else {
           throw new Error(
@@ -558,14 +503,12 @@ const useGoals = () => {
           );
         }
       } catch (error) {
-        console.error('Error updating spending goals:', error);
         return {success: false, error: error.message};
       }
     },
-    [saveGoalsToStorage],
+    [saveGoalsToStorage, isStorageReady, userStorageManager],
   );
 
-  // Mark goal as completed
   const completeGoal = useCallback(
     async goalId => {
       try {
@@ -598,14 +541,12 @@ const useGoals = () => {
           throw new Error(saveResult.error || 'Failed to complete goal');
         }
       } catch (error) {
-        console.error('Error completing goal:', error);
         return {success: false, error: error.message};
       }
     },
     [goals, saveGoalsToStorage],
   );
 
-  // Prepare goal for editing
   const prepareEditGoal = useCallback(goal => {
     try {
       if (!goal || !goal.id) {
@@ -615,17 +556,14 @@ const useGoals = () => {
       setEditingGoal(goal);
       return {success: true, goal};
     } catch (error) {
-      console.error('Error preparing goal for edit:', error);
       return {success: false, error: error.message};
     }
   }, []);
 
-  // Clear editing state
   const clearEditingGoal = useCallback(() => {
     setEditingGoal(null);
   }, []);
 
-  // Get goals for balance card display
   const getBalanceCardGoals = useCallback(() => {
     try {
       return goals.filter(
@@ -633,12 +571,10 @@ const useGoals = () => {
           goal && goal.showOnBalanceCard === true && goal.isActive !== false,
       );
     } catch (error) {
-      console.error('Error getting balance card goals:', error);
       return [];
     }
   }, [goals]);
 
-  // Calculate total monthly goal contributions
   const calculateTotalGoalContributions = useCallback(() => {
     try {
       return goals
@@ -651,12 +587,10 @@ const useGoals = () => {
         )
         .reduce((sum, goal) => sum + (Number(goal.autoContribute) || 0), 0);
     } catch (error) {
-      console.error('Error calculating goal contributions:', error);
       return 0;
     }
   }, [goals]);
 
-  // Get goal progress for a specific goal
   const getGoalProgress = useCallback(goal => {
     try {
       if (!goal || typeof goal !== 'object') {
@@ -680,14 +614,12 @@ const useGoals = () => {
         }
       }
 
-      return Math.max(0, progress); // Ensure no negative progress
+      return Math.max(0, progress);
     } catch (error) {
-      console.error('Error calculating goal progress:', error);
       return 0;
     }
   }, []);
 
-  // Check if goal is overdue
   const isGoalOverdue = useCallback(
     goal => {
       try {
@@ -699,19 +631,17 @@ const useGoals = () => {
         const deadline = new Date(goal.deadline);
 
         if (isNaN(deadline.getTime())) {
-          return false; // Invalid date
+          return false;
         }
 
         return today > deadline && getGoalProgress(goal) < 100;
       } catch (error) {
-        console.error('Error checking if goal is overdue:', error);
         return false;
       }
     },
     [getGoalProgress],
   );
 
-  // Get smart goal suggestions based on spending patterns
   const getSmartSuggestions = useCallback(
     (transactions = [], incomeData = null) => {
       try {
@@ -746,7 +676,6 @@ const useGoals = () => {
         const availableForGoals = Math.max(0, monthlyIncome - monthlySpending);
         const suggestions = [];
 
-        // Emergency fund suggestion (3 months of expenses)
         if (monthlySpending > 0) {
           const emergencyTarget = Math.round(monthlySpending * 3);
           const existingEmergencyGoal = goals.find(
@@ -776,7 +705,6 @@ const useGoals = () => {
           }
         }
 
-        // Vacation fund suggestion
         if (availableForGoals > 200) {
           const existingVacationGoal = goals.find(
             goal =>
@@ -800,19 +728,16 @@ const useGoals = () => {
 
         return suggestions;
       } catch (error) {
-        console.error('Error generating smart suggestions:', error);
         return [];
       }
     },
     [goals],
   );
 
-  // Utility to check if goals are loaded
   const isInitiallyLoaded = useCallback(() => {
     return hasInitiallyLoaded.current;
   }, []);
 
-  // Clean up timeouts on unmount - CRITICAL FIX: useLayoutEffect instead of useEffect
   useLayoutEffect(() => {
     return () => {
       clearLoadingTimeout();
@@ -820,32 +745,24 @@ const useGoals = () => {
   }, [clearLoadingTimeout]);
 
   return {
-    // State
     goals,
     loading,
     editingGoal,
-
-    // Core CRUD operations
+    isStorageReady,
     loadGoals,
     saveGoal,
     deleteGoal,
     prepareEditGoal,
     clearEditingGoal,
-
-    // Goal management
     toggleGoalBalanceDisplay,
     updateGoalProgress,
     updateSpendingGoals,
     completeGoal,
-
-    // Calculated values
     getBalanceCardGoals,
     calculateTotalGoalContributions,
     getGoalProgress,
     isGoalOverdue,
     getSmartSuggestions,
-
-    // Utilities
     isInitiallyLoaded,
   };
 };
