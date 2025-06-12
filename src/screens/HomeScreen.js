@@ -142,8 +142,9 @@ const HomeScreen = ({navigation}) => {
     React.useCallback(() => {
       if (isStorageReady) {
         loadIncomeData();
+        loadGoals();
       }
-    }, [isStorageReady]),
+    }, [isStorageReady, loadGoals]),
   );
 
   const loadIncomeData = async () => {
@@ -195,7 +196,7 @@ const HomeScreen = ({navigation}) => {
 
   const measureBalanceCard = useCallback(() => {
     if (balanceCardRef.current) {
-      balanceCardRef.current.measure((x, y, width, height, pageX, pageY) => {
+      balanceCardRef.current.measure((_, __, width, height, pageX, pageY) => {
         setBalanceCardLayout({x: pageX, y: pageY, width, height});
         setShowBalanceCardSpotlight(true);
       });
@@ -204,7 +205,7 @@ const HomeScreen = ({navigation}) => {
 
   const measureFloatingButton = useCallback(() => {
     if (floatingButtonRef.current) {
-      floatingButtonRef.current.measure((x, y, width, height, pageX, pageY) => {
+      floatingButtonRef.current.measure((_, __, width, height, pageX, pageY) => {
         setFloatingButtonLayout({x: pageX, y: pageY, width, height});
         setShowAddTransactionSpotlight(true);
       });
@@ -227,7 +228,7 @@ const HomeScreen = ({navigation}) => {
 
         if (transactionRef.current && transactions.length > 0) {
           transactionRef.current.measure(
-            (x, y, width, height, pageX, pageY) => {
+            (_, __, width, height, pageX, pageY) => {
               setTransactionLayout({x: pageX, y: pageY, width, height});
               setTransactionSwipeStep(0);
               setShowTransactionSwipeSpotlight(true);
@@ -255,24 +256,6 @@ const HomeScreen = ({navigation}) => {
     navigation.navigate('Goals');
   };
 
-  const getCurrentTransactionData = async transactionId => {
-    try {
-      if (!isStorageReady || !userStorageManager) {
-        return null;
-      }
-
-      const storedTransactions = await userStorageManager.getUserData(
-        'transactions',
-      );
-      if (storedTransactions && Array.isArray(storedTransactions)) {
-        return storedTransactions.find(t => t.id === transactionId);
-      }
-      return null;
-    } catch (error) {
-      console.error('❌ Error getting current transaction data:', error);
-      return null;
-    }
-  };
 
   const handleSaveTransaction = async transaction => {
     try {
