@@ -2,11 +2,10 @@ import React, {useState, useEffect} from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createStackNavigator} from '@react-navigation/stack';
 import {View, Text, ActivityIndicator, StyleSheet} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from 'react-native-vector-icons/Feather';
 
 // Import your components
-import AuthContainer from '../screens/AuthContainer'; // <- UPDATED: Import AuthContainer (business logic)
+import AuthContainer from '../screens/AuthContainer';
 import WelcomeFlow from '../components/WelcomeFlow';
 import IncomeSetupScreen from '../screens/IncomeSetupScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -14,8 +13,9 @@ import AnalyticsScreen from '../screens/AnalyticsScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
-// Import AuthService
+// Import API services
 import AuthService from '../services/AuthService';
+import TrendAPIService from '../services/TrendAPIService';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -94,39 +94,28 @@ function AuthScreen({navigation}) {
   const handleAuthSuccess = async user => {
     console.log('User authenticated successfully:', user);
 
-    // After successful authentication, check if user needs welcome flow
     try {
-      const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
+      // NEW: Get user profile from backend instead of AsyncStorage
+      const userProfile = await TrendAPIService.getUserProfile();
+      console.log('User profile loaded:', userProfile);
 
-      if (!hasSeenWelcome) {
+      if (!userProfile.hasSeenWelcome) {
         console.log('New user - showing welcome flow');
         navigation.navigate('Welcome');
+      } else if (!userProfile.setupComplete || !userProfile.income) {
+        console.log('User needs income setup');
+        navigation.navigate('IncomeSetup');
       } else {
-        // Check if user needs income setup
-        const setupData = await AsyncStorage.getItem('userSetup');
-        if (!setupData) {
-          console.log('User needs income setup');
-          navigation.navigate('IncomeSetup');
-        } else {
-          const parsedData = JSON.parse(setupData);
-          const isComplete =
-            parsedData.setupComplete === true && parsedData.income;
-          if (isComplete) {
-            console.log('Setup complete - showing main app');
-            navigation.navigate('MainTabs');
-          } else {
-            console.log('Setup incomplete - showing income setup');
-            navigation.navigate('IncomeSetup');
-          }
-        }
+        console.log('Setup complete - showing main app');
+        navigation.navigate('MainTabs');
       }
     } catch (error) {
       console.error('Error checking user setup after auth:', error);
+      // Fallback to welcome flow if API fails
       navigation.navigate('Welcome');
     }
   };
 
-  // UPDATED: Use AuthContainer instead of AuthFlow
   return <AuthContainer onAuthSuccess={handleAuthSuccess} />;
 }
 
@@ -134,10 +123,13 @@ function AuthScreen({navigation}) {
 function WelcomeScreen({navigation}) {
   const handleWelcomeComplete = async () => {
     try {
-      await AsyncStorage.setItem('hasSeenWelcome', 'true');
+      // NEW: Update backend instead of AsyncStorage
+      await TrendAPIService.updateUserProfile({hasSeenWelcome: true});
+      console.log('Welcome status saved to backend');
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     } catch (error) {
       console.error('Error saving welcome status:', error);
+      // Continue to income setup even if API fails
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     }
   };
@@ -170,32 +162,19 @@ export default function AppNavigator() {
         return;
       }
 
-      // If authenticated, continue with existing logic
-      const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
-      const setupData = await AsyncStorage.getItem('userSetup');
+      // NEW: Get user profile from backend instead of AsyncStorage
+      const userProfile = await TrendAPIService.getUserProfile();
+      console.log('User profile:', userProfile);
 
-      console.log('hasSeenWelcome:', hasSeenWelcome);
-      console.log('setupData:', setupData);
-
-      if (!hasSeenWelcome) {
+      if (!userProfile.hasSeenWelcome) {
         console.log('Authenticated user needs welcome');
         setInitialRoute('Welcome');
-      } else if (!setupData) {
+      } else if (!userProfile.setupComplete || !userProfile.income) {
         console.log('Authenticated user needs income setup');
         setInitialRoute('IncomeSetup');
       } else {
-        const parsedData = JSON.parse(setupData);
-        const isComplete =
-          parsedData.setupComplete === true && parsedData.income;
-        if (isComplete) {
-          console.log('Authenticated user setup complete - showing main app');
-          setInitialRoute('MainTabs');
-        } else {
-          console.log(
-            'Authenticated user setup incomplete - showing income setup',
-          );
-          setInitialRoute('IncomeSetup');
-        }
+        console.log('Authenticated user setup complete - showing main app');
+        setInitialRoute('MainTabs');
       }
     } catch (error) {
       console.log('Error checking initial route:', error);

@@ -228,8 +228,17 @@ class TrendAPIService {
     }
   }
 
+  // Profile methods for AppNavigator
   async getUserProfile() {
     return this.makeRequest('/auth/profile');
+  }
+
+  // NEW: Update user profile method
+  async updateUserProfile(profileData) {
+    return this.makeRequest('/auth/profile', {
+      method: 'PUT',
+      body: profileData,
+    });
   }
 
   // Category methods
