@@ -7,8 +7,8 @@ import Feather from 'react-native-vector-icons/Feather';
 // Import your components
 import AuthContainer from '../screens/AuthContainer';
 import WelcomeFlow from '../components/WelcomeFlow';
-import IncomeSetupScreen from '../screens/IncomeSetupScreen';
-import HomeScreen from '../screens/HomeScreen';
+import IncomeSetupContainer from '../containers/IncomeSetupContainer'; // ✅ FIXED: Import IncomeSetupContainer
+import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import HomeContainer instead of HomeScreen
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -59,7 +59,7 @@ function MainTabs() {
       }}>
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeContainer} // ✅ CHANGED: Use HomeContainer instead of HomeScreen
         options={{
           tabBarIcon: HomeIcon,
         }}
@@ -216,7 +216,7 @@ export default function AppNavigator() {
       />
       <Stack.Screen
         name="IncomeSetup"
-        component={IncomeSetupScreen}
+        component={IncomeSetupContainer} // ✅ FIXED: Use IncomeSetupContainer instead of IncomeSetupScreen
         options={{
           gestureEnabled: false,
         }}
