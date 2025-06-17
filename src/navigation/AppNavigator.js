@@ -6,12 +6,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from 'react-native-vector-icons/Feather';
 
 // Import your components
+import AuthContainer from '../screens/AuthContainer'; // <- UPDATED: Import AuthContainer (business logic)
 import WelcomeFlow from '../components/WelcomeFlow';
 import IncomeSetupScreen from '../screens/IncomeSetupScreen';
-import HomeScreen from '../screens/HomeScreen'; // <- IMPORT YOUR REAL HOMESCREEN
+import HomeScreen from '../screens/HomeScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+
+// Import AuthService
+import AuthService from '../services/AuthService';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -32,8 +36,6 @@ const GoalsIcon = ({color, size}) => (
 const SettingsIcon = ({color, size}) => (
   <Feather name="menu" size={size} color={color} />
 );
-
-// REMOVED THE TEMPORARY SCREEN COMPONENTS - NOW USING REAL IMPORTS
 
 // Main Tab Navigator
 function MainTabs() {
@@ -57,7 +59,7 @@ function MainTabs() {
       }}>
       <Tab.Screen
         name="Home"
-        component={HomeScreen} // <- NOW USING YOUR REAL HOMESCREEN
+        component={HomeScreen}
         options={{
           tabBarIcon: HomeIcon,
         }}
@@ -87,6 +89,47 @@ function MainTabs() {
   );
 }
 
+// Authentication Screen Wrapper
+function AuthScreen({navigation}) {
+  const handleAuthSuccess = async user => {
+    console.log('User authenticated successfully:', user);
+
+    // After successful authentication, check if user needs welcome flow
+    try {
+      const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
+
+      if (!hasSeenWelcome) {
+        console.log('New user - showing welcome flow');
+        navigation.navigate('Welcome');
+      } else {
+        // Check if user needs income setup
+        const setupData = await AsyncStorage.getItem('userSetup');
+        if (!setupData) {
+          console.log('User needs income setup');
+          navigation.navigate('IncomeSetup');
+        } else {
+          const parsedData = JSON.parse(setupData);
+          const isComplete =
+            parsedData.setupComplete === true && parsedData.income;
+          if (isComplete) {
+            console.log('Setup complete - showing main app');
+            navigation.navigate('MainTabs');
+          } else {
+            console.log('Setup incomplete - showing income setup');
+            navigation.navigate('IncomeSetup');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking user setup after auth:', error);
+      navigation.navigate('Welcome');
+    }
+  };
+
+  // UPDATED: Use AuthContainer instead of AuthFlow
+  return <AuthContainer onAuthSuccess={handleAuthSuccess} />;
+}
+
 // Welcome Screen Wrapper
 function WelcomeScreen({navigation}) {
   const handleWelcomeComplete = async () => {
@@ -114,6 +157,20 @@ export default function AppNavigator() {
   const checkInitialRoute = async () => {
     try {
       console.log('Checking initial route...');
+
+      // Initialize AuthService and check authentication first
+      await AuthService.initialize();
+      const isAuthenticated = AuthService.isAuthenticated();
+
+      console.log('isAuthenticated:', isAuthenticated);
+
+      if (!isAuthenticated) {
+        console.log('User not authenticated - showing auth flow');
+        setInitialRoute('Auth');
+        return;
+      }
+
+      // If authenticated, continue with existing logic
       const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
       const setupData = await AsyncStorage.getItem('userSetup');
 
@@ -121,26 +178,29 @@ export default function AppNavigator() {
       console.log('setupData:', setupData);
 
       if (!hasSeenWelcome) {
-        console.log('New user detected - showing welcome');
+        console.log('Authenticated user needs welcome');
         setInitialRoute('Welcome');
       } else if (!setupData) {
-        console.log('User needs income setup');
+        console.log('Authenticated user needs income setup');
         setInitialRoute('IncomeSetup');
       } else {
         const parsedData = JSON.parse(setupData);
         const isComplete =
           parsedData.setupComplete === true && parsedData.income;
         if (isComplete) {
-          console.log('Setup complete - showing main app');
+          console.log('Authenticated user setup complete - showing main app');
           setInitialRoute('MainTabs');
         } else {
-          console.log('Setup incomplete - showing income setup');
+          console.log(
+            'Authenticated user setup incomplete - showing income setup',
+          );
           setInitialRoute('IncomeSetup');
         }
       }
     } catch (error) {
       console.log('Error checking initial route:', error);
-      setInitialRoute('Welcome');
+      // If there's an error, default to auth flow
+      setInitialRoute('Auth');
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +221,13 @@ export default function AppNavigator() {
         headerShown: false,
       }}
       initialRouteName={initialRoute}>
+      <Stack.Screen
+        name="Auth"
+        component={AuthScreen}
+        options={{
+          gestureEnabled: false,
+        }}
+      />
       <Stack.Screen
         name="Welcome"
         component={WelcomeScreen}
