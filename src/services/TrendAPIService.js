@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Your trend-backend configuration
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.9:3001/api/v1', // ✅ Add /api/v1 prefix
+  baseURL: 'http://localhost:3001/api/v1', // ✅ Add /api/v1 prefix
   timeout: 10000,
 };
 
