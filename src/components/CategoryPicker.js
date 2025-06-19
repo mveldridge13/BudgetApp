@@ -12,25 +12,44 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
-import categoryService from '../services/categoryService';
 import AddCategoryModal from './AddCategoryModal';
 
 const CategoryPicker = ({
-  visible,
-  onClose,
-  selectedCategory,
-  onCategorySelect,
+  // ==============================================
+  // DATA PROPS (from CategoryContainer)
+  // ==============================================
+  categories = [],
+  isLoading = false,
+  error = null,
+  visible = false,
+  selectedCategory = null,
+
+  // ==============================================
+  // EVENT HANDLER PROPS (from CategoryContainer)
+  // ==============================================
+  onCategorySelect = () => {},
+  onAddCategory = () => {},
+  onCategoryAdded = () => {},
+  onClose = () => {},
+  onRetry = () => {},
+  onRefresh = () => {},
+  navigation,
 }) => {
-  const [categories, setCategories] = useState([]);
+  // ==============================================
+  // UI-ONLY STATE (No Business Logic)
+  // ==============================================
+
   const [showAddCategory, setShowAddCategory] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [slideAnim] = useState(
     new Animated.Value(Dimensions.get('window').width),
   );
 
+  // ==============================================
+  // ANIMATION HANDLING (UI Logic Only)
+  // ==============================================
+
   useEffect(() => {
     if (visible) {
-      loadCategories();
       // Slide in from right when opening
       Animated.timing(slideAnim, {
         toValue: 0,
@@ -43,21 +62,39 @@ const CategoryPicker = ({
     }
   }, [visible, slideAnim]);
 
-  const loadCategories = async () => {
-    setIsLoading(true);
-    try {
-      const loadedCategories = await categoryService.getCategories();
-      setCategories(loadedCategories);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // ==============================================
+  // UI EVENT HANDLERS (Delegate to Container)
+  // ==============================================
 
   const handleCategorySelect = categoryId => {
-    onCategorySelect(categoryId);
     // Slide right like hitting back button (iOS style)
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      // Delegate to container
+      onCategorySelect(categoryId);
+    });
+  };
+
+  const handleAddCategoryPress = () => {
+    setShowAddCategory(true);
+  };
+
+  const handleCategoryAdded = newCategory => {
+    // Close add category modal
+    setShowAddCategory(false);
+    // Delegate to container
+    onCategoryAdded(newCategory);
+  };
+
+  const handleAddCategoryClose = () => {
+    setShowAddCategory(false);
+  };
+
+  const handleClose = () => {
+    // Slide right before closing
     Animated.timing(slideAnim, {
       toValue: Dimensions.get('window').width,
       duration: 300,
@@ -67,20 +104,9 @@ const CategoryPicker = ({
     });
   };
 
-  const handleAddCategoryPress = () => {
-    setShowAddCategory(true);
-  };
-
-  const handleCategoryAdded = newCategory => {
-    // Add the new category to the current list
-    setCategories(prevCategories => [...prevCategories, newCategory]);
-    // Automatically select the newly created category
-    handleCategorySelect(newCategory.id);
-  };
-
-  const handleAddCategoryClose = () => {
-    setShowAddCategory(false);
-  };
+  // ==============================================
+  // RENDER ADD CATEGORY MODAL (if active)
+  // ==============================================
 
   if (showAddCategory) {
     return (
@@ -88,16 +114,21 @@ const CategoryPicker = ({
         visible={visible}
         onClose={handleAddCategoryClose}
         onCategoryAdded={handleCategoryAdded}
+        onAddCategory={onAddCategory}
       />
     );
   }
+
+  // ==============================================
+  // RENDER MAIN CATEGORY PICKER UI (IDENTICAL DESIGN)
+  // ==============================================
 
   return (
     <Modal
       visible={visible}
       transparent={true}
       animationType="none"
-      onRequestClose={onClose}>
+      onRequestClose={handleClose}>
       <View style={styles.modalOverlay}>
         <Animated.View
           style={[
@@ -106,23 +137,39 @@ const CategoryPicker = ({
               transform: [{translateX: slideAnim}],
             },
           ]}>
+          {/* Header with Back Button - IDENTICAL */}
           <View style={styles.pickerHeader}>
-            <TouchableOpacity onPress={onClose} style={styles.backButton}>
+            <TouchableOpacity onPress={handleClose} style={styles.backButton}>
               <Icon name="chevron-back" size={24} color={colors.primary} />
             </TouchableOpacity>
             <Text style={styles.pickerTitle}>Select Category</Text>
             <View style={styles.placeholder} />
           </View>
 
+          {/* Category List Content - IDENTICAL */}
           <ScrollView
             style={styles.pickerContent}
             showsVerticalScrollIndicator={false}>
+            {/* Loading State - IDENTICAL */}
             {isLoading ? (
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>Loading categories...</Text>
               </View>
             ) : (
               <>
+                {/* Error State */}
+                {error && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <TouchableOpacity
+                      onPress={onRetry}
+                      style={styles.retryButton}>
+                      <Text style={styles.retryText}>Retry</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Category Options - IDENTICAL */}
                 {categories.map(category => (
                   <TouchableOpacity
                     key={category.id}
@@ -151,6 +198,7 @@ const CategoryPicker = ({
                         )}
                       </View>
                     </View>
+
                     {selectedCategory === category.id && (
                       <Icon name="checkmark" size={20} color={colors.primary} />
                     )}
@@ -160,7 +208,7 @@ const CategoryPicker = ({
             )}
           </ScrollView>
 
-          {/* Add Category Button */}
+          {/* Add Category Button - IDENTICAL */}
           <TouchableOpacity
             style={styles.addCategoryButton}
             onPress={handleAddCategoryPress}
@@ -173,6 +221,10 @@ const CategoryPicker = ({
     </Modal>
   );
 };
+
+// ==============================================
+// IDENTICAL STYLES (100% Design Preservation)
+// ==============================================
 
 const styles = StyleSheet.create({
   modalOverlay: {
@@ -218,6 +270,30 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
+  },
+  errorContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+  },
+  retryText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: 'white',
   },
   categoryOption: {
     flexDirection: 'row',
