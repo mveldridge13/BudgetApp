@@ -1,8 +1,7 @@
-// CategoryContainer.js
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {Alert} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
-import CategoryScreen from '../screens/CategoryScreen';
+import CategoryPicker from '../components/CategoryPicker';
 
 const CategoryContainer = ({navigation, route}) => {
   // ==============================================
@@ -13,30 +12,93 @@ const CategoryContainer = ({navigation, route}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorState, setErrorState] = useState(null);
 
-  // Props from navigation (CategoryPicker usage)
+  // Subcategory navigation state
+  const [currentSubcategoryData, setCurrentSubcategoryData] = useState(null);
+  const [viewStack, setViewStack] = useState(['categories']);
+
+  // Props from navigation
   const visible = route?.params?.visible || true;
   const selectedCategory = route?.params?.selectedCategory || null;
+  const selectedSubcategory = route?.params?.selectedSubcategory || null;
   const onCategorySelectProp = route?.params?.onCategorySelect;
   const onCloseProp = route?.params?.onClose;
 
   // ==============================================
-  // DATA TRANSFORMATION METHODS
+  // HELPER FUNCTIONS
   // ==============================================
 
-  const transformCategoriesForUI = backendCategories => {
-    return backendCategories.map(category => ({
+  const transformCategoriesForUI = useCallback(backendCategories => {
+    if (!Array.isArray(backendCategories)) {
+      return [];
+    }
+
+    console.log('🔍 Raw backend categories:', backendCategories.length);
+    console.log('🔍 Sample category:', backendCategories[0]);
+
+    // Separate main categories and subcategories
+    const mainCategories = backendCategories.filter(cat => !cat.parentId);
+    const subcategories = backendCategories.filter(cat => cat.parentId);
+
+    console.log('🔍 Main categories found:', mainCategories.length);
+    console.log('🔍 Subcategories found:', subcategories.length);
+    console.log(
+      '🔍 Main category names:',
+      mainCategories.map(c => c.name),
+    );
+    console.log(
+      '🔍 Subcategory names:',
+      subcategories.map(c => `${c.name} (parent: ${c.parentId})`),
+    );
+
+    const subcategoriesMap = subcategories.reduce((map, subcat) => {
+      if (!map[subcat.parentId]) {
+        map[subcat.parentId] = [];
+      }
+      map[subcat.parentId].push({
+        id: subcat.id,
+        name: subcat.name,
+        icon: subcat.icon || 'albums-outline',
+        color: subcat.color || '#4ECDC4',
+        isCustom: !subcat.isSystem,
+        parentId: subcat.parentId,
+      });
+      return map;
+    }, {});
+
+    console.log('🔍 Subcategories map:', subcategoriesMap);
+
+    // Transform main categories and attach their subcategories
+    const result = mainCategories.map(category => ({
       id: category.id,
       name: category.name,
-      icon: category.icon || 'wallet-outline', // Default icon
-      color: category.color || '#6B73FF', // Default color
-      isCustom: category.isCustom || false,
-      type: category.type || 'expense',
-      // Add any other properties CategoryScreen expects
-      userId: category.userId,
-      createdAt: category.createdAt,
-      updatedAt: category.updatedAt,
+      icon: category.icon || 'albums-outline',
+      color: category.color || '#4ECDC4',
+      isCustom: !category.isSystem,
+      parentId: category.parentId, // This should be null for main categories
+      hasSubcategories:
+        subcategoriesMap[category.id] &&
+        subcategoriesMap[category.id].length > 0,
+      subcategories: subcategoriesMap[category.id] || [],
     }));
-  };
+
+    console.log('🔍 Final transformed categories:', result.length);
+    console.log(
+      '🔍 Categories with subcategories:',
+      result
+        .filter(c => c.hasSubcategories)
+        .map(c => `${c.name} (${c.subcategories.length} subs)`),
+    );
+
+    // Sort main categories alphabetically by name
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
+
+  const getCategoryById = useCallback(
+    id => {
+      return categories.find(cat => cat.id === id);
+    },
+    [categories],
+  );
 
   // ==============================================
   // BACKEND INTEGRATION METHODS
@@ -44,11 +106,8 @@ const CategoryContainer = ({navigation, route}) => {
 
   const loadCategories = useCallback(async () => {
     try {
-      // Check authentication first
       if (!TrendAPIService.isAuthenticated()) {
-        console.log(
-          'CategoryContainer: User not authenticated, redirecting to auth',
-        );
+        console.log('CategoryContainer: User not authenticated');
         navigation.navigate('Auth');
         return;
       }
@@ -56,25 +115,14 @@ const CategoryContainer = ({navigation, route}) => {
       setIsLoading(true);
       setErrorState(null);
 
-      // Load categories from backend
-      console.log('CategoryContainer: Loading categories from backend...');
-      const backendCategories = await TrendAPIService.getCategories();
-
-      console.log(
-        'CategoryContainer: Categories loaded:',
-        backendCategories?.length || 0,
-      );
-
-      // Transform backend data for UI consumption
-      const transformedCategories = transformCategoriesForUI(
-        backendCategories || [],
-      );
+      const response = await TrendAPIService.getCategories();
+      const backendCategories = response?.categories || []; // Extract categories array from response
+      const transformedCategories = transformCategoriesForUI(backendCategories);
       setCategories(transformedCategories);
     } catch (apiError) {
       console.error('CategoryContainer: Error loading categories:', apiError);
       setErrorState(apiError.message);
 
-      // Graceful fallback with user feedback
       Alert.alert(
         'Connection Issue',
         'Unable to load categories. Please check your connection and try again.',
@@ -84,85 +132,27 @@ const CategoryContainer = ({navigation, route}) => {
         ],
       );
 
-      // Fallback to empty state
       setCategories([]);
     } finally {
       setIsLoading(false);
     }
-  }, [navigation]);
-
-  // ==============================================
-  // ERROR RECOVERY METHODS
-  // ==============================================
-
-  const handleRetry = useCallback(() => {
-    loadCategories();
-  }, [loadCategories]);
-
-  const handleRefresh = useCallback(async () => {
-    await loadCategories();
-  }, [loadCategories]);
-
-  // ==============================================
-  // CATEGORY MANAGEMENT METHODS
-  // ==============================================
-
-  const handleClose = useCallback(() => {
-    console.log('CategoryContainer: Closing category picker');
-
-    // Call the provided close callback or navigate back
-    if (onCloseProp) {
-      onCloseProp();
-    } else {
-      navigation.goBack();
-    }
-  }, [onCloseProp, navigation]);
-
-  const handleCategorySelect = useCallback(
-    categoryId => {
-      console.log('CategoryContainer: Category selected:', categoryId);
-
-      // Call the provided callback
-      if (onCategorySelectProp) {
-        onCategorySelectProp(categoryId);
-      }
-
-      // Close the picker
-      handleClose();
-    },
-    [onCategorySelectProp, handleClose],
-  );
+  }, [navigation, transformCategoriesForUI]);
 
   const handleAddCategory = useCallback(
     async newCategoryData => {
       try {
-        // Check authentication
         if (!TrendAPIService.isAuthenticated()) {
           navigation.navigate('Auth');
           return null;
         }
 
-        console.log(
-          'CategoryContainer: Creating new category:',
-          newCategoryData,
-        );
-
-        // Create category via backend
         const createdCategory = await TrendAPIService.createCategory(
           newCategoryData,
         );
-
-        console.log(
-          'CategoryContainer: Category created successfully:',
-          createdCategory,
-        );
-
-        // Transform for UI
         const transformedCategory = transformCategoriesForUI([
           createdCategory,
         ])[0];
 
-        // Add to current list
         setCategories(prevCategories => [
           ...prevCategories,
           transformedCategory,
@@ -175,65 +165,137 @@ const CategoryContainer = ({navigation, route}) => {
           creationError,
         );
 
-        Alert.alert('Error', 'Failed to create category. Please try again.', [
-          {text: 'OK'},
-        ]);
-
+        Alert.alert('Error', 'Failed to create category. Please try again.');
         return null;
       }
     },
-    [navigation],
+    [navigation, transformCategoriesForUI],
   );
 
-  const handleCategoryAdded = useCallback(
-    newCategory => {
-      if (newCategory) {
-        // Automatically select the newly created category
-        handleCategorySelect(newCategory.id);
+  const handleAddSubcategory = useCallback(
+    async (parentCategoryId, subcategoryData) => {
+      try {
+        if (!TrendAPIService.isAuthenticated()) {
+          navigation.navigate('Auth');
+          return null;
+        }
+
+        const createdSubcategory = await TrendAPIService.createSubcategory(
+          parentCategoryId,
+          subcategoryData,
+        );
+
+        // Reload categories to get updated hierarchy
+        await loadCategories();
+
+        return createdSubcategory;
+      } catch (creationError) {
+        console.error(
+          'CategoryContainer: Error creating subcategory:',
+          creationError,
+        );
+
+        Alert.alert('Error', 'Failed to create subcategory. Please try again.');
+        return null;
       }
     },
-    [handleCategorySelect],
+    [navigation, loadCategories],
   );
 
   // ==============================================
-  // LIFECYCLE MANAGEMENT
+  // EVENT HANDLERS
+  // ==============================================
+
+  const handleClose = useCallback(() => {
+    setCurrentSubcategoryData(null);
+    setViewStack(['categories']);
+
+    if (onCloseProp) {
+      onCloseProp();
+    } else {
+      navigation.goBack();
+    }
+  }, [navigation, onCloseProp]);
+
+  const handleCategorySelect = useCallback(
+    categoryId => {
+      const category = getCategoryById(categoryId);
+
+      if (
+        category &&
+        category.hasSubcategories &&
+        category.subcategories?.length > 0
+      ) {
+        setCurrentSubcategoryData(category);
+        setViewStack(['categories', 'subcategories']);
+      } else {
+        if (onCategorySelectProp) {
+          onCategorySelectProp(categoryId, null);
+        }
+        handleClose();
+      }
+    },
+    [getCategoryById, onCategorySelectProp, handleClose],
+  );
+
+  const handleSubcategorySelect = useCallback(
+    subcategoryId => {
+      if (currentSubcategoryData && onCategorySelectProp) {
+        onCategorySelectProp(currentSubcategoryData.id, subcategoryId);
+      }
+      handleClose();
+    },
+    [currentSubcategoryData, onCategorySelectProp, handleClose],
+  );
+
+  const handleNavigateToSubcategories = useCallback(category => {
+    setCurrentSubcategoryData(category);
+    setViewStack(['categories', 'subcategories']);
+  }, []);
+
+  const handleBackToCategories = useCallback(() => {
+    setCurrentSubcategoryData(null);
+    setViewStack(['categories']);
+  }, []);
+
+  // ==============================================
+  // LIFECYCLE
   // ==============================================
 
   useEffect(() => {
-    // Initialize TrendAPIService if needed
-    const initializeAPI = async () => {
-      const initialized = await TrendAPIService.initialize();
-      if (initialized) {
-        loadCategories();
-      } else {
-        console.error('CategoryContainer: Failed to initialize API service');
-        navigation.navigate('Auth');
-      }
-    };
-
-    initializeAPI();
-  }, [loadCategories, navigation]);
+    if (visible) {
+      loadCategories();
+    }
+  }, [visible, loadCategories]);
 
   // ==============================================
-  // RENDER CONTAINER WITH CLEAN PROPS
+  // RENDER
   // ==============================================
 
   return (
-    <CategoryScreen
-      // Data props (what the UI needs)
+    <CategoryPicker
       categories={categories}
       isLoading={isLoading}
       error={errorState}
       visible={visible}
       selectedCategory={selectedCategory}
-      // Event handlers (what the UI can trigger)
+      selectedSubcategory={selectedSubcategory}
+      currentView={viewStack[viewStack.length - 1]}
+      currentSubcategoryData={currentSubcategoryData}
       onCategorySelect={handleCategorySelect}
+      onSubcategorySelect={handleSubcategorySelect}
+      onNavigateToSubcategories={handleNavigateToSubcategories}
+      onBackToCategories={handleBackToCategories}
       onAddCategory={handleAddCategory}
-      onCategoryAdded={handleCategoryAdded}
+      onAddSubcategory={handleAddSubcategory}
+      onCategoryAdded={newCategory => {
+        console.log('CategoryContainer: Category added:', newCategory);
+      }}
+      onSubcategoryAdded={newSubcategory => {
+        console.log('CategoryContainer: Subcategory added:', newSubcategory);
+      }}
       onClose={handleClose}
-      onRetry={handleRetry}
-      onRefresh={handleRefresh}
-      // Navigation prop
+      onRetry={loadCategories}
       navigation={navigation}
     />
   );

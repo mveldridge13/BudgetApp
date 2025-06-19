@@ -8,7 +8,8 @@ class CategoryService {
   // Get all categories from backend
   async getCategories() {
     try {
-      const categories = await TrendAPI.getCategories();
+      const response = await TrendAPI.getCategories();
+      const categories = response?.categories || []; // Extract categories array from response
       console.log(
         '📂 Categories loaded from backend:',
         categories?.length || 0,
@@ -33,18 +34,47 @@ class CategoryService {
 
   // Transform backend categories to match your existing UI format
   transformCategories(backendCategories) {
-    return backendCategories.map(category => ({
+    if (!Array.isArray(backendCategories)) {
+      return [];
+    }
+
+    // Separate main categories and subcategories
+    const mainCategories = backendCategories.filter(cat => !cat.parentId);
+    const subcategoriesMap = backendCategories
+      .filter(cat => cat.parentId)
+      .reduce((map, subcat) => {
+        if (!map[subcat.parentId]) {
+          map[subcat.parentId] = [];
+        }
+        map[subcat.parentId].push({
+          id: subcat.id,
+          name: subcat.name,
+          icon: subcat.icon || 'document-text-outline',
+          color: subcat.color || '#A8A8A8',
+          isCustom: !subcat.isSystem,
+          parentId: subcat.parentId,
+        });
+        return map;
+      }, {});
+
+    // Transform only main categories with their subcategories attached
+    const transformedCategories = mainCategories.map(category => ({
       id: category.id,
       name: category.name,
       icon: category.icon || 'document-text-outline',
       color: category.color || '#A8A8A8',
-      hasSubcategories: category.hasSubcategories || false,
-      subcategories: category.subcategories || [],
-      isCustom: category.isCustom || false,
+      hasSubcategories:
+        subcategoriesMap[category.id] &&
+        subcategoriesMap[category.id].length > 0,
+      subcategories: subcategoriesMap[category.id] || [],
+      isCustom: !category.isSystem,
       description: category.description,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
     }));
+
+    // Sort main categories alphabetically by name
+    return transformedCategories.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   // Add new category via backend
