@@ -165,35 +165,24 @@ const CategoryPicker = ({
   };
 
   // ==============================================
-  // SUBCATEGORY CREATION - COMMENTED OUT FOR NOW
-  // TODO: Uncomment when ready to implement subcategory creation
+  // SUBCATEGORY VIEWING/SELECTION - ENABLED
+  // Creation functionality remains disabled
   // ==============================================
 
-  /*
   const handleAddSubcategoryPress = () => {
-    setShowAddSubcategory(true);
-  };
-
-  const handleSubcategoryCreated = async subcategoryData => {
-    if (!currentSubcategoryData) {
-      return;
-    }
-
-    const newSubcategory = await onAddSubcategory(
-      currentSubcategoryData.id,
-      subcategoryData,
+    // Show message that creation is disabled
+    Alert.alert(
+      'Feature Not Available',
+      'Subcategory creation is not yet implemented. You can select from existing subcategories.',
+      [{text: 'OK'}],
     );
-    if (newSubcategory) {
-      setShowAddSubcategory(false);
-      onSubcategoryAdded(newSubcategory);
-
-      // Auto-select the newly created subcategory
-      setTimeout(() => {
-        handleSubcategoryPress(newSubcategory.id);
-      }, 100);
-    }
   };
-  */
+
+  // eslint-disable-next-line no-unused-vars
+  const handleSubcategoryCreated = async subcategoryData => {
+    console.warn('⚠️ Subcategory creation not yet implemented');
+    return null;
+  };
 
   // ==============================================
   // HELPER FUNCTIONS (UI Only)
@@ -383,16 +372,20 @@ const CategoryPicker = ({
                     renderSubcategoryOption(subcategory),
                   )}
 
-                  {/* COMMENTED OUT - Add Subcategory Button not implemented yet */}
-                  {/*
+                  {/* Add Subcategory Button - Disabled but shows message */}
                   <TouchableOpacity
                     style={styles.addCategoryButton}
                     onPress={handleAddSubcategoryPress}
                     activeOpacity={0.7}>
-                    <Icon name="add" size={20} color={colors.primary} />
-                    <Text style={styles.addCategoryText}>Add Subcategory</Text>
+                    <Icon name="add" size={20} color={colors.textSecondary} />
+                    <Text
+                      style={[
+                        styles.addCategoryText,
+                        {color: colors.textSecondary},
+                      ]}>
+                      Add Subcategory (Coming Soon)
+                    </Text>
                   </TouchableOpacity>
-                  */}
                 </ScrollView>
               </View>
             </View>
@@ -400,7 +393,7 @@ const CategoryPicker = ({
         </View>
       </Modal>
 
-      {/* COMMENTED OUT - Subcategory creation modal not implemented yet */}
+      {/* Subcategory creation modal remains disabled */}
       {/*
       <SubcategoryModal
         visible={showAddSubcategory}

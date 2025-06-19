@@ -12,7 +12,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../styles';
 import CalendarModal from '../components/CalendarModal';
-import AddTransactionModal from '../components/AddTransactionModal';
+import AddTransactionContainer from '../containers/AddTransactionContainer';
 import BalanceCard from '../components/BalanceCard';
 import TransactionList from '../components/TransactionList';
 import BalanceCardSpotlight from '../components/BalanceCardSpotlight';
@@ -309,7 +309,7 @@ const HomeScreen = ({
         <Text style={styles.floatingButtonIcon}>+</Text>
       </TouchableOpacity>
 
-      {/* Modals - IDENTICAL */}
+      {/* Modals - UPDATED TO USE CONTAINER */}
       <CalendarModal
         visible={showCalendar}
         onClose={() => setShowCalendar(false)}
@@ -317,11 +317,12 @@ const HomeScreen = ({
         onDateChange={onDateChange}
       />
 
-      <AddTransactionModal
+      <AddTransactionContainer
         visible={showAddTransaction}
         onClose={handleCloseAddTransaction}
         onSave={handleSaveTransaction}
         editingTransaction={editingTransaction}
+        navigation={navigation}
       />
 
       {/* Onboarding Overlays - IDENTICAL */}

@@ -58,18 +58,30 @@ const AddTransactionContainer = ({
 
   const transformCategoriesForUI = useCallback(backendCategories => {
     if (!Array.isArray(backendCategories)) {
+      console.log(
+        '🔍 DEBUG: backendCategories is not an array:',
+        backendCategories,
+      );
       return [];
     }
 
-    console.log('🔍 Raw backend categories:', backendCategories.length);
-    console.log('🔍 Sample category:', backendCategories[0]);
+    console.log('🔍 DEBUG: Raw backend categories:', backendCategories.length);
+    console.log('🔍 DEBUG: All backend categories:', backendCategories);
 
     // Separate main categories and subcategories
     const mainCategories = backendCategories.filter(cat => !cat.parentId);
     const subcategories = backendCategories.filter(cat => cat.parentId);
 
-    console.log('🔍 Main categories found:', mainCategories.length);
-    console.log('🔍 Subcategories found:', subcategories.length);
+    console.log('🔍 DEBUG: Main categories found:', mainCategories.length);
+    console.log('🔍 DEBUG: Subcategories found:', subcategories.length);
+    console.log(
+      '🔍 DEBUG: Main category names:',
+      mainCategories.map(c => c.name),
+    );
+    console.log(
+      '🔍 DEBUG: Subcategory names:',
+      subcategories.map(c => `${c.name} (parent: ${c.parentId})`),
+    );
 
     const subcategoriesMap = subcategories.reduce((map, subcat) => {
       if (!map[subcat.parentId]) {
@@ -86,6 +98,8 @@ const AddTransactionContainer = ({
       return map;
     }, {});
 
+    console.log('🔍 DEBUG: Subcategories map:', subcategoriesMap);
+
     // Transform main categories and attach their subcategories
     const result = mainCategories.map(category => ({
       id: category.id,
@@ -100,7 +114,13 @@ const AddTransactionContainer = ({
       subcategories: subcategoriesMap[category.id] || [],
     }));
 
-    console.log('🔍 Final transformed categories:', result.length);
+    console.log('🔍 DEBUG: Final transformed categories:', result.length);
+    console.log(
+      '🔍 DEBUG: Categories with subcategories:',
+      result
+        .filter(c => c.hasSubcategories)
+        .map(c => `${c.name} (${c.subcategories.length} subs)`),
+    );
 
     // Sort main categories alphabetically by name
     return result.sort((a, b) => a.name.localeCompare(b.name));
@@ -266,30 +286,39 @@ const AddTransactionContainer = ({
     categoryId => {
       const category = getCategoryById(categoryId);
 
+      console.log('🔍 DEBUG: Selected category:', category);
+      console.log('🔍 DEBUG: Has subcategories?', category?.hasSubcategories);
+      console.log('🔍 DEBUG: Subcategories array:', category?.subcategories);
+      console.log(
+        '🔍 DEBUG: Subcategories length:',
+        category?.subcategories?.length,
+      );
+
       if (
         category &&
         category.hasSubcategories &&
         category.subcategories?.length > 0
       ) {
-        // Show subcategory picker
+        // Set subcategory data for UI to use
         setCurrentSubcategoryData(category);
+        console.log('🔍 DEBUG: Set currentSubcategoryData to:', category);
+        // Don't select the category yet - wait for subcategory selection
       } else {
         // Select category directly
         setSelectedCategory(categoryId);
         setSelectedSubcategory(null);
-        loadCategories();
       }
     },
-    [getCategoryById, loadCategories],
+    [getCategoryById],
   );
 
   const handleSubcategorySelect = useCallback(
     subcategoryId => {
       setSelectedCategory(currentSubcategoryData.id);
       setSelectedSubcategory(subcategoryId);
-      loadCategories();
+      // Don't need to reload categories here
     },
-    [currentSubcategoryData, loadCategories],
+    [currentSubcategoryData],
   );
 
   const handleRecurrenceSelect = useCallback(recurrenceId => {

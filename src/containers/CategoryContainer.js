@@ -173,41 +173,20 @@ const CategoryContainer = ({navigation, route}) => {
   );
 
   // ==============================================
-  // SUBCATEGORY CREATION - COMMENTED OUT FOR NOW
-  // TODO: Uncomment when ready to implement subcategory creation
+  // SUBCATEGORY SELECTION - ENABLED FOR VIEWING/SELECTING EXISTING
+  // Creation functionality remains commented out
   // ==============================================
 
-  /*
   const handleAddSubcategory = useCallback(
     async (parentCategoryId, subcategoryData) => {
-      try {
-        if (!TrendAPIService.isAuthenticated()) {
-          navigation.navigate('Auth');
-          return null;
-        }
-
-        const createdSubcategory = await TrendAPIService.createSubcategory(
-          parentCategoryId,
-          subcategoryData,
-        );
-
-        // Reload categories to get updated hierarchy
-        await loadCategories();
-
-        return createdSubcategory;
-      } catch (creationError) {
-        console.error(
-          'CategoryContainer: Error creating subcategory:',
-          creationError,
-        );
-
-        Alert.alert('Error', 'Failed to create subcategory. Please try again.');
-        return null;
-      }
+      console.warn('⚠️ Subcategory creation not yet implemented');
+      return {
+        success: false,
+        error: 'Subcategory creation not yet implemented',
+      };
     },
-    [navigation, loadCategories],
+    [],
   );
-  */
 
   // ==============================================
   // EVENT HANDLERS
@@ -294,17 +273,18 @@ const CategoryContainer = ({navigation, route}) => {
       onNavigateToSubcategories={handleNavigateToSubcategories}
       onBackToCategories={handleBackToCategories}
       onAddCategory={handleAddCategory}
-      // COMMENTED OUT - Subcategory creation not implemented yet
-      // onAddSubcategory={handleAddSubcategory}
-      onAddSubcategory={null}
+      // ENABLED - Subcategory selection (for existing subcategories)
+      onAddSubcategory={handleAddSubcategory}
       onCategoryAdded={newCategory => {
         console.log('CategoryContainer: Category added:', newCategory);
       }}
-      // COMMENTED OUT - Subcategory creation callbacks
-      // onSubcategoryAdded={newSubcategory => {
-      //   console.log('CategoryContainer: Subcategory added:', newSubcategory);
-      // }}
-      onSubcategoryAdded={null}
+      // ENABLED - Subcategory selection callbacks
+      onSubcategoryAdded={newSubcategory => {
+        console.log(
+          'CategoryContainer: Subcategory added (creation disabled):',
+          newSubcategory,
+        );
+      }}
       onClose={handleClose}
       onRetry={loadCategories}
       navigation={navigation}

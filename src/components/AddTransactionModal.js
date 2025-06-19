@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   ScrollView,
-  Alert,
   Animated,
   Dimensions,
 } from 'react-native';
@@ -15,66 +14,67 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
-import categoryService from '../services/categoryService';
 
 const {width: screenWidth} = Dimensions.get('window');
 
-// Generate truly unique IDs to prevent deletion issues
-const generateUniqueId = () => {
-  // Combine timestamp with random string to ensure uniqueness
-  const timestamp = Date.now();
-  const randomPart = Math.random().toString(36).substr(2, 9);
-  return `${timestamp}_${randomPart}`;
-};
-
 const AddTransactionModal = ({
+  // ==============================================
+  // DATA PROPS (from AddTransactionContainer)
+  // ==============================================
   visible,
   onClose,
   onSave,
-  editingTransaction,
+  isEditMode,
+
+  // Form data
+  amount,
+  description,
+  selectedCategory,
+  selectedSubcategory,
+  selectedDate,
+  selectedRecurrence,
+
+  // Categories data
+  categories,
+  isLoading,
+  errorState,
+  currentSubcategoryData,
+
+  // Calendar state
+  showCalendar,
+
+  // ==============================================
+  // EVENT HANDLER PROPS (from AddTransactionContainer)
+  // ==============================================
+  onAmountChange,
+  onDescriptionChange,
+  onCategorySelect,
+  onSubcategorySelect,
+  onRecurrenceSelect,
+  onDateChange,
+  onShowCalendar,
+  onHideCalendar,
+
+  // Helper functions
+  getCategoryById,
+  getRecurrenceById,
+  getCategoryDisplayName,
+  recurrenceOptions,
 }) => {
   // Safe area insets
   const insets = useSafeAreaInsets();
-
-  // Transaction data
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedSubcategory, setSelectedSubcategory] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedRecurrence, setSelectedRecurrence] = useState('none');
 
   // Use useRef for animation values to prevent recreation on renders
   const slideAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Other modals
-  const [showCalendar, setShowCalendar] = useState(false);
-
-  // Data
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Current subcategory view data
-  const [currentSubcategoryData, setCurrentSubcategoryData] = useState(null);
-
-  const recurrenceOptions = [
-    {id: 'none', name: 'Does not repeat'},
-    {id: 'weekly', name: 'Weekly'},
-    {id: 'fortnightly', name: 'Fortnightly'},
-    {id: 'monthly', name: 'Monthly'},
-    {id: 'sixmonths', name: 'Every six months'},
-    {id: 'yearly', name: 'Yearly'},
-  ];
-
-  // Check if we're in edit mode
-  const isEditMode = !!editingTransaction;
+  // ==============================================
+  // ANIMATION HANDLING (UI Only)
+  // ==============================================
 
   useEffect(() => {
     if (visible) {
-      loadCategories();
-
       // Reset animations to starting positions
       slideAnim.setValue(0);
       modalAnim.setValue(screenWidth);
@@ -101,112 +101,11 @@ const AddTransactionModal = ({
     }
   }, [visible, slideAnim, modalAnim, fadeAnim]);
 
-  // Effect to populate form when editing
-  useEffect(() => {
-    if (editingTransaction && visible) {
-      // Pre-populate all fields with existing transaction data
-      setAmount(editingTransaction.amount.toString());
-      setDescription(editingTransaction.description || '');
-      setSelectedCategory(editingTransaction.category);
-      setSelectedSubcategory(editingTransaction.subcategory || null);
-      setSelectedDate(new Date(editingTransaction.date));
-      setSelectedRecurrence(editingTransaction.recurrence || 'none');
-    } else if (!editingTransaction && visible) {
-      // Reset form for new transaction
-      setAmount('');
-      setDescription('');
-      setSelectedCategory(null);
-      setSelectedSubcategory(null);
-      setSelectedDate(new Date());
-      setSelectedRecurrence('none');
-    }
-  }, [editingTransaction, visible]);
+  // ==============================================
+  // UI EVENT HANDLERS (Delegates to Container)
+  // ==============================================
 
-  // Effect to auto-update description when category changes
-  useEffect(() => {
-    if (!visible || !selectedCategory || categories.length === 0) {
-      return;
-    }
-
-    const newCategoryDisplayName = getCategoryDisplayName(
-      selectedCategory,
-      selectedSubcategory,
-    );
-
-    if (isEditMode && editingTransaction) {
-      const originalCategoryDisplayName = getCategoryDisplayName(
-        editingTransaction.category,
-        editingTransaction.subcategory,
-      );
-
-      if (
-        !description.trim() ||
-        description.trim() === originalCategoryDisplayName
-      ) {
-        setDescription(newCategoryDisplayName);
-      }
-    } else {
-      if (!description.trim()) {
-        setDescription(newCategoryDisplayName);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selectedCategory,
-    selectedSubcategory,
-    visible,
-    isEditMode,
-    description,
-    categories.length,
-  ]);
-
-  const loadCategories = async () => {
-    setIsLoading(true);
-    try {
-      const loadedCategories = await categoryService.getCategories();
-      setCategories(loadedCategories);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resetForm = async () => {
-    setAmount('');
-    setDescription('');
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setSelectedDate(new Date());
-    setSelectedRecurrence('none');
-    slideAnim.setValue(0);
-    modalAnim.setValue(screenWidth);
-    fadeAnim.setValue(0);
-    setCurrentSubcategoryData(null);
-  };
-
-  const handleSave = async () => {
-    if (!amount || !selectedCategory) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    const finalDescription =
-      description.trim() ||
-      getCategoryDisplayName(selectedCategory, selectedSubcategory);
-
-    const transaction = {
-      id: isEditMode ? editingTransaction.id : generateUniqueId(),
-      amount: parseFloat(amount),
-      description: finalDescription,
-      category: selectedCategory,
-      subcategory: selectedSubcategory,
-      date: selectedDate,
-      recurrence: selectedRecurrence,
-      createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
-      updatedAt: isEditMode ? new Date() : undefined,
-    };
-
+  const handleSave = () => {
     const currentValue = slideAnim._value;
 
     if (currentValue === 0) {
@@ -222,9 +121,7 @@ const AddTransactionModal = ({
           useNativeDriver: true,
         }),
       ]).start(() => {
-        onSave(transaction);
-        resetForm();
-        onClose();
+        onSave();
       });
     } else {
       Animated.timing(slideAnim, {
@@ -244,9 +141,7 @@ const AddTransactionModal = ({
             useNativeDriver: true,
           }),
         ]).start(() => {
-          onSave(transaction);
-          resetForm();
-          onClose();
+          onSave();
         });
       });
     }
@@ -270,7 +165,6 @@ const AddTransactionModal = ({
           useNativeDriver: true,
         }),
       ]).start(() => {
-        resetForm();
         onClose();
       });
     } else {
@@ -292,7 +186,6 @@ const AddTransactionModal = ({
             useNativeDriver: true,
           }),
         ]).start(() => {
-          resetForm();
           onClose();
         });
       });
@@ -309,7 +202,6 @@ const AddTransactionModal = ({
   };
 
   const showSubcategoryPicker = category => {
-    setCurrentSubcategoryData(category);
     Animated.timing(slideAnim, {
       toValue: -screenWidth * 2,
       duration: 300,
@@ -357,21 +249,19 @@ const AddTransactionModal = ({
       category.hasSubcategories &&
       category.subcategories?.length > 0
     ) {
-      // Show subcategory picker
+      // Delegate to container to set data, then show subcategory picker
+      onCategorySelect(categoryId);
       showSubcategoryPicker(category);
     } else {
-      // Select category directly
-      setSelectedCategory(categoryId);
-      setSelectedSubcategory(null);
-      loadCategories();
+      // Select category directly and delegate to container
+      onCategorySelect(categoryId);
       hideCategoryPicker();
     }
   };
 
   const handleSubcategorySelect = subcategoryId => {
-    setSelectedCategory(currentSubcategoryData.id);
-    setSelectedSubcategory(subcategoryId);
-    loadCategories();
+    // Delegate to container
+    onSubcategorySelect(subcategoryId);
     // Go back to transaction view
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -381,9 +271,13 @@ const AddTransactionModal = ({
   };
 
   const handleRecurrenceSelect = recurrenceId => {
-    setSelectedRecurrence(recurrenceId);
+    onRecurrenceSelect(recurrenceId);
     hideRecurrencePicker();
   };
+
+  // ==============================================
+  // HELPER FUNCTIONS (UI Only)
+  // ==============================================
 
   // Helper function to create dynamic category icon style
   const getCategoryIconStyle = color => {
@@ -402,27 +296,6 @@ const AddTransactionModal = ({
     });
   };
 
-  const getCategoryById = id => categories.find(cat => cat.id === id);
-  const getRecurrenceById = id => recurrenceOptions.find(opt => opt.id === id);
-
-  const getCategoryDisplayName = (categoryId, subcategoryId) => {
-    const category = getCategoryById(categoryId);
-    if (!category) {
-      return '';
-    }
-
-    if (subcategoryId && category.subcategories) {
-      const subcategory = category.subcategories.find(
-        sub => sub.id === subcategoryId,
-      );
-      if (subcategory) {
-        return subcategory.name;
-      }
-    }
-
-    return category.name;
-  };
-
   const getRecurrenceIcon = () => {
     return selectedRecurrence !== 'none' ? 'repeat' : 'repeat-outline';
   };
@@ -432,6 +305,10 @@ const AddTransactionModal = ({
       ? colors.primary
       : colors.textSecondary;
   };
+
+  // ==============================================
+  // RENDER UI (Pure UI Component)
+  // ==============================================
 
   if (!visible) {
     return null;
@@ -498,7 +375,7 @@ const AddTransactionModal = ({
                 {/* Date Field */}
                 <TouchableOpacity
                   style={styles.dateField}
-                  onPress={() => setShowCalendar(true)}
+                  onPress={onShowCalendar}
                   activeOpacity={0.7}>
                   <Icon
                     name="calendar-outline"
@@ -517,7 +394,7 @@ const AddTransactionModal = ({
                   <TextInput
                     style={styles.amountInput}
                     value={amount}
-                    onChangeText={setAmount}
+                    onChangeText={onAmountChange}
                     placeholder="0.00"
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
@@ -528,7 +405,7 @@ const AddTransactionModal = ({
                 <TextInput
                   style={styles.descriptionInput}
                   value={description}
-                  onChangeText={setDescription}
+                  onChangeText={onDescriptionChange}
                   placeholder="Description (optional)"
                   placeholderTextColor={colors.textSecondary}
                 />
@@ -716,6 +593,20 @@ const AddTransactionModal = ({
               <ScrollView
                 style={styles.formContainer}
                 showsVerticalScrollIndicator={false}>
+                {/* DEBUG: Check what data we have */}
+                {console.log(
+                  '🔍 UI DEBUG: currentSubcategoryData:',
+                  currentSubcategoryData,
+                )}
+                {console.log(
+                  '🔍 UI DEBUG: subcategories array:',
+                  currentSubcategoryData?.subcategories,
+                )}
+                {console.log(
+                  '🔍 UI DEBUG: subcategories length:',
+                  currentSubcategoryData?.subcategories?.length,
+                )}
+
                 {/* Subcategories */}
                 {currentSubcategoryData?.subcategories?.map(subcategory => (
                   <TouchableOpacity
@@ -800,9 +691,9 @@ const AddTransactionModal = ({
       {/* Calendar Modal */}
       <CalendarModal
         visible={showCalendar}
-        onClose={() => setShowCalendar(false)}
+        onClose={onHideCalendar}
         selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
+        onDateChange={onDateChange}
       />
     </Modal>
   );
