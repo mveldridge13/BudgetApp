@@ -172,6 +172,12 @@ const CategoryContainer = ({navigation, route}) => {
     [navigation, transformCategoriesForUI],
   );
 
+  // ==============================================
+  // SUBCATEGORY CREATION - COMMENTED OUT FOR NOW
+  // TODO: Uncomment when ready to implement subcategory creation
+  // ==============================================
+
+  /*
   const handleAddSubcategory = useCallback(
     async (parentCategoryId, subcategoryData) => {
       try {
@@ -201,6 +207,7 @@ const CategoryContainer = ({navigation, route}) => {
     },
     [navigation, loadCategories],
   );
+  */
 
   // ==============================================
   // EVENT HANDLERS
@@ -287,13 +294,17 @@ const CategoryContainer = ({navigation, route}) => {
       onNavigateToSubcategories={handleNavigateToSubcategories}
       onBackToCategories={handleBackToCategories}
       onAddCategory={handleAddCategory}
-      onAddSubcategory={handleAddSubcategory}
+      // COMMENTED OUT - Subcategory creation not implemented yet
+      // onAddSubcategory={handleAddSubcategory}
+      onAddSubcategory={null}
       onCategoryAdded={newCategory => {
         console.log('CategoryContainer: Category added:', newCategory);
       }}
-      onSubcategoryAdded={newSubcategory => {
-        console.log('CategoryContainer: Subcategory added:', newSubcategory);
-      }}
+      // COMMENTED OUT - Subcategory creation callbacks
+      // onSubcategoryAdded={newSubcategory => {
+      //   console.log('CategoryContainer: Subcategory added:', newSubcategory);
+      // }}
+      onSubcategoryAdded={null}
       onClose={handleClose}
       onRetry={loadCategories}
       navigation={navigation}

@@ -16,7 +16,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
-import SubcategoryModal from './SubcategoryModal';
+// COMMENTED OUT - Subcategory creation not implemented yet
+// import SubcategoryModal from './SubcategoryModal';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -43,9 +44,9 @@ const CategoryPicker = ({
   onNavigateToSubcategories = () => {},
   onBackToCategories = () => {},
   onAddCategory = () => {},
-  onAddSubcategory = () => {},
+  onAddSubcategory = () => {}, // This will be null from CategoryContainer
   onCategoryAdded = () => {},
-  onSubcategoryAdded = () => {},
+  onSubcategoryAdded = () => {}, // This will be null from CategoryContainer
   onClose = () => {},
   onRetry = () => {},
   navigation,
@@ -54,7 +55,9 @@ const CategoryPicker = ({
   // UI-ONLY STATE (No Business Logic)
   // ==============================================
 
-  const [showAddSubcategory, setShowAddSubcategory] = useState(false);
+  // COMMENTED OUT - Subcategory creation not implemented yet
+  // const [showAddSubcategory, setShowAddSubcategory] = useState(false);
+
   const [slideAnim] = useState(
     new Animated.Value(Dimensions.get('window').width),
   );
@@ -161,6 +164,12 @@ const CategoryPicker = ({
     }
   };
 
+  // ==============================================
+  // SUBCATEGORY CREATION - COMMENTED OUT FOR NOW
+  // TODO: Uncomment when ready to implement subcategory creation
+  // ==============================================
+
+  /*
   const handleAddSubcategoryPress = () => {
     setShowAddSubcategory(true);
   };
@@ -184,6 +193,7 @@ const CategoryPicker = ({
       }, 100);
     }
   };
+  */
 
   // ==============================================
   // HELPER FUNCTIONS (UI Only)
@@ -373,7 +383,8 @@ const CategoryPicker = ({
                     renderSubcategoryOption(subcategory),
                   )}
 
-                  {/* Add Subcategory Button */}
+                  {/* COMMENTED OUT - Add Subcategory Button not implemented yet */}
+                  {/*
                   <TouchableOpacity
                     style={styles.addCategoryButton}
                     onPress={handleAddSubcategoryPress}
@@ -381,6 +392,7 @@ const CategoryPicker = ({
                     <Icon name="add" size={20} color={colors.primary} />
                     <Text style={styles.addCategoryText}>Add Subcategory</Text>
                   </TouchableOpacity>
+                  */}
                 </ScrollView>
               </View>
             </View>
@@ -388,13 +400,15 @@ const CategoryPicker = ({
         </View>
       </Modal>
 
-      {/* Add Subcategory Modal */}
+      {/* COMMENTED OUT - Subcategory creation modal not implemented yet */}
+      {/*
       <SubcategoryModal
         visible={showAddSubcategory}
         onClose={() => setShowAddSubcategory(false)}
         onSave={handleSubcategoryCreated}
         parentCategory={currentSubcategoryData}
       />
+      */}
     </>
   );
 };
