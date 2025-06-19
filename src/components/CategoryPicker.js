@@ -1,5 +1,7 @@
+/* eslint-disable no-shadow */
+/* eslint-disable no-catch-shadow */
 /* eslint-disable react-native/no-inline-styles */
-/* eslint-disable no-unused-vars */
+
 import React, {useState, useEffect} from 'react';
 import {
   View,
@@ -14,7 +16,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
-import AddCategoryModal from './AddCategoryModal';
 import SubcategoryModal from './SubcategoryModal';
 
 const {width: screenWidth} = Dimensions.get('window');
@@ -53,7 +54,6 @@ const CategoryPicker = ({
   // UI-ONLY STATE (No Business Logic)
   // ==============================================
 
-  const [showAddCategory, setShowAddCategory] = useState(false);
   const [showAddSubcategory, setShowAddSubcategory] = useState(false);
   const [slideAnim] = useState(
     new Animated.Value(Dimensions.get('window').width),
@@ -142,25 +142,27 @@ const CategoryPicker = ({
     onBackToCategories();
   };
 
-  const handleAddCategoryPress = () => {
-    setShowAddCategory(true);
+  const handleAddCategoryPress = async () => {
+    // Delegate category creation to CategoryContainer
+    // CategoryContainer will handle the backend integration
+    try {
+      const newCategory = await onAddCategory();
+      if (newCategory) {
+        onCategoryAdded(newCategory);
+
+        // Auto-select the newly created category
+        setTimeout(() => {
+          handleCategoryPress(newCategory.id);
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error creating category:', error);
+      Alert.alert('Error', 'Failed to create category. Please try again.');
+    }
   };
 
   const handleAddSubcategoryPress = () => {
     setShowAddSubcategory(true);
-  };
-
-  const handleCategoryCreated = async categoryData => {
-    const newCategory = await onAddCategory(categoryData);
-    if (newCategory) {
-      setShowAddCategory(false);
-      onCategoryAdded(newCategory);
-
-      // Auto-select the newly created category
-      setTimeout(() => {
-        handleCategoryPress(newCategory.id);
-      }, 100);
-    }
   };
 
   const handleSubcategoryCreated = async subcategoryData => {
@@ -385,13 +387,6 @@ const CategoryPicker = ({
           </Animated.View>
         </View>
       </Modal>
-
-      {/* Add Category Modal */}
-      <AddCategoryModal
-        visible={showAddCategory}
-        onClose={() => setShowAddCategory(false)}
-        onSave={handleCategoryCreated}
-      />
 
       {/* Add Subcategory Modal */}
       <SubcategoryModal

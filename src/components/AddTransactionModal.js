@@ -32,53 +32,6 @@ const generateUniqueId = () => {
   return `${timestamp}_${randomPart}`;
 };
 
-// Category creation constants
-const categoryColors = [
-  '#FF6B6B',
-  '#4ECDC4',
-  '#45B7D1',
-  '#96CEB4',
-  '#FECA57',
-  '#FF9FF3',
-  '#A8A8A8',
-  '#FF8C42',
-  '#6C5CE7',
-  '#FD79A8',
-  '#FDCB6E',
-  '#E17055',
-  '#74B9FF',
-  '#00B894',
-  '#E84393',
-  '#0984E3',
-];
-
-const categoryIcons = [
-  'restaurant-outline',
-  'car-outline',
-  'bag-outline',
-  'film-outline',
-  'flash-outline',
-  'fitness-outline',
-  'document-text-outline',
-  'home-outline',
-  'airplane-outline',
-  'medkit-outline',
-  'school-outline',
-  'cafe-outline',
-  'gift-outline',
-  'game-controller-outline',
-  'musical-notes-outline',
-  'book-outline',
-  'bicycle-outline',
-  'camera-outline',
-  'card-outline',
-  'desktop-outline',
-  'hardware-chip-outline',
-  'heart-outline',
-  'library-outline',
-  'map-outline',
-];
-
 const AddTransactionModal = ({
   visible,
   onClose,
@@ -95,7 +48,7 @@ const AddTransactionModal = ({
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
-  const [attachedImage, setAttachedImage] = useState(null); // New state for image
+  const [attachedImage, setAttachedImage] = useState(null);
 
   // Use useRef for animation values to prevent recreation on renders
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -111,17 +64,6 @@ const AddTransactionModal = ({
 
   // Current subcategory view data
   const [currentSubcategoryData, setCurrentSubcategoryData] = useState(null);
-
-  // Add Category form data
-  const [categoryName, setCategoryName] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState('');
-  const [selectedColor, setSelectedColor] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Add Subcategory form data
-  const [subcategoryName, setSubcategoryName] = useState('');
-  const [subcategoryIcon, setSubcategoryIcon] = useState('');
-  const [parentCategoryId, setParentCategoryId] = useState(null);
 
   const recurrenceOptions = [
     {id: 'none', name: 'Does not repeat'},
@@ -175,7 +117,7 @@ const AddTransactionModal = ({
       setSelectedSubcategory(editingTransaction.subcategory || null);
       setSelectedDate(new Date(editingTransaction.date));
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
-      setAttachedImage(editingTransaction.attachedImage || null); // Load existing image
+      setAttachedImage(editingTransaction.attachedImage || null);
     } else if (!editingTransaction && visible) {
       // Reset form for new transaction
       setAmount('');
@@ -184,7 +126,7 @@ const AddTransactionModal = ({
       setSelectedSubcategory(null);
       setSelectedDate(new Date());
       setSelectedRecurrence('none');
-      setAttachedImage(null); // Reset image
+      setAttachedImage(null);
     }
   }, [editingTransaction, visible]);
 
@@ -250,17 +192,10 @@ const AddTransactionModal = ({
     setSelectedSubcategory(null);
     setSelectedDate(new Date());
     setSelectedRecurrence('none');
-    setAttachedImage(null); // Reset image
+    setAttachedImage(null);
     slideAnim.setValue(0);
     modalAnim.setValue(screenWidth);
     fadeAnim.setValue(0);
-    setCategoryName('');
-    setSelectedIcon('');
-    setSelectedColor('');
-    setIsSaving(false);
-    setSubcategoryName('');
-    setSubcategoryIcon('');
-    setParentCategoryId(null);
     setCurrentSubcategoryData(null);
   };
 
@@ -644,25 +579,6 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const showAddCategoryForm = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 4,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const showAddSubcategoryForm = categoryId => {
-    setParentCategoryId(categoryId);
-    setSubcategoryName('');
-    setSubcategoryIcon('');
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 5,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
   const hideCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -682,22 +598,6 @@ const AddTransactionModal = ({
   const hideRecurrencePicker = () => {
     Animated.timing(slideAnim, {
       toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const hideAddCategoryForm = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const hideAddSubcategoryForm = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 2,
       duration: 300,
       useNativeDriver: true,
     }).start();
@@ -739,120 +639,11 @@ const AddTransactionModal = ({
     hideRecurrencePicker();
   };
 
-  const openAddCategoryForm = () => {
-    setCategoryName('');
-    setSelectedIcon('');
-    setSelectedColor('');
-    showAddCategoryForm();
-  };
-
-  const handleSaveCategory = async () => {
-    const categoryData = {
-      name: categoryName.trim(),
-      icon: selectedIcon,
-      color: selectedColor,
-    };
-
-    const validation = categoryService.validateCategory(categoryData);
-    if (!validation.isValid) {
-      Alert.alert('Validation Error', validation.errors.join('\n'));
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const result = await categoryService.addCategory(categoryData);
-
-      if (result.success) {
-        setCategories(prevCategories => [...prevCategories, result.category]);
-        setSelectedCategory(result.category.id);
-        setSelectedSubcategory(null);
-
-        setCategoryName('');
-        setSelectedIcon('');
-        setSelectedColor('');
-
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-
-        Alert.alert('Success', 'Category created successfully!');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to create category');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
-      console.error('Error creating category:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveSubcategory = async () => {
-    const subcategoryData = {
-      name: subcategoryName.trim(),
-      icon: subcategoryIcon,
-    };
-
-    const validation = categoryService.validateSubcategory(subcategoryData);
-    if (!validation.isValid) {
-      Alert.alert('Validation Error', validation.errors.join('\n'));
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const result = await categoryService.addSubcategory(
-        parentCategoryId,
-        subcategoryData,
-      );
-
-      if (result.success) {
-        await loadCategories();
-
-        setSelectedCategory(parentCategoryId);
-        setSelectedSubcategory(result.subcategory.id);
-
-        setSubcategoryName('');
-        setSubcategoryIcon('');
-        setParentCategoryId(null);
-
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-
-        Alert.alert('Success', 'Subcategory created successfully!');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to create subcategory');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
-      console.error('Error creating subcategory:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   // Helper function to create dynamic category icon style
   const getCategoryIconStyle = color => {
     return {
       ...styles.categoryIconContainer,
       backgroundColor: `${color}26`,
-    };
-  };
-
-  // Helper function to create dynamic color option style
-  const getColorOptionStyle = (color, isSelected) => {
-    return {
-      ...styles.colorOption,
-      backgroundColor: color,
-      ...(isSelected && styles.selectedColorOption),
     };
   };
 
@@ -1222,15 +1013,6 @@ const AddTransactionModal = ({
                     ))}
                   </>
                 )}
-
-                {/* Add Category Button */}
-                <TouchableOpacity
-                  style={styles.addCategoryButton}
-                  onPress={openAddCategoryForm}
-                  activeOpacity={0.7}>
-                  <Icon name="add" size={20} color={colors.primary} />
-                  <Text style={styles.addCategoryText}>Add Category</Text>
-                </TouchableOpacity>
               </ScrollView>
             </View>
 
@@ -1291,17 +1073,6 @@ const AddTransactionModal = ({
                     )}
                   </TouchableOpacity>
                 ))}
-
-                {/* Add Subcategory Button */}
-                <TouchableOpacity
-                  style={styles.addCategoryButton}
-                  onPress={() =>
-                    showAddSubcategoryForm(currentSubcategoryData?.id)
-                  }
-                  activeOpacity={0.7}>
-                  <Icon name="add" size={20} color={colors.primary} />
-                  <Text style={styles.addCategoryText}>Add Subcategory</Text>
-                </TouchableOpacity>
               </ScrollView>
             </View>
 
@@ -1343,265 +1114,6 @@ const AddTransactionModal = ({
                 ))}
               </ScrollView>
             </View>
-
-            {/* Add Category Form View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hideAddCategoryForm}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Add Category</Text>
-                <TouchableOpacity
-                  onPress={handleSaveCategory}
-                  style={[
-                    styles.saveButton,
-                    (!categoryName.trim() || !selectedIcon || !selectedColor) &&
-                      styles.saveButtonDisabled,
-                  ]}
-                  disabled={
-                    !categoryName.trim() ||
-                    !selectedIcon ||
-                    !selectedColor ||
-                    isSaving
-                  }>
-                  {isSaving ? (
-                    <Text style={styles.saveText}>Saving...</Text>
-                  ) : (
-                    <Text
-                      style={[
-                        styles.saveText,
-                        (!categoryName.trim() ||
-                          !selectedIcon ||
-                          !selectedColor) &&
-                          styles.saveTextDisabled,
-                      ]}>
-                      Save
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {/* Category Name Input */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Category Name</Text>
-                  <TextInput
-                    style={styles.nameInput}
-                    value={categoryName}
-                    onChangeText={setCategoryName}
-                    placeholder="Enter category name"
-                    placeholderTextColor={colors.textSecondary}
-                    maxLength={30}
-                  />
-                  <Text style={styles.characterCount}>
-                    {categoryName.length}/30
-                  </Text>
-                </View>
-
-                {/* Icon Selection */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Choose Icon</Text>
-                  <View style={styles.iconGrid}>
-                    {categoryIcons.map((icon, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.iconOption,
-                          selectedIcon === icon && styles.selectedIconOption,
-                        ]}
-                        onPress={() => setSelectedIcon(icon)}
-                        activeOpacity={0.7}>
-                        <Icon
-                          name={icon}
-                          size={24}
-                          color={
-                            selectedIcon === icon
-                              ? colors.primary
-                              : colors.textSecondary
-                          }
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Color Selection */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Choose Color</Text>
-                  <View style={styles.colorGrid}>
-                    {categoryColors.map((color, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={getColorOptionStyle(
-                          color,
-                          selectedColor === color,
-                        )}
-                        onPress={() => setSelectedColor(color)}
-                        activeOpacity={0.8}>
-                        {selectedColor === color && (
-                          <Icon name="checkmark" size={16} color="white" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Preview */}
-                {selectedIcon && selectedColor && categoryName.trim() && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Preview</Text>
-                    <View style={styles.previewContainer}>
-                      <View style={getCategoryIconStyle(selectedColor)}>
-                        <Icon
-                          name={selectedIcon}
-                          size={20}
-                          color={selectedColor}
-                        />
-                      </View>
-                      <Text style={styles.categoryName}>
-                        {categoryName.trim()}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
-
-            {/* Add Subcategory Form View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hideAddSubcategoryForm}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Add Subcategory</Text>
-                <TouchableOpacity
-                  onPress={handleSaveSubcategory}
-                  style={[
-                    styles.saveButton,
-                    (!subcategoryName.trim() || !subcategoryIcon) &&
-                      styles.saveButtonDisabled,
-                  ]}
-                  disabled={
-                    !subcategoryName.trim() || !subcategoryIcon || isSaving
-                  }>
-                  {isSaving ? (
-                    <Text style={styles.saveText}>Saving...</Text>
-                  ) : (
-                    <Text
-                      style={[
-                        styles.saveText,
-                        (!subcategoryName.trim() || !subcategoryIcon) &&
-                          styles.saveTextDisabled,
-                      ]}>
-                      Save
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {/* Parent Category Info */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Parent Category</Text>
-                  <View style={styles.parentCategoryInfo}>
-                    <View
-                      style={getCategoryIconStyle(
-                        getCategoryById(parentCategoryId)?.color,
-                      )}>
-                      <Icon
-                        name={getCategoryById(parentCategoryId)?.icon}
-                        size={20}
-                        color={getCategoryById(parentCategoryId)?.color}
-                      />
-                    </View>
-                    <Text style={styles.categoryName}>
-                      {getCategoryById(parentCategoryId)?.name}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Subcategory Name Input */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Subcategory Name</Text>
-                  <TextInput
-                    style={styles.nameInput}
-                    value={subcategoryName}
-                    onChangeText={setSubcategoryName}
-                    placeholder="Enter subcategory name"
-                    placeholderTextColor={colors.textSecondary}
-                    maxLength={30}
-                  />
-                  <Text style={styles.characterCount}>
-                    {subcategoryName.length}/30
-                  </Text>
-                </View>
-
-                {/* Icon Selection */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Choose Icon</Text>
-                  <View style={styles.iconGrid}>
-                    {categoryIcons.map((icon, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.iconOption,
-                          subcategoryIcon === icon && styles.selectedIconOption,
-                        ]}
-                        onPress={() => setSubcategoryIcon(icon)}
-                        activeOpacity={0.7}>
-                        <Icon
-                          name={icon}
-                          size={24}
-                          color={
-                            subcategoryIcon === icon
-                              ? colors.primary
-                              : colors.textSecondary
-                          }
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Preview */}
-                {subcategoryIcon && subcategoryName.trim() && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Preview</Text>
-                    <View style={styles.previewContainer}>
-                      <View
-                        style={getCategoryIconStyle(
-                          getCategoryById(parentCategoryId)?.color,
-                        )}>
-                        <Icon
-                          name={subcategoryIcon}
-                          size={20}
-                          color={getCategoryById(parentCategoryId)?.color}
-                        />
-                      </View>
-                      <Text style={styles.categoryName}>
-                        {subcategoryName.trim()}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -1629,7 +1141,7 @@ const styles = StyleSheet.create({
   },
   viewContainer: {
     flexDirection: 'row',
-    width: screenWidth * 6,
+    width: screenWidth * 4, // Reduced from 6 to 4 views
     height: '100%',
   },
   view: {
@@ -1796,7 +1308,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
-    marginBottom: 32, // Increased from 20 to 32 for more space
+    marginBottom: 32,
   },
   recurrenceLeft: {
     flexDirection: 'row',
@@ -1941,104 +1453,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  addCategoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    marginTop: 20,
-    borderRadius: 12,
-    backgroundColor: colors.overlayLight,
-  },
-  addCategoryText: {
-    fontSize: 16,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.primary,
-    marginLeft: 8,
-  },
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  nameInput: {
-    fontSize: 16,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-  },
-  characterCount: {
-    fontSize: 12,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  iconOption: {
-    width: '18%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  selectedIconOption: {
-    borderColor: colors.primary,
-    backgroundColor: `${colors.primary}10`,
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  colorOption: {
-    width: '18%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  selectedColorOption: {
-    borderColor: colors.textPrimary,
-  },
-  previewContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-  },
-  parentCategoryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
   },
 });
 
