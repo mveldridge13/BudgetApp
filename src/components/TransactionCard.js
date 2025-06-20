@@ -2,7 +2,7 @@ import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {View, Text, StyleSheet, Animated, PanResponder} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
-import categoryService from '../services/categoryService';
+import TrendAPIService from '../services/TrendAPIService'; // Changed import
 
 // Default fallback categories (in case service fails)
 const defaultCategories = [
@@ -63,9 +63,28 @@ const TransactionCard = ({
 
   const loadCategories = useCallback(async () => {
     try {
-      const loadedCategories = await categoryService.getCategories();
-      setCategories(loadedCategories);
+      // Check if authenticated before making API call
+      if (!TrendAPIService.isAuthenticated()) {
+        console.warn(
+          'TrendAPIService not authenticated, using default categories',
+        );
+        setCategories(defaultCategories);
+        setIsLoading(false);
+        return;
+      }
+
+      // Use TrendAPIService to get categories
+      const response = await TrendAPIService.getCategories();
+      const loadedCategories = response?.categories || [];
+
+      if (Array.isArray(loadedCategories) && loadedCategories.length > 0) {
+        setCategories(loadedCategories);
+      } else {
+        // Fallback to default categories if no categories returned
+        setCategories(defaultCategories);
+      }
     } catch (error) {
+      console.warn('Error loading categories:', error);
       // Fallback to default categories if service fails
       setCategories(defaultCategories);
     } finally {

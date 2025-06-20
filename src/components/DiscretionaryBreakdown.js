@@ -15,7 +15,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import Svg, {Path, G} from 'react-native-svg';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
-import CategoryService from '../services/categoryService';
+import TrendAPIService from '../services/TrendAPIService'; // Changed import
 import InsightsService from '../services/InsightsService';
 
 const {width: screenWidth} = Dimensions.get('window');
@@ -99,8 +99,25 @@ const DiscretionaryBreakdown = ({
 
   const loadCategories = async () => {
     try {
-      const loadedCategories = await CategoryService.getCategories();
-      setCategories(loadedCategories || []);
+      // Check if authenticated before making API call
+      if (!TrendAPIService.isAuthenticated()) {
+        console.warn(
+          'TrendAPIService not authenticated, using empty categories',
+        );
+        setCategories([]);
+        return;
+      }
+
+      // Use TrendAPIService to get categories
+      const response = await TrendAPIService.getCategories();
+      const loadedCategories = response?.categories || [];
+
+      if (Array.isArray(loadedCategories)) {
+        setCategories(loadedCategories);
+      } else {
+        console.warn('Invalid categories response, using empty array');
+        setCategories([]);
+      }
     } catch (error) {
       console.error('Error loading categories:', error);
       setCategories([]);
@@ -282,9 +299,13 @@ const DiscretionaryBreakdown = ({
     return categoryMap[categoryName.toLowerCase()] || 'other';
   }, []);
 
-  // Get category info from CategoryService
+  // Get category info from loaded categories
   const getCategoryInfo = useCallback(
     categoryName => {
+      if (!Array.isArray(categories) || categories.length === 0) {
+        return null;
+      }
+
       const categoryId = getCategoryIdFromName(categoryName);
       return categories.find(cat => cat.id === categoryId) || null;
     },

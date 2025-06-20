@@ -1,6 +1,7 @@
 // hooks/useGoals.js
 import {useState, useCallback, useRef, useLayoutEffect} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TrendAPIService from '../services/TrendAPIService'; // Add this import
 
 const GOALS_STORAGE_KEY = 'goals';
 const LOADING_TIMEOUT = 10000; // 10 second timeout for operations
@@ -413,16 +414,23 @@ const useGoals = () => {
           return {success: true};
         }
 
-        // Get category service
-        let categoryService;
+        // Get categories using TrendAPIService
+        let categories;
         try {
-          categoryService = require('../services/categoryService').default;
+          if (!TrendAPIService.isAuthenticated()) {
+            console.warn(
+              'TrendAPIService not authenticated, skipping goal update',
+            );
+            return {success: true};
+          }
+
+          const response = await TrendAPIService.getCategories();
+          categories = response?.categories || [];
         } catch (error) {
-          console.warn('Category service not available:', error);
+          console.warn('Categories not available:', error);
           return {success: true}; // Gracefully handle missing service
         }
 
-        const categories = await categoryService.getCategories();
         if (!Array.isArray(categories)) {
           throw new Error('Invalid categories data');
         }

@@ -66,6 +66,7 @@ const AddTransactionContainer = ({
     }
 
     console.log('🔍 DEBUG: Raw backend categories:', backendCategories.length);
+    console.log('🔍 Sample category:', backendCategories[0]); // Added from File 1
     console.log('🔍 DEBUG: All backend categories:', backendCategories);
 
     // Separate main categories and subcategories
@@ -114,7 +115,7 @@ const AddTransactionContainer = ({
       subcategories: subcategoriesMap[category.id] || [],
     }));
 
-    console.log('🔍 DEBUG: Final transformed categories:', result.length);
+    console.log('🔍 Final transformed categories:', result.length); // Cleaner version from File 1
     console.log(
       '🔍 DEBUG: Categories with subcategories:',
       result
@@ -307,6 +308,7 @@ const AddTransactionContainer = ({
         // Select category directly
         setSelectedCategory(categoryId);
         setSelectedSubcategory(null);
+        // Don't reload categories - not needed here
       }
     },
     [getCategoryById],
