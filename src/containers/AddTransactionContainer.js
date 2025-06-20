@@ -39,6 +39,8 @@ const AddTransactionContainer = ({
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
+  const [selectedTransactionType, setSelectedTransactionType] =
+    useState('EXPENSE'); // ✅ NEW: Transaction type state
 
   // Categories data
   const [categories, setCategories] = useState([]);
@@ -216,6 +218,7 @@ const AddTransactionContainer = ({
     setSelectedSubcategory(null);
     setSelectedDate(new Date());
     setSelectedRecurrence('none');
+    setSelectedTransactionType('EXPENSE'); // ✅ UPDATED: Reset transaction type
     setCurrentSubcategoryData(null);
   }, []);
 
@@ -224,10 +227,11 @@ const AddTransactionContainer = ({
       // Pre-populate all fields with existing transaction data
       setAmount(editingTransaction.amount.toString());
       setDescription(editingTransaction.description || '');
-      setSelectedCategory(editingTransaction.category);
+      setSelectedCategory(editingTransaction.categoryId);
       setSelectedSubcategory(editingTransaction.subcategory || null);
       setSelectedDate(new Date(editingTransaction.date));
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
+      setSelectedTransactionType(editingTransaction.type || 'EXPENSE'); // ✅ UPDATED: Load transaction type from edit data
     } else if (!editingTransaction && visible) {
       // Reset form for new transaction
       resetForm();
@@ -248,14 +252,16 @@ const AddTransactionContainer = ({
       description.trim() ||
       getCategoryDisplayName(selectedCategory, selectedSubcategory);
 
+    console.log('Saving transaction with categoryId:', selectedCategory); // Debug log
     const transaction = {
       id: isEditMode ? editingTransaction.id : generateUniqueId(),
       amount: parseFloat(amount),
       description: finalDescription,
-      category: selectedCategory,
+      categoryId: selectedCategory,
       subcategory: selectedSubcategory,
       date: selectedDate,
       recurrence: selectedRecurrence,
+      type: selectedTransactionType, // ✅ UPDATED: Include transaction type
       createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
       updatedAt: isEditMode ? new Date() : undefined,
     };
@@ -271,6 +277,7 @@ const AddTransactionContainer = ({
     selectedSubcategory,
     selectedDate,
     selectedRecurrence,
+    selectedTransactionType, // ✅ UPDATED: Added to dependencies
     isEditMode,
     editingTransaction,
     onSave,
@@ -348,6 +355,11 @@ const AddTransactionContainer = ({
     setShowCalendar(false);
   }, []);
 
+  // ✅ NEW: Transaction type change handler
+  const handleTransactionTypeChange = useCallback(type => {
+    setSelectedTransactionType(type);
+  }, []);
+
   // ==============================================
   // AUTO-DESCRIPTION LOGIC
   // ==============================================
@@ -365,7 +377,7 @@ const AddTransactionContainer = ({
 
     if (isEditMode && editingTransaction) {
       const originalCategoryDisplayName = getCategoryDisplayName(
-        editingTransaction.category,
+        editingTransaction.categoryId,
         editingTransaction.subcategory,
       );
 
@@ -424,6 +436,7 @@ const AddTransactionContainer = ({
       selectedSubcategory={selectedSubcategory}
       selectedDate={selectedDate}
       selectedRecurrence={selectedRecurrence}
+      selectedTransactionType={selectedTransactionType} // ✅ NEW: Pass transaction type
       // Categories data
       categories={categories}
       isLoading={isLoading}
@@ -440,6 +453,7 @@ const AddTransactionContainer = ({
       onDateChange={handleDateChange}
       onShowCalendar={handleShowCalendar}
       onHideCalendar={handleHideCalendar}
+      onTransactionTypeChange={handleTransactionTypeChange} // ✅ NEW: Pass transaction type handler
       // Helper functions
       getCategoryById={getCategoryById}
       getRecurrenceById={getRecurrenceById}

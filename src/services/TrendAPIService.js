@@ -87,6 +87,7 @@ class TrendAPIService {
       console.log(`🌐 API Request: ${method} ${url}`);
       if (body) {
         console.log('📤 Request body:', body);
+        console.log('📤 Request body JSON:', JSON.stringify(body, null, 2)); // ✅ NEW: Better debugging
       }
 
       const response = await fetch(url, requestConfig);
@@ -113,6 +114,7 @@ class TrendAPIService {
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         console.log(`✅ API Response: ${method} ${url}`, data);
+        console.log('✅ API Response JSON:', JSON.stringify(data, null, 2)); // ✅ NEW: Better debugging
         return data;
       } else {
         return null;
@@ -276,16 +278,40 @@ class TrendAPIService {
   }
 
   async createTransaction(transactionData) {
+    console.log(
+      '🔍 TrendAPIService: Creating transaction with data:',
+      transactionData,
+    ); // ✅ NEW: Debug log
+    console.log(
+      '🔍 TrendAPIService: categoryId field:',
+      transactionData.categoryId,
+    ); // ✅ NEW: Check categoryId specifically
+
+    // Remove category if present, only send categoryId
+    const { category, ...cleanedData } = transactionData;
+
     return this.makeRequest('/transactions', {
       method: 'POST',
-      body: transactionData,
+      body: cleanedData,
     });
   }
 
   async updateTransaction(id, transactionData) {
+    console.log(
+      '🔍 TrendAPIService: Updating transaction with data:',
+      transactionData,
+    ); // ✅ NEW: Debug log
+    console.log(
+      '🔍 TrendAPIService: categoryId field:',
+      transactionData.categoryId,
+    ); // ✅ NEW: Check categoryId specifically
+
+    // Remove category if present, only send categoryId
+    const { category, ...cleanedData } = transactionData;
+
     return this.makeRequest(`/transactions/${id}`, {
-      method: 'PUT',
-      body: transactionData,
+      method: 'PATCH',
+      body: cleanedData,
     });
   }
 

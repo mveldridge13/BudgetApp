@@ -6,9 +6,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
 import HomeScreen from '../screens/HomeScreen';
-// TEMPORARILY DISABLED - NOT CONNECTED TO BACKEND YET
-// import useTransactions from '../hooks/useTransactions';
-// import useGoals from '../hooks/useGoals';
 
 const HomeContainer = ({navigation}) => {
   // ==============================================
@@ -20,6 +17,13 @@ const HomeContainer = ({navigation}) => {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // ✅ NEW: Transaction state management
+  const [transactions, setTransactions] = useState([]);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+
+  // ✅ NEW: Categories state management
+  const [categories, setCategories] = useState([]);
 
   // Date tracking for app state changes
   const [lastActiveDate, setLastActiveDate] = useState(
@@ -33,53 +37,346 @@ const HomeContainer = ({navigation}) => {
     hasSeenTransactionSwipeTour: false,
   });
 
-  // Custom hooks for transaction and goals management
-  // TEMPORARILY DISABLED - NOT CONNECTED TO BACKEND YET
-  // const {
-  //   transactions,
-  //   editingTransaction,
-  //   loadTransactions,
-  //   saveTransaction,
-  //   deleteTransaction,
-  //   prepareEditTransaction,
-  //   clearEditingTransaction,
-  //   calculateTotalExpenses,
-  // } = useTransactions();
+  // ✅ NEW: Goals state (placeholder for now)
+  const [goals, setGoals] = useState([]);
 
-  // const {
-  //   goals,
-  //   loadGoals,
-  //   updateSpendingGoals,
-  // } = useGoals();
+  // ==============================================
+  // ✅ NEW: CATEGORIES BACKEND INTEGRATION
+  // ==============================================
 
-  // TEMPORARY DUMMY DATA - Until we connect transactions to backend
-  // const transactions = [];
-  // const goals = [];
-  // const editingTransaction = null;
-  const loadTransactions = useCallback(async () => {}, []);
-  const saveTransaction = useCallback(async () => {
-    // Return expected structure for compatibility
-    return {
-      success: true,
-      isNewTransaction: true,
-      updatedTransactions: [],
-    };
+  /**
+   * Transform categories from backend to UI format
+   * Same transformation logic as AddTransactionContainer
+   */
+  const transformCategoriesForUI = useCallback(backendCategories => {
+    if (!Array.isArray(backendCategories)) {
+      console.log(
+        '🔍 HomeContainer: backendCategories is not an array:',
+        backendCategories,
+      );
+      return [];
+    }
+
+    console.log(
+      '🔍 HomeContainer: Raw backend categories:',
+      backendCategories.length,
+    );
+
+    // Separate main categories and subcategories
+    const mainCategories = backendCategories.filter(cat => !cat.parentId);
+    const subcategories = backendCategories.filter(cat => cat.parentId);
+
+    console.log(
+      '🔍 HomeContainer: Main categories found:',
+      mainCategories.length,
+    );
+    console.log('🔍 HomeContainer: Subcategories found:', subcategories.length);
+
+    const subcategoriesMap = subcategories.reduce((map, subcat) => {
+      if (!map[subcat.parentId]) {
+        map[subcat.parentId] = [];
+      }
+      map[subcat.parentId].push({
+        id: subcat.id,
+        name: subcat.name,
+        icon: subcat.icon || 'albums-outline',
+        color: subcat.color || '#4ECDC4',
+        isCustom: !subcat.isSystem,
+        parentId: subcat.parentId,
+      });
+      return map;
+    }, {});
+
+    // Transform main categories and attach their subcategories
+    const result = mainCategories.map(category => ({
+      id: category.id,
+      name: category.name,
+      icon: category.icon || 'albums-outline',
+      color: category.color || '#4ECDC4',
+      isCustom: !category.isSystem,
+      parentId: category.parentId,
+      hasSubcategories:
+        subcategoriesMap[category.id] &&
+        subcategoriesMap[category.id].length > 0,
+      subcategories: subcategoriesMap[category.id] || [],
+    }));
+
+    console.log(
+      '🔍 HomeContainer: Final transformed categories:',
+      result.length,
+    );
+
+    // Sort main categories alphabetically by name
+    return result.sort((a, b) => a.name.localeCompare(b.name));
   }, []);
-  const deleteTransaction = useCallback(async () => {}, []);
-  const prepareEditTransaction = useCallback(async () => {}, []);
-  const clearEditingTransaction = useCallback(() => {}, []);
-  const calculateTotalExpenses = useCallback(() => 0, []);
-  const loadGoals = useCallback(async () => {}, []);
-  const updateSpendingGoals = useCallback(async () => {}, []);
 
-  // Simple constants (not variables that change)
-  const transactions = [];
-  const goals = [];
-  const editingTransaction = null;
+  /**
+   * Load categories from backend API
+   */
+  const loadCategories = useCallback(async () => {
+    try {
+      console.log('HomeContainer: Loading categories from backend...');
+
+      if (!AuthService.isAuthenticated()) {
+        console.log('HomeContainer: User not authenticated');
+        return;
+      }
+
+      const response = await TrendAPIService.getCategories();
+      const backendCategories = response?.categories || [];
+      const transformedCategories = transformCategoriesForUI(backendCategories);
+
+      console.log(
+        'HomeContainer: Loaded categories:',
+        transformedCategories.length,
+      );
+      setCategories(transformedCategories);
+    } catch (error) {
+      console.error('HomeContainer: Error loading categories:', error);
+
+      // Don't show alert for categories - just log error
+      // Categories will fall back to default in TransactionCard
+      setCategories([]);
+    }
+  }, [transformCategoriesForUI]);
 
   // ==============================================
-  // BACKEND INTEGRATION METHODS
+  // ✅ TRANSACTION BACKEND INTEGRATION (EXISTING)
   // ==============================================
+
+  /**
+   * Load transactions from backend API
+   */
+  const loadTransactions = useCallback(async () => {
+    try {
+      console.log('HomeContainer: Loading transactions from backend...');
+
+      if (!AuthService.isAuthenticated()) {
+        console.log('HomeContainer: User not authenticated');
+        return;
+      }
+
+      const response = await TrendAPIService.getTransactions();
+      const backendTransactions = response?.transactions || [];
+
+      console.log(
+        'HomeContainer: Loaded transactions:',
+        backendTransactions.length,
+      );
+      setTransactions(backendTransactions);
+    } catch (error) {
+      console.error('HomeContainer: Error loading transactions:', error);
+
+      // Show user-friendly error
+      Alert.alert(
+        'Connection Issue',
+        'Unable to load transactions. Please check your connection.',
+        [{text: 'OK'}],
+      );
+    }
+  }, []);
+
+  /**
+   * Save transaction to backend API
+   */
+  const saveTransaction = useCallback(
+    async transaction => {
+      try {
+        console.log(
+          'HomeContainer: Saving transaction to backend...',
+          transaction,
+        );
+
+        if (!AuthService.isAuthenticated()) {
+          throw new Error('User not authenticated');
+        }
+
+        let savedTransaction;
+        const isEditing = transaction.id && transaction.updatedAt;
+
+        if (isEditing) {
+          // Update existing transaction
+          console.log(
+            'HomeContainer: Updating existing transaction:',
+            transaction.id,
+          );
+          savedTransaction = await TrendAPIService.updateTransaction(
+            transaction.id,
+            {
+              type: transaction.type || 'EXPENSE',
+              amount: transaction.amount,
+              description: transaction.description,
+              categoryId: transaction.categoryId,
+              subcategory: transaction.subcategory,
+              date: transaction.date.toISOString(),
+              recurrence: transaction.recurrence,
+            },
+          );
+        } else {
+          // Create new transaction
+          console.log('HomeContainer: Creating new transaction');
+          savedTransaction = await TrendAPIService.createTransaction({
+            type: transaction.type || 'EXPENSE',
+            amount: transaction.amount,
+            description: transaction.description,
+            categoryId: transaction.categoryId,
+            subcategory: transaction.subcategory,
+            date: transaction.date.toISOString(),
+            recurrence: transaction.recurrence,
+          });
+        }
+
+        console.log(
+          'HomeContainer: Transaction saved successfully:',
+          savedTransaction,
+        );
+
+        // Reload transactions to get fresh data
+        await loadTransactions();
+
+        // Clear editing state
+        setEditingTransaction(null);
+
+        return {
+          success: true,
+          isNewTransaction: !isEditing,
+          transaction: savedTransaction,
+        };
+      } catch (error) {
+        console.error('HomeContainer: Error saving transaction:', error);
+        throw error;
+      }
+    },
+    [loadTransactions],
+  );
+
+  /**
+   * Delete transaction from backend API
+   */
+  const deleteTransaction = useCallback(
+    async transactionId => {
+      try {
+        console.log('HomeContainer: Deleting transaction:', transactionId);
+
+        if (!AuthService.isAuthenticated()) {
+          throw new Error('User not authenticated');
+        }
+
+        await TrendAPIService.deleteTransaction(transactionId);
+        console.log('HomeContainer: Transaction deleted successfully');
+
+        // Reload transactions to update UI
+        await loadTransactions();
+      } catch (error) {
+        console.error('HomeContainer: Error deleting transaction:', error);
+        throw error;
+      }
+    },
+    [loadTransactions],
+  );
+
+  /**
+   * Prepare transaction for editing
+   */
+  const prepareEditTransaction = useCallback(async transaction => {
+    try {
+      console.log(
+        'HomeContainer: Preparing transaction for edit:',
+        transaction.id,
+      );
+      setEditingTransaction(transaction);
+      return transaction;
+    } catch (error) {
+      console.error('HomeContainer: Error preparing edit transaction:', error);
+      throw error;
+    }
+  }, []);
+
+  /**
+   * Clear editing transaction state
+   */
+  const clearEditingTransaction = useCallback(() => {
+    console.log('HomeContainer: Clearing editing transaction');
+    setEditingTransaction(null);
+  }, []);
+
+  /**
+   * Calculate total expenses for selected date
+   */
+  const calculateTotalExpenses = useCallback(
+    date => {
+      if (!transactions || transactions.length === 0) {
+        return 0;
+      }
+
+      const selectedDateStr = date.toDateString();
+
+      // Filter transactions for the selected date
+      const dayTransactions = transactions.filter(transaction => {
+        const transactionDate = new Date(transaction.date);
+        return transactionDate.toDateString() === selectedDateStr;
+      });
+
+      // Sum up the expenses
+      return dayTransactions.reduce((total, transaction) => {
+        return total + (transaction.amount || 0);
+      }, 0);
+    },
+    [transactions],
+  );
+
+  // ==============================================
+  // ✅ GOALS PLACEHOLDER METHODS (EXISTING)
+  // ==============================================
+
+  /**
+   * Load goals from backend (placeholder)
+   */
+  const loadGoals = useCallback(async () => {
+    try {
+      console.log('HomeContainer: Loading goals (placeholder)...');
+      // TODO: Implement when goals backend is ready
+      setGoals([]);
+    } catch (error) {
+      console.error('HomeContainer: Error loading goals:', error);
+    }
+  }, []);
+
+  /**
+   * Update spending goals (placeholder)
+   */
+  const updateSpendingGoals = useCallback(
+    async (newTransaction, deletedTransaction) => {
+      try {
+        console.log('HomeContainer: Updating spending goals (placeholder)...');
+        // TODO: Implement when goals backend is ready
+      } catch (error) {
+        console.error('HomeContainer: Error updating spending goals:', error);
+      }
+    },
+    [],
+  );
+
+  // ==============================================
+  // BACKEND INTEGRATION METHODS (EXISTING)
+  // ==============================================
+
+  /**
+   * Fallback method to load cached income data
+   * Provides smooth UX when backend is unavailable
+   */
+  const loadCachedIncomeData = useCallback(async () => {
+    try {
+      const storedData = await AsyncStorage.getItem('userSetup');
+      if (storedData) {
+        const parsedData = JSON.parse(storedData);
+        setIncomeData(parsedData);
+        console.log('HomeContainer: Loaded cached income data');
+      }
+    } catch (error) {
+      console.error('HomeContainer: Error loading cached data:', error);
+    }
+  }, []);
 
   /**
    * Load user profile data from backend API
@@ -154,23 +451,6 @@ const HomeContainer = ({navigation}) => {
   }, [navigation, loadCachedIncomeData]);
 
   /**
-   * Fallback method to load cached income data
-   * Provides smooth UX when backend is unavailable
-   */
-  const loadCachedIncomeData = useCallback(async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('userSetup');
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        setIncomeData(parsedData);
-        console.log('HomeContainer: Loaded cached income data');
-      }
-    } catch (error) {
-      console.error('HomeContainer: Error loading cached data:', error);
-    }
-  }, []);
-
-  /**
    * Load onboarding status from AsyncStorage
    * TODO: Migrate this to backend user preferences in next phase
    */
@@ -198,7 +478,7 @@ const HomeContainer = ({navigation}) => {
   // LIFECYCLE METHODS
   // ==============================================
 
-  // Initial data loading - inline the loading logic to avoid dependency issues
+  // Initial data loading
   useEffect(() => {
     const loadInitialData = async () => {
       try {
@@ -219,12 +499,12 @@ const HomeContainer = ({navigation}) => {
           return;
         }
 
-        // Load all data in parallel for better performance
+        // ✅ UPDATED: Load all data including categories
         await Promise.all([
           loadUserProfile(),
-          // TEMPORARILY DISABLED - NOT CONNECTED TO BACKEND YET
-          // loadTransactions(),
-          // loadGoals(),
+          loadTransactions(),
+          loadCategories(), // ✅ NEW: Load categories
+          loadGoals(),
           loadOnboardingStatus(),
         ]);
       } catch (error) {
@@ -236,7 +516,14 @@ const HomeContainer = ({navigation}) => {
     };
 
     loadInitialData();
-  }, [loadUserProfile, loadOnboardingStatus, navigation]); // Added navigation dependency
+  }, [
+    loadUserProfile,
+    loadTransactions,
+    loadCategories, // ✅ NEW: Added to dependencies
+    loadGoals,
+    loadOnboardingStatus,
+    navigation,
+  ]);
 
   // Initialize last active date
   useEffect(() => {
@@ -260,15 +547,15 @@ const HomeContainer = ({navigation}) => {
             setSelectedDate(new Date());
           }
 
-          // Reload data for new day - inline to avoid dependency issues
+          // ✅ UPDATED: Reload data including categories
           const reloadForNewDay = async () => {
             try {
               setLoading(true);
               await Promise.all([
                 loadUserProfile(),
-                // TEMPORARILY DISABLED - NOT CONNECTED TO BACKEND YET
-                // loadTransactions(),
-                // loadGoals(),
+                loadTransactions(),
+                loadCategories(), // ✅ NEW: Reload categories
+                loadGoals(),
                 loadOnboardingStatus(),
               ]);
             } catch (error) {
@@ -291,71 +578,78 @@ const HomeContainer = ({navigation}) => {
     lastActiveDate,
     selectedDate,
     loadUserProfile,
+    loadTransactions,
+    loadCategories, // ✅ NEW: Added to dependencies
+    loadGoals,
     loadOnboardingStatus,
     navigation,
-  ]); // Added navigation dependency
+  ]);
 
   // ==============================================
   // BUSINESS LOGIC HANDLERS
   // ==============================================
 
   /**
-   * Handle transaction save operations
-   * Updated for new AddTransactionContainer integration
+   * ✅ UPDATED: Handle transaction save operations
    */
-  const handleSaveTransaction = useCallback(async transaction => {
-    try {
-      console.log('HomeContainer: Saving transaction...', transaction);
+  const handleSaveTransaction = useCallback(
+    async transaction => {
+      try {
+        console.log('HomeContainer: Handling save transaction...', transaction);
 
-      // Since transaction system is temporarily disabled,
-      // just log the transaction for now
-      console.log('HomeContainer: Transaction would be saved:', transaction);
+        // Call the backend save function
+        const result = await saveTransaction(transaction);
 
-      // TODO: Connect to backend transaction API when ready
-      // For now, return success to allow modal to close
-      return {
-        success: true,
-        isNewTransaction: !transaction.updatedAt,
-        transaction: transaction,
-        updatedTransactions: [transaction], // Add this to prevent undefined error
-      };
-    } catch (error) {
-      console.error('HomeContainer: Error saving transaction:', error);
-      throw error;
-    }
-  }, []);
+        console.log('HomeContainer: Transaction saved successfully');
+        return result;
+      } catch (error) {
+        console.error('HomeContainer: Error in handleSaveTransaction:', error);
+
+        // Show user-friendly error
+        Alert.alert(
+          'Save Failed',
+          'Unable to save transaction. Please try again.',
+          [{text: 'OK'}],
+        );
+
+        throw error;
+      }
+    },
+    [saveTransaction],
+  );
 
   /**
-   * Handle transaction deletion
-   * Properly coordinates with goals system
+   * ✅ UPDATED: Handle transaction deletion
    */
   const handleDeleteTransaction = useCallback(
     async transactionId => {
       try {
-        console.log('HomeContainer: Deleting transaction:', transactionId);
+        console.log(
+          'HomeContainer: Handling delete transaction:',
+          transactionId,
+        );
 
-        // Get current transaction data before deletion
-        const storedTransactions = await AsyncStorage.getItem('transactions');
-        if (storedTransactions) {
-          const currentTransactionList = JSON.parse(storedTransactions);
-          const transactionToDelete = currentTransactionList.find(
-            t => t.id === transactionId,
-          );
+        // Call the backend delete function
+        await deleteTransaction(transactionId);
 
-          if (transactionToDelete) {
-            // Delete transaction
-            await deleteTransaction(transactionId);
-
-            // Update goals to remove transaction impact
-            await updateSpendingGoals(null, transactionToDelete);
-          }
-        }
+        console.log('HomeContainer: Transaction deleted successfully');
       } catch (error) {
-        console.error('HomeContainer: Error deleting transaction:', error);
+        console.error(
+          'HomeContainer: Error in handleDeleteTransaction:',
+          error,
+        );
+
+        // Show user-friendly error
+        Alert.alert(
+          'Delete Failed',
+          'Unable to delete transaction. Please try again.',
+          [{text: 'OK'}],
+        );
+
         throw error;
       }
     },
-    [deleteTransaction, updateSpendingGoals],
+    [deleteTransaction],
   );
 
   /**
@@ -393,29 +687,18 @@ const HomeContainer = ({navigation}) => {
 
   return (
     <HomeScreen
-      // Data props
+      // ✅ UPDATED: Real data props
       incomeData={incomeData}
       userProfile={userProfile}
       transactions={transactions}
+      categories={categories} // ✅ NEW: Pass categories to HomeScreen
       goals={goals}
       editingTransaction={editingTransaction}
       loading={loading}
       selectedDate={selectedDate}
       onboardingStatus={onboardingStatus}
-      // Calculated data props
-      totalExpenses={calculateTotalExpenses(selectedDate, incomeData)}
-      // 🔍 FINAL DEBUG - What props are we passing to HomeScreen?
-      // Note: Remove these logs after debugging
-      {...(() => {
-        console.log('🔍 HomeContainer: Passing props to HomeScreen:', {
-          incomeData,
-          userProfile,
-          loading,
-          hasIncomeData: !!incomeData,
-          incomeAmount: incomeData?.monthlyIncome,
-        });
-        return {};
-      })()}
+      // ✅ UPDATED: Calculated data props
+      totalExpenses={calculateTotalExpenses(selectedDate)}
       // Event handlers
       onDateChange={setSelectedDate}
       onSaveTransaction={handleSaveTransaction}

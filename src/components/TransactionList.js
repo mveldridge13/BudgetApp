@@ -6,6 +6,7 @@ import TransactionCard from './TransactionCard';
 
 const TransactionList = ({
   transactions,
+  categories = [], // ✅ NEW: Receive categories prop
   selectedDate,
   onDeleteTransaction,
   onEditTransaction,
@@ -92,6 +93,7 @@ const TransactionList = ({
         style={styles.transactionItemContainer}>
         <TransactionCard
           transaction={transaction}
+          categories={categories} // ✅ UPDATED: Pass categories to TransactionCard
           onDelete={onDeleteTransaction}
           onEdit={onEditTransaction}
           onSwipeStart={onSwipeStart}
@@ -105,6 +107,7 @@ const TransactionList = ({
     <View style={styles.transactionItemContainer}>
       <TransactionCard
         transaction={transaction}
+        categories={categories} // ✅ UPDATED: Pass categories to TransactionCard
         onDelete={onDeleteTransaction}
         onEdit={onEditTransaction}
         onSwipeStart={onSwipeStart}

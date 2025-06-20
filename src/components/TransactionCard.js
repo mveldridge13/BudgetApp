@@ -1,10 +1,9 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useRef} from 'react';
 import {View, Text, StyleSheet, Animated, PanResponder} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
-import TrendAPIService from '../services/TrendAPIService'; // Changed import
 
-// Default fallback categories (in case service fails)
+// Default fallback categories (only used as last resort)
 const defaultCategories = [
   {
     id: 'food',
@@ -45,13 +44,12 @@ const ACTIVATION_THRESHOLD = 15;
 
 const TransactionCard = ({
   transaction,
+  categories = [], // ✅ NEW: Receive categories as props from parent
   onDelete,
   onEdit,
   onSwipeStart,
   onSwipeEnd,
 }) => {
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
@@ -61,40 +59,87 @@ const TransactionCard = ({
   const cardOpacity = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
 
-  const loadCategories = useCallback(async () => {
-    try {
-      // Check if authenticated before making API call
-      if (!TrendAPIService.isAuthenticated()) {
-        console.warn(
-          'TrendAPIService not authenticated, using default categories',
-        );
-        setCategories(defaultCategories);
-        setIsLoading(false);
-        return;
-      }
+  // ✅ UPDATED: Get category data from passed props instead of loading separately
+  const getCategoryData = () => {
+    // Get the category ID from transaction (check both possible field names)
+    const categoryId = transaction.categoryId;
+    const subcategoryId = transaction.subcategoryId || transaction.subcategory;
 
-      // Use TrendAPIService to get categories
-      const response = await TrendAPIService.getCategories();
-      const loadedCategories = response?.categories || [];
+    console.log('🔍 TransactionCard: Looking for category:', categoryId);
+    console.log('🔍 TransactionCard: Transaction subcategory:', subcategoryId);
+    console.log('🔍 TransactionCard: Available categories:', categories);
 
-      if (Array.isArray(loadedCategories) && loadedCategories.length > 0) {
-        setCategories(loadedCategories);
-      } else {
-        // Fallback to default categories if no categories returned
-        setCategories(defaultCategories);
-      }
-    } catch (error) {
-      console.warn('Error loading categories:', error);
-      // Fallback to default categories if service fails
-      setCategories(defaultCategories);
-    } finally {
-      setIsLoading(false);
+    // If no categories passed, use default fallback
+    if (!categories || categories.length === 0) {
+      console.log('🔍 TransactionCard: No categories provided, using default');
+      return defaultCategories[defaultCategories.length - 1];
     }
-  }, []);
 
-  useEffect(() => {
-    loadCategories();
-  }, [loadCategories]);
+    // First, try to find main category by ID
+    let categoryData = categories.find(cat => cat.id === categoryId);
+
+    if (categoryData) {
+      console.log('🔍 TransactionCard: Found main category:', categoryData);
+
+      // If transaction has a subcategory, try to find it
+      if (subcategoryId && categoryData.subcategories) {
+        const subcategory = categoryData.subcategories.find(
+          sub => sub.id === subcategoryId,
+        );
+        if (subcategory) {
+          console.log('🔍 TransactionCard: Found subcategory:', subcategory);
+          // Return subcategory with main category's color as fallback
+          return {
+            ...subcategory,
+            color: subcategory.color || categoryData.color,
+            name: subcategory.name,
+            icon: subcategory.icon || categoryData.icon,
+          };
+        }
+      }
+
+      return categoryData;
+    }
+
+    // If not found as main category, check if the categoryId is actually a subcategory ID
+    for (const mainCategory of categories) {
+      if (
+        mainCategory.subcategories &&
+        Array.isArray(mainCategory.subcategories)
+      ) {
+        const subcategory = mainCategory.subcategories.find(
+          sub => sub.id === categoryId,
+        );
+        if (subcategory) {
+          console.log('🔍 TransactionCard: Found as subcategory:', subcategory);
+          return {
+            ...subcategory,
+            color: subcategory.color || mainCategory.color,
+          };
+        }
+      }
+    }
+
+    // If still not found, try to find by name (fallback)
+    categoryData = categories.find(
+      cat =>
+        cat.name.toLowerCase() ===
+        (transaction.description || '').toLowerCase(),
+    );
+
+    if (categoryData) {
+      console.log('🔍 TransactionCard: Found by name match:', categoryData);
+      return categoryData;
+    }
+
+    console.log('🔍 TransactionCard: No category found, using fallback');
+    // Fallback to 'other' category or default
+    return (
+      categories.find(cat => cat.name.toLowerCase() === 'other') ||
+      categories.find(cat => cat.id === 'other') ||
+      defaultCategories[defaultCategories.length - 1]
+    );
+  };
 
   const resetPosition = () => {
     Animated.parallel([
@@ -242,25 +287,6 @@ const TransactionCard = ({
     }),
   ).current;
 
-  const getCategoryData = () => {
-    if (isLoading) {
-      return defaultCategories[defaultCategories.length - 1];
-    }
-
-    const categoryData = categories.find(
-      cat => cat.id === transaction.category,
-    );
-
-    if (categoryData) {
-      return categoryData;
-    }
-
-    return (
-      categories.find(cat => cat.id === 'other') ||
-      defaultCategories[defaultCategories.length - 1]
-    );
-  };
-
   const categoryData = getCategoryData();
 
   const formatCurrency = amount => {
@@ -321,6 +347,27 @@ const TransactionCard = ({
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);
     return `rgba(${r}, ${g}, ${b}, 0.15)`;
+  };
+
+  // ✅ UPDATED: Support both Income and Expense display
+  const getAmountDisplay = () => {
+    const formattedAmount = formatCurrency(transaction.amount);
+
+    // Check transaction type and display accordingly
+    if (transaction.type === 'INCOME') {
+      return `+${formattedAmount}`;
+    } else {
+      return `-${formattedAmount}`;
+    }
+  };
+
+  const getAmountColor = () => {
+    // Green for income, red for expense
+    if (transaction.type === 'INCOME') {
+      return '#4CAF50';
+    } else {
+      return '#FF4757';
+    }
   };
 
   const isRecurring =
@@ -409,8 +456,9 @@ const TransactionCard = ({
               <Text style={styles.metadata}>{getMetadataText()}</Text>
             </View>
 
-            <Text style={styles.amount}>
-              -{formatCurrency(transaction.amount)}
+            {/* ✅ UPDATED: Dynamic amount display with color coding */}
+            <Text style={[styles.amount, {color: getAmountColor()}]}>
+              {getAmountDisplay()}
             </Text>
           </View>
         </Animated.View>
@@ -543,7 +591,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '300',
     fontFamily: 'System',
-    color: '#FF4757',
     letterSpacing: -0.2,
   },
 });

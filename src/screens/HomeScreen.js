@@ -26,6 +26,7 @@ const HomeScreen = ({
   incomeData = null,
   userProfile = null,
   transactions = [],
+  categories = [], // ✅ NEW: Receive categories prop
   goals = [],
   editingTransaction = null,
   loading = false,
@@ -255,13 +256,14 @@ const HomeScreen = ({
   }, [onOnboardingComplete]);
 
   // ==============================================
-  // RENDER UI (IDENTICAL DESIGN)
+  // RENDER UI
   // ==============================================
 
   // 🔍 TEMPORARY DEBUG - Remove after fixing
   console.log('🔍 HomeScreen - incomeData:', incomeData);
   console.log('🔍 HomeScreen - loading:', loading);
   console.log('🔍 HomeScreen - userProfile:', userProfile);
+  console.log('🔍 HomeScreen - categories:', categories); // ✅ NEW: Debug categories
 
   return (
     <View style={styles.container}>
@@ -280,7 +282,7 @@ const HomeScreen = ({
         />
       </View>
 
-      {/* Content Area - Transaction Lists - IDENTICAL */}
+      {/* Content Area - Transaction Lists */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -290,6 +292,7 @@ const HomeScreen = ({
         removeClippedSubviews={false}>
         <TransactionList
           transactions={transactions}
+          categories={categories} // ✅ UPDATED: Pass categories to TransactionList
           selectedDate={selectedDate}
           onDeleteTransaction={onDeleteTransaction}
           onEditTransaction={handleEditTransaction}

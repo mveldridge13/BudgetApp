@@ -1,3 +1,4 @@
+/* eslint-disable react-native/no-inline-styles */
 import React, {useEffect, useRef} from 'react';
 import {
   View,
@@ -33,6 +34,7 @@ const AddTransactionModal = ({
   selectedSubcategory,
   selectedDate,
   selectedRecurrence,
+  selectedTransactionType, // ✅ NEW: Transaction type (INCOME/EXPENSE)
 
   // Categories data
   categories,
@@ -54,6 +56,7 @@ const AddTransactionModal = ({
   onDateChange,
   onShowCalendar,
   onHideCalendar,
+  onTransactionTypeChange, // ✅ NEW: Transaction type change handler
 
   // Helper functions
   getCategoryById,
@@ -70,7 +73,7 @@ const AddTransactionModal = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // ==============================================
-  // ANIMATION HANDLING (UI Only)
+  // ANIMATION HANDLING (UI Only) - UNCHANGED
   // ==============================================
 
   useEffect(() => {
@@ -102,7 +105,7 @@ const AddTransactionModal = ({
   }, [visible, slideAnim, modalAnim, fadeAnim]);
 
   // ==============================================
-  // UI EVENT HANDLERS (Delegates to Container)
+  // UI EVENT HANDLERS (Delegates to Container) - UNCHANGED
   // ==============================================
 
   const handleSave = () => {
@@ -192,7 +195,7 @@ const AddTransactionModal = ({
     }
   };
 
-  // Navigation functions
+  // Navigation functions - UNCHANGED
   const showCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth,
@@ -276,7 +279,15 @@ const AddTransactionModal = ({
   };
 
   // ==============================================
-  // HELPER FUNCTIONS (UI Only)
+  // ✅ NEW: Transaction Type Handlers
+  // ==============================================
+
+  const handleTransactionTypeSelect = type => {
+    onTransactionTypeChange(type);
+  };
+
+  // ==============================================
+  // HELPER FUNCTIONS (UI Only) - UNCHANGED
   // ==============================================
 
   // Helper function to create dynamic category icon style
@@ -304,6 +315,11 @@ const AddTransactionModal = ({
     return selectedRecurrence !== 'none'
       ? colors.primary
       : colors.textSecondary;
+  };
+
+  // ✅ NEW: Helper functions for transaction type
+  const getTransactionTypeDisplayName = () => {
+    return selectedTransactionType === 'INCOME' ? 'Income' : 'Expense';
   };
 
   // ==============================================
@@ -351,7 +367,10 @@ const AddTransactionModal = ({
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>
-                  {isEditMode ? 'Edit Expense' : 'Add Expense'}
+                  {/* ✅ UPDATED: Dynamic title based on transaction type */}
+                  {isEditMode
+                    ? `Edit ${getTransactionTypeDisplayName()}`
+                    : 'Add Transaction'}
                 </Text>
                 <TouchableOpacity
                   onPress={handleSave}
@@ -372,7 +391,74 @@ const AddTransactionModal = ({
               </View>
 
               <ScrollView style={styles.formContainer}>
-                {/* Date Field */}
+                {/* ✅ NEW: Transaction Type Selector */}
+                <View style={styles.transactionTypeContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.transactionTypeButton,
+                      selectedTransactionType === 'EXPENSE' &&
+                        styles.transactionTypeButtonActive,
+                      selectedTransactionType === 'EXPENSE' && {
+                        backgroundColor: '#F443361A',
+                      },
+                    ]}
+                    onPress={() => handleTransactionTypeSelect('EXPENSE')}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="trending-down"
+                      size={18}
+                      color={
+                        selectedTransactionType === 'EXPENSE'
+                          ? '#F44336'
+                          : colors.textSecondary
+                      }
+                      style={styles.transactionTypeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        selectedTransactionType === 'EXPENSE' && {
+                          color: '#F44336',
+                        },
+                      ]}>
+                      Expense
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.transactionTypeButton,
+                      selectedTransactionType === 'INCOME' &&
+                        styles.transactionTypeButtonActive,
+                      selectedTransactionType === 'INCOME' && {
+                        backgroundColor: '#4CAF501A',
+                      },
+                    ]}
+                    onPress={() => handleTransactionTypeSelect('INCOME')}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="trending-up"
+                      size={18}
+                      color={
+                        selectedTransactionType === 'INCOME'
+                          ? '#4CAF50'
+                          : colors.textSecondary
+                      }
+                      style={styles.transactionTypeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        selectedTransactionType === 'INCOME' && {
+                          color: '#4CAF50',
+                        },
+                      ]}>
+                      Income
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Date Field - UNCHANGED */}
                 <TouchableOpacity
                   style={styles.dateField}
                   onPress={onShowCalendar}
@@ -388,7 +474,7 @@ const AddTransactionModal = ({
                   </Text>
                 </TouchableOpacity>
 
-                {/* Amount Field */}
+                {/* Amount Field - UNCHANGED */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.currencySymbol}>$</Text>
                   <TextInput
@@ -401,7 +487,7 @@ const AddTransactionModal = ({
                   />
                 </View>
 
-                {/* Description Field */}
+                {/* Description Field - UNCHANGED */}
                 <TextInput
                   style={styles.descriptionInput}
                   value={description}
@@ -410,7 +496,7 @@ const AddTransactionModal = ({
                   placeholderTextColor={colors.textSecondary}
                 />
 
-                {/* Category Field */}
+                {/* Category Field - UNCHANGED */}
                 <TouchableOpacity
                   style={styles.categoryField}
                   onPress={showCategoryPicker}
@@ -464,7 +550,7 @@ const AddTransactionModal = ({
                   />
                 </TouchableOpacity>
 
-                {/* Recurrence Field */}
+                {/* Recurrence Field - UNCHANGED */}
                 <TouchableOpacity
                   style={styles.recurrenceField}
                   onPress={showRecurrencePicker}
@@ -494,7 +580,7 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Category Picker View */}
+            {/* Category Picker View - UNCHANGED */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -572,7 +658,7 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Subcategory Picker View */}
+            {/* Subcategory Picker View - UNCHANGED */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -593,20 +679,6 @@ const AddTransactionModal = ({
               <ScrollView
                 style={styles.formContainer}
                 showsVerticalScrollIndicator={false}>
-                {/* DEBUG: Check what data we have */}
-                {console.log(
-                  '🔍 UI DEBUG: currentSubcategoryData:',
-                  currentSubcategoryData,
-                )}
-                {console.log(
-                  '🔍 UI DEBUG: subcategories array:',
-                  currentSubcategoryData?.subcategories,
-                )}
-                {console.log(
-                  '🔍 UI DEBUG: subcategories length:',
-                  currentSubcategoryData?.subcategories?.length,
-                )}
-
                 {/* Subcategories */}
                 {currentSubcategoryData?.subcategories?.map(subcategory => (
                   <TouchableOpacity
@@ -646,7 +718,7 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Recurrence Picker View */}
+            {/* Recurrence Picker View - UNCHANGED */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -688,7 +760,7 @@ const AddTransactionModal = ({
         </Animated.View>
       </Animated.View>
 
-      {/* Calendar Modal */}
+      {/* Calendar Modal - UNCHANGED */}
       <CalendarModal
         visible={showCalendar}
         onClose={onHideCalendar}
@@ -772,6 +844,44 @@ const styles = StyleSheet.create({
     padding: 20,
     flex: 1,
   },
+  // ✅ NEW: Transaction Type Selector Styles
+  transactionTypeContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    padding: 4,
+  },
+  transactionTypeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  transactionTypeButtonActive: {
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  transactionTypeIcon: {
+    marginRight: 8,
+  },
+  transactionTypeText: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  // END NEW STYLES
   dateField: {
     flexDirection: 'row',
     alignItems: 'center',
