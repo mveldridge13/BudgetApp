@@ -3,7 +3,7 @@ import {View, Text, StyleSheet, Animated, PanResponder} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
 
-// Default fallback categories (only used as last resort)
+// Default fallback categories
 const defaultCategories = [
   {
     id: 'food',
@@ -39,12 +39,12 @@ const defaultCategories = [
   },
 ];
 
-const SWIPE_THRESHOLD = 120; // Positive for right swipe, negative for left swipe
+const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
 
 const TransactionCard = ({
   transaction,
-  categories = [], // ✅ NEW: Receive categories as props from parent
+  categories = [],
   onDelete,
   onEdit,
   onSwipeStart,
@@ -59,30 +59,15 @@ const TransactionCard = ({
   const cardOpacity = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
 
-  // ✅ UPDATED: Get category data from backend response and passed props
   const getCategoryData = () => {
-    console.log('🔍 TransactionCard: Full transaction object:', transaction);
-
-    // Get IDs from transaction (priority: subcategory > category)
     const categoryId = transaction.categoryId;
     const subcategoryId = transaction.subcategoryId;
 
-    console.log('🔍 TransactionCard: categoryId:', categoryId);
-    console.log('🔍 TransactionCard: subcategoryId:', subcategoryId);
-    console.log(
-      '🔍 TransactionCard: Available categories:',
-      categories?.length,
-    );
-
-    // ✅ FIRST: Check if backend returned subcategory object directly
+    // Check if backend returned subcategory object directly
     if (
       transaction.subcategory &&
       typeof transaction.subcategory === 'object'
     ) {
-      console.log(
-        '🔍 TransactionCard: Using backend subcategory object:',
-        transaction.subcategory,
-      );
       return {
         id: transaction.subcategory.id,
         name: transaction.subcategory.name,
@@ -91,12 +76,8 @@ const TransactionCard = ({
       };
     }
 
-    // ✅ SECOND: Check if backend returned category object directly
+    // Check if backend returned category object directly
     if (transaction.category && typeof transaction.category === 'object') {
-      console.log(
-        '🔍 TransactionCard: Using backend category object:',
-        transaction.category,
-      );
       return {
         id: transaction.category.id,
         name: transaction.category.name,
@@ -105,11 +86,10 @@ const TransactionCard = ({
       };
     }
 
-    // ✅ THIRD: Use passed categories to look up by ID
+    // Use passed categories to look up by ID
     if (categories && categories.length > 0) {
       // If we have a subcategoryId, prioritize finding the subcategory
       if (subcategoryId) {
-        // Look through all categories and their subcategories
         for (const mainCategory of categories) {
           if (
             mainCategory.subcategories &&
@@ -119,10 +99,6 @@ const TransactionCard = ({
               sub => sub.id === subcategoryId,
             );
             if (subcategory) {
-              console.log(
-                '🔍 TransactionCard: Found subcategory in categories:',
-                subcategory,
-              );
               return {
                 ...subcategory,
                 color: subcategory.color || mainCategory.color,
@@ -137,10 +113,6 @@ const TransactionCard = ({
       if (categoryId) {
         const mainCategory = categories.find(cat => cat.id === categoryId);
         if (mainCategory) {
-          console.log(
-            '🔍 TransactionCard: Found main category in categories:',
-            mainCategory,
-          );
           return mainCategory;
         }
       }
@@ -150,16 +122,12 @@ const TransactionCard = ({
         cat => cat.name.toLowerCase() === 'other' || cat.id === 'other',
       );
       if (otherCategory) {
-        console.log(
-          '🔍 TransactionCard: Using other category from passed categories',
-        );
         return otherCategory;
       }
     }
 
-    // ✅ FINAL FALLBACK: Use default categories
-    console.log('🔍 TransactionCard: Using default fallback category');
-    return defaultCategories[defaultCategories.length - 1]; // "Other" category
+    // Final fallback: Use default categories
+    return defaultCategories[defaultCategories.length - 1];
   };
 
   const resetPosition = () => {
@@ -186,12 +154,11 @@ const TransactionCard = ({
   const performDelete = () => {
     setIsDeleting(true);
 
-    // Call onDelete immediately
     if (onDelete) {
       onDelete(transaction.id);
     }
 
-    // Animate card out (just for visual effect)
+    // Animate card out
     Animated.parallel([
       Animated.timing(cardOpacity, {
         toValue: 0,
@@ -216,18 +183,10 @@ const TransactionCard = ({
     ]).start();
   };
 
-  // ✅ CRITICAL FIX: Modified performEdit to pass transaction ID instead of full object
   const performEdit = () => {
-    // ✅ FIXED: Pass transaction ID only, let HomeContainer find fresh data
     if (onEdit) {
-      console.log(
-        '🔍 TransactionCard: Calling onEdit with transaction ID:',
-        transaction.id,
-      );
-      onEdit(transaction.id); // Pass ID instead of full transaction object
+      onEdit(transaction.id);
     }
-
-    // Reset position after edit action
     resetPosition();
   };
 
@@ -243,7 +202,6 @@ const TransactionCard = ({
         return isHorizontal && hasMinMovement;
       },
       onPanResponderGrant: (evt, gestureState) => {
-        // Disable parent ScrollView
         if (onSwipeStart) {
           onSwipeStart();
         }
@@ -259,7 +217,6 @@ const TransactionCard = ({
         const newTranslateX = gestureState.dx;
         translateX.setValue(newTranslateX);
 
-        // Calculate opacity for delete (left swipe) and edit (right swipe)
         if (newTranslateX < 0) {
           // Left swipe - delete
           const progress = Math.min(
@@ -279,7 +236,6 @@ const TransactionCard = ({
         const swipeDistance = gestureState.dx;
         const swipeVelocity = gestureState.vx;
 
-        // Re-enable parent ScrollView
         if (onSwipeEnd) {
           onSwipeEnd();
         }
@@ -292,18 +248,14 @@ const TransactionCard = ({
         }).start();
 
         if (swipeDistance < -SWIPE_THRESHOLD || swipeVelocity < -0.5) {
-          // Left swipe threshold reached - delete
           performDelete();
         } else if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
-          // Right swipe threshold reached - edit
           performEdit();
         } else {
-          // Not enough swipe - reset position
           resetPosition();
         }
       },
       onPanResponderTerminate: () => {
-        // Re-enable parent ScrollView if gesture is terminated
         if (onSwipeEnd) {
           onSwipeEnd();
         }
@@ -357,19 +309,15 @@ const TransactionCard = ({
     }
   };
 
-  // ✅ FIXED: Metadata display logic - show MAIN category name, not subcategory
   const getMetadataText = () => {
     const recurrenceText = getRecurrenceText(transaction.recurrence);
-
-    // ✅ FIXED: Show main category name, not subcategory name
     let categoryName = categoryData.name;
 
-    // If we found a subcategory, we need to show the MAIN category name
+    // If we found a subcategory, show the main category name
     if (
       transaction.subcategory &&
       typeof transaction.subcategory === 'object'
     ) {
-      // We have subcategory object from backend - need to find main category
       const mainCategory = categories.find(
         cat =>
           cat.subcategories &&
@@ -379,7 +327,6 @@ const TransactionCard = ({
         categoryName = mainCategory.name;
       }
     } else if (transaction.subcategoryId && categories.length > 0) {
-      // We have subcategoryId - find main category
       const mainCategory = categories.find(
         cat =>
           cat.subcategories &&
@@ -405,11 +352,9 @@ const TransactionCard = ({
     return `rgba(${r}, ${g}, ${b}, 0.15)`;
   };
 
-  // ✅ UPDATED: Support both Income and Expense display
   const getAmountDisplay = () => {
     const formattedAmount = formatCurrency(transaction.amount);
 
-    // Check transaction type and display accordingly
     if (transaction.type === 'INCOME') {
       return `+${formattedAmount}`;
     } else {
@@ -418,7 +363,6 @@ const TransactionCard = ({
   };
 
   const getAmountColor = () => {
-    // Green for income, red for expense
     if (transaction.type === 'INCOME') {
       return '#4CAF50';
     } else {
@@ -436,7 +380,7 @@ const TransactionCard = ({
   return (
     <View style={styles.outerContainer}>
       <View style={styles.cardContainer}>
-        {/* Edit Background - positioned on the left side */}
+        {/* Edit Background */}
         <Animated.View
           style={[
             styles.editBackground,
@@ -450,7 +394,7 @@ const TransactionCard = ({
           </View>
         </Animated.View>
 
-        {/* Delete Background - positioned on the right side */}
+        {/* Delete Background */}
         <Animated.View
           style={[
             styles.deleteBackground,
@@ -512,7 +456,6 @@ const TransactionCard = ({
               <Text style={styles.metadata}>{getMetadataText()}</Text>
             </View>
 
-            {/* ✅ UPDATED: Dynamic amount display with color coding */}
             <Text style={[styles.amount, {color: getAmountColor()}]}>
               {getAmountDisplay()}
             </Text>
@@ -558,7 +501,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#52C788', // Lighter green background for edit
+    backgroundColor: '#52C788',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -585,7 +528,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FF6B85', // Lighter red background for delete
+    backgroundColor: '#FF6B85',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',

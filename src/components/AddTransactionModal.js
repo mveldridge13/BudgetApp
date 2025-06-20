@@ -19,9 +19,7 @@ import CalendarModal from './CalendarModal';
 const {width: screenWidth} = Dimensions.get('window');
 
 const AddTransactionModal = ({
-  // ==============================================
-  // DATA PROPS (from AddTransactionContainer)
-  // ==============================================
+  // Data props
   visible,
   onClose,
   onSave,
@@ -34,7 +32,7 @@ const AddTransactionModal = ({
   selectedSubcategory,
   selectedDate,
   selectedRecurrence,
-  selectedTransactionType, // ✅ NEW: Transaction type (INCOME/EXPENSE)
+  selectedTransactionType,
 
   // Categories data
   categories,
@@ -45,9 +43,7 @@ const AddTransactionModal = ({
   // Calendar state
   showCalendar,
 
-  // ==============================================
-  // EVENT HANDLER PROPS (from AddTransactionContainer)
-  // ==============================================
+  // Event handler props
   onAmountChange,
   onDescriptionChange,
   onCategorySelect,
@@ -56,7 +52,7 @@ const AddTransactionModal = ({
   onDateChange,
   onShowCalendar,
   onHideCalendar,
-  onTransactionTypeChange, // ✅ NEW: Transaction type change handler
+  onTransactionTypeChange,
 
   // Helper functions
   getCategoryById,
@@ -64,16 +60,15 @@ const AddTransactionModal = ({
   getCategoryDisplayName,
   recurrenceOptions,
 }) => {
-  // Safe area insets
   const insets = useSafeAreaInsets();
 
-  // Use useRef for animation values to prevent recreation on renders
+  // Animation values
   const slideAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // ==============================================
-  // ANIMATION HANDLING (UI Only) - UNCHANGED
+  // ANIMATION HANDLING
   // ==============================================
 
   useEffect(() => {
@@ -105,7 +100,7 @@ const AddTransactionModal = ({
   }, [visible, slideAnim, modalAnim, fadeAnim]);
 
   // ==============================================
-  // UI EVENT HANDLERS (Delegates to Container) - UNCHANGED
+  // UI EVENT HANDLERS
   // ==============================================
 
   const handleSave = () => {
@@ -151,14 +146,13 @@ const AddTransactionModal = ({
   };
 
   const handleClose = () => {
-    // Get current slide position to determine which view we're in
     const currentValue = slideAnim._value;
 
     if (currentValue === 0) {
       // Already in transaction view, animate modal out then close
       Animated.parallel([
         Animated.timing(modalAnim, {
-          toValue: screenWidth, // Slide out to right
+          toValue: screenWidth,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -195,7 +189,7 @@ const AddTransactionModal = ({
     }
   };
 
-  // Navigation functions - UNCHANGED
+  // Navigation functions
   const showCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth,
@@ -252,18 +246,15 @@ const AddTransactionModal = ({
       category.hasSubcategories &&
       category.subcategories?.length > 0
     ) {
-      // Delegate to container to set data, then show subcategory picker
       onCategorySelect(categoryId);
       showSubcategoryPicker(category);
     } else {
-      // Select category directly and delegate to container
       onCategorySelect(categoryId);
       hideCategoryPicker();
     }
   };
 
   const handleSubcategorySelect = subcategoryId => {
-    // Delegate to container
     onSubcategorySelect(subcategoryId);
     // Go back to transaction view
     Animated.timing(slideAnim, {
@@ -278,19 +269,14 @@ const AddTransactionModal = ({
     hideRecurrencePicker();
   };
 
-  // ==============================================
-  // ✅ NEW: Transaction Type Handlers
-  // ==============================================
-
   const handleTransactionTypeSelect = type => {
     onTransactionTypeChange(type);
   };
 
   // ==============================================
-  // HELPER FUNCTIONS (UI Only)
+  // HELPER FUNCTIONS
   // ==============================================
 
-  // Helper function to create dynamic category icon style
   const getCategoryIconStyle = color => {
     return {
       ...styles.categoryIconContainer,
@@ -298,7 +284,6 @@ const AddTransactionModal = ({
     };
   };
 
-  // Helper functions
   const formatDate = date => {
     return date.toLocaleDateString('en-AU', {
       day: 'numeric',
@@ -317,12 +302,10 @@ const AddTransactionModal = ({
       : colors.textSecondary;
   };
 
-  // ✅ NEW: Helper functions for transaction type
   const getTransactionTypeDisplayName = () => {
     return selectedTransactionType === 'INCOME' ? 'Income' : 'Expense';
   };
 
-  // ✅ FIXED: Helper function to get the correct category display for the category field
   const getCategoryFieldDisplayName = () => {
     if (!selectedCategory) {
       return null;
@@ -337,7 +320,6 @@ const AddTransactionModal = ({
     return mainCategory.name;
   };
 
-  // ✅ FIXED: Helper function to get the correct icon for the category field
   const getCategoryFieldIcon = () => {
     if (!selectedCategory) {
       return null;
@@ -360,7 +342,7 @@ const AddTransactionModal = ({
   };
 
   // ==============================================
-  // RENDER UI (Pure UI Component)
+  // RENDER
   // ==============================================
 
   if (!visible) {
@@ -404,7 +386,6 @@ const AddTransactionModal = ({
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>
-                  {/* ✅ UPDATED: Dynamic title based on transaction type */}
                   {isEditMode
                     ? `Edit ${getTransactionTypeDisplayName()}`
                     : 'Add Transaction'}
@@ -428,7 +409,7 @@ const AddTransactionModal = ({
               </View>
 
               <ScrollView style={styles.formContainer}>
-                {/* ✅ NEW: Transaction Type Selector */}
+                {/* Transaction Type Selector */}
                 <View style={styles.transactionTypeContainer}>
                   <TouchableOpacity
                     style={[
@@ -495,7 +476,7 @@ const AddTransactionModal = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* Date Field - UNCHANGED */}
+                {/* Date Field */}
                 <TouchableOpacity
                   style={styles.dateField}
                   onPress={onShowCalendar}
@@ -511,7 +492,7 @@ const AddTransactionModal = ({
                   </Text>
                 </TouchableOpacity>
 
-                {/* Amount Field - UNCHANGED */}
+                {/* Amount Field */}
                 <View style={styles.inputContainer}>
                   <Text style={styles.currencySymbol}>$</Text>
                   <TextInput
@@ -524,7 +505,7 @@ const AddTransactionModal = ({
                   />
                 </View>
 
-                {/* Description Field - UNCHANGED */}
+                {/* Description Field */}
                 <TextInput
                   style={styles.descriptionInput}
                   value={description}
@@ -533,7 +514,7 @@ const AddTransactionModal = ({
                   placeholderTextColor={colors.textSecondary}
                 />
 
-                {/* ✅ FIXED: Category Field - Now shows main category name */}
+                {/* Category Field */}
                 <TouchableOpacity
                   style={styles.categoryField}
                   onPress={showCategoryPicker}
@@ -575,7 +556,7 @@ const AddTransactionModal = ({
                   />
                 </TouchableOpacity>
 
-                {/* Recurrence Field - UNCHANGED */}
+                {/* Recurrence Field */}
                 <TouchableOpacity
                   style={styles.recurrenceField}
                   onPress={showRecurrencePicker}
@@ -605,7 +586,7 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Category Picker View - UNCHANGED */}
+            {/* Category Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -683,7 +664,7 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Subcategory Picker View - UNCHANGED */}
+            {/* Subcategory Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -743,7 +724,7 @@ const AddTransactionModal = ({
               </ScrollView>
             </View>
 
-            {/* Recurrence Picker View - UNCHANGED */}
+            {/* Recurrence Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
@@ -785,7 +766,7 @@ const AddTransactionModal = ({
         </Animated.View>
       </Animated.View>
 
-      {/* Calendar Modal - UNCHANGED */}
+      {/* Calendar Modal */}
       <CalendarModal
         visible={showCalendar}
         onClose={onHideCalendar}
@@ -869,7 +850,7 @@ const styles = StyleSheet.create({
     padding: 20,
     flex: 1,
   },
-  // ✅ NEW: Transaction Type Selector Styles
+  // Transaction Type Selector Styles
   transactionTypeContainer: {
     flexDirection: 'row',
     marginBottom: 20,
@@ -906,7 +887,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
   },
-  // END NEW STYLES
   dateField: {
     flexDirection: 'row',
     alignItems: 'center',

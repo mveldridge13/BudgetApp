@@ -1,8 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Your trend-backend configuration
 const API_CONFIG = {
-  baseURL: 'http://127.0.0.1:3001/api/v1', // ✅ Add /api/v1 prefix
+  baseURL: 'http://127.0.0.1:3001/api/v1',
   timeout: 10000,
 };
 
@@ -12,7 +11,6 @@ class TrendAPIService {
     this.token = null;
   }
 
-  // Initialize and load stored token
   async initialize() {
     try {
       this.token = await AsyncStorage.getItem('trend_auth_token');
@@ -23,7 +21,6 @@ class TrendAPIService {
     }
   }
 
-  // Save token securely
   async saveToken(token) {
     try {
       this.token = token;
@@ -35,7 +32,6 @@ class TrendAPIService {
     }
   }
 
-  // Clear token
   async clearToken() {
     try {
       this.token = null;
@@ -47,12 +43,10 @@ class TrendAPIService {
     }
   }
 
-  // Check if user is authenticated
   isAuthenticated() {
     return !!this.token;
   }
 
-  // Make authenticated API request
   async makeRequest(endpoint, options = {}) {
     const {
       method = 'GET',
@@ -68,7 +62,6 @@ class TrendAPIService {
       ...headers,
     };
 
-    // Add authorization header if required and token exists
     if (requiresAuth && this.token) {
       requestHeaders.Authorization = `Bearer ${this.token}`;
     }
@@ -78,49 +71,33 @@ class TrendAPIService {
       headers: requestHeaders,
     };
 
-    // Add body for POST/PUT/PATCH requests
     if (body && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
       requestConfig.body = JSON.stringify(body);
     }
 
     try {
-      console.log(`🌐 API Request: ${method} ${url}`);
-      if (body) {
-        console.log('📤 Request body:', body);
-        console.log('📤 Request body JSON:', JSON.stringify(body, null, 2)); // ✅ NEW: Better debugging
-      }
-
       const response = await fetch(url, requestConfig);
 
-      console.log(
-        `📥 Response status: ${response.status} ${response.statusText}`,
-      );
-
-      // Handle different response types
       if (response.status === 401) {
-        // Token expired or invalid
         await this.clearToken();
         throw new Error('Authentication required');
       }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ API Error ${response.status}:`, errorText);
+        console.error(`API Error ${response.status}:`, errorText);
         throw new Error(`API Error ${response.status}: ${errorText}`);
       }
 
-      // Handle empty responses
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
-        console.log(`✅ API Response: ${method} ${url}`, data);
-        console.log('✅ API Response JSON:', JSON.stringify(data, null, 2)); // ✅ NEW: Better debugging
         return data;
       } else {
         return null;
       }
     } catch (error) {
-      console.error(`❌ API Request failed: ${method} ${url}`, error);
+      console.error(`API Request failed: ${method} ${url}`, error);
       throw error;
     }
   }
@@ -128,12 +105,6 @@ class TrendAPIService {
   // Authentication methods
   async login(email, password) {
     try {
-      console.log('🔐 Attempting login for:', email);
-      console.log('🔐 Request body:', {
-        email: email.trim(),
-        password: '[HIDDEN]',
-      });
-
       const response = await this.makeRequest('/auth/login', {
         method: 'POST',
         body: {
@@ -143,14 +114,8 @@ class TrendAPIService {
         requiresAuth: false,
       });
 
-      console.log(
-        '🔐 Login response received:',
-        response ? 'Success' : 'No response',
-      );
-
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
-        console.log('✅ Token saved successfully');
 
         return {
           success: true,
@@ -158,11 +123,11 @@ class TrendAPIService {
           token: response.access_token,
         };
       } else {
-        console.error('❌ Invalid response format:', response);
+        console.error('Invalid response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('❌ Login request failed:', error.message);
+      console.error('Login request failed:', error.message);
       return {
         success: false,
         error: error.message,
@@ -172,12 +137,6 @@ class TrendAPIService {
 
   async register(userData) {
     try {
-      console.log('🔐 Attempting registration for:', userData.email);
-      console.log('🔐 Registration body:', {
-        ...userData,
-        password: '[HIDDEN]',
-      });
-
       const response = await this.makeRequest('/auth/register', {
         method: 'POST',
         body: {
@@ -189,14 +148,8 @@ class TrendAPIService {
         requiresAuth: false,
       });
 
-      console.log(
-        '🔐 Registration response received:',
-        response ? 'Success' : 'No response',
-      );
-
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
-        console.log('✅ Registration token saved successfully');
 
         return {
           success: true,
@@ -204,11 +157,11 @@ class TrendAPIService {
           token: response.access_token,
         };
       } else {
-        console.error('❌ Invalid registration response format:', response);
+        console.error('Invalid registration response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('❌ Registration request failed:', error.message);
+      console.error('Registration request failed:', error.message);
       return {
         success: false,
         error: error.message,
@@ -218,24 +171,21 @@ class TrendAPIService {
 
   async logout() {
     try {
-      // Call backend logout endpoint
       await this.makeRequest('/auth/logout', {
         method: 'POST',
       });
     } catch (error) {
       console.warn('Logout API call failed:', error);
     } finally {
-      // Always clear local token
       await this.clearToken();
     }
   }
 
-  // Profile methods for AppNavigator
+  // Profile methods
   async getUserProfile() {
     return this.makeRequest('/auth/profile');
   }
 
-  // NEW: Update user profile method
   async updateUserProfile(profileData) {
     return this.makeRequest('/auth/profile', {
       method: 'PUT',
@@ -278,41 +228,70 @@ class TrendAPIService {
   }
 
   async createTransaction(transactionData) {
-    console.log(
-      '🔍 TrendAPIService: Creating transaction with data:',
-      transactionData,
-    ); // ✅ NEW: Debug log
-    console.log(
-      '🔍 TrendAPIService: categoryId field:',
-      transactionData.categoryId,
-    ); // ✅ NEW: Check categoryId specifically
+    const {category, ...cleanedData} = transactionData;
 
-    // Remove category if present, only send categoryId
-    const { category, ...cleanedData } = transactionData;
-
-    return this.makeRequest('/transactions', {
+    const response = await this.makeRequest('/transactions', {
       method: 'POST',
       body: cleanedData,
     });
+
+    // Handle different possible response formats from backend
+    if (response?.transaction) {
+      return response.transaction;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn('Unexpected create response format:', response);
+      return response;
+    }
   }
 
   async updateTransaction(id, transactionData) {
-    console.log(
-      '🔍 TrendAPIService: Updating transaction with data:',
-      transactionData,
-    ); // ✅ NEW: Debug log
-    console.log(
-      '🔍 TrendAPIService: categoryId field:',
-      transactionData.categoryId,
-    ); // ✅ NEW: Check categoryId specifically
+    const {category, ...cleanedData} = transactionData;
 
-    // Remove category if present, only send categoryId
-    const { category, ...cleanedData } = transactionData;
-
-    return this.makeRequest(`/transactions/${id}`, {
+    const response = await this.makeRequest(`/transactions/${id}`, {
       method: 'PATCH',
       body: cleanedData,
     });
+
+    // Handle different possible response formats from backend
+    if (response?.transaction) {
+      return response.transaction;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      // Fallback: If backend doesn't return full object, fetch it
+      console.warn(
+        'Update response missing transaction data, fetching fresh copy',
+      );
+
+      try {
+        const freshTransaction = await this.getTransactionById(id);
+        return freshTransaction;
+      } catch (fetchError) {
+        console.error('Failed to fetch fresh transaction:', fetchError);
+        return response;
+      }
+    }
+  }
+
+  async getTransactionById(id) {
+    const response = await this.makeRequest(`/transactions/${id}`);
+
+    if (response?.transaction) {
+      return response.transaction;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn('Unexpected getById response format:', response);
+      return response;
+    }
   }
 
   async deleteTransaction(id) {
@@ -363,5 +342,4 @@ class TrendAPIService {
   }
 }
 
-// Export singleton instance
 export default new TrendAPIService();

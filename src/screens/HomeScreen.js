@@ -1,6 +1,3 @@
-/* eslint-disable no-unused-vars */
-/* eslint-disable react-hooks/exhaustive-deps */
-// screens/HomeScreen.js - PURE UI COMPONENT
 import React, {useState, useRef, useCallback} from 'react';
 import {
   View,
@@ -20,13 +17,11 @@ import AddTransactionSpotlight from '../components/AddTransactionSpotlight';
 import TransactionSwipeSpotlight from '../components/TransactionSwipeSpotlight';
 
 const HomeScreen = ({
-  // ==============================================
-  // DATA PROPS (from HomeContainer)
-  // ==============================================
+  // Data props
   incomeData = null,
   userProfile = null,
   transactions = [],
-  categories = [], // ✅ NEW: Receive categories prop
+  categories = [],
   goals = [],
   editingTransaction = null,
   loading = false,
@@ -34,9 +29,7 @@ const HomeScreen = ({
   onboardingStatus = null,
   totalExpenses = 0,
 
-  // ==============================================
-  // EVENT HANDLER PROPS (from HomeContainer)
-  // ==============================================
+  // Event handler props
   onDateChange = () => {},
   onSaveTransaction = () => {},
   onDeleteTransaction = () => {},
@@ -50,7 +43,7 @@ const HomeScreen = ({
   const insets = useSafeAreaInsets();
 
   // ==============================================
-  // UI-ONLY STATE (No Business Logic)
+  // UI STATE
   // ==============================================
 
   // Modal visibility state
@@ -78,33 +71,22 @@ const HomeScreen = ({
   const transactionRef = useRef(null);
 
   // ==============================================
-  // UI EVENT HANDLERS (Pure UI Logic Only)
+  // UI EVENT HANDLERS
   // ==============================================
 
-  /**
-   * Handle opening add transaction modal
-   * Ensures we're in add mode (not edit mode)
-   */
   const handleAddTransaction = useCallback(() => {
-    onClearEditingTransaction(); // Clear any editing state
+    onClearEditingTransaction();
     setShowAddTransaction(true);
   }, [onClearEditingTransaction]);
 
-  /**
-   * Handle closing add transaction modal
-   */
   const handleCloseAddTransaction = useCallback(() => {
     setShowAddTransaction(false);
     onClearEditingTransaction();
   }, [onClearEditingTransaction]);
 
-  /**
-   * Handle transaction save with tutorial logic
-   */
   const handleSaveTransaction = useCallback(
     async transaction => {
       try {
-        // Call business logic handler from container
         const result = await onSaveTransaction(transaction);
 
         // Handle UI-specific logic for tutorials
@@ -114,20 +96,15 @@ const HomeScreen = ({
           }, 1000);
         }
 
-        // Close modal on successful save
         setShowAddTransaction(false);
       } catch (error) {
         // Error handling is done in container
         // UI just stays open for user to retry
-        console.log('HomeScreen: Transaction save failed, keeping modal open');
       }
     },
-    [onSaveTransaction],
+    [onSaveTransaction, measureFirstTransaction],
   );
 
-  /**
-   * Handle transaction editing
-   */
   const handleEditTransaction = useCallback(
     async transaction => {
       try {
@@ -142,9 +119,6 @@ const HomeScreen = ({
     [onEditTransaction],
   );
 
-  /**
-   * Handle swipe gesture states for smooth scrolling
-   */
   const handleSwipeStart = useCallback(() => setScrollEnabled(false), []);
   const handleSwipeEnd = useCallback(() => setScrollEnabled(true), []);
 
@@ -184,9 +158,6 @@ const HomeScreen = ({
   // ONBOARDING FLOW HANDLERS
   // ==============================================
 
-  /**
-   * Check and trigger onboarding tutorials based on status
-   */
   const checkAndShowOnboarding = useCallback(() => {
     if (!onboardingStatus) {
       return;
@@ -195,6 +166,7 @@ const HomeScreen = ({
     const {
       hasSeenBalanceCardTour,
       hasSeenAddTransactionTour,
+      // eslint-disable-next-line no-unused-vars
       hasSeenTransactionSwipeTour,
     } = onboardingStatus;
 
@@ -256,18 +228,12 @@ const HomeScreen = ({
   }, [onOnboardingComplete]);
 
   // ==============================================
-  // RENDER UI
+  // RENDER
   // ==============================================
-
-  // 🔍 TEMPORARY DEBUG - Remove after fixing
-  console.log('🔍 HomeScreen - incomeData:', incomeData);
-  console.log('🔍 HomeScreen - loading:', loading);
-  console.log('🔍 HomeScreen - userProfile:', userProfile);
-  console.log('🔍 HomeScreen - categories:', categories); // ✅ NEW: Debug categories
 
   return (
     <View style={styles.container}>
-      {/* Purple Gradient Header - IDENTICAL */}
+      {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
         <BalanceCard
           incomeData={incomeData}
@@ -282,7 +248,7 @@ const HomeScreen = ({
         />
       </View>
 
-      {/* Content Area - Transaction Lists */}
+      {/* Content Area */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -292,7 +258,7 @@ const HomeScreen = ({
         removeClippedSubviews={false}>
         <TransactionList
           transactions={transactions}
-          categories={categories} // ✅ UPDATED: Pass categories to TransactionList
+          categories={categories}
           selectedDate={selectedDate}
           onDeleteTransaction={onDeleteTransaction}
           onEditTransaction={handleEditTransaction}
@@ -303,7 +269,7 @@ const HomeScreen = ({
         />
       </ScrollView>
 
-      {/* Floating Add Button - IDENTICAL */}
+      {/* Floating Add Button */}
       <TouchableOpacity
         ref={floatingButtonRef}
         style={[styles.floatingButton, {bottom: insets.bottom + 30}]}
@@ -312,7 +278,7 @@ const HomeScreen = ({
         <Text style={styles.floatingButtonIcon}>+</Text>
       </TouchableOpacity>
 
-      {/* Modals - UPDATED TO USE CONTAINER */}
+      {/* Modals */}
       <CalendarModal
         visible={showCalendar}
         onClose={() => setShowCalendar(false)}
@@ -328,7 +294,7 @@ const HomeScreen = ({
         navigation={navigation}
       />
 
-      {/* Onboarding Overlays - IDENTICAL */}
+      {/* Onboarding Overlays */}
       <BalanceCardSpotlight
         visible={showBalanceCardSpotlight}
         onNext={handleBalanceCardSpotlightNext}
@@ -355,7 +321,6 @@ const HomeScreen = ({
   );
 };
 
-// IDENTICAL STYLING - NO CHANGES
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -6,7 +6,7 @@ import TransactionCard from './TransactionCard';
 
 const TransactionList = ({
   transactions,
-  categories = [], // ✅ NEW: Receive categories prop
+  categories = [],
   selectedDate,
   onDeleteTransaction,
   onEditTransaction,
@@ -72,7 +72,6 @@ const TransactionList = ({
 
   const recurringGroups = getRecurringTransactionsByFrequency();
 
-  // Helper function to get section title
   const getSectionTitle = frequency => {
     const titles = {
       weekly: 'Weekly',
@@ -93,7 +92,7 @@ const TransactionList = ({
         style={styles.transactionItemContainer}>
         <TransactionCard
           transaction={transaction}
-          categories={categories} // ✅ UPDATED: Pass categories to TransactionCard
+          categories={categories}
           onDelete={onDeleteTransaction}
           onEdit={onEditTransaction}
           onSwipeStart={onSwipeStart}
@@ -107,7 +106,7 @@ const TransactionList = ({
     <View style={styles.transactionItemContainer}>
       <TransactionCard
         transaction={transaction}
-        categories={categories} // ✅ UPDATED: Pass categories to TransactionCard
+        categories={categories}
         onDelete={onDeleteTransaction}
         onEdit={onEditTransaction}
         onSwipeStart={onSwipeStart}
