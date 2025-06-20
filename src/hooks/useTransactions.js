@@ -1,369 +1,265 @@
-// hooks/useTransactions.js (Fixed date handling for ISO strings)
-import {useState, useCallback} from 'react';
+/* eslint-disable react-hooks/exhaustive-deps */
+import {useState, useCallback, useEffect, useRef} from 'react';
 import {Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import TrendAPIService from '../services/TrendAPIService';
+
+const TRANSACTIONS_KEY = 'transactions';
+const TRANSACTION_QUEUE_KEY = 'transaction_queue';
 
 const useTransactions = () => {
   const [transactions, setTransactions] = useState([]);
-  const [deletingIds, setDeletingIds] = useState([]);
-  const [editingIds, setEditingIds] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [queue, setQueue] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
+  const syncInProgress = useRef(false);
 
+  // Watch network
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOnline(state.isConnected && state.isInternetReachable);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load queue on mount
+  useEffect(() => {
+    (async () => {
+      const storedQueue = await AsyncStorage.getItem(TRANSACTION_QUEUE_KEY);
+      setQueue(storedQueue ? JSON.parse(storedQueue) : []);
+    })();
+  }, []);
+
+  const sortTransactions = useCallback(
+    txs => txs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
+    [],
+  );
+
+  // Load transactions when coming online
   const loadTransactions = useCallback(async () => {
     try {
-      const storedTransactions = await AsyncStorage.getItem('transactions');
-      if (storedTransactions) {
-        const parsedTransactions = JSON.parse(storedTransactions);
-        setTransactions(parsedTransactions);
+      if (isOnline) {
+        const response = await TrendAPIService.getTransactions();
+        const backendTransactions = response?.transactions || [];
+        const sorted = sortTransactions(backendTransactions);
+        setTransactions(sorted);
+        await AsyncStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(sorted));
       } else {
-        setTransactions([]);
+        const stored = await AsyncStorage.getItem(TRANSACTIONS_KEY);
+        const parsed = stored ? JSON.parse(stored) : [];
+        setTransactions(sortTransactions(parsed));
       }
     } catch (error) {
       console.error('Error loading transactions:', error);
       setTransactions([]);
     }
-  }, []);
+  }, [isOnline, sortTransactions]);
 
-  const saveTransactionsToStorage = useCallback(async updatedTransactions => {
+  // Load transactions when online status changes
+  useEffect(() => {
+    loadTransactions();
+  }, [isOnline, loadTransactions]);
+
+  // Sync on reconnect
+  const syncQueue = useCallback(async () => {
+    if (syncInProgress.current) {
+      return;
+    }
+
+    syncInProgress.current = true;
+    setSyncing(true);
+    setSyncError(null);
+
     try {
+      let updatedTransactions = [...transactions];
+      let newQueue = [...queue];
+
+      for (let i = 0; i < newQueue.length; i++) {
+        const change = newQueue[i];
+        try {
+          if (change.type === 'create') {
+            const {id, ...data} = change.transaction;
+            const saved = await TrendAPIService.createTransaction(data);
+            updatedTransactions = updatedTransactions.map(t =>
+              t.id === id ? saved : t,
+            );
+          } else if (change.type === 'update') {
+            await TrendAPIService.updateTransaction(
+              change.transaction.id,
+              change.transaction,
+            );
+          } else if (change.type === 'delete') {
+            await TrendAPIService.deleteTransaction(change.transactionId);
+          }
+
+          newQueue = newQueue.slice(i + 1);
+          setQueue(newQueue);
+          await AsyncStorage.setItem(
+            TRANSACTION_QUEUE_KEY,
+            JSON.stringify(newQueue),
+          );
+          i = -1; // Restart loop from new queue start
+        } catch (error) {
+          console.warn('Sync error, will retry later:', error);
+          setSyncError(error);
+          break;
+        }
+      }
+
       await AsyncStorage.setItem(
-        'transactions',
+        TRANSACTIONS_KEY,
         JSON.stringify(updatedTransactions),
       );
-    } catch (error) {
-      console.error('Error saving transactions:', error);
-      throw error;
+      setTransactions(sortTransactions(updatedTransactions));
+    } finally {
+      syncInProgress.current = false;
+      setSyncing(false);
     }
-  }, []);
+  }, [queue, transactions, sortTransactions]);
+
+  useEffect(() => {
+    if (isOnline && queue.length > 0) {
+      syncQueue();
+    }
+  }, [isOnline, queue.length, syncQueue]);
+
+  const queueChange = useCallback(
+    async change => {
+      const dedupedQueue = queue.filter(q => {
+        if (
+          q.type === 'update' &&
+          change.type === 'update' &&
+          q.transaction.id === change.transaction.id
+        ) {
+          return false;
+        }
+        if (
+          q.type === 'delete' &&
+          change.type === 'delete' &&
+          q.transactionId === change.transactionId
+        ) {
+          return false;
+        }
+        return true;
+      });
+      const newQueue = [...dedupedQueue, change];
+      setQueue(newQueue);
+      await AsyncStorage.setItem(
+        TRANSACTION_QUEUE_KEY,
+        JSON.stringify(newQueue),
+      );
+    },
+    [queue],
+  );
 
   const saveTransaction = useCallback(
     async transaction => {
       try {
         let updatedTransactions;
 
-        if (editingTransaction) {
-          // We're editing an existing transaction
-          updatedTransactions = transactions.map(t =>
-            t.id === editingTransaction.id ? transaction : t,
+        if (isOnline) {
+          let saved;
+          if (transaction.id) {
+            saved = await TrendAPIService.updateTransaction(
+              transaction.id,
+              transaction,
+            );
+            updatedTransactions = transactions.map(t =>
+              t.id === saved.id ? saved : t,
+            );
+          } else {
+            saved = await TrendAPIService.createTransaction(transaction);
+            updatedTransactions = [saved, ...transactions];
+          }
+          setTransactions(sortTransactions(updatedTransactions));
+          await AsyncStorage.setItem(
+            TRANSACTIONS_KEY,
+            JSON.stringify(updatedTransactions),
           );
-
-          await saveTransactionsToStorage(updatedTransactions);
-          setTransactions(updatedTransactions);
-          setEditingTransaction(null);
-          return {isNewTransaction: false, updatedTransactions};
+        } else {
+          if (transaction.id) {
+            updatedTransactions = transactions.map(t =>
+              t.id === transaction.id ? transaction : t,
+            );
+            await queueChange({type: 'update', transaction});
+          } else {
+            const tempId = `temp-${Date.now()}`;
+            const offlineTransaction = {...transaction, id: tempId};
+            updatedTransactions = [offlineTransaction, ...transactions];
+            await queueChange({
+              type: 'create',
+              transaction: offlineTransaction,
+            });
+          }
+          setTransactions(sortTransactions(updatedTransactions));
+          await AsyncStorage.setItem(
+            TRANSACTIONS_KEY,
+            JSON.stringify(updatedTransactions),
+          );
         }
 
-        // We're adding a new transaction
-        updatedTransactions = [transaction, ...transactions];
-        await saveTransactionsToStorage(updatedTransactions);
-        setTransactions(updatedTransactions);
-
-        return {isNewTransaction: true, updatedTransactions};
+        setEditingTransaction(null);
       } catch (error) {
-        console.error('Error saving transaction:', error);
         Alert.alert('Error', 'Failed to save transaction.');
         throw error;
       }
     },
-    [editingTransaction, transactions, saveTransactionsToStorage],
+    [isOnline, transactions, queueChange, sortTransactions],
   );
 
   const deleteTransaction = useCallback(
     async transactionId => {
       try {
-        // Prevent multiple deletes of the same transaction
-        if (deletingIds.includes(transactionId)) {
-          return;
-        }
-
-        setDeletingIds(prev => [...prev, transactionId]);
-
-        // Get fresh transaction data from AsyncStorage before deleting
-        const storedTransactions = await AsyncStorage.getItem('transactions');
-        let currentTransactions = [];
-
-        if (storedTransactions) {
-          currentTransactions = JSON.parse(storedTransactions);
-        } else {
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'No transactions found.');
-          return;
-        }
-
-        // Find the transaction to delete
-        const transactionToDelete = currentTransactions.find(
-          t => t.id === transactionId,
+        const updatedTransactions = transactions.filter(
+          t => t.id !== transactionId,
         );
-        if (!transactionToDelete) {
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'Transaction not found.');
-          return;
-        }
-
-        // Get index and create updated array
-        const indexToDelete = currentTransactions.findIndex(
-          t => t.id === transactionId,
-        );
-        if (indexToDelete === -1) {
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'Transaction not found.');
-          return;
-        }
-
-        const updatedTransactions = [
-          ...currentTransactions.slice(0, indexToDelete),
-          ...currentTransactions.slice(indexToDelete + 1),
-        ];
-
-        // Verify deletion worked correctly
-        if (updatedTransactions.length !== currentTransactions.length - 1) {
-          console.error('Delete operation failed - incorrect result');
-          setDeletingIds(prev => prev.filter(id => id !== transactionId));
-          Alert.alert('Error', 'Delete operation failed. Please try again.');
-          return;
-        }
-
-        // Save and update state
-        await saveTransactionsToStorage(updatedTransactions);
         setTransactions(updatedTransactions);
-        setDeletingIds(prev => prev.filter(id => id !== transactionId));
 
-        return updatedTransactions;
+        if (isOnline) {
+          await TrendAPIService.deleteTransaction(transactionId);
+        } else {
+          await queueChange({type: 'delete', transactionId});
+        }
+
+        await AsyncStorage.setItem(
+          TRANSACTIONS_KEY,
+          JSON.stringify(updatedTransactions),
+        );
       } catch (error) {
-        console.error('Error deleting transaction:', error);
-        setDeletingIds(prev => prev.filter(id => id !== transactionId));
-        Alert.alert('Error', 'Failed to delete transaction. Please try again.');
+        Alert.alert('Error', 'Failed to delete transaction.');
         throw error;
       }
     },
-    [deletingIds, saveTransactionsToStorage],
+    [isOnline, transactions, queueChange, sortTransactions],
   );
 
   const prepareEditTransaction = useCallback(
-    async transaction => {
-      try {
-        // Prevent multiple edits of the same transaction
-        if (editingIds.includes(transaction.id)) {
-          return null;
-        }
-
-        setEditingIds(prev => [...prev, transaction.id]);
-
-        // Get fresh transaction data from AsyncStorage
-        const storedTransactions = await AsyncStorage.getItem('transactions');
-        let currentTransactions = [];
-
-        if (storedTransactions) {
-          currentTransactions = JSON.parse(storedTransactions);
-        } else {
-          setEditingIds(prev => prev.filter(id => id !== transaction.id));
-          Alert.alert('Error', 'No transactions found.');
-          return null;
-        }
-
-        // Find the most current version of the transaction
-        const currentTransaction = currentTransactions.find(
-          t => t.id === transaction.id,
-        );
-
-        if (!currentTransaction) {
-          setEditingIds(prev => prev.filter(id => id !== transaction.id));
-          Alert.alert('Error', 'Transaction not found.');
-          return null;
-        }
-
-        // Set the transaction for editing
-        setEditingTransaction(currentTransaction);
-        setEditingIds(prev => prev.filter(id => id !== transaction.id));
-
-        return currentTransaction;
-      } catch (error) {
-        console.error('Error preparing edit transaction:', error);
-        setEditingIds(prev => prev.filter(id => id !== transaction.id));
-        Alert.alert('Error', 'Failed to prepare transaction for editing.');
-        return null;
-      }
+    transactionId => {
+      const transaction = transactions.find(t => t.id === transactionId);
+      setEditingTransaction(transaction);
+      return transaction;
     },
-    [editingIds],
+    [transactions],
   );
 
   const clearEditingTransaction = useCallback(() => {
     setEditingTransaction(null);
   }, []);
 
-  // FIXED: Calculate pay period expenses with proper date handling
-  const calculateTotalExpenses = useCallback(
-    (selectedDate, incomeData) => {
-      // If no income data, we can't calculate pay period, so fallback to daily calculation
-      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-        // Fallback to original daily calculation
-        const dailyTransactions = transactions.filter(transaction => {
-          if (transaction.recurrence && transaction.recurrence !== 'none') {
-            return false;
-          }
-          const transactionDate = new Date(transaction.date);
-          const isSameDay = (date1, date2) => {
-            return (
-              date1.getDate() === date2.getDate() &&
-              date1.getMonth() === date2.getMonth() &&
-              date1.getFullYear() === date2.getFullYear()
-            );
-          };
-          return isSameDay(transactionDate, selectedDate);
-        });
-
-        const recurringTransactions = transactions.filter(transaction => {
-          return (
-            transaction.recurrence &&
-            transaction.recurrence !== 'none' &&
-            [
-              'monthly',
-              'fortnightly',
-              'sixmonths',
-              'yearly',
-              'weekly',
-            ].includes(transaction.recurrence)
-          );
-        });
-
-        const dailyExpenses = dailyTransactions.reduce(
-          (sum, transaction) => sum + transaction.amount,
-          0,
-        );
-        const monthlyExpenses = recurringTransactions.reduce(
-          (sum, transaction) => sum + transaction.amount,
-          0,
-        );
-
-        return dailyExpenses + monthlyExpenses;
-      }
-
-      // Always calculate based on current date, not selected date
-      const currentDate = new Date();
-
-      // FIXED: Handle both ISO string format and DD/MM/YYYY format for nextPayDate
-      let nextPayDate;
-
-      if (incomeData.nextPayDate.includes('T')) {
-        // ISO string format from CalendarModal
-        nextPayDate = new Date(incomeData.nextPayDate);
-      } else {
-        // Legacy DD/MM/YYYY format
-        const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-        nextPayDate = new Date(
-          2000 + parseInt(yearStr, 10),
-          parseInt(monthStr, 10) - 1,
-          parseInt(dayStr, 10),
-        );
-      }
-
-      // Validate the date
-      if (isNaN(nextPayDate.getTime())) {
-        console.error('Invalid nextPayDate:', incomeData.nextPayDate);
-        return 0;
-      }
-
-      const frequencyDays = {
-        weekly: 7,
-        fortnightly: 14,
-        monthly: 30,
-      };
-
-      const days = frequencyDays[incomeData.frequency] || 30;
-
-      let periodStart;
-      if (incomeData.frequency === 'monthly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setMonth(periodStart.getMonth() - 1);
-      } else {
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - days);
-      }
-
-      const periodEnd = new Date(nextPayDate);
-      periodEnd.setDate(periodEnd.getDate() - 1);
-
-      // Debug logging
-      console.log('=== EXPENSE CALCULATION DEBUG ===');
-      console.log('Current Date:', currentDate);
-      console.log('Selected Date:', selectedDate);
-      console.log('Next Pay Date (raw):', incomeData.nextPayDate);
-      console.log('Next Pay Date (parsed):', nextPayDate);
-      console.log('Period Start:', periodStart);
-      console.log('Period End:', periodEnd);
-      console.log('Income Data:', incomeData);
-      console.log('Total Transactions:', transactions.length);
-
-      // Filter daily transactions within the current pay period
-      const payPeriodTransactions = transactions.filter(transaction => {
-        if (transaction.recurrence && transaction.recurrence !== 'none') {
-          return false; // Handle recurring separately
-        }
-
-        const transactionDate = new Date(transaction.date);
-
-        console.log('Checking transaction:', {
-          date: transaction.date,
-          parsedDate: transactionDate,
-          amount: transaction.amount,
-          description: transaction.description,
-          inPeriod:
-            transactionDate >= periodStart && transactionDate <= periodEnd,
-        });
-
-        // Check if transaction falls within current pay period
-        return transactionDate >= periodStart && transactionDate <= periodEnd;
-      });
-
-      // Filter recurring transactions (these apply to the whole period)
-      const recurringTransactions = transactions.filter(transaction => {
-        return (
-          transaction.recurrence &&
-          transaction.recurrence !== 'none' &&
-          ['monthly', 'fortnightly', 'sixmonths', 'yearly', 'weekly'].includes(
-            transaction.recurrence,
-          )
-        );
-      });
-
-      // Calculate totals
-      const payPeriodExpenses = payPeriodTransactions.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0,
-      );
-      const recurringExpenses = recurringTransactions.reduce(
-        (sum, transaction) => sum + transaction.amount,
-        0,
-      );
-
-      const totalExpenses = payPeriodExpenses + recurringExpenses;
-
-      console.log('Pay Period Transactions:', payPeriodTransactions);
-      console.log('Recurring Transactions:', recurringTransactions);
-      console.log('Pay Period Expenses:', payPeriodExpenses);
-      console.log('Recurring Expenses:', recurringExpenses);
-      console.log('Total Expenses:', totalExpenses);
-      console.log('=== END DEBUG ===');
-
-      return totalExpenses;
-    },
-    [transactions],
-  );
-
   return {
-    // State
     transactions,
-    deletingIds,
-    editingIds,
     editingTransaction,
-
-    // Actions
     loadTransactions,
     saveTransaction,
     deleteTransaction,
     prepareEditTransaction,
     clearEditingTransaction,
-    calculateTotalExpenses,
+    isOnline,
+    syncing,
+    syncError,
   };
 };
 
