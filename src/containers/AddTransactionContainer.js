@@ -3,13 +3,7 @@ import {Alert} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import AddTransactionModal from '../components/AddTransactionModal';
 
-// Generate truly unique IDs to prevent deletion issues
-const generateUniqueId = () => {
-  // Combine timestamp with random string to ensure uniqueness
-  const timestamp = Date.now();
-  const randomPart = Math.random().toString(36).substr(2, 9);
-  return `${timestamp}_${randomPart}`;
-};
+// ID generation is now handled by the backend
 
 // Recurrence options - static data moved outside component
 const recurrenceOptions = [
@@ -224,19 +218,53 @@ const AddTransactionContainer = ({
 
   const populateFormForEdit = useCallback(() => {
     if (editingTransaction && visible) {
+      console.log('🔍 DEBUG populateFormForEdit:');
+      console.log('🔍 editingTransaction:', editingTransaction);
+      console.log('🔍 categoryId:', editingTransaction.categoryId);
+      console.log('🔍 subcategoryId:', editingTransaction.subcategoryId);
+
       // Pre-populate all fields with existing transaction data
       setAmount(editingTransaction.amount.toString());
       setDescription(editingTransaction.description || '');
       setSelectedCategory(editingTransaction.categoryId);
-      setSelectedSubcategory(editingTransaction.subcategory || null);
+      setSelectedSubcategory(editingTransaction.subcategoryId || null);
       setSelectedDate(new Date(editingTransaction.date));
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
-      setSelectedTransactionType(editingTransaction.type || 'EXPENSE'); // ✅ UPDATED: Load transaction type from edit data
+      setSelectedTransactionType(editingTransaction.type || 'EXPENSE');
+
+      // ✅ FIXED: Set currentSubcategoryData for edit mode
+      if (editingTransaction.categoryId) {
+        const category = getCategoryById(editingTransaction.categoryId);
+        if (category && category.hasSubcategories) {
+          setCurrentSubcategoryData(category);
+          console.log(
+            '🔍 DEBUG: Set currentSubcategoryData for edit mode:',
+            category,
+          );
+        }
+      }
+
+      // Debug what getCategoryDisplayName returns
+      setTimeout(() => {
+        const displayName = getCategoryDisplayName(
+          editingTransaction.categoryId,
+          editingTransaction.subcategoryId,
+        );
+        console.log('🔍 getCategoryDisplayName result:', displayName);
+        console.log('🔍 categories at this time:', categories);
+      }, 100);
     } else if (!editingTransaction && visible) {
       // Reset form for new transaction
       resetForm();
     }
-  }, [editingTransaction, visible, resetForm]);
+  }, [
+    editingTransaction,
+    visible,
+    resetForm,
+    getCategoryDisplayName,
+    categories,
+    getCategoryById, // ✅ ADDED: Add missing dependency
+  ]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -252,19 +280,26 @@ const AddTransactionContainer = ({
       description.trim() ||
       getCategoryDisplayName(selectedCategory, selectedSubcategory);
 
-    console.log('Saving transaction with categoryId:', selectedCategory); // Debug log
+    console.log('🔍 DEBUG handleSave:');
+    console.log('🔍 DEBUG selectedCategory:', selectedCategory);
+    console.log('🔍 DEBUG selectedSubcategory:', selectedSubcategory);
+    console.log('🔍 DEBUG selectedTransactionType:', selectedTransactionType);
+
     const transaction = {
-      id: isEditMode ? editingTransaction.id : generateUniqueId(),
+      // ✅ FIXED: Only include ID if we're editing an existing transaction
+      ...(isEditMode && editingTransaction.id && {id: editingTransaction.id}),
       amount: parseFloat(amount),
       description: finalDescription,
       categoryId: selectedCategory,
-      subcategory: selectedSubcategory,
+      subcategory: selectedSubcategory, // ✅ Frontend uses subcategory, backend expects subcategoryId
       date: selectedDate,
       recurrence: selectedRecurrence,
-      type: selectedTransactionType, // ✅ UPDATED: Include transaction type
+      type: selectedTransactionType,
       createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
       updatedAt: isEditMode ? new Date() : undefined,
     };
+
+    console.log('🔍 DEBUG Final transaction object:', transaction);
 
     onSave(transaction);
     resetForm();
@@ -277,7 +312,7 @@ const AddTransactionContainer = ({
     selectedSubcategory,
     selectedDate,
     selectedRecurrence,
-    selectedTransactionType, // ✅ UPDATED: Added to dependencies
+    selectedTransactionType,
     isEditMode,
     editingTransaction,
     onSave,
@@ -323,9 +358,22 @@ const AddTransactionContainer = ({
 
   const handleSubcategorySelect = useCallback(
     subcategoryId => {
-      setSelectedCategory(currentSubcategoryData.id);
-      setSelectedSubcategory(subcategoryId);
-      // Don't need to reload categories here
+      console.log('🔍 DEBUG handleSubcategorySelect:', subcategoryId);
+      console.log('🔍 DEBUG currentSubcategoryData:', currentSubcategoryData);
+
+      // ✅ FIXED: Handle both edit mode and new transaction mode
+      if (currentSubcategoryData) {
+        // New transaction or category change - use currentSubcategoryData
+        setSelectedCategory(currentSubcategoryData.id);
+        setSelectedSubcategory(subcategoryId);
+      } else {
+        // Edit mode - keep existing category, just update subcategory
+        setSelectedSubcategory(subcategoryId);
+        console.log(
+          '🔍 DEBUG: Edit mode - keeping existing category, setting subcategory to:',
+          subcategoryId,
+        );
+      }
     },
     [currentSubcategoryData],
   );
@@ -361,7 +409,7 @@ const AddTransactionContainer = ({
   }, []);
 
   // ==============================================
-  // AUTO-DESCRIPTION LOGIC
+  // ✅ FIXED: AUTO-DESCRIPTION LOGIC
   // ==============================================
 
   // Effect to auto-update description when category changes
@@ -376,19 +424,39 @@ const AddTransactionContainer = ({
     );
 
     if (isEditMode && editingTransaction) {
+      // ✅ FIXED: Get the original category display name properly
       const originalCategoryDisplayName = getCategoryDisplayName(
         editingTransaction.categoryId,
-        editingTransaction.subcategory,
+        editingTransaction.subcategoryId, // ✅ FIXED: Use subcategoryId
       );
 
-      if (
-        !description.trim() ||
-        description.trim() === originalCategoryDisplayName
-      ) {
+      // ✅ FIXED: Check multiple conditions for when to auto-update description
+      const shouldAutoUpdate =
+        !description.trim() || // Empty description
+        description.trim() === originalCategoryDisplayName || // Matches original category
+        description.trim() === editingTransaction.description || // Matches original description
+        // Also check if current description matches any category name (user might have changed category before)
+        categories.some(
+          cat =>
+            cat.name === description.trim() ||
+            (cat.subcategories &&
+              cat.subcategories.some(sub => sub.name === description.trim())),
+        );
+
+      if (shouldAutoUpdate) {
+        console.log(
+          `🔍 Auto-updating description from "${description}" to "${newCategoryDisplayName}"`,
+        );
         setDescription(newCategoryDisplayName);
+      } else {
+        console.log(`🔍 Keeping custom description: "${description}"`);
       }
     } else {
+      // For new transactions, always auto-update if description is empty
       if (!description.trim()) {
+        console.log(
+          `🔍 Setting description for new transaction: "${newCategoryDisplayName}"`,
+        );
         setDescription(newCategoryDisplayName);
       }
     }
@@ -398,7 +466,7 @@ const AddTransactionContainer = ({
     visible,
     isEditMode,
     description,
-    categories.length,
+    categories,
     getCategoryDisplayName,
     editingTransaction,
   ]);

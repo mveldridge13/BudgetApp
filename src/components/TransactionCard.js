@@ -59,86 +59,107 @@ const TransactionCard = ({
   const cardOpacity = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
 
-  // ✅ UPDATED: Get category data from passed props instead of loading separately
+  // ✅ UPDATED: Get category data from backend response and passed props
   const getCategoryData = () => {
-    // Get the category ID from transaction (check both possible field names)
+    console.log('🔍 TransactionCard: Full transaction object:', transaction);
+
+    // Get IDs from transaction (priority: subcategory > category)
     const categoryId = transaction.categoryId;
-    const subcategoryId = transaction.subcategoryId || transaction.subcategory;
+    const subcategoryId = transaction.subcategoryId;
 
-    console.log('🔍 TransactionCard: Looking for category:', categoryId);
-    console.log('🔍 TransactionCard: Transaction subcategory:', subcategoryId);
-    console.log('🔍 TransactionCard: Available categories:', categories);
+    console.log('🔍 TransactionCard: categoryId:', categoryId);
+    console.log('🔍 TransactionCard: subcategoryId:', subcategoryId);
+    console.log(
+      '🔍 TransactionCard: Available categories:',
+      categories?.length,
+    );
 
-    // If no categories passed, use default fallback
-    if (!categories || categories.length === 0) {
-      console.log('🔍 TransactionCard: No categories provided, using default');
-      return defaultCategories[defaultCategories.length - 1];
+    // ✅ FIRST: Check if backend returned subcategory object directly
+    if (
+      transaction.subcategory &&
+      typeof transaction.subcategory === 'object'
+    ) {
+      console.log(
+        '🔍 TransactionCard: Using backend subcategory object:',
+        transaction.subcategory,
+      );
+      return {
+        id: transaction.subcategory.id,
+        name: transaction.subcategory.name,
+        icon: transaction.subcategory.icon || 'albums-outline',
+        color: transaction.subcategory.color || '#4ECDC4',
+      };
     }
 
-    // First, try to find main category by ID
-    let categoryData = categories.find(cat => cat.id === categoryId);
+    // ✅ SECOND: Check if backend returned category object directly
+    if (transaction.category && typeof transaction.category === 'object') {
+      console.log(
+        '🔍 TransactionCard: Using backend category object:',
+        transaction.category,
+      );
+      return {
+        id: transaction.category.id,
+        name: transaction.category.name,
+        icon: transaction.category.icon || 'albums-outline',
+        color: transaction.category.color || '#4ECDC4',
+      };
+    }
 
-    if (categoryData) {
-      console.log('🔍 TransactionCard: Found main category:', categoryData);
-
-      // If transaction has a subcategory, try to find it
-      if (subcategoryId && categoryData.subcategories) {
-        const subcategory = categoryData.subcategories.find(
-          sub => sub.id === subcategoryId,
-        );
-        if (subcategory) {
-          console.log('🔍 TransactionCard: Found subcategory:', subcategory);
-          // Return subcategory with main category's color as fallback
-          return {
-            ...subcategory,
-            color: subcategory.color || categoryData.color,
-            name: subcategory.name,
-            icon: subcategory.icon || categoryData.icon,
-          };
+    // ✅ THIRD: Use passed categories to look up by ID
+    if (categories && categories.length > 0) {
+      // If we have a subcategoryId, prioritize finding the subcategory
+      if (subcategoryId) {
+        // Look through all categories and their subcategories
+        for (const mainCategory of categories) {
+          if (
+            mainCategory.subcategories &&
+            Array.isArray(mainCategory.subcategories)
+          ) {
+            const subcategory = mainCategory.subcategories.find(
+              sub => sub.id === subcategoryId,
+            );
+            if (subcategory) {
+              console.log(
+                '🔍 TransactionCard: Found subcategory in categories:',
+                subcategory,
+              );
+              return {
+                ...subcategory,
+                color: subcategory.color || mainCategory.color,
+                icon: subcategory.icon || mainCategory.icon,
+              };
+            }
+          }
         }
       }
 
-      return categoryData;
-    }
-
-    // If not found as main category, check if the categoryId is actually a subcategory ID
-    for (const mainCategory of categories) {
-      if (
-        mainCategory.subcategories &&
-        Array.isArray(mainCategory.subcategories)
-      ) {
-        const subcategory = mainCategory.subcategories.find(
-          sub => sub.id === categoryId,
-        );
-        if (subcategory) {
-          console.log('🔍 TransactionCard: Found as subcategory:', subcategory);
-          return {
-            ...subcategory,
-            color: subcategory.color || mainCategory.color,
-          };
+      // If no subcategory found, look for main category
+      if (categoryId) {
+        const mainCategory = categories.find(cat => cat.id === categoryId);
+        if (mainCategory) {
+          console.log(
+            '🔍 TransactionCard: Found main category in categories:',
+            mainCategory,
+          );
+          return mainCategory;
         }
+      }
+
+      // Fallback: look for "other" category in passed categories
+      const otherCategory = categories.find(
+        cat => cat.name.toLowerCase() === 'other' || cat.id === 'other',
+      );
+      if (otherCategory) {
+        console.log(
+          '🔍 TransactionCard: Using other category from passed categories',
+        );
+        return otherCategory;
       }
     }
 
-    // If still not found, try to find by name (fallback)
-    categoryData = categories.find(
-      cat =>
-        cat.name.toLowerCase() ===
-        (transaction.description || '').toLowerCase(),
-    );
-
-    if (categoryData) {
-      console.log('🔍 TransactionCard: Found by name match:', categoryData);
-      return categoryData;
-    }
-
-    console.log('🔍 TransactionCard: No category found, using fallback');
-    // Fallback to 'other' category or default
-    return (
-      categories.find(cat => cat.name.toLowerCase() === 'other') ||
-      categories.find(cat => cat.id === 'other') ||
-      defaultCategories[defaultCategories.length - 1]
-    );
+    // ✅ FINAL FALLBACK: Use default categories
+    console.log('🔍 TransactionCard: Using default fallback category');
+    return defaultCategories[defaultCategories.length - 1]; // "Other" category
   };
 
   const resetPosition = () => {
@@ -195,10 +216,15 @@ const TransactionCard = ({
     ]).start();
   };
 
+  // ✅ CRITICAL FIX: Modified performEdit to pass transaction ID instead of full object
   const performEdit = () => {
-    // Call onEdit callback
+    // ✅ FIXED: Pass transaction ID only, let HomeContainer find fresh data
     if (onEdit) {
-      onEdit(transaction);
+      console.log(
+        '🔍 TransactionCard: Calling onEdit with transaction ID:',
+        transaction.id,
+      );
+      onEdit(transaction.id); // Pass ID instead of full transaction object
     }
 
     // Reset position after edit action
@@ -331,13 +357,43 @@ const TransactionCard = ({
     }
   };
 
+  // ✅ FIXED: Metadata display logic - show MAIN category name, not subcategory
   const getMetadataText = () => {
     const recurrenceText = getRecurrenceText(transaction.recurrence);
 
+    // ✅ FIXED: Show main category name, not subcategory name
+    let categoryName = categoryData.name;
+
+    // If we found a subcategory, we need to show the MAIN category name
+    if (
+      transaction.subcategory &&
+      typeof transaction.subcategory === 'object'
+    ) {
+      // We have subcategory object from backend - need to find main category
+      const mainCategory = categories.find(
+        cat =>
+          cat.subcategories &&
+          cat.subcategories.some(sub => sub.id === transaction.subcategory.id),
+      );
+      if (mainCategory) {
+        categoryName = mainCategory.name;
+      }
+    } else if (transaction.subcategoryId && categories.length > 0) {
+      // We have subcategoryId - find main category
+      const mainCategory = categories.find(
+        cat =>
+          cat.subcategories &&
+          cat.subcategories.some(sub => sub.id === transaction.subcategoryId),
+      );
+      if (mainCategory) {
+        categoryName = mainCategory.name;
+      }
+    }
+
     if (recurrenceText) {
-      return `${categoryData.name} • ${recurrenceText}`;
+      return `${categoryName} • ${recurrenceText}`;
     } else {
-      return `${categoryData.name} • ${formatDate(transaction.date)}`;
+      return `${categoryName} • ${formatDate(transaction.date)}`;
     }
   };
 

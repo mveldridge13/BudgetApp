@@ -163,6 +163,10 @@ const HomeContainer = ({navigation}) => {
         'HomeContainer: Loaded transactions:',
         backendTransactions.length,
       );
+      console.log(
+        '🔍 DEBUG: First transaction structure:',
+        backendTransactions[0],
+      );
       setTransactions(backendTransactions);
     } catch (error) {
       console.error('HomeContainer: Error loading transactions:', error);
@@ -194,6 +198,19 @@ const HomeContainer = ({navigation}) => {
         let savedTransaction;
         const isEditing = transaction.id && transaction.updatedAt;
 
+        // ✅ FIXED: Map frontend field names to backend field names
+        const transactionData = {
+          type: transaction.type || 'EXPENSE',
+          amount: transaction.amount,
+          description: transaction.description,
+          categoryId: transaction.categoryId || transaction.category, // Support both field names
+          subcategoryId: transaction.subcategory, // ✅ FIXED: Map subcategory → subcategoryId
+          date: transaction.date.toISOString(),
+          recurrence: transaction.recurrence,
+        };
+
+        console.log('🔍 DEBUG: Data being sent to backend:', transactionData);
+
         if (isEditing) {
           // Update existing transaction
           console.log(
@@ -202,28 +219,14 @@ const HomeContainer = ({navigation}) => {
           );
           savedTransaction = await TrendAPIService.updateTransaction(
             transaction.id,
-            {
-              type: transaction.type || 'EXPENSE',
-              amount: transaction.amount,
-              description: transaction.description,
-              categoryId: transaction.categoryId,
-              subcategory: transaction.subcategory,
-              date: transaction.date.toISOString(),
-              recurrence: transaction.recurrence,
-            },
+            transactionData,
           );
         } else {
           // Create new transaction
           console.log('HomeContainer: Creating new transaction');
-          savedTransaction = await TrendAPIService.createTransaction({
-            type: transaction.type || 'EXPENSE',
-            amount: transaction.amount,
-            description: transaction.description,
-            categoryId: transaction.categoryId,
-            subcategory: transaction.subcategory,
-            date: transaction.date.toISOString(),
-            recurrence: transaction.recurrence,
-          });
+          savedTransaction = await TrendAPIService.createTransaction(
+            transactionData,
+          );
         }
 
         console.log(
@@ -234,8 +237,14 @@ const HomeContainer = ({navigation}) => {
         // Reload transactions to get fresh data
         await loadTransactions();
 
-        // Clear editing state
-        setEditingTransaction(null);
+        // ✅ CRITICAL FIX: Clear editingTransaction so prepareEditTransaction finds fresh data
+        if (isEditing) {
+          console.log('🔍 DEBUG: Clearing editingTransaction to force refresh');
+          setEditingTransaction(null);
+        } else {
+          // Clear editing state for new transactions
+          setEditingTransaction(null);
+        }
 
         return {
           success: true,
@@ -276,21 +285,56 @@ const HomeContainer = ({navigation}) => {
   );
 
   /**
-   * Prepare transaction for editing
+   * ✅ FIXED: Prepare transaction for editing - now receives transaction ID
    */
-  const prepareEditTransaction = useCallback(async transaction => {
-    try {
-      console.log(
-        'HomeContainer: Preparing transaction for edit:',
-        transaction.id,
-      );
-      setEditingTransaction(transaction);
-      return transaction;
-    } catch (error) {
-      console.error('HomeContainer: Error preparing edit transaction:', error);
-      throw error;
-    }
-  }, []);
+  const prepareEditTransaction = useCallback(
+    async transactionId => {
+      try {
+        console.log(
+          '🔍 DEBUG: prepareEditTransaction called with ID:',
+          transactionId,
+        );
+        console.log(
+          '🔍 DEBUG: Current transactions in state length:',
+          transactions.length,
+        );
+
+        // ✅ CRITICAL FIX: Find the latest version from transactions state by ID
+        const latestTransaction = transactions.find(
+          t => t.id === transactionId,
+        );
+        console.log(
+          '🔍 DEBUG: Latest transaction from state:',
+          latestTransaction,
+        );
+
+        if (!latestTransaction) {
+          console.warn('⚠️ Warning: Transaction not found in current state');
+          return null;
+        }
+
+        // ✅ Use the fresh data from transactions state
+        console.log(
+          '🔍 DEBUG: Transaction being set for editing (FRESH DATA):',
+          latestTransaction,
+        );
+
+        console.log(
+          'HomeContainer: Preparing transaction for edit:',
+          latestTransaction.id,
+        );
+        setEditingTransaction(latestTransaction);
+        return latestTransaction;
+      } catch (error) {
+        console.error(
+          'HomeContainer: Error preparing edit transaction:',
+          error,
+        );
+        throw error;
+      }
+    },
+    [transactions],
+  );
 
   /**
    * Clear editing transaction state

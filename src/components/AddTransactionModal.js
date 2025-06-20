@@ -287,7 +287,7 @@ const AddTransactionModal = ({
   };
 
   // ==============================================
-  // HELPER FUNCTIONS (UI Only) - UNCHANGED
+  // HELPER FUNCTIONS (UI Only)
   // ==============================================
 
   // Helper function to create dynamic category icon style
@@ -320,6 +320,43 @@ const AddTransactionModal = ({
   // ✅ NEW: Helper functions for transaction type
   const getTransactionTypeDisplayName = () => {
     return selectedTransactionType === 'INCOME' ? 'Income' : 'Expense';
+  };
+
+  // ✅ FIXED: Helper function to get the correct category display for the category field
+  const getCategoryFieldDisplayName = () => {
+    if (!selectedCategory) {
+      return null;
+    }
+
+    const mainCategory = getCategoryById(selectedCategory);
+    if (!mainCategory) {
+      return null;
+    }
+
+    // Always show the main category name in the category field
+    return mainCategory.name;
+  };
+
+  // ✅ FIXED: Helper function to get the correct icon for the category field
+  const getCategoryFieldIcon = () => {
+    if (!selectedCategory) {
+      return null;
+    }
+
+    const mainCategory = getCategoryById(selectedCategory);
+    if (!mainCategory) {
+      return null;
+    }
+
+    // If subcategory is selected, show subcategory icon, otherwise show main category icon
+    if (selectedSubcategory) {
+      const subcategory = mainCategory.subcategories?.find(
+        sub => sub.id === selectedSubcategory,
+      );
+      return subcategory?.icon || mainCategory.icon;
+    }
+
+    return mainCategory.icon;
   };
 
   // ==============================================
@@ -496,7 +533,7 @@ const AddTransactionModal = ({
                   placeholderTextColor={colors.textSecondary}
                 />
 
-                {/* Category Field - UNCHANGED */}
+                {/* ✅ FIXED: Category Field - Now shows main category name */}
                 <TouchableOpacity
                   style={styles.categoryField}
                   onPress={showCategoryPicker}
@@ -509,25 +546,13 @@ const AddTransactionModal = ({
                             getCategoryById(selectedCategory)?.color,
                           )}>
                           <Icon
-                            name={
-                              selectedSubcategory
-                                ? getCategoryById(
-                                    selectedCategory,
-                                  )?.subcategories?.find(
-                                    sub => sub.id === selectedSubcategory,
-                                  )?.icon ||
-                                  getCategoryById(selectedCategory)?.icon
-                                : getCategoryById(selectedCategory)?.icon
-                            }
+                            name={getCategoryFieldIcon()}
                             size={18}
                             color={getCategoryById(selectedCategory)?.color}
                           />
                         </View>
                         <Text style={styles.categoryText}>
-                          {getCategoryDisplayName(
-                            selectedCategory,
-                            selectedSubcategory,
-                          )}
+                          {getCategoryFieldDisplayName()}
                         </Text>
                       </>
                     ) : (
