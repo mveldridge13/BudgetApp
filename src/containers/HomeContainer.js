@@ -103,6 +103,11 @@ const HomeContainer = ({navigation}) => {
   // TRANSACTION INTEGRATION
   // ==============================================
 
+  const sortTransactions = useCallback(
+    txs => txs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
+    [],
+  );
+
   const loadTransactions = useCallback(async () => {
     try {
       if (!AuthService.isAuthenticated()) {
@@ -111,8 +116,9 @@ const HomeContainer = ({navigation}) => {
 
       const response = await TrendAPIService.getTransactions();
       const backendTransactions = response?.transactions || [];
+      const sortedTransactions = sortTransactions(backendTransactions);
 
-      setTransactions(backendTransactions);
+      setTransactions(sortedTransactions);
     } catch (error) {
       console.error('HomeContainer: Error loading transactions:', error);
 
@@ -122,7 +128,7 @@ const HomeContainer = ({navigation}) => {
         [{text: 'OK'}],
       );
     }
-  }, []);
+  }, [sortTransactions]);
 
   /**
    * Save transaction with optimistic updates
@@ -160,10 +166,9 @@ const HomeContainer = ({navigation}) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-          setTransactions(prevTransactions => [
-            ...prevTransactions,
-            optimisticTransaction,
-          ]);
+          setTransactions(prevTransactions => 
+            sortTransactions([optimisticTransaction, ...prevTransactions])
+          );
         }
 
         // Clear editing state only after successful operation
@@ -202,14 +207,16 @@ const HomeContainer = ({navigation}) => {
         } else {
           // Replace the temporary transaction with real server data
           setTransactions(prevTransactions =>
-            prevTransactions.map(t =>
-              t.id &&
-              t.id.startsWith('temp_') &&
-              t.description === transaction.description &&
-              t.amount === transaction.amount
-                ? savedTransaction
-                : t,
-            ),
+            sortTransactions(
+              prevTransactions.map(t =>
+                t.id &&
+                t.id.startsWith('temp_') &&
+                t.description === transaction.description &&
+                t.amount === transaction.amount
+                  ? savedTransaction
+                  : t,
+              )
+            )
           );
         }
 
@@ -241,7 +248,7 @@ const HomeContainer = ({navigation}) => {
         throw error;
       }
     },
-    [transactions],
+    [transactions, sortTransactions],
   );
 
   /**
@@ -301,9 +308,11 @@ const HomeContainer = ({navigation}) => {
 
         // Update local state with fresh data to keep it in sync
         setTransactions(prevTransactions =>
-          prevTransactions.map(t =>
-            t.id === transactionId ? freshTransaction : t,
-          ),
+          sortTransactions(
+            prevTransactions.map(t =>
+              t.id === transactionId ? freshTransaction : t,
+            )
+          )
         );
 
         setEditingTransaction(freshTransaction);
@@ -325,7 +334,7 @@ const HomeContainer = ({navigation}) => {
         throw error;
       }
     },
-    [transactions],
+    [transactions, sortTransactions],
   );
 
   const clearEditingTransaction = useCallback(() => {
