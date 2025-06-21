@@ -164,8 +164,10 @@ const HomeScreen = ({
 
   const checkAndShowOnboarding = useCallback(() => {
     if (!onboardingStatus) {
+      console.log('HomeScreen: Onboarding status is null, skipping checks');
       return;
     }
+    console.log('HomeScreen: Checking onboarding status:', onboardingStatus);
 
     const {
       hasSeenBalanceCardTour,

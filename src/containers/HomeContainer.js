@@ -30,12 +30,8 @@ const HomeContainer = ({navigation}) => {
     new Date().toDateString(),
   );
 
-  // Onboarding state
-  const [onboardingStatus, setOnboardingStatus] = useState({
-    hasSeenBalanceCardTour: false,
-    hasSeenAddTransactionTour: false,
-    hasSeenTransactionSwipeTour: false,
-  });
+  // Onboarding state - start as null to prevent premature triggering
+  const [onboardingStatus, setOnboardingStatus] = useState(null);
 
   // Goals state
   const [goals, setGoals] = useState([]);
@@ -388,6 +384,7 @@ const HomeContainer = ({navigation}) => {
 
   const loadOnboardingStatus = useCallback(async () => {
     try {
+      console.log('HomeContainer: Loading onboarding status...');
       if (!AuthService.isAuthenticated()) {
         // If not authenticated, load from local storage only
         const [balanceCard, addTransaction, transactionSwipe] =
@@ -397,11 +394,13 @@ const HomeContainer = ({navigation}) => {
             AsyncStorage.getItem('hasSeenTransactionSwipeTour'),
           ]);
 
-        setOnboardingStatus({
+        const localStatus = {
           hasSeenBalanceCardTour: balanceCard === 'true',
           hasSeenAddTransactionTour: addTransaction === 'true',
           hasSeenTransactionSwipeTour: transactionSwipe === 'true',
-        });
+        };
+        console.log('HomeContainer: Loaded local onboarding status:', localStatus);
+        setOnboardingStatus(localStatus);
         return;
       }
 
@@ -425,6 +424,7 @@ const HomeContainer = ({navigation}) => {
           ),
         ]);
 
+        console.log('HomeContainer: Loaded server onboarding status:', serverStatus);
         setOnboardingStatus(serverStatus);
       } catch (serverError) {
         console.warn(
@@ -476,6 +476,9 @@ const HomeContainer = ({navigation}) => {
 
       // Update local state immediately (optimistic update)
       setOnboardingStatus(prev => ({
+        hasSeenBalanceCardTour: false,
+        hasSeenAddTransactionTour: false,
+        hasSeenTransactionSwipeTour: false,
         ...prev,
         [tourKey]: true,
       }));
@@ -502,6 +505,9 @@ const HomeContainer = ({navigation}) => {
 
       // Revert optimistic update on failure
       setOnboardingStatus(prev => ({
+        hasSeenBalanceCardTour: false,
+        hasSeenAddTransactionTour: false,
+        hasSeenTransactionSwipeTour: false,
         ...prev,
         [`hasSeen${tourType}Tour`]: false,
       }));
