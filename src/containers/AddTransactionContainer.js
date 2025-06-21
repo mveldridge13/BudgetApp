@@ -235,9 +235,16 @@ const AddTransactionContainer = ({
       updatedAt: isEditMode ? new Date() : undefined,
     };
 
-    onSave(transaction);
-    resetForm();
-    onClose();
+    try {
+      await onSave(transaction);
+      // Only reset form and close modal if save was successful
+      resetForm();
+      onClose();
+    } catch (error) {
+      // Error handling is done by parent container
+      // Keep modal open for user to retry
+      console.log('AddTransactionContainer: Save failed, keeping modal open');
+    }
   }, [
     amount,
     selectedCategory,

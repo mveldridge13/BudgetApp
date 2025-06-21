@@ -170,8 +170,8 @@ const HomeContainer = ({navigation}) => {
           ]);
         }
 
-        // Clear editing state immediately (optimistic)
-        setEditingTransaction(null);
+        // Clear editing state only after successful operation
+        // setEditingTransaction(null); // Move this after successful backend operation
 
         // STEP 2: BACKEND REQUEST - Send to server
         const transactionData = {
@@ -217,6 +217,9 @@ const HomeContainer = ({navigation}) => {
           );
         }
 
+        // Clear editing state only after successful backend operation
+        setEditingTransaction(null);
+
         return {
           success: true,
           isNewTransaction: !isEditing,
@@ -231,9 +234,12 @@ const HomeContainer = ({navigation}) => {
         // STEP 4: ROLLBACK - Revert optimistic changes on error
         setTransactions(previousTransactions);
 
-        // Restore editing state if it was an edit
+        // Restore editing state if it was an edit (keep existing editing state)
         if (transaction.id && transaction.updatedAt) {
           setEditingTransaction(transaction);
+        } else {
+          // For new transactions, don't clear editing state on error
+          // Let the user retry the save operation
         }
 
         throw error;
@@ -377,6 +383,154 @@ const HomeContainer = ({navigation}) => {
   );
 
   // ==============================================
+  // ONBOARDING INTEGRATION
+  // ==============================================
+
+  const loadOnboardingStatus = useCallback(async () => {
+    try {
+      if (!AuthService.isAuthenticated()) {
+        // If not authenticated, load from local storage only
+        const [balanceCard, addTransaction, transactionSwipe] =
+          await Promise.all([
+            AsyncStorage.getItem('hasSeenBalanceCardTour'),
+            AsyncStorage.getItem('hasSeenAddTransactionTour'),
+            AsyncStorage.getItem('hasSeenTransactionSwipeTour'),
+          ]);
+
+        setOnboardingStatus({
+          hasSeenBalanceCardTour: balanceCard === 'true',
+          hasSeenAddTransactionTour: addTransaction === 'true',
+          hasSeenTransactionSwipeTour: transactionSwipe === 'true',
+        });
+        return;
+      }
+
+      // Try to get onboarding status from backend first
+      try {
+        const serverStatus = await TrendAPIService.getOnboardingStatus();
+
+        // Update local storage to match server
+        await Promise.all([
+          AsyncStorage.setItem(
+            'hasSeenBalanceCardTour',
+            String(serverStatus.hasSeenBalanceCardTour),
+          ),
+          AsyncStorage.setItem(
+            'hasSeenAddTransactionTour',
+            String(serverStatus.hasSeenAddTransactionTour),
+          ),
+          AsyncStorage.setItem(
+            'hasSeenTransactionSwipeTour',
+            String(serverStatus.hasSeenTransactionSwipeTour),
+          ),
+        ]);
+
+        setOnboardingStatus(serverStatus);
+      } catch (serverError) {
+        console.warn(
+          'Failed to load onboarding status from server, using local storage:',
+          serverError,
+        );
+
+        // Fallback to local storage
+        const [balanceCard, addTransaction, transactionSwipe] =
+          await Promise.all([
+            AsyncStorage.getItem('hasSeenBalanceCardTour'),
+            AsyncStorage.getItem('hasSeenAddTransactionTour'),
+            AsyncStorage.getItem('hasSeenTransactionSwipeTour'),
+          ]);
+
+        const localStatus = {
+          hasSeenBalanceCardTour: balanceCard === 'true',
+          hasSeenAddTransactionTour: addTransaction === 'true',
+          hasSeenTransactionSwipeTour: transactionSwipe === 'true',
+        };
+
+        setOnboardingStatus(localStatus);
+
+        // Try to sync local status to server in background
+        try {
+          await TrendAPIService.updateOnboardingStatus(localStatus);
+        } catch (syncError) {
+          console.warn(
+            'Failed to sync local onboarding status to server:',
+            syncError,
+          );
+        }
+      }
+    } catch (error) {
+      console.error('HomeContainer: Error loading onboarding status:', error);
+
+      // Set default values on complete failure
+      setOnboardingStatus({
+        hasSeenBalanceCardTour: false,
+        hasSeenAddTransactionTour: false,
+        hasSeenTransactionSwipeTour: false,
+      });
+    }
+  }, []);
+
+  const handleOnboardingComplete = useCallback(async tourType => {
+    try {
+      const tourKey = `hasSeen${tourType}Tour`;
+
+      // Update local state immediately (optimistic update)
+      setOnboardingStatus(prev => ({
+        ...prev,
+        [tourKey]: true,
+      }));
+
+      // Update local storage
+      await AsyncStorage.setItem(tourKey, 'true');
+
+      // Update server if authenticated
+      if (AuthService.isAuthenticated()) {
+        try {
+          // Mark specific tour complete on server
+          await TrendAPIService.markOnboardingTourComplete(tourType);
+        } catch (serverError) {
+          console.warn(
+            `Failed to sync ${tourType} completion to server:`,
+            serverError,
+          );
+          // Local update already completed, so we can continue
+          // The next app load will attempt to sync again
+        }
+      }
+    } catch (error) {
+      console.error('HomeContainer: Error saving onboarding status:', error);
+
+      // Revert optimistic update on failure
+      setOnboardingStatus(prev => ({
+        ...prev,
+        [`hasSeen${tourType}Tour`]: false,
+      }));
+
+      // Try to revert local storage too
+      try {
+        await AsyncStorage.setItem(`hasSeen${tourType}Tour`, 'false');
+      } catch (storageError) {
+        console.error('Failed to revert local storage:', storageError);
+      }
+    }
+  }, []);
+
+  // Optional: Add a method to sync onboarding status manually
+  const syncOnboardingStatus = useCallback(async () => {
+    try {
+      if (!AuthService.isAuthenticated()) {
+        return;
+      }
+
+      const currentStatus = onboardingStatus;
+      await TrendAPIService.updateOnboardingStatus(currentStatus);
+      console.log('Onboarding status synced successfully');
+    } catch (error) {
+      console.error('Failed to sync onboarding status:', error);
+    }
+  }, [onboardingStatus]);
+
+  // ==============================================
   // BACKEND INTEGRATION
   // ==============================================
 
@@ -445,26 +599,6 @@ const HomeContainer = ({navigation}) => {
       );
     }
   }, [navigation, loadCachedIncomeData]);
-
-  const loadOnboardingStatus = useCallback(async () => {
-    try {
-      const [balanceCard, addTransaction, transactionSwipe] = await Promise.all(
-        [
-          AsyncStorage.getItem('hasSeenBalanceCardTour'),
-          AsyncStorage.getItem('hasSeenAddTransactionTour'),
-          AsyncStorage.getItem('hasSeenTransactionSwipeTour'),
-        ],
-      );
-
-      setOnboardingStatus({
-        hasSeenBalanceCardTour: balanceCard === 'true',
-        hasSeenAddTransactionTour: addTransaction === 'true',
-        hasSeenTransactionSwipeTour: transactionSwipe === 'true',
-      });
-    } catch (error) {
-      console.error('HomeContainer: Error loading onboarding status:', error);
-    }
-  }, []);
 
   // ==============================================
   // LIFECYCLE
@@ -621,18 +755,6 @@ const HomeContainer = ({navigation}) => {
   const handleGoalsPress = useCallback(() => {
     navigation.navigate('Goals');
   }, [navigation]);
-
-  const handleOnboardingComplete = useCallback(async tourType => {
-    try {
-      await AsyncStorage.setItem(`hasSeen${tourType}Tour`, 'true');
-      setOnboardingStatus(prev => ({
-        ...prev,
-        [`hasSeen${tourType}Tour`]: true,
-      }));
-    } catch (error) {
-      console.error('HomeContainer: Error saving onboarding status:', error);
-    }
-  }, []);
 
   // ==============================================
   // RENDER

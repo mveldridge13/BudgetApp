@@ -89,17 +89,21 @@ const HomeScreen = ({
       try {
         const result = await onSaveTransaction(transaction);
 
-        // Handle UI-specific logic for tutorials
-        if (result?.shouldShowTransactionTutorial) {
-          setTimeout(() => {
-            measureFirstTransaction();
-          }, 1000);
+        // Only close modal and clear editing state if save was successful
+        if (result?.success) {
+          setShowAddTransaction(false);
+          
+          // Handle UI-specific logic for tutorials
+          if (result?.shouldShowTransactionTutorial) {
+            setTimeout(() => {
+              measureFirstTransaction();
+            }, 1000);
+          }
         }
-
-        setShowAddTransaction(false);
       } catch (error) {
         // Error handling is done in container
-        // UI just stays open for user to retry
+        // UI stays open for user to retry
+        console.log('HomeScreen: Save failed, keeping modal open for retry');
       }
     },
     [onSaveTransaction, measureFirstTransaction],

@@ -193,6 +193,74 @@ class TrendAPIService {
     });
   }
 
+  // Onboarding methods
+  async getOnboardingStatus() {
+    try {
+      // Since onboarding fields are part of the user profile,
+      // we can extract them from the existing getUserProfile response
+      const userProfile = await this.getUserProfile();
+
+      return {
+        hasSeenBalanceCardTour: userProfile.hasSeenBalanceCardTour ?? false,
+        hasSeenAddTransactionTour:
+          userProfile.hasSeenAddTransactionTour ?? false,
+        hasSeenTransactionSwipeTour:
+          userProfile.hasSeenTransactionSwipeTour ?? false,
+      };
+    } catch (error) {
+      console.error('Failed to get onboarding status:', error);
+      // Return default status on error
+      return {
+        hasSeenBalanceCardTour: false,
+        hasSeenAddTransactionTour: false,
+        hasSeenTransactionSwipeTour: false,
+      };
+    }
+  }
+
+  async updateOnboardingStatus(onboardingData) {
+    try {
+      // Update the user profile with onboarding data
+      const response = await this.updateUserProfile(onboardingData);
+
+      // Extract onboarding fields from the response
+      return {
+        hasSeenBalanceCardTour: response.hasSeenBalanceCardTour ?? false,
+        hasSeenAddTransactionTour: response.hasSeenAddTransactionTour ?? false,
+        hasSeenTransactionSwipeTour:
+          response.hasSeenTransactionSwipeTour ?? false,
+      };
+    } catch (error) {
+      console.error('Failed to update onboarding status:', error);
+      throw error;
+    }
+  }
+
+  async markOnboardingTourComplete(tourType) {
+    try {
+      // Convert tourType to the field name
+      const fieldName = `hasSeen${tourType}Tour`;
+
+      // Update just this specific onboarding field
+      const updateData = {
+        [fieldName]: true,
+      };
+
+      // eslint-disable-next-line no-unused-vars
+      const response = await this.updateUserProfile(updateData);
+
+      return {
+        success: true,
+        tourType: tourType,
+        completedAt: new Date().toISOString(),
+        [fieldName]: true,
+      };
+    } catch (error) {
+      console.error(`Failed to mark ${tourType} tour complete:`, error);
+      throw error;
+    }
+  }
+
   // Category methods
   async getCategories() {
     return this.makeRequest('/categories');
