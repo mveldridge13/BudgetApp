@@ -347,20 +347,58 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-      const selectedDateStr = date.toDateString();
+      // Calculate pay period dates
+      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
+        return 0;
+      }
 
-      // Filter transactions for the selected date
-      const dayTransactions = transactions.filter(transaction => {
+      let nextPayDate;
+      
+      // Handle both ISO string format and DD/MM/YYYY format
+      if (incomeData.nextPayDate.includes('T')) {
+        nextPayDate = new Date(incomeData.nextPayDate);
+      } else {
+        const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
+        nextPayDate = new Date(
+          2000 + parseInt(yearStr, 10),
+          parseInt(monthStr, 10) - 1,
+          parseInt(dayStr, 10),
+        );
+      }
+
+      if (isNaN(nextPayDate.getTime())) {
+        return 0;
+      }
+
+      const frequencyDays = {
+        weekly: 7,
+        fortnightly: 14,
+        monthly: 30,
+      };
+
+      const days = frequencyDays[incomeData.frequency] || 30;
+
+      let periodStart;
+      if (incomeData.frequency === 'monthly') {
+        periodStart = new Date(nextPayDate);
+        periodStart.setMonth(periodStart.getMonth() - 1);
+      } else {
+        periodStart = new Date(nextPayDate);
+        periodStart.setDate(periodStart.getDate() - days);
+      }
+
+      // Filter transactions for the entire pay period
+      const periodTransactions = transactions.filter(transaction => {
         const transactionDate = new Date(transaction.date);
-        return transactionDate.toDateString() === selectedDateStr;
+        return transactionDate >= periodStart && transactionDate < nextPayDate;
       });
 
-      // Sum up the expenses
-      return dayTransactions.reduce((total, transaction) => {
+      // Sum up the expenses for the entire period
+      return periodTransactions.reduce((total, transaction) => {
         return total + (transaction.amount || 0);
       }, 0);
     },
-    [transactions],
+    [transactions, incomeData],
   );
 
   // ==============================================
