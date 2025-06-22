@@ -166,8 +166,8 @@ const HomeContainer = ({navigation}) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-          setTransactions(prevTransactions => 
-            sortTransactions([optimisticTransaction, ...prevTransactions])
+          setTransactions(prevTransactions =>
+            sortTransactions([optimisticTransaction, ...prevTransactions]),
           );
         }
 
@@ -215,8 +215,8 @@ const HomeContainer = ({navigation}) => {
                 t.amount === transaction.amount
                   ? savedTransaction
                   : t,
-              )
-            )
+              ),
+            ),
           );
         }
 
@@ -311,8 +311,8 @@ const HomeContainer = ({navigation}) => {
           sortTransactions(
             prevTransactions.map(t =>
               t.id === transactionId ? freshTransaction : t,
-            )
-          )
+            ),
+          ),
         );
 
         setEditingTransaction(freshTransaction);
@@ -408,7 +408,10 @@ const HomeContainer = ({navigation}) => {
           hasSeenAddTransactionTour: addTransaction === 'true',
           hasSeenTransactionSwipeTour: transactionSwipe === 'true',
         };
-        console.log('HomeContainer: Loaded local onboarding status:', localStatus);
+        console.log(
+          'HomeContainer: Loaded local onboarding status:',
+          localStatus,
+        );
         setOnboardingStatus(localStatus);
         return;
       }
@@ -433,7 +436,10 @@ const HomeContainer = ({navigation}) => {
           ),
         ]);
 
-        console.log('HomeContainer: Loaded server onboarding status:', serverStatus);
+        console.log(
+          'HomeContainer: Loaded server onboarding status:',
+          serverStatus,
+        );
         setOnboardingStatus(serverStatus);
       } catch (serverError) {
         console.warn(
