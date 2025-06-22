@@ -24,80 +24,12 @@ const BalanceCard = ({
     }).format(amount || 0);
   };
 
-  const getCurrentMonth = () => {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return months[selectedDate.getMonth()];
-  };
-
-  const calculatePayPeriod = () => {
-    if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-      return null;
-    }
-
-    let nextPayDate;
-
-    // Handle both ISO string format (from CalendarModal) and DD/MM/YYYY format (legacy)
-    if (incomeData.nextPayDate.includes('T')) {
-      // ISO string format from CalendarModal
-      nextPayDate = new Date(incomeData.nextPayDate);
-    } else {
-      // Legacy DD/MM/YYYY format
-      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-      nextPayDate = new Date(
-        2000 + parseInt(yearStr, 10),
-        parseInt(monthStr, 10) - 1,
-        parseInt(dayStr, 10),
-      );
-    }
-
-    // Validate the date
-    if (isNaN(nextPayDate.getTime())) {
-      return null;
-    }
-
-    const frequencyDays = {
-      weekly: 7,
-      fortnightly: 14,
-      monthly: 30,
-    };
-
-    const days = frequencyDays[incomeData.frequency] || 30;
-
-    let periodStart;
-    if (incomeData.frequency === 'monthly') {
-      periodStart = new Date(nextPayDate);
-      periodStart.setMonth(periodStart.getMonth() - 1);
-    } else {
-      periodStart = new Date(nextPayDate);
-      periodStart.setDate(periodStart.getDate() - days);
-    }
-
-    const periodEnd = new Date(nextPayDate);
-    periodEnd.setDate(periodEnd.getDate() - 1);
-
-    const formatDate = dateToFormat => {
-      const dayNum = dateToFormat.getDate();
-      const monthName = dateToFormat.toLocaleDateString('en-AU', {
-        month: 'short',
-      });
-      const yearNum = dateToFormat.getFullYear().toString().slice(-2);
-      return `${dayNum} ${monthName} ${yearNum}`;
-    };
-
-    return `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
+  const getCurrentDate = () => {
+    const day = selectedDate.getDate();
+    const month = selectedDate.toLocaleDateString('en-AU', {
+      month: 'short',
+    });
+    return `${month} ${day}`;
   };
 
   // Format the next pay date for display
@@ -214,10 +146,7 @@ const BalanceCard = ({
           style={styles.periodInfo}
           onPress={onCalendarPress}
           activeOpacity={0.7}>
-          <Text style={styles.currentMonth}>{getCurrentMonth()}</Text>
-          {calculatePayPeriod() && (
-            <Text style={styles.payPeriod}>{calculatePayPeriod()}</Text>
-          )}
+          <Text style={styles.currentMonth}>{getCurrentDate()}</Text>
           <Text style={styles.frequencyDisplay}>
             Paid {incomeData.frequency} • Next: {formatNextPayDate()}
           </Text>
