@@ -353,7 +353,7 @@ const HomeContainer = ({navigation}) => {
       }
 
       let nextPayDate;
-      
+
       // Handle both ISO string format and DD/MM/YYYY format
       if (incomeData.nextPayDate.includes('T')) {
         nextPayDate = new Date(incomeData.nextPayDate);
