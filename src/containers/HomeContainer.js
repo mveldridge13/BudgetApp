@@ -342,7 +342,7 @@ const HomeContainer = ({navigation}) => {
   }, []);
 
   const calculateTotalExpenses = useCallback(
-    date => {
+    () => {
       if (!transactions || transactions.length === 0) {
         return 0;
       }
@@ -830,7 +830,7 @@ const HomeContainer = ({navigation}) => {
       loading={loading}
       selectedDate={selectedDate}
       onboardingStatus={onboardingStatus}
-      totalExpenses={calculateTotalExpenses(selectedDate)}
+      totalExpenses={calculateTotalExpenses()}
       onDateChange={setSelectedDate}
       onSaveTransaction={handleSaveTransaction}
       onDeleteTransaction={handleDeleteTransaction}
