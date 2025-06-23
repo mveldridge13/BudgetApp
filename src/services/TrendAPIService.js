@@ -66,9 +66,14 @@ class TrendAPIService {
       requestHeaders.Authorization = `Bearer ${this.token}`;
     }
 
+    // Create timeout signal
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout);
+
     const requestConfig = {
       method,
       headers: requestHeaders,
+      signal: controller.signal,
     };
 
     if (body && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
@@ -77,6 +82,7 @@ class TrendAPIService {
 
     try {
       const response = await fetch(url, requestConfig);
+      clearTimeout(timeoutId);
 
       if (response.status === 401) {
         await this.clearToken();
@@ -97,6 +103,7 @@ class TrendAPIService {
         return null;
       }
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error(`API Request failed: ${method} ${url}`, error);
       throw error;
     }
@@ -195,27 +202,17 @@ class TrendAPIService {
 
   // Onboarding methods
   async getOnboardingStatus() {
-    try {
-      // Since onboarding fields are part of the user profile,
-      // we can extract them from the existing getUserProfile response
-      const userProfile = await this.getUserProfile();
+    // Since onboarding fields are part of the user profile,
+    // we can extract them from the existing getUserProfile response
+    const userProfile = await this.getUserProfile();
 
-      return {
-        hasSeenBalanceCardTour: userProfile.hasSeenBalanceCardTour ?? false,
-        hasSeenAddTransactionTour:
-          userProfile.hasSeenAddTransactionTour ?? false,
-        hasSeenTransactionSwipeTour:
-          userProfile.hasSeenTransactionSwipeTour ?? false,
-      };
-    } catch (error) {
-      console.error('Failed to get onboarding status:', error);
-      // Return default status on error
-      return {
-        hasSeenBalanceCardTour: false,
-        hasSeenAddTransactionTour: false,
-        hasSeenTransactionSwipeTour: false,
-      };
-    }
+    return {
+      hasSeenBalanceCardTour: userProfile.hasSeenBalanceCardTour ?? false,
+      hasSeenAddTransactionTour:
+        userProfile.hasSeenAddTransactionTour ?? false,
+      hasSeenTransactionSwipeTour:
+        userProfile.hasSeenTransactionSwipeTour ?? false,
+    };
   }
 
   async updateOnboardingStatus(onboardingData) {
@@ -332,18 +329,12 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      // Fallback: If backend doesn't return full object, fetch it
+      // Fallback: If backend doesn't return full object, return what we have
+      // to prevent hanging. The UI can handle partial data.
       console.warn(
-        'Update response missing transaction data, fetching fresh copy',
+        'Update response missing transaction data, returning partial response',
       );
-
-      try {
-        const freshTransaction = await this.getTransactionById(id);
-        return freshTransaction;
-      } catch (fetchError) {
-        console.error('Failed to fetch fresh transaction:', fetchError);
-        return response;
-      }
+      return response || {id, ...cleanedData};
     }
   }
 

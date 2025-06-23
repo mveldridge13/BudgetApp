@@ -185,7 +185,7 @@ const TransactionCard = ({
 
   const performEdit = () => {
     if (onEdit) {
-      onEdit(transaction.id);
+      onEdit(transaction); // ✅ FIXED: Pass the full transaction object
     }
     resetPosition();
   };
