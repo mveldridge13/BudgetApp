@@ -3,48 +3,12 @@ import {View, Text, StyleSheet, Animated, PanResponder} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
 
-// Default fallback categories
-const defaultCategories = [
-  {
-    id: 'food',
-    name: 'Food & Dining',
-    icon: 'restaurant-outline',
-    color: '#FF6B6B',
-  },
-  {id: 'transport', name: 'Transport', icon: 'car-outline', color: '#4ECDC4'},
-  {id: 'shopping', name: 'Shopping', icon: 'bag-outline', color: '#45B7D1'},
-  {
-    id: 'entertainment',
-    name: 'Entertainment',
-    icon: 'film-outline',
-    color: '#96CEB4',
-  },
-  {
-    id: 'bills',
-    name: 'Bills & Utilities',
-    icon: 'flash-outline',
-    color: '#FECA57',
-  },
-  {
-    id: 'health',
-    name: 'Health & Fitness',
-    icon: 'fitness-outline',
-    color: '#FF9FF3',
-  },
-  {
-    id: 'other',
-    name: 'Other',
-    icon: 'document-text-outline',
-    color: '#95A5A6',
-  },
-];
-
 const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
 
 const TransactionCard = ({
   transaction,
-  categories = [],
+  categoryData, // ✅ PRE-RESOLVED category data from container
   onDelete,
   onEdit,
   onSwipeStart,
@@ -58,77 +22,6 @@ const TransactionCard = ({
   const editOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
-
-  const getCategoryData = () => {
-    const categoryId = transaction.categoryId;
-    const subcategoryId = transaction.subcategoryId;
-
-    // Check if backend returned subcategory object directly
-    if (
-      transaction.subcategory &&
-      typeof transaction.subcategory === 'object'
-    ) {
-      return {
-        id: transaction.subcategory.id,
-        name: transaction.subcategory.name,
-        icon: transaction.subcategory.icon || 'albums-outline',
-        color: transaction.subcategory.color || '#4ECDC4',
-      };
-    }
-
-    // Check if backend returned category object directly
-    if (transaction.category && typeof transaction.category === 'object') {
-      return {
-        id: transaction.category.id,
-        name: transaction.category.name,
-        icon: transaction.category.icon || 'albums-outline',
-        color: transaction.category.color || '#4ECDC4',
-      };
-    }
-
-    // Use passed categories to look up by ID
-    if (categories && categories.length > 0) {
-      // If we have a subcategoryId, prioritize finding the subcategory
-      if (subcategoryId) {
-        for (const mainCategory of categories) {
-          if (
-            mainCategory.subcategories &&
-            Array.isArray(mainCategory.subcategories)
-          ) {
-            const subcategory = mainCategory.subcategories.find(
-              sub => sub.id === subcategoryId,
-            );
-            if (subcategory) {
-              return {
-                ...subcategory,
-                color: subcategory.color || mainCategory.color,
-                icon: subcategory.icon || mainCategory.icon,
-              };
-            }
-          }
-        }
-      }
-
-      // If no subcategory found, look for main category
-      if (categoryId) {
-        const mainCategory = categories.find(cat => cat.id === categoryId);
-        if (mainCategory) {
-          return mainCategory;
-        }
-      }
-
-      // Fallback: look for "other" category in passed categories
-      const otherCategory = categories.find(
-        cat => cat.name.toLowerCase() === 'other' || cat.id === 'other',
-      );
-      if (otherCategory) {
-        return otherCategory;
-      }
-    }
-
-    // Final fallback: Use default categories
-    return defaultCategories[defaultCategories.length - 1];
-  };
 
   const resetPosition = () => {
     Animated.parallel([
@@ -185,7 +78,7 @@ const TransactionCard = ({
 
   const performEdit = () => {
     if (onEdit) {
-      onEdit(transaction); // ✅ FIXED: Pass the full transaction object
+      onEdit(transaction);
     }
     resetPosition();
   };
@@ -265,8 +158,7 @@ const TransactionCard = ({
     }),
   ).current;
 
-  const categoryData = getCategoryData();
-
+  // ✅ PURE UI FORMATTING FUNCTIONS (no business logic)
   const formatCurrency = amount => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
@@ -309,33 +201,10 @@ const TransactionCard = ({
     }
   };
 
+  // ✅ PURE UI DISPLAY LOGIC (uses pre-resolved categoryData)
   const getMetadataText = () => {
     const recurrenceText = getRecurrenceText(transaction.recurrence);
-    let categoryName = categoryData.name;
-
-    // If we found a subcategory, show the main category name
-    if (
-      transaction.subcategory &&
-      typeof transaction.subcategory === 'object'
-    ) {
-      const mainCategory = categories.find(
-        cat =>
-          cat.subcategories &&
-          cat.subcategories.some(sub => sub.id === transaction.subcategory.id),
-      );
-      if (mainCategory) {
-        categoryName = mainCategory.name;
-      }
-    } else if (transaction.subcategoryId && categories.length > 0) {
-      const mainCategory = categories.find(
-        cat =>
-          cat.subcategories &&
-          cat.subcategories.some(sub => sub.id === transaction.subcategoryId),
-      );
-      if (mainCategory) {
-        categoryName = mainCategory.name;
-      }
-    }
+    const categoryName = categoryData?.name || 'Other';
 
     if (recurrenceText) {
       return `${categoryName} • ${recurrenceText}`;
@@ -376,6 +245,13 @@ const TransactionCard = ({
   if (isDeleting) {
     return null;
   }
+
+  // ✅ SAFE FALLBACK if categoryData is not provided
+  const safeCategory = categoryData || {
+    name: 'Other',
+    icon: 'document-text-outline',
+    color: '#95A5A6',
+  };
 
   return (
     <View style={styles.outerContainer}>
@@ -426,14 +302,14 @@ const TransactionCard = ({
                   styles.iconCircle,
                   {
                     backgroundColor: getLightBackgroundColor(
-                      categoryData.color,
+                      safeCategory.color,
                     ),
                   },
                 ]}>
                 <Icon
-                  name={categoryData.icon}
+                  name={safeCategory.icon}
                   size={20}
-                  color={categoryData.color}
+                  color={safeCategory.color}
                 />
               </View>
             </View>

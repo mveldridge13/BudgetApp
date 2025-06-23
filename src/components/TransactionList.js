@@ -5,8 +5,7 @@ import {colors} from '../styles';
 import TransactionCard from './TransactionCard';
 
 const TransactionList = ({
-  transactions,
-  categories = [],
+  transactions, // ✅ Now contains pre-resolved categoryData
   selectedDate,
   onDeleteTransaction,
   onEditTransaction,
@@ -15,6 +14,14 @@ const TransactionList = ({
   transactionRef,
   onTransactionLayout,
 }) => {
+  console.log('📋 TransactionList: Rendering with transactions:', {
+    transactionsCount: transactions.length,
+    sampleTransactionHasCategoryData: transactions[0]?.categoryData
+      ? true
+      : false,
+    selectedDate: selectedDate.toDateString(),
+  });
+
   // Measure first transaction when transactions load
   useEffect(() => {
     if (transactions.length > 0 && transactionRef && onTransactionLayout) {
@@ -86,13 +93,19 @@ const TransactionList = ({
   const renderTransactionItem = ({item: transaction, index}) => {
     const isFirst = index === 0;
 
+    console.log('📋 TransactionList: Rendering transaction:', {
+      description: transaction.description,
+      hasCategoryData: !!transaction.categoryData,
+      categoryName: transaction.categoryData?.name,
+    });
+
     return (
       <View
         ref={isFirst ? transactionRef : null}
         style={styles.transactionItemContainer}>
         <TransactionCard
           transaction={transaction}
-          categories={categories}
+          categoryData={transaction.categoryData} // ✅ UPDATED: Pass pre-resolved categoryData
           onDelete={onDeleteTransaction}
           onEdit={onEditTransaction}
           onSwipeStart={onSwipeStart}
@@ -102,18 +115,35 @@ const TransactionList = ({
     );
   };
 
-  const renderRecurringItem = ({item: transaction}) => (
-    <View style={styles.transactionItemContainer}>
-      <TransactionCard
-        transaction={transaction}
-        categories={categories}
-        onDelete={onDeleteTransaction}
-        onEdit={onEditTransaction}
-        onSwipeStart={onSwipeStart}
-        onSwipeEnd={onSwipeEnd}
-      />
-    </View>
-  );
+  const renderRecurringItem = ({item: transaction}) => {
+    console.log('📋 TransactionList: Rendering recurring transaction:', {
+      description: transaction.description,
+      recurrence: transaction.recurrence,
+      hasCategoryData: !!transaction.categoryData,
+      categoryName: transaction.categoryData?.name,
+    });
+
+    return (
+      <View style={styles.transactionItemContainer}>
+        <TransactionCard
+          transaction={transaction}
+          categoryData={transaction.categoryData} // ✅ UPDATED: Pass pre-resolved categoryData
+          onDelete={onDeleteTransaction}
+          onEdit={onEditTransaction}
+          onSwipeStart={onSwipeStart}
+          onSwipeEnd={onSwipeEnd}
+        />
+      </View>
+    );
+  };
+
+  console.log('📋 TransactionList: Filtered transactions:', {
+    dailyTransactionsCount: dailyTransactions.length,
+    recurringGroupsCounts: Object.keys(recurringGroups).map(freq => ({
+      frequency: freq,
+      count: recurringGroups[freq].length,
+    })),
+  });
 
   return (
     <View style={styles.container}>

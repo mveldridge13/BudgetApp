@@ -54,9 +54,17 @@ const AddTransactionContainer = ({
       return [];
     }
 
+    console.log(
+      '🔄 AddTransaction: Transforming categories:',
+      backendCategories.length,
+    );
+
     // Separate main categories and subcategories
     const mainCategories = backendCategories.filter(cat => !cat.parentId);
     const subcategories = backendCategories.filter(cat => cat.parentId);
+
+    console.log('🔄 AddTransaction: Main categories:', mainCategories.length);
+    console.log('🔄 AddTransaction: Subcategories:', subcategories.length);
 
     const subcategoriesMap = subcategories.reduce((map, subcat) => {
       if (!map[subcat.parentId]) {
@@ -86,6 +94,8 @@ const AddTransactionContainer = ({
         subcategoriesMap[category.id].length > 0,
       subcategories: subcategoriesMap[category.id] || [],
     }));
+
+    console.log('🔄 AddTransaction: Final categories:', result.length);
 
     // Sort main categories alphabetically by name
     return result.sort((a, b) => a.name.localeCompare(b.name));
@@ -132,7 +142,10 @@ const AddTransactionContainer = ({
 
   const loadCategories = useCallback(async () => {
     try {
+      console.log('📂 AddTransaction: Loading categories...');
+
       if (!TrendAPIService.isAuthenticated()) {
+        console.log('📂 AddTransaction: Not authenticated');
         if (navigation) {
           navigation.navigate('Auth');
         }
@@ -144,8 +157,19 @@ const AddTransactionContainer = ({
 
       const response = await TrendAPIService.getCategories();
       const backendCategories = response?.categories || [];
+
+      console.log(
+        '📂 AddTransaction: Backend categories received:',
+        backendCategories.length,
+      );
+
       const transformedCategories = transformCategoriesForUI(backendCategories);
       setCategories(transformedCategories);
+
+      console.log(
+        '📂 AddTransaction: Categories loaded successfully:',
+        transformedCategories.length,
+      );
     } catch (apiError) {
       console.error(
         'AddTransactionContainer: Error loading categories:',
@@ -173,6 +197,7 @@ const AddTransactionContainer = ({
   // ==============================================
 
   const resetForm = useCallback(() => {
+    console.log('🔄 AddTransaction: Resetting form');
     setAmount('');
     setDescription('');
     setSelectedCategory(null);
@@ -185,6 +210,11 @@ const AddTransactionContainer = ({
 
   const populateFormForEdit = useCallback(() => {
     if (editingTransaction && visible) {
+      console.log(
+        '✏️ AddTransaction: Populating form for edit:',
+        editingTransaction,
+      );
+
       // Pre-populate all fields with existing transaction data
       setAmount(editingTransaction.amount.toString());
       setDescription(editingTransaction.description || '');
@@ -203,6 +233,7 @@ const AddTransactionContainer = ({
       }
     } else if (!editingTransaction && visible) {
       // Reset form for new transaction
+      console.log('➕ AddTransaction: Setting up for new transaction');
       resetForm();
     }
   }, [editingTransaction, visible, resetForm, getCategoryById]);
@@ -212,6 +243,8 @@ const AddTransactionContainer = ({
   // ==============================================
 
   const handleSave = useCallback(async () => {
+    console.log('💾 AddTransaction: Attempting to save transaction');
+
     if (!amount || !selectedCategory) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -226,8 +259,8 @@ const AddTransactionContainer = ({
       ...(isEditMode && editingTransaction.id && {id: editingTransaction.id}),
       amount: parseFloat(amount),
       description: finalDescription,
-      categoryId: selectedCategory,
-      subcategory: selectedSubcategory,
+      categoryId: selectedCategory, // ✅ CORRECT field name
+      subcategoryId: selectedSubcategory, // ✅ FIXED - was 'subcategory'
       date: selectedDate,
       recurrence: selectedRecurrence,
       type: selectedTransactionType,
@@ -235,15 +268,28 @@ const AddTransactionContainer = ({
       updatedAt: isEditMode ? new Date() : undefined,
     };
 
+    // Add debugging to see what's being sent
+    console.log('🚀 AddTransaction: Saving transaction:', {
+      isEditMode,
+      transactionId: transaction.id,
+      amount: transaction.amount,
+      description: transaction.description,
+      categoryId: transaction.categoryId,
+      subcategoryId: transaction.subcategoryId,
+      type: transaction.type,
+      recurrence: transaction.recurrence,
+    });
+
     try {
       await onSave(transaction);
       // Only reset form and close modal if save was successful
+      console.log('✅ AddTransaction: Save successful');
       resetForm();
       onClose();
     } catch (error) {
       // Error handling is done by parent container
       // Keep modal open for user to retry
-      console.log('AddTransactionContainer: Save failed, keeping modal open');
+      console.log('❌ AddTransaction: Save failed, keeping modal open:', error);
     }
   }, [
     amount,
@@ -262,12 +308,14 @@ const AddTransactionContainer = ({
   ]);
 
   const handleClose = useCallback(() => {
+    console.log('❌ AddTransaction: Closing modal');
     resetForm();
     onClose();
   }, [resetForm, onClose]);
 
   const handleCategorySelect = useCallback(
     categoryId => {
+      console.log('🏷️ AddTransaction: Category selected:', categoryId);
       const category = getCategoryById(categoryId);
 
       if (
@@ -275,10 +323,16 @@ const AddTransactionContainer = ({
         category.hasSubcategories &&
         category.subcategories?.length > 0
       ) {
+        console.log(
+          '🏷️ AddTransaction: Category has subcategories, showing subcategory picker',
+        );
         // Set subcategory data for UI to use
         setCurrentSubcategoryData(category);
         // Don't select the category yet - wait for subcategory selection
       } else {
+        console.log(
+          '🏷️ AddTransaction: Category has no subcategories, selecting directly',
+        );
         // Select category directly
         setSelectedCategory(categoryId);
         setSelectedSubcategory(null);
@@ -289,12 +343,18 @@ const AddTransactionContainer = ({
 
   const handleSubcategorySelect = useCallback(
     subcategoryId => {
+      console.log('🏷️ AddTransaction: Subcategory selected:', subcategoryId);
+
       // Handle both edit mode and new transaction mode
       if (currentSubcategoryData) {
+        console.log(
+          '🏷️ AddTransaction: Using currentSubcategoryData for category',
+        );
         // New transaction or category change - use currentSubcategoryData
         setSelectedCategory(currentSubcategoryData.id);
         setSelectedSubcategory(subcategoryId);
       } else {
+        console.log('🏷️ AddTransaction: Edit mode - keeping existing category');
         // Edit mode - keep existing category, just update subcategory
         setSelectedSubcategory(subcategoryId);
       }
@@ -303,6 +363,7 @@ const AddTransactionContainer = ({
   );
 
   const handleRecurrenceSelect = useCallback(recurrenceId => {
+    console.log('🔄 AddTransaction: Recurrence selected:', recurrenceId);
     setSelectedRecurrence(recurrenceId);
   }, []);
 
@@ -315,6 +376,7 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleDateChange = useCallback(date => {
+    console.log('📅 AddTransaction: Date changed:', date);
     setSelectedDate(date);
     setShowCalendar(false);
   }, []);
@@ -328,6 +390,7 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleTransactionTypeChange = useCallback(type => {
+    console.log('💰 AddTransaction: Type changed:', type);
     setSelectedTransactionType(type);
   }, []);
 
@@ -367,11 +430,19 @@ const AddTransactionContainer = ({
         );
 
       if (shouldAutoUpdate) {
+        console.log(
+          '📝 AddTransaction: Auto-updating description to:',
+          newCategoryDisplayName,
+        );
         setDescription(newCategoryDisplayName);
       }
     } else {
       // For new transactions, always auto-update if description is empty
       if (!description.trim()) {
+        console.log(
+          '📝 AddTransaction: Setting initial description to:',
+          newCategoryDisplayName,
+        );
         setDescription(newCategoryDisplayName);
       }
     }
@@ -392,6 +463,9 @@ const AddTransactionContainer = ({
 
   useEffect(() => {
     if (visible) {
+      console.log(
+        '👁️ AddTransaction: Modal became visible, loading categories',
+      );
       loadCategories();
     }
   }, [visible, loadCategories]);
@@ -404,6 +478,16 @@ const AddTransactionContainer = ({
   // ==============================================
   // RENDER
   // ==============================================
+
+  console.log('🎨 AddTransaction: Rendering with state:', {
+    visible,
+    isEditMode,
+    selectedCategory,
+    selectedSubcategory,
+    categoriesCount: categories.length,
+    isLoading,
+    errorState,
+  });
 
   return (
     <AddTransactionModal
