@@ -9,7 +9,7 @@ import AuthContainer from '../screens/AuthContainer';
 import WelcomeFlow from '../components/WelcomeFlow';
 import IncomeSetupContainer from '../containers/IncomeSetupContainer'; // ✅ FIXED: Import IncomeSetupContainer
 import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import HomeContainer instead of HomeScreen
-import AnalyticsScreen from '../screens/AnalyticsScreen';
+import AnalyticsContainer from '../containers/AnalyticsContainer'; // ✅ CHANGED: Import AnalyticsContainer instead of AnalyticsScreen
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 
@@ -66,7 +66,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Analytics"
-        component={AnalyticsScreen}
+        component={AnalyticsContainer} // ✅ CHANGED: Use AnalyticsContainer instead of AnalyticsScreen
         options={{
           tabBarIcon: AnalyticsIcon,
         }}

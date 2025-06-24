@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
+import React, {useMemo} from 'react';
 import {
   View,
   StyleSheet,
@@ -7,12 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
-  AppState,
-  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {LineChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
 import DiscretionaryBreakdown from '../components/DiscretionaryBreakdown';
@@ -24,397 +20,33 @@ const ProBadge = () => (
   </View>
 );
 
-const AnalyticsScreen = () => {
+const AnalyticsScreen = ({
+  // Core data
+  transactions,
+  data,
+  isLoading,
+
+  // UI state
+  selectedPeriod,
+  comparisonMode,
+  refreshing,
+  isPro,
+  showBreakdown,
+
+  // Calculated statistics
+  statistics,
+
+  // Event handlers
+  onPeriodChange,
+  onComparisonToggle,
+  onDiscretionaryClick,
+  onCloseBreakdown,
+  onRefresh,
+
+  // Helper functions
+  isRecurringTransaction,
+}) => {
   const insets = useSafeAreaInsets();
-  const [selectedPeriod, setSelectedPeriod] = useState('daily');
-  const [comparisonMode, setComparisonMode] = useState(false);
-  const [transactions, setTransactions] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [isPro, setIsPro] = useState(false);
-  const [showBreakdown, setShowBreakdown] = useState(false);
-
-  // Refs to prevent multiple simultaneous loads and flicker
-  const isLoadingRef = useRef(false);
-  const lastActiveDate = useRef(new Date().toDateString());
-  const isMountedRef = useRef(true);
-  const hasLoadedOnce = useRef(false);
-
-  // Check Pro status on mount and when screen is focused
-  useEffect(() => {
-    const checkProStatus = async () => {
-      try {
-        const proStatus = await AsyncStorage.getItem('isPro');
-        setIsPro(proStatus === 'true');
-      } catch (error) {
-        console.error('Error checking Pro status:', error);
-      }
-    };
-    checkProStatus();
-  }, []);
-
-  // Re-check Pro status when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      const checkProStatus = async () => {
-        try {
-          const proStatus = await AsyncStorage.getItem('isPro');
-          setIsPro(proStatus === 'true');
-        } catch (error) {
-          console.error('Error checking Pro status:', error);
-        }
-      };
-      checkProStatus();
-    }, []),
-  );
-
-  // Consolidated data loading function
-  const loadTransactions = useCallback(async (force = false) => {
-    if (isLoadingRef.current && !force) {
-      return;
-    }
-
-    isLoadingRef.current = true;
-
-    try {
-      const storedTransactions = await AsyncStorage.getItem('transactions');
-      if (storedTransactions && isMountedRef.current) {
-        const parsedTransactions = JSON.parse(storedTransactions);
-        setTransactions(parsedTransactions);
-      } else if (isMountedRef.current) {
-        setTransactions([]);
-      }
-      hasLoadedOnce.current = true;
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-      if (isMountedRef.current) {
-        setTransactions([]);
-      }
-    } finally {
-      isLoadingRef.current = false;
-    }
-  }, []);
-
-  // Initial load on mount
-  useEffect(() => {
-    isMountedRef.current = true;
-    loadTransactions();
-
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [loadTransactions]);
-
-  // Monitor app state changes for automatic refresh
-  useEffect(() => {
-    const handleAppStateChange = nextAppState => {
-      if (nextAppState === 'active' && isMountedRef.current) {
-        const now = new Date();
-        const currentDateString = now.toDateString();
-
-        // Only reload if it's a new day
-        if (lastActiveDate.current !== currentDateString) {
-          lastActiveDate.current = currentDateString;
-          loadTransactions(true);
-        }
-      }
-    };
-
-    const subscription = AppState.addEventListener(
-      'change',
-      handleAppStateChange,
-    );
-    return () => subscription?.remove();
-  }, [loadTransactions]);
-
-  // Only reload on focus if data is empty
-  useFocusEffect(
-    useCallback(() => {
-      if (isMountedRef.current && !isLoadingRef.current) {
-        // Only reload if transactions are empty
-        if (transactions.length === 0) {
-          loadTransactions();
-        }
-      }
-    }, [loadTransactions, transactions.length]),
-  );
-
-  // Pull-to-refresh handler
-  const onRefresh = useCallback(async () => {
-    if (refreshing) {
-      return;
-    }
-
-    setRefreshing(true);
-    await loadTransactions(true);
-    setRefreshing(false);
-  }, [loadTransactions, refreshing]);
-
-  // Helper function to check if transaction is recurring
-  const isRecurringTransaction = useCallback(transaction => {
-    // Check for recurrence field based on your app's structure
-    return (
-      transaction.recurrence &&
-      transaction.recurrence !== 'none' &&
-      ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
-        transaction.recurrence,
-      )
-    );
-  }, []);
-
-  // Updated period data calculation with discretionary spending separation
-  const getPeriodData = useCallback(() => {
-    if (transactions.length === 0) {
-      return [];
-    }
-
-    const now = new Date();
-    const data = [];
-
-    switch (selectedPeriod) {
-      case 'daily':
-        // Last 7 days
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date(now);
-          date.setDate(date.getDate() - i);
-
-          const dayTransactions = transactions.filter(t => {
-            const transactionDate = new Date(t.date);
-            return (
-              transactionDate.getDate() === date.getDate() &&
-              transactionDate.getMonth() === date.getMonth() &&
-              transactionDate.getFullYear() === date.getFullYear()
-            );
-          });
-
-          // Calculate total and discretionary amounts
-          const dailyTotal = dayTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-          );
-
-          const dailyDiscretionary = dayTransactions
-            .filter(t => !isRecurringTransaction(t))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-          // Previous week same day for comparison
-          const previousWeekDate = new Date(date);
-          previousWeekDate.setDate(previousWeekDate.getDate() - 7);
-
-          const previousDayTransactions = transactions.filter(t => {
-            const transactionDate = new Date(t.date);
-            return (
-              transactionDate.getDate() === previousWeekDate.getDate() &&
-              transactionDate.getMonth() === previousWeekDate.getMonth() &&
-              transactionDate.getFullYear() === previousWeekDate.getFullYear()
-            );
-          });
-
-          const previousDayTotal = previousDayTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-          );
-
-          const previousDayDiscretionary = previousDayTransactions
-            .filter(t => !isRecurringTransaction(t))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-          data.push({
-            label: date.toLocaleDateString('en-US', {
-              weekday: 'short',
-              day: 'numeric',
-            }),
-            amount: dailyTotal,
-            discretionaryAmount: dailyDiscretionary,
-            previousPeriod: previousDayTotal,
-            previousDiscretionary: previousDayDiscretionary,
-            date: new Date(date),
-          });
-        }
-        break;
-
-      case 'weekly':
-        // Last 4 weeks
-        for (let i = 3; i >= 0; i--) {
-          const weekStart = new Date(now);
-          weekStart.setDate(weekStart.getDate() - (weekStart.getDay() + 7 * i));
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekEnd.getDate() + 6);
-
-          const weekTransactions = transactions.filter(t => {
-            const transactionDate = new Date(t.date);
-            return transactionDate >= weekStart && transactionDate <= weekEnd;
-          });
-
-          const weeklyTotal = weekTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-          );
-
-          const weeklyDiscretionary = weekTransactions
-            .filter(t => !isRecurringTransaction(t))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-          // Previous month same week for comparison
-          const previousWeekStart = new Date(weekStart);
-          previousWeekStart.setDate(previousWeekStart.getDate() - 28);
-          const previousWeekEnd = new Date(previousWeekStart);
-          previousWeekEnd.setDate(previousWeekEnd.getDate() + 6);
-
-          const previousWeekTransactions = transactions.filter(t => {
-            const transactionDate = new Date(t.date);
-            return (
-              transactionDate >= previousWeekStart &&
-              transactionDate <= previousWeekEnd
-            );
-          });
-
-          const previousWeekTotal = previousWeekTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-          );
-
-          const previousWeekDiscretionary = previousWeekTransactions
-            .filter(t => !isRecurringTransaction(t))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-          data.push({
-            label: `Week ${4 - i}`,
-            amount: weeklyTotal,
-            discretionaryAmount: weeklyDiscretionary,
-            previousPeriod: previousWeekTotal,
-            previousDiscretionary: previousWeekDiscretionary,
-            startDate: new Date(weekStart),
-            endDate: new Date(weekEnd),
-          });
-        }
-        break;
-
-      case 'monthly':
-        // Last 5 months
-        for (let i = 4; i >= 0; i--) {
-          const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-
-          const monthTransactions = transactions.filter(t => {
-            const transactionDate = new Date(t.date);
-            return (
-              transactionDate.getMonth() === monthDate.getMonth() &&
-              transactionDate.getFullYear() === monthDate.getFullYear()
-            );
-          });
-
-          const monthlyTotal = monthTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-          );
-
-          const monthlyDiscretionary = monthTransactions
-            .filter(t => !isRecurringTransaction(t))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-          // Previous year same month for comparison
-          const previousYearMonth = new Date(monthDate);
-          previousYearMonth.setFullYear(previousYearMonth.getFullYear() - 1);
-
-          const previousMonthTransactions = transactions.filter(t => {
-            const transactionDate = new Date(t.date);
-            return (
-              transactionDate.getMonth() === previousYearMonth.getMonth() &&
-              transactionDate.getFullYear() === previousYearMonth.getFullYear()
-            );
-          });
-
-          const previousMonthTotal = previousMonthTransactions.reduce(
-            (sum, t) => sum + t.amount,
-            0,
-          );
-
-          const previousMonthDiscretionary = previousMonthTransactions
-            .filter(t => !isRecurringTransaction(t))
-            .reduce((sum, t) => sum + t.amount, 0);
-
-          data.push({
-            label: monthDate.toLocaleDateString('en-US', {month: 'short'}),
-            amount: monthlyTotal,
-            discretionaryAmount: monthlyDiscretionary,
-            previousPeriod: previousMonthTotal,
-            previousDiscretionary: previousMonthDiscretionary,
-            monthDate: new Date(monthDate),
-          });
-        }
-        break;
-    }
-
-    return data;
-  }, [transactions, selectedPeriod, isRecurringTransaction]);
-
-  // Memoize all derived data
-  const data = useMemo(() => getPeriodData(), [getPeriodData]);
-
-  const getCurrentTotal = useMemo(() => {
-    return data.reduce((sum, item) => sum + item.amount, 0);
-  }, [data]);
-
-  const getCurrentDiscretionary = useMemo(() => {
-    return data.reduce((sum, item) => sum + item.discretionaryAmount, 0);
-  }, [data]);
-
-  const getPreviousTotal = useMemo(() => {
-    return data.reduce((sum, item) => sum + item.previousPeriod, 0);
-  }, [data]);
-
-  const getPreviousDiscretionary = useMemo(() => {
-    return data.reduce((sum, item) => sum + item.previousDiscretionary, 0);
-  }, [data]);
-
-  const getPercentageChange = useMemo(() => {
-    const current = getCurrentTotal;
-    const previous = getPreviousTotal;
-    if (previous === 0) {
-      return 0;
-    }
-    return ((current - previous) / previous) * 100;
-  }, [getCurrentTotal, getPreviousTotal]);
-
-  const getDiscretionaryPercentageChange = useMemo(() => {
-    const current = getCurrentDiscretionary;
-    const previous = getPreviousDiscretionary;
-    if (previous === 0) {
-      return 0;
-    }
-    return ((current - previous) / previous) * 100;
-  }, [getCurrentDiscretionary, getPreviousDiscretionary]);
-
-  const getAverageSpending = useMemo(() => {
-    if (data.length === 0) {
-      return 0;
-    }
-    return getCurrentTotal / data.length;
-  }, [data.length, getCurrentTotal]);
-
-  const getAverageDiscretionary = useMemo(() => {
-    if (data.length === 0) {
-      return 0;
-    }
-    return getCurrentDiscretionary / data.length;
-  }, [data.length, getCurrentDiscretionary]);
-
-  const getHighestSpendingPeriod = useMemo(() => {
-    if (data.length === 0) {
-      return null;
-    }
-    return data.reduce((max, current) =>
-      current.amount > max.amount ? current : max,
-    );
-  }, [data]);
-
-  const getHighestDiscretionaryPeriod = useMemo(() => {
-    if (data.length === 0) {
-      return null;
-    }
-    return data.reduce((max, current) =>
-      current.discretionaryAmount > max.discretionaryAmount ? current : max,
-    );
-  }, [data]);
 
   // Memoize chart configuration
   const chartConfig = useMemo(
@@ -463,35 +95,6 @@ const AnalyticsScreen = () => {
 
   const screenWidth = useMemo(() => Dimensions.get('window').width, []);
 
-  // Memoized handlers
-  const handlePeriodChange = useCallback(period => {
-    setSelectedPeriod(period);
-  }, []);
-
-  const handleComparisonToggle = useCallback(() => {
-    setComparisonMode(prev => !prev);
-  }, []);
-
-  const handleDiscretionaryClick = useCallback(() => {
-    if (isPro) {
-      setShowBreakdown(true);
-    } else {
-      // Show upgrade prompt
-      Alert.alert(
-        'Upgrade to Pro',
-        'Access advanced analytics and detailed breakdowns with Pro features!',
-        [
-          {text: 'Maybe Later', style: 'cancel'},
-          {text: 'Learn More', style: 'default'},
-        ],
-      );
-    }
-  }, [isPro]);
-
-  const handleCloseBreakdown = useCallback(() => {
-    setShowBreakdown(false);
-  }, []);
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -526,7 +129,7 @@ const AnalyticsScreen = () => {
             {['daily', 'weekly', 'monthly'].map(period => (
               <TouchableOpacity
                 key={period}
-                onPress={() => handlePeriodChange(period)}
+                onPress={() => onPeriodChange(period)}
                 style={[
                   styles.periodButton,
                   selectedPeriod === period && styles.periodButtonActive,
@@ -544,7 +147,7 @@ const AnalyticsScreen = () => {
 
           <TouchableOpacity
             style={styles.comparisonToggle}
-            onPress={handleComparisonToggle}>
+            onPress={onComparisonToggle}>
             <View
               style={[
                 styles.checkbox,
@@ -562,7 +165,9 @@ const AnalyticsScreen = () => {
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Total Spending</Text>
-            <Text style={styles.statValue}>${getCurrentTotal.toFixed(2)}</Text>
+            <Text style={styles.statValue}>
+              ${statistics.currentTotal.toFixed(2)}
+            </Text>
           </View>
 
           <View style={styles.statCard}>
@@ -571,7 +176,7 @@ const AnalyticsScreen = () => {
               Average
             </Text>
             <Text style={styles.statValue}>
-              ${getAverageSpending.toFixed(2)}
+              ${statistics.averageSpending.toFixed(2)}
             </Text>
           </View>
 
@@ -582,13 +187,13 @@ const AnalyticsScreen = () => {
                 styles.statValue,
                 {
                   color:
-                    getPercentageChange >= 0
+                    statistics.percentageChange >= 0
                       ? colors.danger || '#EF4444'
                       : colors.success || '#10B981',
                 },
               ]}>
-              {getPercentageChange >= 0 ? '+' : ''}
-              {getPercentageChange.toFixed(1)}%
+              {statistics.percentageChange >= 0 ? '+' : ''}
+              {statistics.percentageChange.toFixed(1)}%
             </Text>
           </View>
         </View>
@@ -598,14 +203,14 @@ const AnalyticsScreen = () => {
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Discretionary Spending</Text>
             <Text style={styles.statValue}>
-              ${getCurrentDiscretionary.toFixed(2)}
+              ${statistics.currentDiscretionary.toFixed(2)}
             </Text>
           </View>
 
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Discretionary Average</Text>
             <Text style={styles.statValue}>
-              ${getAverageDiscretionary.toFixed(2)}
+              ${statistics.averageDiscretionary.toFixed(2)}
             </Text>
           </View>
 
@@ -616,13 +221,13 @@ const AnalyticsScreen = () => {
                 styles.statValue,
                 {
                   color:
-                    getDiscretionaryPercentageChange >= 0
+                    statistics.discretionaryPercentageChange >= 0
                       ? colors.danger || '#EF4444'
                       : colors.success || '#10B981',
                 },
               ]}>
-              {getDiscretionaryPercentageChange >= 0 ? '+' : ''}
-              {getDiscretionaryPercentageChange.toFixed(1)}%
+              {statistics.discretionaryPercentageChange >= 0 ? '+' : ''}
+              {statistics.discretionaryPercentageChange.toFixed(1)}%
             </Text>
           </View>
         </View>
@@ -652,33 +257,33 @@ const AnalyticsScreen = () => {
         <View style={styles.insightsContainer}>
           <Text style={styles.insightsTitle}>Key Insights</Text>
 
-          {getHighestSpendingPeriod && (
+          {statistics.highestSpendingPeriod && (
             <View
               style={[styles.insightCard, {borderLeftColor: colors.primary}]}>
               <Text style={styles.insightText}>
                 <Text style={styles.insightBold}>Highest total spending:</Text>{' '}
-                {getHighestSpendingPeriod.label} with $
-                {getHighestSpendingPeriod.amount.toFixed(2)}
+                {statistics.highestSpendingPeriod.label} with $
+                {statistics.highestSpendingPeriod.amount.toFixed(2)}
               </Text>
             </View>
           )}
 
-          {getHighestDiscretionaryPeriod &&
-            getHighestDiscretionaryPeriod.discretionaryAmount > 0 && (
+          {statistics.highestDiscretionaryPeriod &&
+            statistics.highestDiscretionaryPeriod.discretionaryAmount > 0 && (
               <TouchableOpacity
                 style={[
                   styles.insightCard,
                   styles.clickableInsight,
                   {borderLeftColor: colors.secondary || '#10B981'},
                 ]}
-                onPress={handleDiscretionaryClick}>
+                onPress={onDiscretionaryClick}>
                 <View style={styles.insightContentClean}>
                   <Text style={styles.insightText}>
                     <Text style={styles.insightBold}>
                       Highest discretionary spending:
                     </Text>{' '}
-                    {getHighestDiscretionaryPeriod.label} with $
-                    {getHighestDiscretionaryPeriod.discretionaryAmount.toFixed(
+                    {statistics.highestDiscretionaryPeriod.label} with $
+                    {statistics.highestDiscretionaryPeriod.discretionaryAmount.toFixed(
                       2,
                     )}
                   </Text>
@@ -698,15 +303,16 @@ const AnalyticsScreen = () => {
               styles.insightCard,
               {
                 borderLeftColor:
-                  getPercentageChange >= 0
+                  statistics.percentageChange >= 0
                     ? colors.danger || '#EF4444'
                     : colors.success || '#10B981',
               },
             ]}>
             <Text style={styles.insightText}>
               <Text style={styles.insightBold}>Total spending trend:</Text>{' '}
-              You're spending {Math.abs(getPercentageChange).toFixed(1)}%{' '}
-              {getPercentageChange >= 0 ? 'more' : 'less'} than last period
+              You're spending {Math.abs(statistics.percentageChange).toFixed(1)}
+              % {statistics.percentageChange >= 0 ? 'more' : 'less'} than last
+              period
             </Text>
           </View>
 
@@ -715,7 +321,7 @@ const AnalyticsScreen = () => {
               styles.insightCard,
               {
                 borderLeftColor:
-                  getDiscretionaryPercentageChange >= 0
+                  statistics.discretionaryPercentageChange >= 0
                     ? colors.danger || '#EF4444'
                     : colors.success || '#10B981',
               },
@@ -723,9 +329,11 @@ const AnalyticsScreen = () => {
             <Text style={styles.insightText}>
               <Text style={styles.insightBold}>Discretionary trend:</Text> Your
               discretionary spending is{' '}
-              {Math.abs(getDiscretionaryPercentageChange).toFixed(1)}%{' '}
-              {getDiscretionaryPercentageChange >= 0 ? 'higher' : 'lower'} than
-              last period
+              {Math.abs(statistics.discretionaryPercentageChange).toFixed(1)}%{' '}
+              {statistics.discretionaryPercentageChange >= 0
+                ? 'higher'
+                : 'lower'}{' '}
+              than last period
             </Text>
           </View>
 
@@ -747,7 +355,7 @@ const AnalyticsScreen = () => {
       {/* Discretionary Breakdown Modal */}
       <DiscretionaryBreakdown
         visible={showBreakdown}
-        onClose={handleCloseBreakdown}
+        onClose={onCloseBreakdown}
         transactions={transactions}
         selectedPeriod={selectedPeriod}
         periodData={data}
