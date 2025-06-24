@@ -47,6 +47,24 @@ class TrendAPIService {
     return !!this.token;
   }
 
+  // Helper method to build query string
+  buildQueryString(params) {
+    const cleanParams = {};
+
+    // Clean up parameters - remove null/undefined values
+    Object.keys(params).forEach(key => {
+      if (
+        params[key] !== null &&
+        params[key] !== undefined &&
+        params[key] !== ''
+      ) {
+        cleanParams[key] = params[key];
+      }
+    });
+
+    return new URLSearchParams(cleanParams).toString();
+  }
+
   async makeRequest(endpoint, options = {}) {
     const {
       method = 'GET',
@@ -109,7 +127,10 @@ class TrendAPIService {
     }
   }
 
-  // Authentication methods
+  // ============================================================================
+  // AUTHENTICATION METHODS
+  // ============================================================================
+
   async login(email, password) {
     try {
       const response = await this.makeRequest('/auth/login', {
@@ -123,7 +144,6 @@ class TrendAPIService {
 
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
-
         return {
           success: true,
           user: response.user,
@@ -151,13 +171,15 @@ class TrendAPIService {
           lastName: userData.lastName.trim(),
           email: userData.email.trim(),
           password: userData.password,
+          username: userData.username?.trim(),
+          currency: userData.currency || 'USD',
+          timezone: userData.timezone || 'UTC',
         },
         requiresAuth: false,
       });
 
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
-
         return {
           success: true,
           user: response.user,
@@ -188,7 +210,6 @@ class TrendAPIService {
     }
   }
 
-  // Profile methods
   async getUserProfile() {
     return this.makeRequest('/auth/profile');
   }
@@ -200,94 +221,31 @@ class TrendAPIService {
     });
   }
 
-  // Onboarding methods
-  async getOnboardingStatus() {
-    // Since onboarding fields are part of the user profile,
-    // we can extract them from the existing getUserProfile response
-    const userProfile = await this.getUserProfile();
-
-    return {
-      hasSeenBalanceCardTour: userProfile.hasSeenBalanceCardTour ?? false,
-      hasSeenAddTransactionTour:
-        userProfile.hasSeenAddTransactionTour ?? false,
-      hasSeenTransactionSwipeTour:
-        userProfile.hasSeenTransactionSwipeTour ?? false,
-    };
-  }
+  // ============================================================================
+  // USER MANAGEMENT METHODS
+  // ============================================================================
 
   async updateOnboardingStatus(onboardingData) {
-    try {
-      // Update the user profile with onboarding data
-      const response = await this.updateUserProfile(onboardingData);
-
-      // Extract onboarding fields from the response
-      return {
-        hasSeenBalanceCardTour: response.hasSeenBalanceCardTour ?? false,
-        hasSeenAddTransactionTour: response.hasSeenAddTransactionTour ?? false,
-        hasSeenTransactionSwipeTour:
-          response.hasSeenTransactionSwipeTour ?? false,
-      };
-    } catch (error) {
-      console.error('Failed to update onboarding status:', error);
-      throw error;
-    }
-  }
-
-  async markOnboardingTourComplete(tourType) {
-    try {
-      // Convert tourType to the field name
-      const fieldName = `hasSeen${tourType}Tour`;
-
-      // Update just this specific onboarding field
-      const updateData = {
-        [fieldName]: true,
-      };
-
-      // eslint-disable-next-line no-unused-vars
-      const response = await this.updateUserProfile(updateData);
-
-      return {
-        success: true,
-        tourType: tourType,
-        completedAt: new Date().toISOString(),
-        [fieldName]: true,
-      };
-    } catch (error) {
-      console.error(`Failed to mark ${tourType} tour complete:`, error);
-      throw error;
-    }
-  }
-
-  // Category methods
-  async getCategories() {
-    return this.makeRequest('/categories');
-  }
-
-  async createCategory(categoryData) {
-    return this.makeRequest('/categories', {
-      method: 'POST',
-      body: categoryData,
+    return this.makeRequest('/users/onboarding', {
+      method: 'PATCH',
+      body: onboardingData,
     });
   }
 
-  async updateCategory(id, categoryData) {
-    return this.makeRequest(`/categories/${id}`, {
-      method: 'PUT',
-      body: categoryData,
-    });
-  }
-
-  async deleteCategory(id) {
-    return this.makeRequest(`/categories/${id}`, {
+  async deactivateAccount() {
+    return this.makeRequest('/users/profile', {
       method: 'DELETE',
     });
   }
 
-  // Transaction methods
+  // ============================================================================
+  // TRANSACTION METHODS
+  // ============================================================================
+
   async getTransactions(filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
-    const endpoint = queryParams
-      ? `/transactions?${queryParams}`
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions?${queryString}`
       : '/transactions';
     return this.makeRequest(endpoint);
   }
@@ -300,7 +258,7 @@ class TrendAPIService {
       body: cleanedData,
     });
 
-    // Handle different possible response formats from backend
+    // Handle different possible response formats
     if (response?.transaction) {
       return response.transaction;
     } else if (response?.data) {
@@ -321,7 +279,6 @@ class TrendAPIService {
       body: cleanedData,
     });
 
-    // Handle different possible response formats from backend
     if (response?.transaction) {
       return response.transaction;
     } else if (response?.data) {
@@ -329,8 +286,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      // Fallback: If backend doesn't return full object, return what we have
-      // to prevent hanging. The UI can handle partial data.
       console.warn(
         'Update response missing transaction data, returning partial response',
       );
@@ -359,14 +314,66 @@ class TrendAPIService {
     });
   }
 
-  async getTransactionAnalytics(budgetId, filters = {}) {
-    const queryParams = new URLSearchParams({budgetId, ...filters}).toString();
-    return this.makeRequest(`/transactions/analytics?${queryParams}`);
+  // ============================================================================
+  // ANALYTICS METHODS - FIXED FOR BACKEND INTEGRATION
+  // ============================================================================
+
+  async getTransactionAnalytics(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/analytics?${queryString}`
+      : '/transactions/analytics';
+
+    console.log('📊 Fetching analytics from:', endpoint);
+    return this.makeRequest(endpoint);
   }
 
-  // Budget methods
-  async getBudgets() {
-    return this.makeRequest('/budgets');
+  async getTransactionSummary(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/summary?${queryString}`
+      : '/transactions/summary';
+
+    return this.makeRequest(endpoint);
+  }
+
+  async getRecentTransactions() {
+    return this.makeRequest('/transactions/recent');
+  }
+
+  async getTransactionsByCategory(categoryId, filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/by-category/${categoryId}?${queryString}`
+      : `/transactions/by-category/${categoryId}`;
+
+    return this.makeRequest(endpoint);
+  }
+
+  async getTransactionsByBudget(budgetId, filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/by-budget/${budgetId}?${queryString}`
+      : `/transactions/by-budget/${budgetId}`;
+
+    return this.makeRequest(endpoint);
+  }
+
+  async searchTransactions(searchData) {
+    return this.makeRequest('/transactions/search', {
+      method: 'POST',
+      body: searchData,
+    });
+  }
+
+  // ============================================================================
+  // BUDGET METHODS
+  // ============================================================================
+
+  async getBudgets(pagination = {}) {
+    const queryString = this.buildQueryString(pagination);
+    const endpoint = queryString ? `/budgets?${queryString}` : '/budgets';
+    return this.makeRequest(endpoint);
   }
 
   async createBudget(budgetData) {
@@ -374,6 +381,10 @@ class TrendAPIService {
       method: 'POST',
       body: budgetData,
     });
+  }
+
+  async getBudgetById(id) {
+    return this.makeRequest(`/budgets/${id}`);
   }
 
   async updateBudget(id, budgetData) {
@@ -393,12 +404,163 @@ class TrendAPIService {
     return this.makeRequest(`/budgets/${id}/analytics`);
   }
 
-  // Health check
+  // ============================================================================
+  // CATEGORY METHODS - ENHANCED
+  // ============================================================================
+
+  async getCategories(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString ? `/categories?${queryString}` : '/categories';
+    return this.makeRequest(endpoint);
+  }
+
+  async createCategory(categoryData) {
+    return this.makeRequest('/categories', {
+      method: 'POST',
+      body: categoryData,
+    });
+  }
+
+  async getCategoryById(id) {
+    return this.makeRequest(`/categories/${id}`);
+  }
+
+  async updateCategory(id, categoryData) {
+    return this.makeRequest(`/categories/${id}`, {
+      method: 'PATCH',
+      body: categoryData,
+    });
+  }
+
+  async deleteCategory(id, options = {}) {
+    const queryString = this.buildQueryString(options);
+    const endpoint = queryString
+      ? `/categories/${id}?${queryString}`
+      : `/categories/${id}`;
+
+    return this.makeRequest(endpoint, {
+      method: 'DELETE',
+    });
+  }
+
+  async getCategoryAnalytics(id, filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/categories/${id}/analytics?${queryString}`
+      : `/categories/${id}/analytics`;
+
+    return this.makeRequest(endpoint);
+  }
+
+  async getSystemCategories() {
+    return this.makeRequest('/categories/system');
+  }
+
+  async getPopularCategories(limit = 10) {
+    return this.makeRequest(`/categories/popular?limit=${limit}`);
+  }
+
+  async getArchivedCategories() {
+    return this.makeRequest('/categories/archived');
+  }
+
+  async restoreCategory(id) {
+    return this.makeRequest(`/categories/${id}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  // ============================================================================
+  // ONBOARDING METHODS - ENHANCED
+  // ============================================================================
+
+  async getOnboardingStatus() {
+    // Get from user profile since onboarding is part of user data
+    const userProfile = await this.getUserProfile();
+
+    return {
+      hasSeenBalanceCardTour: userProfile.hasSeenBalanceCardTour ?? false,
+      hasSeenAddTransactionTour: userProfile.hasSeenAddTransactionTour ?? false,
+      hasSeenTransactionSwipeTour:
+        userProfile.hasSeenTransactionSwipeTour ?? false,
+      setupComplete: userProfile.setupComplete ?? false,
+      hasSeenWelcome: userProfile.hasSeenWelcome ?? false,
+    };
+  }
+
+  async markOnboardingTourComplete(tourType) {
+    try {
+      // Convert tourType to the field name
+      const fieldName = `hasSeen${tourType}Tour`;
+
+      // Update via user profile endpoint
+      const updateData = {
+        [fieldName]: true,
+      };
+
+      // eslint-disable-next-line no-unused-vars
+      const response = await this.updateUserProfile(updateData);
+
+      return {
+        success: true,
+        tourType: tourType,
+        completedAt: new Date().toISOString(),
+        [fieldName]: true,
+      };
+    } catch (error) {
+      console.error(`Failed to mark ${tourType} tour complete:`, error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // HEALTH CHECK METHODS
+  // ============================================================================
+
   async checkHealth() {
     return this.makeRequest('/health', {
       requiresAuth: false,
     });
   }
+
+  async ping() {
+    return this.makeRequest('/health/ping', {
+      requiresAuth: false,
+    });
+  }
+
+  // ============================================================================
+  // UTILITY METHODS
+  // ============================================================================
+
+  // Helper method to get current user info
+  async getCurrentUser() {
+    if (!this.isAuthenticated()) {
+      throw new Error('Not authenticated');
+    }
+    return this.getUserProfile();
+  }
+
+  // Helper method to refresh authentication
+  async refreshAuth() {
+    try {
+      const profile = await this.getUserProfile();
+      return !!profile;
+    } catch (error) {
+      await this.clearToken();
+      return false;
+    }
+  }
+
+  // Helper method for debugging API calls
+  getApiInfo() {
+    return {
+      baseURL: this.baseURL,
+      isAuthenticated: this.isAuthenticated(),
+      hasToken: !!this.token,
+    };
+  }
 }
 
+// Export singleton instance
 export default new TrendAPIService();

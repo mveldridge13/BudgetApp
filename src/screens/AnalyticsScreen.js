@@ -1,12 +1,12 @@
-import React, {useMemo} from 'react';
+import React from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   Text,
   TouchableOpacity,
-  Dimensions,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {LineChart} from 'react-native-chart-kit';
@@ -26,6 +26,11 @@ const AnalyticsScreen = ({
   data,
   isLoading,
 
+  // Pre-formatted chart data from container
+  chartData,
+  chartConfig,
+  screenWidth,
+
   // UI state
   selectedPeriod,
   comparisonMode,
@@ -35,6 +40,9 @@ const AnalyticsScreen = ({
 
   // Calculated statistics
   statistics,
+
+  // ✅ NEW: Spending velocity data
+  spendingVelocity,
 
   // Event handlers
   onPeriodChange,
@@ -48,52 +56,12 @@ const AnalyticsScreen = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  // Memoize chart configuration
-  const chartConfig = useMemo(
-    () => ({
-      backgroundColor: colors.surface || '#ffffff',
-      backgroundGradientFrom: colors.surface || '#ffffff',
-      backgroundGradientTo: colors.surface || '#ffffff',
-      decimalPlaces: 0,
-      color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-      style: {
-        borderRadius: 16,
-      },
-      propsForDots: {
-        r: '4',
-        strokeWidth: '2',
-        stroke: colors.primary || '#6366F1',
-      },
-    }),
-    [],
+  // Debug logging
+  console.log('🚀 AnalyticsScreen spendingVelocity:', spendingVelocity);
+  console.log(
+    '🚀 AnalyticsScreen spendingVelocity type:',
+    typeof spendingVelocity,
   );
-
-  const chartData = useMemo(
-    () => ({
-      labels: data.map(item => item.label),
-      datasets: [
-        {
-          data: data.map(item => item.amount),
-          color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-          strokeWidth: 3,
-        },
-        ...(comparisonMode
-          ? [
-              {
-                data: data.map(item => item.previousPeriod),
-                color: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`,
-                strokeWidth: 2,
-                withDots: false,
-              },
-            ]
-          : []),
-      ],
-    }),
-    [data, comparisonMode],
-  );
-
-  const screenWidth = useMemo(() => Dimensions.get('window').width, []);
 
   return (
     <View style={styles.container}>
@@ -232,8 +200,8 @@ const AnalyticsScreen = ({
           </View>
         </View>
 
-        {/* Chart */}
-        {data.length > 0 && (
+        {/* Chart - Using pre-formatted data from container */}
+        {chartData && chartData.labels && chartData.labels.length > 0 && (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Spending Over Time</Text>
             <LineChart
@@ -288,7 +256,7 @@ const AnalyticsScreen = ({
                     )}
                   </Text>
                   {isPro ? (
-                    <Text style={styles.tapHint}>Tap for breakdown</Text>
+                    <Text style={styles.tapHint}>Tap for deatails</Text>
                   ) : (
                     <View style={styles.proIndicator}>
                       <ProBadge />
@@ -337,7 +305,57 @@ const AnalyticsScreen = ({
             </Text>
           </View>
 
-          {transactions.length === 0 && (
+          {/* ✅ NEW: Spending Velocity Insight - Pro Feature */}
+          {spendingVelocity ? (
+            <TouchableOpacity
+              style={[
+                styles.insightCard,
+                isPro && styles.clickableInsight, // Only clickable if Pro
+                {
+                  borderLeftColor:
+                    spendingVelocity.velocityStatus === 'ON_TRACK'
+                      ? colors.success || '#10B981'
+                      : spendingVelocity.velocityStatus === 'SLIGHTLY_HIGH'
+                      ? colors.warning || '#F59E0B'
+                      : colors.danger || '#EF4444',
+                },
+              ]}
+              onPress={() => {
+                if (isPro) {
+                  // TODO: Add velocity details modal or navigation
+                  console.log('🚀 Show velocity details');
+                } else {
+                  Alert.alert(
+                    'Upgrade to Pro',
+                    'Access detailed spending velocity analysis with Pro features!',
+                    [
+                      {text: 'Maybe Later', style: 'cancel'},
+                      {text: 'Learn More', style: 'default'},
+                    ],
+                  );
+                }
+              }}>
+              <View style={styles.insightContentClean}>
+                <Text style={styles.insightText}>
+                  <Text style={styles.insightBold}>Spending Velocity:</Text>{' '}
+                  {spendingVelocity.velocityStatus === 'ON_TRACK' && 'On Track'}
+                  {spendingVelocity.velocityStatus === 'SLIGHTLY_HIGH' &&
+                    'Slightly High'}
+                  {spendingVelocity.velocityStatus === 'HIGH' && 'High'}
+                  {spendingVelocity.velocityStatus === 'VERY_HIGH' &&
+                    'Very High'}
+                </Text>
+                {isPro ? (
+                  <Text style={styles.tapHint}>Tap for details</Text>
+                ) : (
+                  <View style={styles.proIndicator}>
+                    <ProBadge />
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          ) : (
+            // Fallback for no velocity data
             <View
               style={[
                 styles.insightCard,

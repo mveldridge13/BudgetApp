@@ -1,9 +1,10 @@
 import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
-import {AppState, Alert} from 'react-native';
+import {AppState, Alert, Dimensions} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import TrendAPIService from '../services/TrendAPIService';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
+import {colors} from '../styles';
 
 const AnalyticsContainer = () => {
   // UI state only
@@ -111,6 +112,12 @@ const AnalyticsContainer = () => {
 
         if (isMountedRef.current) {
           console.log('Backend analytics:', analyticsResponse);
+          console.log('Monthly trends:', analyticsResponse?.monthlyTrends);
+          console.log('Total expenses:', analyticsResponse?.totalExpenses);
+          console.log(
+            'Spending velocity:',
+            analyticsResponse?.spendingVelocity,
+          );
           setAnalyticsData(analyticsResponse);
         }
       } catch (err) {
@@ -132,11 +139,42 @@ const AnalyticsContainer = () => {
     loadAnalyticsData();
   }, [selectedPeriod, loadAnalyticsData]);
 
-  // Transform backend data for UI - minimal processing
+  // ============================================================================
+  // CHART CONFIGURATION - MOVED FROM UI TO CONTAINER
+  // ============================================================================
+
+  const chartConfig = useMemo(
+    () => ({
+      backgroundColor: colors.surface || '#ffffff',
+      backgroundGradientFrom: colors.surface || '#ffffff',
+      backgroundGradientTo: colors.surface || '#ffffff',
+      decimalPlaces: 0,
+      color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+      labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+      style: {
+        borderRadius: 16,
+      },
+      propsForDots: {
+        r: '4',
+        strokeWidth: '2',
+        stroke: colors.primary || '#6366F1',
+      },
+    }),
+    [],
+  );
+
+  // ============================================================================
+  // DATA PROCESSING - BACKEND-FIRST WITH CHART FORMATTING
+  // ============================================================================
+
   const processedData = useMemo(() => {
     if (!analyticsData) {
       return {
         chartData: [],
+        formattedChartData: {
+          labels: [],
+          datasets: [],
+        },
         statistics: {
           currentTotal: 0,
           currentDiscretionary: 0,
@@ -149,26 +187,81 @@ const AnalyticsContainer = () => {
           highestSpendingPeriod: null,
           highestDiscretionaryPeriod: null,
         },
+        spendingVelocity: null,
         transactions: [],
       };
     }
 
-    // Use backend monthlyTrends directly for chart
+    // Use backend monthlyTrends directly for chart - BACKEND SHOULD PROVIDE THIS
     const chartData =
       analyticsData.monthlyTrends?.map((trend, index) => {
         const date = new Date(trend.month);
+        let label;
+
+        if (selectedPeriod === 'monthly') {
+          label = date.toLocaleDateString('en-US', {month: 'short'});
+        } else if (selectedPeriod === 'weekly') {
+          label = `W${index + 1}`;
+        } else {
+          // Daily period - use short day labels
+          label = date.toLocaleDateString('en-US', {weekday: 'short'});
+        }
+
         return {
-          label:
-            selectedPeriod === 'monthly'
-              ? date.toLocaleDateString('en-US', {month: 'short'})
-              : `Period ${index + 1}`,
+          label,
           amount: trend.expenses || 0,
-          discretionaryAmount: trend.expenses * 0.7, // Backend could provide this
-          previousPeriod: 0, // Backend enhancement needed
+          discretionaryAmount: trend.expenses * 0.7, // Backend should provide this
+          previousPeriod: 0, // Backend should provide this
           previousDiscretionary: 0,
           date,
         };
       }) || [];
+
+    console.log('Processed chart data:', chartData);
+    console.log('Chart data length:', chartData.length);
+
+    // MINIMAL fallback - backend should fix monthlyTrends
+    const finalChartData = chartData.length > 0 ? chartData : [];
+
+    console.log('Final chart data:', finalChartData);
+
+    // ============================================================================
+    // CHART DATA FORMATTING - MOVED FROM UI COMPONENT
+    // ============================================================================
+
+    // Format data specifically for react-native-chart-kit
+    const formattedChartData =
+      finalChartData.length > 0
+        ? {
+            labels: finalChartData.map(item => item.label),
+            datasets: [
+              {
+                data: finalChartData.map(item => item.amount),
+                color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
+                strokeWidth: 3,
+              },
+              ...(comparisonMode
+                ? [
+                    {
+                      data: finalChartData.map(item => item.previousPeriod),
+                      color: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`,
+                      strokeWidth: 2,
+                      withDots: false,
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : {
+            labels: ['No Data'],
+            datasets: [
+              {
+                data: [0],
+                color: (opacity = 1) => `rgba(156, 163, 175, ${opacity})`,
+                strokeWidth: 1,
+              },
+            ],
+          };
 
     // Use backend statistics directly
     const statistics = {
@@ -181,14 +274,14 @@ const AnalyticsContainer = () => {
       averageSpending: analyticsData.averageTransaction || 0,
       averageDiscretionary: analyticsData.averageTransaction * 0.7 || 0,
       highestSpendingPeriod:
-        chartData.length > 0
-          ? chartData.reduce((max, current) =>
+        finalChartData.length > 0
+          ? finalChartData.reduce((max, current) =>
               current.amount > max.amount ? current : max,
             )
           : null,
       highestDiscretionaryPeriod:
-        chartData.length > 0
-          ? chartData.reduce((max, current) =>
+        finalChartData.length > 0
+          ? finalChartData.reduce((max, current) =>
               current.discretionaryAmount > max.discretionaryAmount
                 ? current
                 : max,
@@ -196,12 +289,23 @@ const AnalyticsContainer = () => {
           : null,
     };
 
+    // ✅ NEW: Pass through spending velocity from backend
+    const spendingVelocity = analyticsData.spendingVelocity || null;
+
     return {
-      chartData,
+      chartData: finalChartData, // Raw data for insights
+      formattedChartData, // Ready-to-use chart data
       statistics,
+      spendingVelocity, // ✅ NEW: Spending velocity data from backend
       transactions: [], // We don't need individual transactions for analytics
     };
-  }, [analyticsData, selectedPeriod]);
+  }, [analyticsData, selectedPeriod, comparisonMode]);
+
+  // ============================================================================
+  // SCREEN DIMENSIONS - MOVED FROM UI
+  // ============================================================================
+
+  const screenWidth = useMemo(() => Dimensions.get('window').width, []);
 
   // Simple helper for discretionary breakdown component
   const isRecurringTransaction = useCallback(transaction => {
@@ -283,11 +387,21 @@ const AnalyticsContainer = () => {
     }, [loadAnalyticsData, analyticsData]),
   );
 
-  // Pass backend data directly to UI
+  // ============================================================================
+  // PROPS FOR PURE UI COMPONENT - ALL PROCESSING DONE
+  // ============================================================================
+
   const screenProps = {
     // Backend data with minimal transformation
     transactions: processedData.transactions,
-    data: processedData.chartData,
+    data: processedData.chartData, // Raw data for insights and breakdown modal
+
+    // PRE-FORMATTED CHART DATA - READY TO USE
+    chartData: processedData.formattedChartData, // ✅ Ready for react-native-chart-kit
+    chartConfig, // ✅ Complete chart configuration
+    screenWidth, // ✅ Pre-calculated screen width
+
+    // Loading state
     isLoading,
 
     // UI state
@@ -300,6 +414,9 @@ const AnalyticsContainer = () => {
     // Backend-calculated statistics
     statistics: processedData.statistics,
 
+    // ✅ NEW: Spending velocity data from backend
+    spendingVelocity: processedData.spendingVelocity,
+
     // Event handlers
     onPeriodChange: handlePeriodChange,
     onComparisonToggle: handleComparisonToggle,
@@ -310,6 +427,13 @@ const AnalyticsContainer = () => {
     // Helper for breakdown component
     isRecurringTransaction,
   };
+
+  // Debug logging
+  console.log(
+    '📦 Container passing spendingVelocity:',
+    processedData.spendingVelocity,
+  );
+  console.log('📦 Container screenProps keys:', Object.keys(screenProps));
 
   return <AnalyticsScreen {...screenProps} />;
 };
