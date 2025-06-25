@@ -71,30 +71,37 @@ The app follows a **Container-Component Pattern** with these layers:
 ```
 BudgetApp/
 ├── src/
-│   ├── components/          # Reusable UI Components (14 files)
+│   ├── components/          # Reusable UI Components (19 files)
 │   │   ├── AddGoalModal.js
 │   │   ├── AddTransactionModal.js
+│   │   ├── AddTransactionSpotlight.js
 │   │   ├── BalanceCard.js
+│   │   ├── BalanceCardSpotlight.js
 │   │   ├── CalendarModal.js
 │   │   ├── CategoryPicker.js
 │   │   ├── DiscretionaryBreakdown.js
 │   │   ├── GoalCard.js
 │   │   ├── GoalSuggestionsCard.js
 │   │   ├── RecurrencePickerModal.js
+│   │   ├── SpendingVelocityBreakdown.js
 │   │   ├── Spotlight.js
 │   │   ├── SpotlightMask.js
 │   │   ├── TransactionCard.js
 │   │   ├── TransactionList.js
+│   │   ├── TransactionSwipeSpotlight.js
 │   │   └── WelcomeFlow.js
 │   │
-│   ├── containers/          # Business Logic Containers (5 files)
+│   ├── containers/          # Business Logic Containers (7 files)
 │   │   ├── AddTransactionContainer.js
 │   │   ├── AnalyticsContainer.js
 │   │   ├── CategoryContainer.js
+│   │   ├── DiscretionaryContainer.js
 │   │   ├── HomeContainer.js
-│   │   └── IncomeSetupContainer.js
+│   │   ├── IncomeSetupContainer.js
+│   │   └── SpendingVelocityContainer.js
 │   │
-│   ├── data/               # Static Data (1 file)
+│   ├── data/               # Static Data (2 files)
+│   │   ├── categories.js
 │   │   └── index.js        # Empty file
 │   │
 │   ├── hooks/              # Custom React Hooks (3 files)
@@ -105,14 +112,15 @@ BudgetApp/
 │   ├── navigation/         # Navigation Configuration (1 file)
 │   │   └── AppNavigator.js
 │   │
-│   ├── screens/            # Screen Components (7 files)
+│   ├── screens/            # Screen Components (8 files)
 │   │   ├── AnalyticsScreen.js
 │   │   ├── AuthContainer.js
 │   │   ├── AuthFlow.js
 │   │   ├── GoalsScreen.js
 │   │   ├── HomeScreen.js
 │   │   ├── IncomeSetupScreen.js
-│   │   └── SettingsScreen.js
+│   │   ├── SettingsScreen.js
+│   │   └── index.js
 │   │
 │   ├── services/           # API and Business Services (4 files)
 │   │   ├── AuthService.js
@@ -125,9 +133,12 @@ BudgetApp/
 │   │   ├── globalStyles.js
 │   │   └── index.js
 │   │
-│   └── utils/              # Utility Functions (3 files, empty)
+│   └── utils/              # Utility Functions (6 files)
+│       ├── currencyHelper.js
+│       ├── dateHelper.js
 │       ├── dateUtils.js
 │       ├── formatting.js
+│       ├── storage.js
 │       └── validation.js
 │
 ├── Configuration Files
@@ -460,6 +471,128 @@ class InsightsService {
 
 - AppNavigator.js (setup flow)
 
+#### **DiscretionaryContainer.js** - Discretionary Spending Analysis Logic
+
+```javascript
+// Dependencies
+├── Services: TrendAPIService (discretionary breakdown API)
+├── Components: DiscretionaryBreakdown (UI component)
+├── React: useState, useEffect, useCallback, useRef
+└── React Navigation: useFocusEffect
+
+// Key State Management
+├── discretionaryData - Backend discretionary breakdown data
+├── selectedDate - Selected date for analysis
+├── selectedPeriod - Time period (daily/weekly/monthly)
+├── expandedCategories - UI state for category expansion
+├── showCalendar - Calendar modal visibility
+└── isLoading/refreshing - Loading states
+
+// Major Functions
+├── Date Management
+│   ├── formatDateForAPI() - Local timezone date formatting
+│   ├── formatDateTimeForAPI() - DateTime with time component
+│   ├── createLocalDateRange() - Timezone-safe date ranges
+│   └── formatPeriodLabel() - Human-readable date labels
+├── Data Loading
+│   ├── loadDiscretionaryData() - Fetch breakdown from backend
+│   └── handleRefresh() - Pull-to-refresh functionality
+├── Event Handlers
+│   ├── handleDateChange() - Calendar date selection
+│   ├── handleCategoryPress() - Category expand/collapse
+│   ├── handleCalendarOpen() - Show calendar modal
+│   └── handleClose() - Modal close and cleanup
+└── Data Processing
+    ├── processedBreakdownData() - Transform for UI consumption
+    └── Category/subcategory processing with Map/Array conversion
+```
+
+**Data Flow to DiscretionaryBreakdown:**
+
+- Timezone-safe date ranges for API calls
+- Processed breakdown data with resolved categories
+- Formatted chart data and statistics
+- All event handlers for user interactions
+
+#### **SpendingVelocityContainer.js** - Spending Velocity Analysis Logic
+
+```javascript
+// Dependencies
+├── Services: TrendAPIService (spending velocity API)
+├── Components: SpendingVelocityBreakdown (UI component)
+├── Storage: AsyncStorage (profile caching)
+└── React Navigation: useFocusEffect
+
+// Key State Management
+├── userProfile - User profile data
+├── analyticsData - Backend analytics data
+├── spendingVelocityData - Processed velocity data
+├── selectedPeriod - Time period selection
+├── isLoading - Loading states
+└── UI state (showBreakdown, refreshing)
+
+// Major Functions
+├── Data Loading
+│   ├── loadUserProfile() - User profile with income data
+│   ├── loadAnalyticsData() - Backend analytics data
+│   └── getDateRange() - Period-based date calculations
+├── Data Processing
+│   ├── processSpendingVelocityData() - Transform for UI
+│   ├── Weekly trend calculations
+│   └── Velocity metrics and projections
+├── Event Handlers
+│   ├── handlePeriodChange() - Period selection
+│   ├── handleRefresh() - Data refresh
+│   └── handleClose() - Modal management
+└── Lifecycle Management
+    ├── App state monitoring
+    ├── Focus effect handling
+    └── Component cleanup
+```
+
+**Used By:**
+
+- AnalyticsScreen.js (spending velocity modal)
+
+#### **CategoryContainer.js** - Category Management Logic
+
+```javascript
+// Dependencies
+├── Services: TrendAPIService (category CRUD operations)
+├── Components: CategoryPicker (UI component)
+├── React Navigation: useNavigation
+└── React: useState, useEffect, useCallback
+
+// Key State Management
+├── categories - Available categories with subcategories
+├── selectedCategory/Subcategory - Current selection
+├── currentSubcategoryData - Selected category data
+├── isLoading - Loading states
+└── errorState - Error handling
+
+// Major Functions
+├── Data Transformation
+│   ├── transformCategoriesForUI() - Backend to UI format
+│   └── getCategoryById() - Category lookup utility
+├── Backend Integration
+│   ├── loadCategories() - Fetch all categories
+│   ├── handleAddCategory() - Create new category
+│   └── handleAddSubcategory() - Create new subcategory
+├── Navigation & Selection
+│   ├── handleCategorySelect() - Category selection
+│   ├── handleSubcategorySelect() - Subcategory selection
+│   ├── handleNavigateToSubcategories() - Drill-down navigation
+│   └── handleBackToCategories() - Navigation back
+└── Lifecycle Management
+    ├── Component mounting/unmounting
+    └── Conditional data loading
+```
+
+**Used By:**
+
+- AddTransactionContainer.js (category selection)
+- Other containers requiring category selection
+
 ### Screen Layer
 
 #### **HomeScreen.js** - Main App Interface
@@ -579,6 +712,85 @@ class InsightsService {
 
 ### Component Layer (Key Components)
 
+#### **DiscretionaryBreakdown.js** - Discretionary Spending Analysis UI
+
+```javascript
+// Dependencies
+├── SpendingVelocityBreakdown (nested component)
+├── React Native: Modal, Charts, Animations
+├── styles/colors (theming)
+└── React Native Chart Kit (data visualization)
+
+// Props Interface
+├── visible - Modal visibility state
+├── breakdownData - Processed discretionary data
+├── selectedDate - Current selected date
+├── selectedPeriod - Time period (daily/weekly/monthly)
+├── expandedCategories - Category expansion state
+├── showCalendar - Calendar modal state
+├── Event handlers - All user interactions
+└── isLoading/refreshing - Loading states
+
+// Features
+├── Modal-based discretionary spending breakdown
+├── Category-wise spending analysis with subcategories
+├── Interactive charts and visualizations
+├── Calendar date selection
+├── Expandable category details
+├── Pull-to-refresh functionality
+└── Spending velocity integration
+```
+
+#### **SpendingVelocityBreakdown.js** - Spending Velocity Analysis UI
+
+```javascript
+// Dependencies
+├── React Native: ScrollView, Charts
+├── styles/colors (theming)
+└── Date formatting utilities
+
+// Props Interface
+├── spendingVelocityData - Processed velocity data
+├── selectedPeriod - Time period selection
+├── userProfile - User income data
+├── Event handlers - User interactions
+└── isLoading - Loading state
+
+// Features
+├── Weekly spending trend analysis
+├── Velocity calculations and projections
+├── Visual spending pace indicators
+├── Income-based spending recommendations
+├── Historical trend comparisons
+└── Interactive period selection
+```
+
+#### **Onboarding Spotlight Components**
+
+**AddTransactionSpotlight.js**, **BalanceCardSpotlight.js**, **TransactionSwipeSpotlight.js**
+
+```javascript
+// Dependencies
+├── Spotlight (base spotlight component)
+├── React Native: Animated, Dimensions
+└── styles/colors (theming)
+
+// Props Interface
+├── visible - Spotlight visibility
+├── targetRef - Component reference for positioning
+├── onNext/onSkip - Navigation handlers
+├── measurements - Layout measurements
+└── Animation controls
+
+// Features
+├── Contextual tutorial overlays
+├── Precise component targeting
+├── Animated spotlight effects
+├── Step-by-step user guidance
+├── Skippable tutorial flows
+└── Responsive positioning
+```
+
 #### **BalanceCard.js** - Income/Expense Display
 
 ```javascript
@@ -696,6 +908,52 @@ class InsightsService {
 ├── Typography styles (fonts, sizes, weights)
 ├── Component styles (common patterns)
 └── Utility styles (shadows, borders)
+```
+
+### Utility Layer
+
+#### **currencyHelper.js** - Currency Formatting Utilities
+
+```javascript
+// Currency formatting and calculation utilities
+├── formatCurrency() - Format numbers as currency
+├── parseCurrency() - Parse currency strings to numbers
+├── calculateTotals() - Financial calculations
+└── roundToTwoDecimal() - Precise decimal handling
+```
+
+#### **dateHelper.js** - Date Manipulation Utilities
+
+```javascript
+// Date formatting and calculation utilities
+├── formatDate() - Human-readable date formatting
+├── getDateRange() - Period-based date calculations
+├── isToday() - Date comparison utilities
+├── addDays/Weeks/Months() - Date arithmetic
+└── timezoneUtils() - Timezone-safe operations
+```
+
+#### **storage.js** - AsyncStorage Utilities
+
+```javascript
+// AsyncStorage wrapper utilities
+├── storeData() - Store data with error handling
+├── getData() - Retrieve data with fallbacks
+├── removeData() - Delete stored data
+├── clearAll() - Clear all stored data
+└── storageKeys - Centralized storage key management
+```
+
+#### **Data Layer**
+
+#### **categories.js** - Default Category Data
+
+```javascript
+// Static category definitions
+├── defaultCategories - System category definitions
+├── categoryIcons - Icon mappings
+├── categoryColors - Color schemes
+└── subcategoryTemplates - Default subcategory structures
 ```
 
 ## Data Flow Patterns
