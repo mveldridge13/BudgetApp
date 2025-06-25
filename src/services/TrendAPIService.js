@@ -315,7 +315,7 @@ class TrendAPIService {
   }
 
   // ============================================================================
-  // ANALYTICS METHODS - FIXED FOR BACKEND INTEGRATION
+  // ANALYTICS METHODS - ENHANCED WITH DISCRETIONARY BREAKDOWN
   // ============================================================================
 
   async getTransactionAnalytics(filters = {}) {
@@ -325,6 +325,17 @@ class TrendAPIService {
       : '/transactions/analytics';
 
     console.log('📊 Fetching analytics from:', endpoint);
+    return this.makeRequest(endpoint);
+  }
+
+  // ✅ NEW: Get discretionary breakdown for daily spending analysis
+  async getDiscretionaryBreakdown(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/discretionary-breakdown?${queryString}`
+      : '/transactions/discretionary-breakdown';
+
+    console.log('📊 Fetching discretionary breakdown from:', endpoint);
     return this.makeRequest(endpoint);
   }
 

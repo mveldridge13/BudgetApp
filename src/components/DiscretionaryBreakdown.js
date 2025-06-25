@@ -1,5 +1,6 @@
 /* eslint-disable react-native/no-inline-styles */
-import React, {useRef, useMemo, useState, useEffect, useCallback} from 'react';
+// eslint-disable-next-line no-unused-vars
+import React, {useRef, useState, useCallback} from 'react';
 import {
   View,
   StyleSheet,
@@ -15,8 +16,6 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import Svg, {Path, G} from 'react-native-svg';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
-import TrendAPIService from '../services/TrendAPIService'; // Changed import
-import InsightsService from '../services/InsightsService';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -72,276 +71,70 @@ const getCategoryIcon = categoryName => {
 };
 
 const DiscretionaryBreakdown = ({
+  // ✅ PURE UI PROPS - All data comes from container
   visible,
   onClose,
-  transactions,
+  onRefresh,
+  onCalendarOpen,
+  onDateChange,
+  onCategoryPress,
+
+  // ✅ DATA PROPS - Processed by container
+  isLoading,
+  refreshing,
+  selectedDate,
   selectedPeriod,
-  periodData,
-  isRecurringTransaction,
-  allTransactions,
-  previousPeriodData,
+  breakdownData,
+  expandedCategories,
+  showCalendar,
+
+  // ✅ BREAKDOWN DATA STRUCTURE
+  // breakdownData = {
+  //   period: {
+  //     label: string,
+  //     discretionaryAmount: number,
+  //     isCustomDate: boolean
+  //   },
+  //   categories: [{
+  //     name: string,
+  //     amount: number,
+  //     color: string,
+  //     originalColor: string,
+  //     transactions: array,
+  //     subcategories: [{
+  //       name: string,
+  //       amount: number,
+  //       percentage: string
+  //     }],
+  //     hasSubcategories: boolean
+  //   }],
+  //   insights: [{
+  //     category: string,
+  //     message: string,
+  //     suggestion: string,
+  //     type: 'warning' | 'success' | 'info'
+  //   }],
+  //   totalAmount: number,
+  //   totalTransactions: number
+  // }
 }) => {
-  // Animations
+  // ✅ ANIMATIONS - Keep original animations
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // State
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [categories, setCategories] = useState([]);
-  const [expandedCategories, setExpandedCategories] = useState(new Set());
-  const [refreshing, setRefreshing] = useState(false);
+  // ✅ PURE UI STATE - Only UI-related state
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
 
-  // Load categories on mount
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
-  const loadCategories = async () => {
-    try {
-      // Check if authenticated before making API call
-      if (!TrendAPIService.isAuthenticated()) {
-        console.warn(
-          'TrendAPIService not authenticated, using empty categories',
-        );
-        setCategories([]);
-        return;
-      }
-
-      // Use TrendAPIService to get categories
-      const response = await TrendAPIService.getCategories();
-      const loadedCategories = response?.categories || [];
-
-      if (Array.isArray(loadedCategories)) {
-        setCategories(loadedCategories);
-      } else {
-        console.warn('Invalid categories response, using empty array');
-        setCategories([]);
-      }
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      setCategories([]);
-    }
-  };
-
-  // Pull-to-refresh handler
-  const onRefresh = useCallback(async () => {
-    if (refreshing) {
-      return;
-    }
-
-    setRefreshing(true);
-    try {
-      await loadCategories();
-    } catch (error) {
-      console.error('Error refreshing breakdown data:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [refreshing]);
-
-  // Helper to get transactions for current period
-  const getCurrentPeriodTransactions = useCallback(
-    period => {
-      return InsightsService.getTransactionsForPeriod(
-        allTransactions || transactions,
-        period,
-        selectedPeriod,
-        isRecurringTransaction,
-      );
-    },
-    [allTransactions, transactions, selectedPeriod, isRecurringTransaction],
-  );
-
-  // Helper to get previous period
-  const getPreviousPeriod = useCallback(
-    currentPeriod => {
-      if (previousPeriodData && previousPeriodData.length > 0) {
-        if (selectedPeriod === 'daily' && currentPeriod.date) {
-          const targetDate = new Date(currentPeriod.date);
-          targetDate.setDate(targetDate.getDate() - 1);
-          return previousPeriodData.find(p => {
-            if (!p.date) {
-              return false;
-            }
-            return (
-              p.date.getDate() === targetDate.getDate() &&
-              p.date.getMonth() === targetDate.getMonth() &&
-              p.date.getFullYear() === targetDate.getFullYear()
-            );
-          });
-        } else if (selectedPeriod === 'weekly' && currentPeriod.startDate) {
-          const targetStart = new Date(currentPeriod.startDate);
-          targetStart.setDate(targetStart.getDate() - 7);
-          return previousPeriodData.find(p => {
-            if (!p.startDate) {
-              return false;
-            }
-            return (
-              Math.abs(p.startDate.getTime() - targetStart.getTime()) <
-              24 * 60 * 60 * 1000
-            );
-          });
-        } else if (selectedPeriod === 'monthly' && currentPeriod.monthDate) {
-          const targetMonth = new Date(currentPeriod.monthDate);
-          targetMonth.setMonth(targetMonth.getMonth() - 1);
-          return previousPeriodData.find(p => {
-            if (!p.monthDate) {
-              return false;
-            }
-            return (
-              p.monthDate.getMonth() === targetMonth.getMonth() &&
-              p.monthDate.getFullYear() === targetMonth.getFullYear()
-            );
-          });
-        }
-      }
-
-      return InsightsService.calculatePreviousPeriod(
-        currentPeriod,
-        selectedPeriod,
-      );
-    },
-    [previousPeriodData, selectedPeriod],
-  );
-
-  // Function to get category color based on category name
-  const getCategoryColor = categoryName => {
-    const category = categoryName.toLowerCase();
-    switch (category) {
-      case 'food':
-      case 'restaurant':
-      case 'dining':
-      case 'groceries':
-        return '#FF6B6B';
-      case 'transport':
-      case 'transportation':
-      case 'gas':
-      case 'fuel':
-      case 'car':
-        return '#4ECDC4';
-      case 'shopping':
-      case 'retail':
-      case 'clothes':
-      case 'clothing':
-        return '#45B7D1';
-      case 'entertainment':
-      case 'movies':
-      case 'gaming':
-        return '#96CEB4';
-      case 'health':
-      case 'medical':
-      case 'pharmacy':
-        return '#FF9FF3';
-      case 'home':
-      case 'utilities':
-      case 'household':
-      case 'bills':
-        return '#FECA57';
-      case 'education':
-      case 'books':
-      case 'learning':
-        return '#A8A8A8';
-      case 'travel':
-      case 'vacation':
-      case 'hotel':
-        return '#FF8C42';
-      case 'gifts':
-      case 'donations':
-        return '#6C5CE7';
-      case 'coffee':
-      case 'cafe':
-        return '#FD79A8';
-      default:
-        return '#A8A8A8';
-    }
-  };
-
-  // Helper function to create dynamic category icon style
-  const getCategoryIconStyle = color => {
+  // ✅ Helper function like TransactionCard uses
+  const getLightBackgroundColor = color => {
     const hex = color.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);
-    return {
-      ...styles.categoryIconContainer,
-      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.15)`,
-    };
+    return `rgba(${r}, ${g}, ${b}, 0.15)`;
   };
 
-  // Map category names to CategoryService IDs
-  const getCategoryIdFromName = useCallback(categoryName => {
-    const categoryMap = {
-      food: 'food',
-      restaurant: 'food',
-      dining: 'food',
-      groceries: 'food',
-      transport: 'transport',
-      transportation: 'transport',
-      gas: 'transport',
-      fuel: 'transport',
-      car: 'transport',
-      shopping: 'shopping',
-      retail: 'shopping',
-      clothes: 'shopping',
-      clothing: 'shopping',
-      entertainment: 'entertainment',
-      movies: 'entertainment',
-      gaming: 'entertainment',
-      health: 'health',
-      medical: 'health',
-      pharmacy: 'health',
-      home: 'bills',
-      utilities: 'bills',
-      household: 'bills',
-      bills: 'bills',
-    };
-    return categoryMap[categoryName.toLowerCase()] || 'other';
-  }, []);
-
-  // Get category info from loaded categories
-  const getCategoryInfo = useCallback(
-    categoryName => {
-      if (!Array.isArray(categories) || categories.length === 0) {
-        return null;
-      }
-
-      const categoryId = getCategoryIdFromName(categoryName);
-      return categories.find(cat => cat.id === categoryId) || null;
-    },
-    [categories, getCategoryIdFromName],
-  );
-
-  // Handle category expand/collapse
-  const handleCategoryPress = useCallback(
-    categoryName => {
-      const category = getCategoryInfo(categoryName);
-      if (category?.hasSubcategories) {
-        setExpandedCategories(prev => {
-          const newSet = new Set(prev);
-          if (newSet.has(categoryName)) {
-            newSet.delete(categoryName);
-          } else {
-            newSet.add(categoryName);
-          }
-          return newSet;
-        });
-      }
-    },
-    [getCategoryInfo],
-  );
-
-  // Reset form function
-  const resetForm = () => {
-    modalAnim.setValue(screenWidth);
-    fadeAnim.setValue(0);
-    setShowCalendar(false);
-    setSelectedDate(new Date());
-    setExpandedCategories(new Set());
-    setRefreshing(false);
-  };
-
-  // Handle modal animations
+  // ✅ UI EVENT HANDLERS - Pass events to container
   const handleClose = () => {
     Animated.parallel([
       Animated.timing(modalAnim, {
@@ -355,12 +148,33 @@ const DiscretionaryBreakdown = ({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      resetForm();
       onClose();
     });
   };
 
-  // Open animation
+  const handleCalendarOpen = () => {
+    setCalendarModalVisible(true);
+    onCalendarOpen?.();
+  };
+
+  const handleCalendarClose = () => {
+    setCalendarModalVisible(false);
+  };
+
+  const handleDateChange = date => {
+    setCalendarModalVisible(false);
+    onDateChange?.(date);
+  };
+
+  const handleCategoryPress = categoryName => {
+    onCategoryPress?.(categoryName);
+  };
+
+  const handleRefresh = () => {
+    onRefresh?.();
+  };
+
+  // ✅ OPEN ANIMATION - Keep original animation
   React.useEffect(() => {
     if (visible) {
       modalAnim.setValue(screenWidth);
@@ -384,274 +198,7 @@ const DiscretionaryBreakdown = ({
     }
   }, [visible, modalAnim, fadeAnim]);
 
-  // Get the breakdown data for selected date or highest spending period
-  const breakdownData = useMemo(() => {
-    if (!transactions.length || !periodData.length) {
-      return {period: null, categories: [], insights: [], isCustomDate: false};
-    }
-
-    let targetPeriod = null;
-    let isCustomDate = false;
-
-    if (selectedDate) {
-      if (selectedPeriod === 'daily') {
-        targetPeriod = periodData.find(p => {
-          if (!p.date) {
-            return false;
-          }
-          return (
-            p.date.getDate() === selectedDate.getDate() &&
-            p.date.getMonth() === selectedDate.getMonth() &&
-            p.date.getFullYear() === selectedDate.getFullYear()
-          );
-        });
-      } else if (selectedPeriod === 'weekly') {
-        targetPeriod = periodData.find(p => {
-          if (!p.startDate || !p.endDate) {
-            return false;
-          }
-          return selectedDate >= p.startDate && selectedDate <= p.endDate;
-        });
-      } else if (selectedPeriod === 'monthly') {
-        targetPeriod = periodData.find(p => {
-          if (!p.monthDate) {
-            return false;
-          }
-          return (
-            p.monthDate.getMonth() === selectedDate.getMonth() &&
-            p.monthDate.getFullYear() === selectedDate.getFullYear()
-          );
-        });
-      }
-
-      if (targetPeriod) {
-        isCustomDate = true;
-      }
-    }
-
-    if (!targetPeriod) {
-      targetPeriod = periodData.reduce((max, current) =>
-        current.discretionaryAmount > max.discretionaryAmount ? current : max,
-      );
-    }
-
-    if (!targetPeriod || targetPeriod.discretionaryAmount === 0) {
-      return {period: null, categories: [], insights: [], isCustomDate};
-    }
-
-    let periodTransactions = [];
-
-    if (selectedPeriod === 'daily' && targetPeriod.date) {
-      periodTransactions = transactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return (
-          transactionDate.getDate() === targetPeriod.date.getDate() &&
-          transactionDate.getMonth() === targetPeriod.date.getMonth() &&
-          transactionDate.getFullYear() === targetPeriod.date.getFullYear() &&
-          !isRecurringTransaction(t)
-        );
-      });
-    } else if (
-      selectedPeriod === 'weekly' &&
-      targetPeriod.startDate &&
-      targetPeriod.endDate
-    ) {
-      periodTransactions = transactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return (
-          transactionDate >= targetPeriod.startDate &&
-          transactionDate <= targetPeriod.endDate &&
-          !isRecurringTransaction(t)
-        );
-      });
-    } else if (selectedPeriod === 'monthly' && targetPeriod.monthDate) {
-      periodTransactions = transactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return (
-          transactionDate.getMonth() === targetPeriod.monthDate.getMonth() &&
-          transactionDate.getFullYear() ===
-            targetPeriod.monthDate.getFullYear() &&
-          !isRecurringTransaction(t)
-        );
-      });
-    }
-
-    // Group by category and calculate totals
-    const categoryTotals = {};
-    const categoryTransactions = {};
-
-    periodTransactions.forEach(transaction => {
-      const category = transaction.category || 'Other';
-      const amount = Math.abs(transaction.amount);
-
-      if (!categoryTotals[category]) {
-        categoryTotals[category] = 0;
-        categoryTransactions[category] = [];
-      }
-      categoryTotals[category] += amount;
-      categoryTransactions[category].push(transaction);
-    });
-
-    // Helper function to create lighter colors for pie chart
-    const getLightColor = color => {
-      const hex = color.replace('#', '');
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      return `rgba(${r}, ${g}, ${b}, 0.8)`;
-    };
-
-    // Convert to chart format with colors and add subcategory breakdown
-    const processedCategories = Object.entries(categoryTotals)
-      .map(([category, amount]) => {
-        const categoryInfo = getCategoryInfo(category);
-        const color = getCategoryColor(category);
-
-        // Calculate subcategories for this category
-        const subcategories = [];
-        const categoryTransactionList = categoryTransactions[category] || [];
-
-        if (
-          categoryInfo?.hasSubcategories &&
-          categoryTransactionList.length > 0
-        ) {
-          const subcategoryMap = {};
-
-          categoryTransactionList.forEach(transaction => {
-            let subcategoryName = 'General';
-            const desc = (transaction.description || '').toLowerCase();
-
-            if (
-              categoryInfo.subcategories &&
-              categoryInfo.subcategories.length > 0
-            ) {
-              const matchedSubcategory = categoryInfo.subcategories.find(
-                sub => {
-                  const subName = sub.name.toLowerCase();
-                  if (desc.includes(subName)) {
-                    return true;
-                  }
-
-                  if (
-                    subName.includes('takeout') &&
-                    (desc.includes('uber') ||
-                      desc.includes('doordash') ||
-                      desc.includes('delivery'))
-                  ) {
-                    return true;
-                  }
-                  if (
-                    subName.includes('grocery') &&
-                    (desc.includes('woolworth') ||
-                      desc.includes('coles') ||
-                      desc.includes('supermarket'))
-                  ) {
-                    return true;
-                  }
-                  if (
-                    subName.includes('coffee') &&
-                    (desc.includes('starbucks') || desc.includes('cafe'))
-                  ) {
-                    return true;
-                  }
-                  if (
-                    subName.includes('fuel') &&
-                    (desc.includes('gas') ||
-                      desc.includes('petrol') ||
-                      desc.includes('shell') ||
-                      desc.includes('bp'))
-                  ) {
-                    return true;
-                  }
-                  if (
-                    subName.includes('pharmacy') &&
-                    (desc.includes('chemist') || desc.includes('medication'))
-                  ) {
-                    return true;
-                  }
-                  if (
-                    subName.includes('subscription') &&
-                    (desc.includes('netflix') ||
-                      desc.includes('spotify') ||
-                      desc.includes('monthly'))
-                  ) {
-                    return true;
-                  }
-
-                  return false;
-                },
-              );
-
-              if (matchedSubcategory) {
-                subcategoryName = matchedSubcategory.name;
-              }
-            }
-
-            const subAmount = Math.abs(transaction.amount);
-            subcategoryMap[subcategoryName] =
-              (subcategoryMap[subcategoryName] || 0) + subAmount;
-          });
-
-          Object.entries(subcategoryMap).forEach(([subName, subAmount]) => {
-            subcategories.push({
-              name: subName,
-              amount: subAmount,
-              percentage: ((subAmount / amount) * 100).toFixed(1),
-            });
-          });
-
-          subcategories.sort((a, b) => b.amount - a.amount);
-        }
-
-        return {
-          name: category,
-          categoryName: category,
-          amount: amount,
-          color: getLightColor(color),
-          originalColor: color,
-          legendFontColor: colors.text || '#1F2937',
-          legendFontSize: 12,
-          transactions: categoryTransactionList,
-          subcategories: subcategories,
-          hasSubcategories: categoryInfo?.hasSubcategories || false,
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
-
-    // Generate insights using InsightsService
-    const currentTransactions = getCurrentPeriodTransactions(targetPeriod);
-    const previousPeriod = getPreviousPeriod(targetPeriod);
-    const previousTransactions = previousPeriod
-      ? getCurrentPeriodTransactions(previousPeriod)
-      : [];
-
-    const insights = InsightsService.generateInsights(
-      processedCategories,
-      targetPeriod,
-      previousPeriod,
-      currentTransactions,
-      previousTransactions,
-      selectedPeriod,
-    );
-
-    return {
-      period: targetPeriod,
-      categories: processedCategories,
-      insights,
-      isCustomDate,
-    };
-  }, [
-    transactions,
-    periodData,
-    selectedPeriod,
-    isRecurringTransaction,
-    selectedDate,
-    getCategoryInfo,
-    getCurrentPeriodTransactions,
-    getPreviousPeriod,
-  ]);
-
-  // Donut Chart Renderer
+  // ✅ DONUT CHART RENDERER - Keep original chart logic
   const renderDonutChart = () => {
     const chartWidth = screenWidth - 40;
     const chartHeight = 280;
@@ -660,6 +207,9 @@ const DiscretionaryBreakdown = ({
     const innerRadius = radius - strokeWidth;
     const centerX = chartWidth / 2;
     const centerY = chartHeight / 2;
+
+    const currentData = breakdownData?.categories || [];
+    const totalTransactions = breakdownData?.totalTransactions || 0;
 
     if (!currentData || currentData.length === 0) {
       return (
@@ -675,10 +225,6 @@ const DiscretionaryBreakdown = ({
 
     const total = currentData.reduce(
       (sum, item) => sum + (item.amount || 0),
-      0,
-    );
-    const totalExpenses = currentData.reduce(
-      (sum, item) => sum + (item.transactions?.length || 0),
       0,
     );
 
@@ -791,11 +337,14 @@ const DiscretionaryBreakdown = ({
                   return null;
                 }
 
+                // ✅ FIXED: Use backend category color directly (like TransactionCard)
+                const categoryColor = segment.color || '#CCCCCC';
+
                 return (
                   <Path
                     key={index}
                     d={pathData}
-                    fill={segment.color || '#CCCCCC'}
+                    fill={categoryColor}
                     stroke="#ffffff"
                     strokeWidth="4"
                   />
@@ -805,7 +354,7 @@ const DiscretionaryBreakdown = ({
           </Svg>
 
           <View style={styles.donutCenterContent}>
-            <Text style={styles.donutCenterNumber}>{totalExpenses}</Text>
+            <Text style={styles.donutCenterNumber}>{totalTransactions}</Text>
             <Text style={styles.donutCenterLabel}>Expenses</Text>
           </View>
         </View>
@@ -813,16 +362,18 @@ const DiscretionaryBreakdown = ({
     );
   };
 
-  // Render insights
+  // ✅ INSIGHTS RENDERER - Keep original insights UI
   const renderInsights = () => {
-    if (breakdownData.insights.length === 0) {
+    const insights = breakdownData?.insights || [];
+
+    if (insights.length === 0) {
       return null;
     }
 
     return (
       <View style={styles.insightsContainer}>
         <Text style={styles.insightsTitle}>Spending Insights</Text>
-        {breakdownData.insights.map((insight, index) => (
+        {insights.map((insight, index) => (
           <View
             key={index}
             style={[
@@ -849,7 +400,7 @@ const DiscretionaryBreakdown = ({
     );
   };
 
-  // Helper to get period label for no data message
+  // ✅ PERIOD LABEL HELPER
   const getCurrentPeriodLabel = () => {
     switch (selectedPeriod) {
       case 'daily':
@@ -863,26 +414,28 @@ const DiscretionaryBreakdown = ({
     }
   };
 
-  // Render no data state with calendar access
+  // ✅ NO DATA STATE - Keep original no data UI
   const renderNoDataState = () => {
     const periodLabel = getCurrentPeriodLabel();
 
     const displayPeriod = {
       label:
         selectedPeriod === 'daily'
-          ? selectedDate.toLocaleDateString('en-US', {
+          ? selectedDate?.toLocaleDateString('en-US', {
               weekday: 'short',
               day: 'numeric',
-            })
+            }) || 'Today'
           : selectedPeriod === 'weekly'
-          ? `Week of ${selectedDate.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            })}`
-          : selectedDate.toLocaleDateString('en-US', {
+          ? `Week of ${
+              selectedDate?.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              }) || 'This Week'
+            }`
+          : selectedDate?.toLocaleDateString('en-US', {
               month: 'long',
               year: 'numeric',
-            }),
+            }) || 'This Month',
       discretionaryAmount: 0,
     };
 
@@ -890,7 +443,7 @@ const DiscretionaryBreakdown = ({
       <View style={styles.noDataFullContainer}>
         <TouchableOpacity
           style={styles.summaryCard}
-          onPress={() => setShowCalendar(true)}
+          onPress={handleCalendarOpen}
           activeOpacity={0.7}>
           <View style={styles.summaryHeader}>
             <Text style={styles.summaryLabel}>Selected Period</Text>
@@ -923,8 +476,9 @@ const DiscretionaryBreakdown = ({
     return null;
   }
 
-  const currentData = breakdownData.categories;
-  const totalAmount = breakdownData.period?.discretionaryAmount || 0;
+  const currentData = breakdownData?.categories || [];
+  const totalAmount = breakdownData?.totalAmount || 0;
+  const period = breakdownData?.period;
 
   return (
     <Modal
@@ -959,22 +513,22 @@ const DiscretionaryBreakdown = ({
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
-                onRefresh={onRefresh}
+                onRefresh={handleRefresh}
                 colors={[colors.primary || '#6366F1']}
                 tintColor={colors.primary || '#6366F1'}
                 title="Pull to refresh..."
                 titleColor={colors.textSecondary || '#6B7280'}
               />
             }>
-            {breakdownData.period ? (
+            {period ? (
               <>
                 <TouchableOpacity
                   style={styles.summaryCard}
-                  onPress={() => setShowCalendar(true)}
+                  onPress={handleCalendarOpen}
                   activeOpacity={0.7}>
                   <View style={styles.summaryHeader}>
                     <Text style={styles.summaryLabel}>
-                      {breakdownData.isCustomDate
+                      {period.isCustomDate
                         ? 'Selected Period'
                         : 'Highest Spending Period'}
                     </Text>
@@ -984,11 +538,9 @@ const DiscretionaryBreakdown = ({
                       color={colors.primary || '#6366F1'}
                     />
                   </View>
-                  <Text style={styles.summaryTitle}>
-                    {breakdownData.period.label}
-                  </Text>
+                  <Text style={styles.summaryTitle}>{period.label}</Text>
                   <Text style={styles.summaryAmount}>
-                    ${breakdownData.period.discretionaryAmount.toFixed(2)}
+                    ${period.discretionaryAmount?.toFixed(2) || '0.00'}
                   </Text>
                   <Text style={styles.summarySubtext}>
                     in discretionary spending
@@ -1010,28 +562,44 @@ const DiscretionaryBreakdown = ({
                             ? ((item.amount / totalAmount) * 100).toFixed(1)
                             : '0.0';
                         const iconName = getCategoryIcon(item.name);
-                        const isExpanded = expandedCategories.has(item.name);
-                        const canExpand =
-                          item.hasSubcategories &&
-                          item.subcategories.length > 0;
+                        const isExpanded =
+                          expandedCategories?.has?.(item.name) || false;
+                        const canExpand = item.subcategories?.length > 0; // ✅ FIXED: Just check if subcategories exist
+
+                        // ✅ FIXED: Use backend category color directly (like TransactionCard)
+                        const categoryColor = item.color || '#CCCCCC';
+
+                        console.log('🎨 Category color debug:', {
+                          name: item.name,
+                          backendColor: item.color,
+                          originalColor: item.originalColor,
+                          hasSubcategories: item.hasSubcategories,
+                          subcategoriesLength: item.subcategories?.length,
+                          canExpand: canExpand,
+                          isExpanded: isExpanded,
+                        });
 
                         return (
                           <View key={index} style={styles.categoryItem}>
                             <TouchableOpacity
-                              onPress={() =>
-                                canExpand && handleCategoryPress(item.name)
-                              }
-                              disabled={!canExpand}>
+                              onPress={() => handleCategoryPress(item.name)}
+                              activeOpacity={0.7}>
                               <View style={styles.categoryHeader}>
                                 <View style={styles.categoryLeft}>
                                   <View
-                                    style={getCategoryIconStyle(
-                                      item.originalColor,
-                                    )}>
+                                    style={[
+                                      styles.categoryIconContainer,
+                                      {
+                                        backgroundColor:
+                                          getLightBackgroundColor(
+                                            categoryColor,
+                                          ),
+                                      },
+                                    ]}>
                                     <Icon
                                       name={iconName}
                                       size={20}
-                                      color={item.originalColor}
+                                      color={categoryColor}
                                     />
                                   </View>
                                   <View style={styles.categoryInfo}>
@@ -1042,12 +610,13 @@ const DiscretionaryBreakdown = ({
                                 </View>
                                 <View style={styles.categoryRight}>
                                   <Text style={styles.categoryAmount}>
-                                    ${item.amount.toFixed(2)}
+                                    ${item.amount?.toFixed(2) || '0.00'}
                                   </Text>
                                   <Text style={styles.categoryPercentage}>
                                     {percentage}%
                                   </Text>
                                 </View>
+                                {/* ✅ FIXED: Show chevron only if subcategories exist */}
                                 {canExpand && (
                                   <Icon
                                     name={
@@ -1061,29 +630,47 @@ const DiscretionaryBreakdown = ({
                               </View>
                             </TouchableOpacity>
 
-                            {isExpanded && item.subcategories.length > 0 && (
+                            {isExpanded && item.subcategories?.length > 0 && (
                               <View style={styles.subcategoriesContainer}>
-                                {item.subcategories.map((subItem, subIndex) => (
-                                  <View
-                                    key={subIndex}
-                                    style={styles.subcategoryItem}>
-                                    <View style={styles.subcategoryLeft}>
-                                      <View style={styles.subcategoryDot} />
-                                      <Text style={styles.subcategoryName}>
-                                        {subItem.name}
-                                      </Text>
+                                {item.subcategories.map((subItem, subIndex) => {
+                                  // ✅ FIXED: Proper logging outside JSX
+                                  console.log(
+                                    '🔍 Subcategory',
+                                    subIndex,
+                                    ':',
+                                    subItem,
+                                  );
+
+                                  return (
+                                    <View
+                                      key={subIndex}
+                                      style={styles.subcategoryItem}>
+                                      <View style={styles.subcategoryLeft}>
+                                        <View
+                                          style={[
+                                            styles.subcategoryDot,
+                                            {backgroundColor: categoryColor},
+                                          ]}
+                                        />
+                                        <Text style={styles.subcategoryName}>
+                                          {subItem.subcategoryName ||
+                                            subItem.name ||
+                                            'General'}
+                                        </Text>
+                                      </View>
+                                      <View style={styles.subcategoryRight}>
+                                        <Text style={styles.subcategoryAmount}>
+                                          ${(subItem.amount || 0).toFixed(2)}
+                                        </Text>
+                                        <Text
+                                          style={styles.subcategoryPercentage}>
+                                          {(subItem.percentage || 0).toFixed(1)}
+                                          %
+                                        </Text>
+                                      </View>
                                     </View>
-                                    <View style={styles.subcategoryRight}>
-                                      <Text style={styles.subcategoryAmount}>
-                                        ${subItem.amount.toFixed(2)}
-                                      </Text>
-                                      <Text
-                                        style={styles.subcategoryPercentage}>
-                                        {subItem.percentage}%
-                                      </Text>
-                                    </View>
-                                  </View>
-                                ))}
+                                  );
+                                })}
                               </View>
                             )}
                           </View>
@@ -1110,10 +697,10 @@ const DiscretionaryBreakdown = ({
       </Animated.View>
 
       <CalendarModal
-        visible={showCalendar}
-        onClose={() => setShowCalendar(false)}
+        visible={calendarModalVisible}
+        onClose={handleCalendarClose}
         selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
+        onDateChange={handleDateChange}
       />
     </Modal>
   );

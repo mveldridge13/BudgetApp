@@ -11,7 +11,8 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {LineChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
-import DiscretionaryBreakdown from '../components/DiscretionaryBreakdown';
+// ✅ FIXED: Import DiscretionaryContainer instead of DiscretionaryBreakdown
+import DiscretionaryContainer from '../containers/DiscretionaryContainer';
 import SpendingVelocityContainer from '../containers/SpendingVelocityContainer';
 
 // Pro Badge Component - moved outside to prevent recreation on each render
@@ -378,16 +379,11 @@ const AnalyticsScreen = ({
         </View>
       </ScrollView>
 
-      {/* Discretionary Breakdown Modal */}
-      <DiscretionaryBreakdown
+      {/* ✅ FIXED: Use DiscretionaryContainer instead of DiscretionaryBreakdown */}
+      <DiscretionaryContainer
         visible={showBreakdown}
         onClose={onCloseBreakdown}
-        transactions={transactions}
         selectedPeriod={selectedPeriod}
-        periodData={data}
-        isRecurringTransaction={isRecurringTransaction}
-        allTransactions={transactions}
-        previousPeriodData={data}
       />
 
       {/* ✅ NEW: Spending Velocity Modal */}
