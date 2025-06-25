@@ -16,13 +16,185 @@ const DiscretionaryContainer = ({
   const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [discretionaryData, setDiscretionaryData] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    console.log('🔍 DEBUG: Initial selectedDate creation:', {
+      today: today,
+      todayString: today.toString(),
+      todayISO: today.toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    return today;
+  });
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [showCalendar, setShowCalendar] = useState(false);
 
   // Refs for component lifecycle management
   const isMountedRef = useRef(true);
   const isLoadingRef = useRef(false);
+
+  // ==============================================
+  // TIMEZONE-SAFE DATE UTILITIES
+  // ==============================================
+
+  /**
+   * Create a date string in local timezone (YYYY-MM-DD format)
+   * This avoids timezone conversion issues
+   */
+  const formatDateForAPI = useCallback(date => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  /**
+   * Create a datetime string for API with time portion
+   * Format: YYYY-MM-DD HH:mm:ss (in local timezone)
+   */
+  const formatDateTimeForAPI = useCallback(date => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }, []);
+
+  /**
+   * Create local date range without timezone conversion
+   * DEBUGGING VERSION - with extensive logging
+   */
+  const createLocalDateRange = useCallback(
+    (baseDate, period) => {
+      console.log('🔍 DEBUG: createLocalDateRange input:', {
+        baseDate: baseDate,
+        baseDateString: baseDate.toString(),
+        baseDateISO: baseDate.toISOString(),
+        period: period,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+
+      // Create start and end dates with explicit time boundaries
+      let startDate, endDate;
+
+      switch (period) {
+        case 'daily':
+          // Start at 00:00:00 of selected day, end at 23:59:59 of same day
+          startDate = new Date(
+            baseDate.getFullYear(),
+            baseDate.getMonth(),
+            baseDate.getDate(),
+            0,
+            0,
+            0,
+            0,
+          );
+          endDate = new Date(
+            baseDate.getFullYear(),
+            baseDate.getMonth(),
+            baseDate.getDate(),
+            23,
+            59,
+            59,
+            999,
+          );
+          break;
+        case 'weekly':
+          // Week containing the selected date (Sunday to Saturday)
+          const startOfWeek = new Date(baseDate);
+          startOfWeek.setDate(baseDate.getDate() - baseDate.getDay());
+          startDate = new Date(
+            startOfWeek.getFullYear(),
+            startOfWeek.getMonth(),
+            startOfWeek.getDate(),
+            0,
+            0,
+            0,
+            0,
+          );
+
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(startOfWeek.getDate() + 6);
+          endDate = new Date(
+            endOfWeek.getFullYear(),
+            endOfWeek.getMonth(),
+            endOfWeek.getDate(),
+            23,
+            59,
+            59,
+            999,
+          );
+          break;
+        case 'monthly':
+          // First day of month to last day of month
+          startDate = new Date(
+            baseDate.getFullYear(),
+            baseDate.getMonth(),
+            1,
+            0,
+            0,
+            0,
+            0,
+          );
+          endDate = new Date(
+            baseDate.getFullYear(),
+            baseDate.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999,
+          );
+          break;
+        default:
+          startDate = new Date(
+            baseDate.getFullYear(),
+            baseDate.getMonth(),
+            baseDate.getDate(),
+            0,
+            0,
+            0,
+            0,
+          );
+          endDate = new Date(
+            baseDate.getFullYear(),
+            baseDate.getMonth(),
+            baseDate.getDate(),
+            23,
+            59,
+            59,
+            999,
+          );
+      }
+
+      // Try both date-only and datetime formats for the API
+      const result = {
+        startDate: formatDateForAPI(startDate),
+        endDate: formatDateForAPI(endDate),
+        // Alternative: include time if your API supports it
+        startDateTime: formatDateTimeForAPI(startDate),
+        endDateTime: formatDateTimeForAPI(endDate),
+      };
+
+      console.log('🔍 DEBUG: createLocalDateRange output:', {
+        startDateObj: startDate,
+        endDateObj: endDate,
+        startDateString: startDate.toString(),
+        endDateString: endDate.toString(),
+        apiStartDate: result.startDate,
+        apiEndDate: result.endDate,
+        apiStartDateTime: result.startDateTime,
+        apiEndDateTime: result.endDateTime,
+        selectedDateFormatted: formatDateForAPI(baseDate),
+        timezoneOffset: startDate.getTimezoneOffset(),
+      });
+
+      return result;
+    },
+    [formatDateForAPI, formatDateTimeForAPI],
+  );
 
   // ==============================================
   // BACKEND INTEGRATION METHODS
@@ -45,59 +217,21 @@ const DiscretionaryContainer = ({
       try {
         console.log(
           '🔍 Loading discretionary breakdown for:',
-          selectedDate.toISOString().split('T')[0],
+          formatDateForAPI(selectedDate),
         );
 
-        // Calculate date range based on selected period
-        const now = new Date(selectedDate);
-        let startDate, endDate;
+        // ✅ FIXED: Use timezone-safe date range creation
+        const dateRange = createLocalDateRange(selectedDate, selectedPeriod);
 
-        switch (selectedPeriod) {
-          case 'daily':
-            // Get the specific day
-            startDate = new Date(
-              now.getFullYear(),
-              now.getMonth(),
-              now.getDate(),
-            );
-            endDate = new Date(
-              now.getFullYear(),
-              now.getMonth(),
-              now.getDate() + 1,
-            );
-            break;
-          case 'weekly':
-            // Get the week containing the selected date
-            startDate = new Date(now);
-            startDate.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
-            endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 7);
-            break;
-          case 'monthly':
-            // Get the month containing the selected date
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            break;
-          default:
-            startDate = new Date(
-              now.getFullYear(),
-              now.getMonth(),
-              now.getDate(),
-            );
-            endDate = new Date(
-              now.getFullYear(),
-              now.getMonth(),
-              now.getDate() + 1,
-            );
-        }
-
+        // Try with datetime format since date-only isn't working
         const filters = {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
+          startDate: dateRange.startDateTime, // Use full datetime
+          endDate: dateRange.endDateTime, // Use full datetime
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
 
         console.log(
-          '📊 Fetching discretionary breakdown with filters:',
+          '📊 Fetching discretionary breakdown with DATETIME filters:',
           filters,
         );
 
@@ -132,7 +266,7 @@ const DiscretionaryContainer = ({
         }
       }
     },
-    [selectedDate, selectedPeriod],
+    [selectedDate, selectedPeriod, formatDateForAPI, createLocalDateRange],
   );
 
   /**
@@ -156,11 +290,23 @@ const DiscretionaryContainer = ({
 
   /**
    * Handle date selection from calendar
+   * DEBUGGING VERSION - with extensive logging
    */
-  const handleDateChange = useCallback(newDate => {
-    console.log('📅 Date changed to:', newDate.toISOString().split('T')[0]);
-    setSelectedDate(newDate);
-  }, []);
+  const handleDateChange = useCallback(
+    newDate => {
+      console.log('🔍 DEBUG: handleDateChange called with:', {
+        newDate: newDate,
+        newDateString: newDate.toString(),
+        newDateISO: newDate.toISOString(),
+        currentSelectedDate: selectedDate,
+        currentSelectedDateString: selectedDate.toString(),
+        formattedNewDate: formatDateForAPI(newDate),
+        formattedCurrentDate: formatDateForAPI(selectedDate),
+      });
+      setSelectedDate(newDate);
+    },
+    [formatDateForAPI, selectedDate],
+  );
 
   /**
    * Handle calendar modal open
@@ -227,11 +373,11 @@ const DiscretionaryContainer = ({
     if (visible && isMountedRef.current) {
       console.log(
         '📅 Reloading data for new date:',
-        selectedDate.toISOString().split('T')[0],
+        formatDateForAPI(selectedDate),
       );
       loadDiscretionaryData(true);
     }
-  }, [selectedDate, visible, loadDiscretionaryData]);
+  }, [selectedDate, visible, loadDiscretionaryData, formatDateForAPI]);
 
   // Handle component unmounting
   useEffect(() => {
@@ -283,7 +429,7 @@ const DiscretionaryContainer = ({
 
       console.log('🗓️ Formatting date:', {
         backend: dateStr,
-        selectedDate: selectedDate.toISOString(),
+        selectedDate: formatDateForAPI(selectedDate),
         formatted: date.toLocaleDateString('en-US', {
           weekday: 'short',
           day: 'numeric',
@@ -316,7 +462,7 @@ const DiscretionaryContainer = ({
           });
       }
     },
-    [selectedDate],
+    [selectedDate, formatDateForAPI],
   );
 
   /**
@@ -385,6 +531,12 @@ const DiscretionaryContainer = ({
           backendCategoryColor: category.categoryColor,
           backendColor: category.color,
           originalSubcategories: category.subcategories,
+          subcategoriesType: typeof category.subcategories,
+          subcategoriesIsArray: Array.isArray(category.subcategories),
+          subcategoriesIsMap: category.subcategories instanceof Map,
+          subcategoriesKeys: category.subcategories
+            ? Object.keys(category.subcategories)
+            : 'none',
           processedSubcategories: subcategories,
           isMap: category.subcategories instanceof Map,
         });
@@ -392,7 +544,7 @@ const DiscretionaryContainer = ({
         return {
           name: category.categoryName,
           amount: category.amount,
-          color: category.categoryColor || category.color || '#CCCCCC', // ✅ FIXED: Use categoryColor first
+          color: category.categoryColor || category.color || '#CCCCCC',
           originalColor:
             category.originalColor ||
             category.categoryColor ||
@@ -400,7 +552,7 @@ const DiscretionaryContainer = ({
             '#CCCCCC',
           transactions: category.transactions || [],
           subcategories: subcategories,
-          hasSubcategories: subcategories.length > 0, // ✅ FIXED: Base on actual subcategories
+          hasSubcategories: subcategories.length > 0,
         };
       },
     );
@@ -434,7 +586,7 @@ const DiscretionaryContainer = ({
         isLoading,
         refreshing,
         hasDiscretionaryData: !!discretionaryData,
-        selectedDate: selectedDate.toISOString().split('T')[0],
+        selectedDate: formatDateForAPI(selectedDate),
         selectedPeriod,
         expandedCategoriesCount: expandedCategories.size,
         showCalendar,
@@ -449,6 +601,7 @@ const DiscretionaryContainer = ({
     selectedPeriod,
     expandedCategories,
     showCalendar,
+    formatDateForAPI,
   ]);
 
   // ==============================================
@@ -480,7 +633,7 @@ const DiscretionaryContainer = ({
   console.log('🚀 Rendering DiscretionaryBreakdown with props:', {
     visible,
     hasData: processedBreakdownData.totalAmount > 0,
-    selectedDate: selectedDate.toISOString().split('T')[0],
+    selectedDate: formatDateForAPI(selectedDate),
     totalAmount: processedBreakdownData.totalAmount,
     totalTransactions: processedBreakdownData.totalTransactions,
     categoryCount: processedBreakdownData.categories.length,
