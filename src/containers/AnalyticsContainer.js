@@ -113,6 +113,13 @@ const AnalyticsContainer = () => {
         if (isMountedRef.current) {
           console.log('Backend analytics:', analyticsResponse);
           console.log('Monthly trends:', analyticsResponse?.monthlyTrends);
+          console.log(
+            'Discretionary trends:',
+            analyticsResponse?.monthlyTrends?.map(t => ({
+              month: t.month,
+              discretionary: t.discretionaryExpenses,
+            })),
+          );
           console.log('Total expenses:', analyticsResponse?.totalExpenses);
           console.log(
             'Spending velocity:',
@@ -192,7 +199,7 @@ const AnalyticsContainer = () => {
       };
     }
 
-    // Use backend monthlyTrends directly for chart - BACKEND SHOULD PROVIDE THIS
+    // ✅ UPDATED: Use backend monthlyTrends with discretionary data
     const chartData =
       analyticsData.monthlyTrends?.map((trend, index) => {
         const date = new Date(trend.month);
@@ -210,18 +217,42 @@ const AnalyticsContainer = () => {
         return {
           label,
           amount: trend.expenses || 0,
-          discretionaryAmount: trend.expenses * 0.7, // Backend should provide this
+          discretionaryAmount: trend.discretionaryExpenses || 0, // ✅ FIXED: Use backend data
           previousPeriod: 0, // Backend should provide this
           previousDiscretionary: 0,
           date,
         };
       }) || [];
 
-    console.log('Processed chart data:', chartData);
+    // ✅ ENHANCED DEBUG: Show raw backend trends
+    console.log(
+      '📊 Raw backend monthlyTrends:',
+      analyticsData.monthlyTrends?.map(t => ({
+        month: t.month,
+        expenses: t.expenses,
+        discretionaryExpenses: t.discretionaryExpenses,
+      })),
+    );
+
+    console.log(
+      '📊 Processed chart data with backend discretionary:',
+      chartData,
+    );
     console.log('Chart data length:', chartData.length);
 
     // MINIMAL fallback - backend should fix monthlyTrends
     const finalChartData = chartData.length > 0 ? chartData : [];
+
+    // ✅ ENHANCED DEBUG: Show final chart data discretionary amounts
+    console.log(
+      '📊 Final chart data discretionary amounts:',
+      finalChartData.map(d => ({
+        label: d.label,
+        date: d.date.toISOString().split('T')[0],
+        totalExpenses: d.amount,
+        discretionary: d.discretionaryAmount,
+      })),
+    );
 
     console.log('Final chart data:', finalChartData);
 
@@ -263,16 +294,28 @@ const AnalyticsContainer = () => {
             ],
           };
 
-    // Use backend statistics directly
+    // ✅ UPDATED: Calculate discretionary statistics from backend data
+    const totalDiscretionaryExpenses =
+      analyticsData.monthlyTrends?.reduce(
+        (sum, trend) => sum + (trend.discretionaryExpenses || 0),
+        0,
+      ) || 0;
+
+    const averageDiscretionaryPerPeriod =
+      analyticsData.monthlyTrends?.length > 0
+        ? totalDiscretionaryExpenses / analyticsData.monthlyTrends.length
+        : 0;
+
+    // Use backend statistics with calculated discretionary data
     const statistics = {
       currentTotal: analyticsData.totalExpenses || 0,
-      currentDiscretionary: analyticsData.totalExpenses * 0.7 || 0, // Backend could calculate this
+      currentDiscretionary: totalDiscretionaryExpenses, // ✅ FIXED: Use backend calculation
       previousTotal: 0, // Backend enhancement needed
       previousDiscretionary: 0,
       percentageChange: 0, // Backend enhancement needed
       discretionaryPercentageChange: 0,
       averageSpending: analyticsData.averageTransaction || 0,
-      averageDiscretionary: analyticsData.averageTransaction * 0.7 || 0,
+      averageDiscretionary: averageDiscretionaryPerPeriod, // ✅ FIXED: Use backend calculation
       highestSpendingPeriod:
         finalChartData.length > 0
           ? finalChartData.reduce((max, current) =>
@@ -288,6 +331,17 @@ const AnalyticsContainer = () => {
             )
           : null,
     };
+
+    console.log('✅ Statistics using backend discretionary data:', {
+      totalDiscretionary: statistics.currentDiscretionary,
+      averageDiscretionary: statistics.averageDiscretionary,
+      highestDiscretionary:
+        statistics.highestDiscretionaryPeriod?.discretionaryAmount,
+      highestDiscretionaryDay: statistics.highestDiscretionaryPeriod?.label,
+      highestDiscretionaryDate: statistics.highestDiscretionaryPeriod?.date
+        ?.toISOString()
+        ?.split('T')[0],
+    });
 
     // ✅ NEW: Pass through spending velocity from backend
     const spendingVelocity = analyticsData.spendingVelocity || null;
@@ -411,7 +465,7 @@ const AnalyticsContainer = () => {
     isPro,
     showBreakdown,
 
-    // Backend-calculated statistics
+    // ✅ UPDATED: Backend-calculated statistics with real discretionary data
     statistics: processedData.statistics,
 
     // ✅ NEW: Spending velocity data from backend
