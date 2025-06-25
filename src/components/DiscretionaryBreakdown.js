@@ -569,15 +569,6 @@ const DiscretionaryBreakdown = ({
                         // ✅ FIXED: Use backend category color directly (like TransactionCard)
                         const categoryColor = item.color || '#CCCCCC';
 
-                        console.log('🎨 Category color debug:', {
-                          name: item.name,
-                          backendColor: item.color,
-                          originalColor: item.originalColor,
-                          hasSubcategories: item.hasSubcategories,
-                          subcategoriesLength: item.subcategories?.length,
-                          canExpand: canExpand,
-                          isExpanded: isExpanded,
-                        });
 
                         return (
                           <View key={index} style={styles.categoryItem}>
@@ -633,13 +624,6 @@ const DiscretionaryBreakdown = ({
                             {isExpanded && item.subcategories?.length > 0 && (
                               <View style={styles.subcategoriesContainer}>
                                 {item.subcategories.map((subItem, subIndex) => {
-                                  // ✅ FIXED: Proper logging outside JSX
-                                  console.log(
-                                    '🔍 Subcategory',
-                                    subIndex,
-                                    ':',
-                                    subItem,
-                                  );
 
                                   return (
                                     <View

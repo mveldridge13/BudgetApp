@@ -31,16 +31,10 @@ const SpendingVelocityContainer = ({
    */
   const loadUserProfile = useCallback(async () => {
     try {
-      console.log('👤 Loading user profile for spending velocity...');
       const profile = await TrendAPIService.getUserProfile();
 
       if (isMountedRef.current) {
         setUserProfile(profile);
-        console.log('👤 User profile loaded:', {
-          hasIncome: !!profile?.income,
-          incomeFrequency: profile?.incomeFrequency,
-          hasFixedExpenses: !!profile?.fixedExpenses,
-        });
       }
     } catch (profileError) {
       console.error('Error loading user profile:', profileError);
@@ -63,7 +57,6 @@ const SpendingVelocityContainer = ({
       }
 
       try {
-        console.log('🔥 Loading spending velocity analytics...');
 
         // Calculate date range based on selected period for comprehensive data
         const now = new Date();
@@ -101,16 +94,10 @@ const SpendingVelocityContainer = ({
           endDate: endDate.toISOString(),
         };
 
-        console.log('📊 Fetching analytics with filters:', filters);
         const analyticsResponse = await TrendAPIService.getTransactionAnalytics(
           filters,
         );
 
-        console.log('📊 Analytics response received:', {
-          hasSpendingVelocity: !!analyticsResponse?.spendingVelocity,
-          hasDailyBurnRate: !!analyticsResponse?.dailyBurnRate,
-          totalExpenses: analyticsResponse?.totalExpenses,
-        });
 
         if (isMountedRef.current) {
           setAnalyticsData(analyticsResponse);
@@ -144,7 +131,6 @@ const SpendingVelocityContainer = ({
 
     setRefreshing(true);
     try {
-      console.log('🔄 Refreshing spending velocity data...');
       await Promise.all([
         loadUserProfile(),
         loadAnalyticsData(true), // Force reload
@@ -160,7 +146,6 @@ const SpendingVelocityContainer = ({
    * Handle modal close
    */
   const handleClose = useCallback(() => {
-    console.log('🚪 Closing spending velocity modal');
     onClose();
   }, [onClose]);
 
@@ -170,7 +155,6 @@ const SpendingVelocityContainer = ({
   const handleAppStateChange = useCallback(
     nextAppState => {
       if (nextAppState === 'active' && visible) {
-        console.log('📱 App became active, refreshing velocity data...');
         loadAnalyticsData(true);
       }
     },
@@ -184,7 +168,6 @@ const SpendingVelocityContainer = ({
   // Load data when modal becomes visible
   useEffect(() => {
     if (visible && isMountedRef.current) {
-      console.log('👁️ Spending velocity modal became visible');
       loadUserProfile();
       loadAnalyticsData();
     }
@@ -211,7 +194,6 @@ const SpendingVelocityContainer = ({
   useFocusEffect(
     useCallback(() => {
       if (visible) {
-        console.log('🎯 Focus effect triggered for velocity modal');
         // Force reload analytics when focused
         const reloadData = async () => {
           try {
@@ -260,10 +242,6 @@ const SpendingVelocityContainer = ({
       };
     }
 
-    console.log('📊 Processing analytics data for UI:', {
-      hasDailyBurnRate: !!analyticsData.dailyBurnRate,
-      hasSpendingVelocity: !!analyticsData.spendingVelocity,
-    });
 
     return {
       dailyBurnRate: analyticsData.dailyBurnRate || null,
@@ -282,15 +260,6 @@ const SpendingVelocityContainer = ({
    * Log component state for debugging
    */
   React.useEffect(() => {
-    if (__DEV__) {
-      console.log('🔥 SpendingVelocityContainer State:', {
-        visible,
-        isLoading,
-        refreshing,
-        hasAnalyticsData: !!analyticsData,
-        hasUserProfile: !!userProfile,
-      });
-    }
   }, [visible, isLoading, refreshing, analyticsData, userProfile]);
 
   // ==============================================
@@ -314,13 +283,6 @@ const SpendingVelocityContainer = ({
     onRefresh: handleRefresh,
   };
 
-  console.log('🚀 Rendering SpendingVelocityBreakdown with props:', {
-    visible,
-    hasDailyBurnRate: !!screenProps.dailyBurnRate,
-    hasUserProfile: !!screenProps.userProfile,
-    userIncome: userProfile?.income,
-    userFrequency: userProfile?.incomeFrequency,
-  });
 
   return <SpendingVelocityBreakdown {...screenProps} />;
 };

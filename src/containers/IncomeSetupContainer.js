@@ -39,7 +39,6 @@ const IncomeSetupContainer = ({navigation, route}) => {
     try {
       // Primary: Load income from backend
       const userProfile = await TrendAPIService.getUserProfile();
-      console.log('📥 Loading existing user profile:', userProfile);
 
       if (userProfile?.income) {
         setIncome(userProfile.income.toString());
@@ -135,14 +134,9 @@ const IncomeSetupContainer = ({navigation, route}) => {
         setupComplete: true,
       };
 
-      console.log(
-        '💾 Saving complete income data to backend:',
-        profileUpdateData,
-      );
 
       await TrendAPIService.updateUserProfile(profileUpdateData);
 
-      console.log('✅ Successfully saved to backend!');
 
       // Save complete data to AsyncStorage (backward compatibility)
       const setupData = {
@@ -155,7 +149,6 @@ const IncomeSetupContainer = ({navigation, route}) => {
       };
 
       await AsyncStorage.setItem('userSetup', JSON.stringify(setupData));
-      console.log('💾 Also saved to AsyncStorage for backward compatibility');
 
       // Handle navigation based on mode
       if (isEditMode) {
@@ -202,7 +195,6 @@ const IncomeSetupContainer = ({navigation, route}) => {
       if (loading) {
         return;
       }
-      console.log('📅 Frequency selected:', frequencyId);
       setSelectedFrequency(frequencyId);
     },
     [loading],
@@ -212,7 +204,6 @@ const IncomeSetupContainer = ({navigation, route}) => {
    * Handle date selection
    */
   const handleDateChange = useCallback(selectedDate => {
-    console.log('📅 Next pay date selected:', selectedDate);
     setNextPayDate(selectedDate);
     setHasSelectedDate(true);
   }, []);

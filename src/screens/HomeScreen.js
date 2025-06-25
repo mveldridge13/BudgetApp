@@ -52,12 +52,6 @@ const HomeScreen = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  console.log('🏠 HomeScreen: Rendering with props:', {
-    transactionsCount: transactions.length,
-    categoriesCount: categories.length,
-    hasOnboarding: !!onboarding,
-    loading,
-  });
 
   // ==============================================
   // UI STATE (PURE UI ONLY)
@@ -70,13 +64,11 @@ const HomeScreen = ({
   // UI EVENT HANDLERS (PURE UI ONLY)
   // ==============================================
   const handleAddTransaction = useCallback(() => {
-    console.log('🏠 HomeScreen: Add transaction button pressed');
     onClearEditingTransaction();
     setShowAddTransaction(true);
   }, [onClearEditingTransaction]);
 
   const handleCloseAddTransaction = useCallback(() => {
-    console.log('🏠 HomeScreen: Closing add transaction modal');
     setShowAddTransaction(false);
     onClearEditingTransaction();
   }, [onClearEditingTransaction]);
@@ -84,27 +76,13 @@ const HomeScreen = ({
   const handleSaveTransaction = useCallback(
     async transaction => {
       try {
-        console.log(
-          '🏠 HomeScreen: Saving transaction:',
-          transaction.description,
-        );
         const result = await onSaveTransaction(transaction);
 
         if (result?.success) {
-          console.log(
-            '🏠 HomeScreen: Transaction saved successfully, closing modal',
-          );
           setShowAddTransaction(false);
         } else {
-          console.log(
-            '🏠 HomeScreen: Transaction save was not successful, keeping modal open',
-          );
         }
       } catch (error) {
-        console.log(
-          '🏠 HomeScreen: Save failed, keeping modal open for retry:',
-          error.message,
-        );
       }
     },
     [onSaveTransaction],
@@ -113,18 +91,10 @@ const HomeScreen = ({
   const handleEditTransaction = useCallback(
     async transaction => {
       try {
-        console.log(
-          '🏠 HomeScreen: Edit transaction requested:',
-          transaction.description,
-        );
         const currentTransaction = await onEditTransaction(transaction.id);
         if (currentTransaction) {
-          console.log(
-            '🏠 HomeScreen: Transaction loaded for editing, opening modal',
-          );
           setShowAddTransaction(true);
         } else {
-          console.log('🏠 HomeScreen: Failed to load transaction for editing');
         }
       } catch (error) {
         console.error('🏠 HomeScreen: Error in edit transaction:', error);
@@ -135,12 +105,10 @@ const HomeScreen = ({
   );
 
   const handleSwipeStart = useCallback(() => {
-    console.log('🏠 HomeScreen: Transaction swipe started, disabling scroll');
     setScrollEnabled(false);
   }, []);
 
   const handleSwipeEnd = useCallback(() => {
-    console.log('🏠 HomeScreen: Transaction swipe ended, enabling scroll');
     setScrollEnabled(true);
   }, []);
 
@@ -148,33 +116,27 @@ const HomeScreen = ({
   // ONBOARDING HANDLERS (DELEGATED TO CONTAINER)
   // ==============================================
   const handleBalanceCardSpotlightNext = useCallback(async () => {
-    console.log('🏠 HomeScreen: Balance card spotlight next');
     await onOnboardingComplete('BalanceCard');
   }, [onOnboardingComplete]);
 
   const handleBalanceCardSpotlightSkip = useCallback(async () => {
-    console.log('🏠 HomeScreen: Balance card spotlight skip');
     await onOnboardingSkip('BalanceCard');
   }, [onOnboardingSkip]);
 
   const handleAddTransactionSpotlightNext = useCallback(async () => {
-    console.log('🏠 HomeScreen: Add transaction spotlight next');
     await onOnboardingComplete('AddTransaction');
     handleAddTransaction();
   }, [onOnboardingComplete, handleAddTransaction]);
 
   const handleAddTransactionSpotlightSkip = useCallback(async () => {
-    console.log('🏠 HomeScreen: Add transaction spotlight skip');
     await onOnboardingSkip('AddTransaction');
   }, [onOnboardingSkip]);
 
   const handleTransactionSwipeSpotlightNext = useCallback(async () => {
-    console.log('🏠 HomeScreen: Transaction swipe spotlight next');
     await onOnboardingComplete('TransactionSwipe');
   }, [onOnboardingComplete]);
 
   const handleTransactionSwipeSpotlightSkip = useCallback(async () => {
-    console.log('🏠 HomeScreen: Transaction swipe spotlight skip');
     await onOnboardingSkip('TransactionSwipe');
   }, [onOnboardingSkip]);
 

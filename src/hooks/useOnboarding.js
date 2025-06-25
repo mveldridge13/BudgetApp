@@ -40,7 +40,6 @@ const useOnboarding = () => {
   // ==============================================
   const loadOnboardingStatus = useCallback(async () => {
     try {
-      console.log('Onboarding: Loading status...');
       setLoading(true);
 
       if (!AuthService.isAuthenticated()) {
@@ -58,7 +57,6 @@ const useOnboarding = () => {
           hasSeenTransactionSwipeTour: transactionSwipe === 'true',
         };
 
-        console.log('Onboarding: Loaded local status:', localStatus);
         setOnboardingStatus(localStatus);
         return;
       }
@@ -83,23 +81,9 @@ const useOnboarding = () => {
           ),
         ]);
 
-        console.log('Onboarding: Loaded server status:', serverStatus);
-        console.log('Onboarding: Tutorial eligibility:', {
-          hasSeenBalanceCardTour: serverStatus.hasSeenBalanceCardTour,
-          hasSeenAddTransactionTour: serverStatus.hasSeenAddTransactionTour,
-          hasSeenTransactionSwipeTour: serverStatus.hasSeenTransactionSwipeTour,
-          shouldShowAnyTutorial:
-            !serverStatus.hasSeenBalanceCardTour ||
-            !serverStatus.hasSeenAddTransactionTour ||
-            !serverStatus.hasSeenTransactionSwipeTour,
-        });
 
         setOnboardingStatus(serverStatus);
       } catch (serverError) {
-        console.warn(
-          'Onboarding: Server failed, using local storage:',
-          serverError,
-        );
 
         // Fallback to local storage
         const [balanceCard, addTransaction, transactionSwipe] =
@@ -185,13 +169,9 @@ const useOnboarding = () => {
   const checkAndShowOnboarding = useCallback(
     (incomeData, transactions) => {
       if (!onboardingStatus || tutorialInProgress) {
-        console.log(
-          'Onboarding: Skipping check - status not loaded or tutorial in progress',
-        );
         return;
       }
 
-      console.log('Onboarding: Checking what to show:', onboardingStatus);
 
       const {
         hasSeenBalanceCardTour,
@@ -201,12 +181,10 @@ const useOnboarding = () => {
 
       // Show balance card tutorial first (if user has income data)
       if (incomeData && !hasSeenBalanceCardTour) {
-        console.log('Onboarding: Triggering balance card tour');
         setTimeout(() => measureBalanceCard(), 500);
       }
       // Show add transaction tutorial second
       else if (hasSeenBalanceCardTour && !hasSeenAddTransactionTour) {
-        console.log('Onboarding: Triggering add transaction tour');
         setTimeout(() => measureFloatingButton(), 500);
       }
       // Show transaction swipe tutorial third (only if they have transactions)
@@ -217,7 +195,6 @@ const useOnboarding = () => {
         transactions &&
         transactions.length > 0
       ) {
-        console.log('Onboarding: Triggering transaction swipe tour');
         setTimeout(() => measureFirstTransaction(), 500);
       }
     },
@@ -243,12 +220,6 @@ const useOnboarding = () => {
         onboardingStatus.hasSeenAddTransactionTour &&
         !onboardingStatus.hasSeenTransactionSwipeTour;
 
-      console.log('Onboarding: Should show transaction tutorial?', {
-        isNewTransaction,
-        hasTransactions,
-        onboardingStatus,
-        result: shouldShow,
-      });
 
       return shouldShow;
     },
@@ -257,7 +228,6 @@ const useOnboarding = () => {
 
   const triggerTransactionTutorial = useCallback(() => {
     if (!tutorialInProgress) {
-      console.log('Onboarding: Manually triggering transaction tutorial');
       setTimeout(() => measureFirstTransaction(), 1000);
     }
   }, [tutorialInProgress, measureFirstTransaction]);
@@ -269,12 +239,10 @@ const useOnboarding = () => {
     async tourType => {
       try {
         const tourKey = `hasSeen${tourType}Tour`;
-        console.log(`Onboarding: Completing tour ${tourType}`);
 
         // Update local state immediately (optimistic update)
         setOnboardingStatus(prev => {
           const newStatus = {...prev, [tourKey]: true};
-          console.log('Onboarding: Updated status:', newStatus);
           return newStatus;
         });
 
@@ -285,14 +253,7 @@ const useOnboarding = () => {
         if (AuthService.isAuthenticated()) {
           try {
             await TrendAPIService.markOnboardingTourComplete(tourType);
-            console.log(
-              `Onboarding: Successfully synced ${tourType} tour completion to server`,
-            );
           } catch (serverError) {
-            console.warn(
-              `Onboarding: Failed to sync ${tourType} to server:`,
-              serverError,
-            );
             // Don't revert - local state is more important for UX
           }
         }
@@ -340,8 +301,7 @@ const useOnboarding = () => {
 
   const skipTour = useCallback(
     async tourType => {
-      console.log(`Onboarding: Skipping tour ${tourType}`);
-      await completeTour(tourType);
+        await completeTour(tourType);
     },
     [completeTour],
   );
@@ -350,7 +310,6 @@ const useOnboarding = () => {
   // UTILITY FUNCTIONS
   // ==============================================
   const hideActiveSpotlights = useCallback(() => {
-    console.log('Onboarding: Hiding all active spotlights');
     setShowBalanceCardSpotlight(false);
     setShowAddTransactionSpotlight(false);
     setShowTransactionSwipeSpotlight(false);
@@ -358,7 +317,6 @@ const useOnboarding = () => {
   }, []);
 
   const resetTutorialState = useCallback(() => {
-    console.log('Onboarding: Resetting tutorial state');
     setTutorialInProgress(false);
     setTransactionSwipeStep(0);
   }, []);

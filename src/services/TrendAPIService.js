@@ -324,7 +324,6 @@ class TrendAPIService {
       ? `/transactions/analytics?${queryString}`
       : '/transactions/analytics';
 
-    console.log('📊 Fetching analytics from:', endpoint);
     return this.makeRequest(endpoint);
   }
 
@@ -335,7 +334,6 @@ class TrendAPIService {
       ? `/transactions/discretionary-breakdown?${queryString}`
       : '/transactions/discretionary-breakdown';
 
-    console.log('📊 Fetching discretionary breakdown from:', endpoint);
     return this.makeRequest(endpoint);
   }
 

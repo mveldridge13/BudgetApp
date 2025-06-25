@@ -92,21 +92,16 @@ function MainTabs() {
 // Authentication Screen Wrapper
 function AuthScreen({navigation}) {
   const handleAuthSuccess = async user => {
-    console.log('User authenticated successfully:', user);
 
     try {
       // NEW: Get user profile from backend instead of AsyncStorage
       const userProfile = await TrendAPIService.getUserProfile();
-      console.log('User profile loaded:', userProfile);
 
       if (!userProfile.hasSeenWelcome) {
-        console.log('New user - showing welcome flow');
         navigation.navigate('Welcome');
       } else if (!userProfile.setupComplete || !userProfile.income) {
-        console.log('User needs income setup');
         navigation.navigate('IncomeSetup');
       } else {
-        console.log('Setup complete - showing main app');
         navigation.navigate('MainTabs');
       }
     } catch (error) {
@@ -125,7 +120,6 @@ function WelcomeScreen({navigation}) {
     try {
       // NEW: Update backend instead of AsyncStorage
       await TrendAPIService.updateUserProfile({hasSeenWelcome: true});
-      console.log('Welcome status saved to backend');
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     } catch (error) {
       console.error('Error saving welcome status:', error);
@@ -148,36 +142,28 @@ export default function AppNavigator() {
 
   const checkInitialRoute = async () => {
     try {
-      console.log('Checking initial route...');
 
       // Initialize AuthService and check authentication first
       await AuthService.initialize();
       const isAuthenticated = AuthService.isAuthenticated();
 
-      console.log('isAuthenticated:', isAuthenticated);
 
       if (!isAuthenticated) {
-        console.log('User not authenticated - showing auth flow');
         setInitialRoute('Auth');
         return;
       }
 
       // NEW: Get user profile from backend instead of AsyncStorage
       const userProfile = await TrendAPIService.getUserProfile();
-      console.log('User profile:', userProfile);
 
       if (!userProfile.hasSeenWelcome) {
-        console.log('Authenticated user needs welcome');
         setInitialRoute('Welcome');
       } else if (!userProfile.setupComplete || !userProfile.income) {
-        console.log('Authenticated user needs income setup');
         setInitialRoute('IncomeSetup');
       } else {
-        console.log('Authenticated user setup complete - showing main app');
         setInitialRoute('MainTabs');
       }
     } catch (error) {
-      console.log('Error checking initial route:', error);
       // If there's an error, default to auth flow
       setInitialRoute('Auth');
     } finally {

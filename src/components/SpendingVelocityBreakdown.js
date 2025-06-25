@@ -263,10 +263,6 @@ const SpendingVelocityBreakdown = ({
       dailyBurnRate?.weeklyTrendWithLabels &&
       Array.isArray(dailyBurnRate.weeklyTrendWithLabels)
     ) {
-      console.log(
-        '🎯 Using weeklyTrendWithLabels from backend:',
-        dailyBurnRate.weeklyTrendWithLabels,
-      );
 
       const {weeklyTrendWithLabels} = dailyBurnRate;
       const maxValue = Math.max(
@@ -286,9 +282,6 @@ const SpendingVelocityBreakdown = ({
               const barHeight = (item.amount / maxValue) * chartHeight;
               const isToday = item.isToday;
 
-              console.log(
-                `📊 Day: ${item.day}, Amount: ${item.amount}, IsToday: ${isToday}`,
-              );
 
               return (
                 <View key={`${item.day}-${index}`} style={styles.barContainer}>
@@ -323,13 +316,9 @@ const SpendingVelocityBreakdown = ({
       !dailyBurnRate?.weeklyTrend ||
       !Array.isArray(dailyBurnRate.weeklyTrend)
     ) {
-      console.log('⚠️ No weekly trend data available');
-      return null;
+        return null;
     }
 
-    console.log(
-      '⚠️ Falling back to old weeklyTrend method (days might be wrong)',
-    );
 
     const {weeklyTrend} = dailyBurnRate;
     const maxValue = Math.max(...weeklyTrend, 1);

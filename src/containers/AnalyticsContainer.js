@@ -111,20 +111,6 @@ const AnalyticsContainer = () => {
         );
 
         if (isMountedRef.current) {
-          console.log('Backend analytics:', analyticsResponse);
-          console.log('Monthly trends:', analyticsResponse?.monthlyTrends);
-          console.log(
-            'Discretionary trends:',
-            analyticsResponse?.monthlyTrends?.map(t => ({
-              month: t.month,
-              discretionary: t.discretionaryExpenses,
-            })),
-          );
-          console.log('Total expenses:', analyticsResponse?.totalExpenses);
-          console.log(
-            'Spending velocity:',
-            analyticsResponse?.spendingVelocity,
-          );
           setAnalyticsData(analyticsResponse);
         }
       } catch (err) {
@@ -224,37 +210,8 @@ const AnalyticsContainer = () => {
         };
       }) || [];
 
-    // ✅ ENHANCED DEBUG: Show raw backend trends
-    console.log(
-      '📊 Raw backend monthlyTrends:',
-      analyticsData.monthlyTrends?.map(t => ({
-        month: t.month,
-        expenses: t.expenses,
-        discretionaryExpenses: t.discretionaryExpenses,
-      })),
-    );
-
-    console.log(
-      '📊 Processed chart data with backend discretionary:',
-      chartData,
-    );
-    console.log('Chart data length:', chartData.length);
-
     // MINIMAL fallback - backend should fix monthlyTrends
     const finalChartData = chartData.length > 0 ? chartData : [];
-
-    // ✅ ENHANCED DEBUG: Show final chart data discretionary amounts
-    console.log(
-      '📊 Final chart data discretionary amounts:',
-      finalChartData.map(d => ({
-        label: d.label,
-        date: d.date.toISOString().split('T')[0],
-        totalExpenses: d.amount,
-        discretionary: d.discretionaryAmount,
-      })),
-    );
-
-    console.log('Final chart data:', finalChartData);
 
     // ============================================================================
     // CHART DATA FORMATTING - MOVED FROM UI COMPONENT
@@ -331,17 +288,6 @@ const AnalyticsContainer = () => {
             )
           : null,
     };
-
-    console.log('✅ Statistics using backend discretionary data:', {
-      totalDiscretionary: statistics.currentDiscretionary,
-      averageDiscretionary: statistics.averageDiscretionary,
-      highestDiscretionary:
-        statistics.highestDiscretionaryPeriod?.discretionaryAmount,
-      highestDiscretionaryDay: statistics.highestDiscretionaryPeriod?.label,
-      highestDiscretionaryDate: statistics.highestDiscretionaryPeriod?.date
-        ?.toISOString()
-        ?.split('T')[0],
-    });
 
     // ✅ NEW: Pass through spending velocity from backend
     const spendingVelocity = analyticsData.spendingVelocity || null;
@@ -481,13 +427,6 @@ const AnalyticsContainer = () => {
     // Helper for breakdown component
     isRecurringTransaction,
   };
-
-  // Debug logging
-  console.log(
-    '📦 Container passing spendingVelocity:',
-    processedData.spendingVelocity,
-  );
-  console.log('📦 Container screenProps keys:', Object.keys(screenProps));
 
   return <AnalyticsScreen {...screenProps} />;
 };

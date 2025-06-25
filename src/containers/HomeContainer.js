@@ -41,30 +41,15 @@ const HomeContainer = ({navigation}) => {
   };
 
   const transformCategoriesForUI = useCallback(backendCategories => {
-    console.log('🔄 Transforming categories:', backendCategories.length);
 
     if (!Array.isArray(backendCategories)) {
-      console.log('🔄 Not an array, returning empty');
       return [];
     }
 
     const mainCategories = backendCategories.filter(cat => !cat.parentId);
     const subcategories = backendCategories.filter(cat => cat.parentId);
 
-    console.log('🔄 Categories breakdown:', {
-      total: backendCategories.length,
-      mainCategories: mainCategories.length,
-      subcategories: subcategories.length,
-    });
 
-    console.log(
-      '🔄 Main categories:',
-      mainCategories.map(c => ({id: c.id, name: c.name})),
-    );
-    console.log(
-      '🔄 Subcategories:',
-      subcategories.map(c => ({id: c.id, name: c.name, parentId: c.parentId})),
-    );
 
     const subcategoriesMap = subcategories.reduce((map, subcat) => {
       if (!map[subcat.parentId]) {
@@ -94,14 +79,6 @@ const HomeContainer = ({navigation}) => {
 
     const sorted = result.sort((a, b) => a.name.localeCompare(b.name));
 
-    console.log(
-      '🔄 Final transformed categories:',
-      sorted.map(c => ({
-        id: c.id,
-        name: c.name,
-        subcategoriesCount: c.subcategories?.length || 0,
-      })),
-    );
 
     return sorted;
   }, []);
@@ -111,12 +88,6 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const resolveCategoryForTransaction = useCallback(
     (transaction, categories) => {
-      console.log('🏷️ HomeContainer: Resolving category for transaction:', {
-        description: transaction.description,
-        categoryId: transaction.categoryId,
-        subcategoryId: transaction.subcategoryId,
-        availableCategoriesCount: categories.length,
-      });
 
       const categoryId = transaction.categoryId;
       const subcategoryId = transaction.subcategoryId;
@@ -126,10 +97,6 @@ const HomeContainer = ({navigation}) => {
         transaction.subcategory &&
         typeof transaction.subcategory === 'object'
       ) {
-        console.log(
-          '🏷️ HomeContainer: Using direct subcategory object:',
-          transaction.subcategory.name,
-        );
         return {
           id: transaction.subcategory.id,
           name: transaction.subcategory.name,
@@ -140,10 +107,6 @@ const HomeContainer = ({navigation}) => {
 
       // Check if backend returned category object directly
       if (transaction.category && typeof transaction.category === 'object') {
-        console.log(
-          '🏷️ HomeContainer: Using direct category object:',
-          transaction.category.name,
-        );
         return {
           id: transaction.category.id,
           name: transaction.category.name,
@@ -156,10 +119,6 @@ const HomeContainer = ({navigation}) => {
       if (categories && categories.length > 0) {
         // If we have a subcategoryId, prioritize finding the subcategory
         if (subcategoryId) {
-          console.log(
-            '🏷️ HomeContainer: Looking for subcategory ID:',
-            subcategoryId,
-          );
           for (const mainCategory of categories) {
             if (
               mainCategory.subcategories &&
@@ -169,10 +128,6 @@ const HomeContainer = ({navigation}) => {
                 sub => sub.id === subcategoryId,
               );
               if (subcategory) {
-                console.log(
-                  '🏷️ HomeContainer: Found subcategory:',
-                  subcategory.name,
-                );
                 return {
                   ...subcategory,
                   color: subcategory.color || mainCategory.color,
@@ -181,27 +136,14 @@ const HomeContainer = ({navigation}) => {
               }
             }
           }
-          console.log(
-            '🏷️ HomeContainer: Subcategory not found:',
-            subcategoryId,
-          );
         }
 
         // If no subcategory found, look for main category
         if (categoryId) {
-          console.log(
-            '🏷️ HomeContainer: Looking for main category ID:',
-            categoryId,
-          );
           const mainCategory = categories.find(cat => cat.id === categoryId);
           if (mainCategory) {
-            console.log(
-              '🏷️ HomeContainer: Found main category:',
-              mainCategory.name,
-            );
             return mainCategory;
           }
-          console.log('🏷️ HomeContainer: Main category not found:', categoryId);
         }
 
         // Fallback: look for "other" category in passed categories
@@ -209,25 +151,16 @@ const HomeContainer = ({navigation}) => {
           cat => cat.name.toLowerCase() === 'other' || cat.id === 'other',
         );
         if (otherCategory) {
-          console.log(
-            '🏷️ HomeContainer: Using "Other" category from available categories:',
-            otherCategory.name,
-          );
           return otherCategory;
         }
 
         // If no "other" category found, use the first available category
         if (categories.length > 0) {
-          console.log(
-            '🏷️ HomeContainer: Using first available category as fallback:',
-            categories[0].name,
-          );
           return categories[0];
         }
       }
 
       // Final fallback: Use default category structure
-      console.log('🏷️ HomeContainer: Using hardcoded default "Other" category');
       return {
         id: 'other',
         name: 'Other',
@@ -243,13 +176,6 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const processTransactionsWithCategories = useCallback(
     (transactions, categories) => {
-      console.log(
-        '🔄 HomeContainer: Processing transactions with categories:',
-        {
-          transactionsCount: transactions.length,
-          categoriesCount: categories.length,
-        },
-      );
 
       const processedTransactions = transactions.map(transaction => {
         const categoryData = resolveCategoryForTransaction(
@@ -262,14 +188,6 @@ const HomeContainer = ({navigation}) => {
         };
       });
 
-      console.log(
-        '🔄 HomeContainer: Processed transactions sample:',
-        processedTransactions.slice(0, 3).map(t => ({
-          description: t.description,
-          categoryName: t.categoryData?.name,
-          categoryId: t.categoryId,
-        })),
-      );
 
       return processedTransactions;
     },
@@ -344,15 +262,6 @@ const HomeContainer = ({navigation}) => {
       const backendTransactions = response?.transactions || [];
       const sortedTransactions = sortTransactionsByDate(backendTransactions);
 
-      console.log('📊 Loaded transactions:', sortedTransactions.length);
-      console.log(
-        '📊 Transaction category IDs:',
-        sortedTransactions.map(t => ({
-          description: t.description,
-          categoryId: t.categoryId,
-          subcategoryId: t.subcategoryId,
-        })),
-      );
 
       setTransactions(sortedTransactions);
     } catch (error) {
@@ -367,32 +276,20 @@ const HomeContainer = ({navigation}) => {
 
   const loadCategories = useCallback(async () => {
     try {
-      console.log('📂 Loading categories...');
 
       if (!AuthService.isAuthenticated()) {
-        console.log('📂 Not authenticated, skipping categories');
         return;
       }
 
-      console.log('📂 Calling TrendAPIService.getCategories()...');
       const response = await TrendAPIService.getCategories();
-      console.log('📂 Categories API response:', response);
 
       const backendCategories = response?.categories || [];
-      console.log('📂 Backend categories count:', backendCategories.length);
 
       const transformedCategories = transformCategoriesForUI(backendCategories);
-      console.log(
-        '📂 Transformed categories:',
-        transformedCategories.length,
-        transformedCategories,
-      );
 
       setCategories(transformedCategories);
-      console.log('📂 Categories loaded successfully!');
     } catch (error) {
       console.error('📂 Error loading categories:', error);
-      console.log('📂 Setting empty categories array');
       setCategories([]);
     }
   }, [transformCategoriesForUI]);
@@ -418,13 +315,6 @@ const HomeContainer = ({navigation}) => {
           throw new Error('User not authenticated');
         }
 
-        console.log('💾 Saving transaction:', {
-          isEditing,
-          description: transaction.description,
-          amount: transaction.amount,
-          categoryId: transaction.categoryId,
-          subcategoryId: transaction.subcategoryId,
-        });
 
         // Optimistic update
         if (isEditing) {
@@ -436,7 +326,6 @@ const HomeContainer = ({navigation}) => {
                   : t,
               ),
             );
-            console.log('💾 Updated transactions (edit):', updated.length);
             return updated;
           });
         } else {
@@ -453,7 +342,6 @@ const HomeContainer = ({navigation}) => {
               optimisticTransaction,
               ...prev,
             ]);
-            console.log('💾 Updated transactions (new):', updated.length);
             return updated;
           });
         }
@@ -469,7 +357,6 @@ const HomeContainer = ({navigation}) => {
           recurrence: transaction.recurrence,
         };
 
-        console.log('💾 Sending to backend:', transactionData);
 
         // Send to backend
         const savedTransaction = isEditing
@@ -479,7 +366,6 @@ const HomeContainer = ({navigation}) => {
             )
           : await TrendAPIService.createTransaction(transactionData);
 
-        console.log('💾 Backend response:', savedTransaction);
 
         // Reconcile with server response
         setTransactions(prev => {
@@ -493,7 +379,6 @@ const HomeContainer = ({navigation}) => {
             return t;
           });
           const final = sortTransactionsByDate(updated);
-          console.log('💾 Final reconciled transactions:', final.length);
           return final;
         });
 
@@ -519,10 +404,6 @@ const HomeContainer = ({navigation}) => {
         } else {
           setTransactions(prev => {
             const updated = prev.filter(t => t.id !== tempId);
-            console.log(
-              '💾 Rollback - transactions after removal:',
-              updated.length,
-            );
             return updated;
           });
         }
@@ -541,13 +422,11 @@ const HomeContainer = ({navigation}) => {
         throw new Error('User not authenticated');
       }
 
-      console.log('🗑️ Deleting transaction:', transactionId);
 
       // Optimistic removal
       setTransactions(prev => {
         deletedTransaction = prev.find(t => t.id === transactionId);
         const updated = prev.filter(t => t.id !== transactionId);
-        console.log('🗑️ Transactions after delete:', updated.length);
         return updated;
       });
 
@@ -560,10 +439,6 @@ const HomeContainer = ({navigation}) => {
       if (deletedTransaction) {
         setTransactions(prev => {
           const updated = sortTransactionsByDate([deletedTransaction, ...prev]);
-          console.log(
-            '🗑️ Rollback - restored transaction, total:',
-            updated.length,
-          );
           return updated;
         });
       }
@@ -622,20 +497,12 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const calculateTotalExpenses = useCallback(() => {
     try {
-      console.log('🧮 Calculating total expenses...', {
-        transactionsCount: transactions?.length,
-        hasIncomeData: !!incomeData,
-        nextPayDate: incomeData?.nextPayDate,
-        frequency: incomeData?.frequency,
-      });
 
       if (!transactions?.length) {
-        console.log('🧮 No transactions, returning 0');
         return 0;
       }
 
       if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-        console.log('🧮 No income data, returning 0');
         return 0;
       }
 
@@ -658,7 +525,6 @@ const HomeContainer = ({navigation}) => {
         }
       } catch (dateError) {
         console.error('🧮 Error parsing next pay date:', dateError);
-        console.log('🧮 Falling back to current date');
         nextPayDate = new Date();
       }
 
@@ -671,36 +537,26 @@ const HomeContainer = ({navigation}) => {
         periodEnd = new Date(nextPayDate);
         periodEnd.setHours(23, 59, 59, 999);
 
-        console.log('🧮 Next pay date:', nextPayDate.toISOString());
 
         if (incomeData.frequency === 'weekly') {
           periodStart = new Date(nextPayDate);
           periodStart.setDate(periodStart.getDate() - 7);
-          console.log('🧮 Weekly period: 7 days back from next pay date');
         } else if (incomeData.frequency === 'fortnightly') {
           periodStart = new Date(nextPayDate);
           periodStart.setDate(periodStart.getDate() - 14);
-          console.log('🧮 Fortnightly period: 14 days back from next pay date');
         } else if (incomeData.frequency === 'monthly') {
           periodStart = new Date(nextPayDate);
           periodStart.setMonth(periodStart.getMonth() - 1);
-          console.log('🧮 Monthly period: 1 month back from next pay date');
         } else if (incomeData.frequency === 'sixmonths') {
           periodStart = new Date(nextPayDate);
           periodStart.setMonth(periodStart.getMonth() - 6);
-          console.log('🧮 Six months period: 6 months back from next pay date');
         } else if (incomeData.frequency === 'yearly') {
           periodStart = new Date(nextPayDate);
           periodStart.setFullYear(periodStart.getFullYear() - 1);
-          console.log('🧮 Yearly period: 1 year back from next pay date');
         } else {
           // Default to monthly if frequency is unknown
           periodStart = new Date(nextPayDate);
           periodStart.setMonth(periodStart.getMonth() - 1);
-          console.log(
-            '🧮 Default to monthly period for unknown frequency:',
-            incomeData.frequency,
-          );
         }
 
         // Ensure periodStart is not invalid
@@ -709,28 +565,18 @@ const HomeContainer = ({navigation}) => {
         }
       } catch (periodError) {
         console.error('🧮 Error calculating period:', periodError);
-        console.log('🧮 Falling back to 30-day period');
         periodStart = new Date(nextPayDate);
         periodStart.setDate(periodStart.getDate() - 30);
         periodEnd = new Date(nextPayDate);
         periodEnd.setHours(23, 59, 59, 999);
       }
 
-      console.log('🧮 Period:', {
-        start: periodStart.toISOString(),
-        end: periodEnd.toISOString(),
-        frequency: incomeData.frequency,
-        daysDifference: Math.ceil(
-          (periodEnd - periodStart) / (1000 * 60 * 60 * 24),
-        ),
-      });
 
       // Filter transactions for the period - only count EXPENSE transactions
       const periodTransactions = transactions.filter(transaction => {
         try {
           const transactionDate = new Date(transaction.date);
           if (isNaN(transactionDate.getTime())) {
-            console.warn('🧮 Invalid transaction date:', transaction.date);
             return false;
           }
 
@@ -738,15 +584,6 @@ const HomeContainer = ({navigation}) => {
             transactionDate >= periodStart && transactionDate <= periodEnd;
           const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
 
-          console.log('🧮 Transaction check:', {
-            description: transaction.description,
-            amount: transaction.amount,
-            type: transaction.type,
-            date: transactionDate.toISOString(),
-            inPeriod,
-            isExpense,
-            included: inPeriod && isExpense,
-          });
 
           return inPeriod && isExpense;
         } catch (error) {
@@ -759,11 +596,6 @@ const HomeContainer = ({navigation}) => {
       const total = periodTransactions.reduce((sum, transaction) => {
         try {
           const amount = parseFloat(transaction.amount) || 0;
-          console.log('🧮 Adding to total:', {
-            description: transaction.description,
-            amount,
-            runningTotal: sum + amount,
-          });
           return sum + amount;
         } catch (error) {
           console.error(
@@ -775,11 +607,6 @@ const HomeContainer = ({navigation}) => {
         }
       }, 0);
 
-      console.log('🧮 Final calculation:', {
-        totalTransactions: transactions.length,
-        periodTransactions: periodTransactions.length,
-        totalExpenses: total,
-      });
 
       return total;
     } catch (error) {
@@ -791,7 +618,6 @@ const HomeContainer = ({navigation}) => {
   // Update totalExpenses whenever transactions or incomeData changes
   useEffect(() => {
     const newTotal = calculateTotalExpenses();
-    console.log('🧮 Setting new total expenses:', newTotal);
     setTotalExpenses(newTotal);
   }, [calculateTotalExpenses]);
 
@@ -805,7 +631,6 @@ const HomeContainer = ({navigation}) => {
 
         // Trigger onboarding tutorial if needed
         if (result?.shouldShowTransactionTutorial) {
-          console.log('HomeContainer: Triggering transaction tutorial');
           onboarding.triggerTransactionTutorial();
         }
 
@@ -888,14 +713,6 @@ const HomeContainer = ({navigation}) => {
     categories,
   );
 
-  console.log('🏠 HomeContainer render:', {
-    transactionsCount: transactions.length,
-    transactionsWithCategoriesCount: transactionsWithCategories.length,
-    categoriesCount: categories.length,
-    totalExpenses,
-    incomeData: !!incomeData,
-    loading: loading || onboarding.loading,
-  });
 
   // ==============================================
   // LIFECYCLE

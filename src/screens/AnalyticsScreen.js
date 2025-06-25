@@ -62,17 +62,10 @@ const AnalyticsScreen = ({
   const [showSpendingVelocityModal, setShowSpendingVelocityModal] =
     useState(false);
 
-  // Debug logging
-  console.log('🚀 AnalyticsScreen spendingVelocity:', spendingVelocity);
-  console.log(
-    '🚀 AnalyticsScreen spendingVelocity type:',
-    typeof spendingVelocity,
-  );
 
   // ✅ NEW: Handle Spending Velocity tap
   const handleSpendingVelocityPress = () => {
     if (isPro) {
-      console.log('🔥 Opening Spending Velocity breakdown for Pro user');
       setShowSpendingVelocityModal(true);
     } else {
       Alert.alert(

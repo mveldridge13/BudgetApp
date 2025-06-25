@@ -14,13 +14,6 @@ const TransactionList = ({
   transactionRef,
   onTransactionLayout,
 }) => {
-  console.log('📋 TransactionList: Rendering with transactions:', {
-    transactionsCount: transactions.length,
-    sampleTransactionHasCategoryData: transactions[0]?.categoryData
-      ? true
-      : false,
-    selectedDate: selectedDate.toDateString(),
-  });
 
   // Measure first transaction when transactions load
   useEffect(() => {
@@ -93,11 +86,6 @@ const TransactionList = ({
   const renderTransactionItem = ({item: transaction, index}) => {
     const isFirst = index === 0;
 
-    console.log('📋 TransactionList: Rendering transaction:', {
-      description: transaction.description,
-      hasCategoryData: !!transaction.categoryData,
-      categoryName: transaction.categoryData?.name,
-    });
 
     return (
       <View
@@ -116,12 +104,6 @@ const TransactionList = ({
   };
 
   const renderRecurringItem = ({item: transaction}) => {
-    console.log('📋 TransactionList: Rendering recurring transaction:', {
-      description: transaction.description,
-      recurrence: transaction.recurrence,
-      hasCategoryData: !!transaction.categoryData,
-      categoryName: transaction.categoryData?.name,
-    });
 
     return (
       <View style={styles.transactionItemContainer}>
@@ -137,13 +119,6 @@ const TransactionList = ({
     );
   };
 
-  console.log('📋 TransactionList: Filtered transactions:', {
-    dailyTransactionsCount: dailyTransactions.length,
-    recurringGroupsCounts: Object.keys(recurringGroups).map(freq => ({
-      frequency: freq,
-      count: recurringGroups[freq].length,
-    })),
-  });
 
   return (
     <View style={styles.container}>

@@ -18,12 +18,6 @@ const DiscretionaryContainer = ({
   const [discretionaryData, setDiscretionaryData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
-    console.log('🔍 DEBUG: Initial selectedDate creation:', {
-      today: today,
-      todayString: today.toString(),
-      todayISO: today.toISOString(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
     return today;
   });
   const [expandedCategories, setExpandedCategories] = useState(new Set());
@@ -64,18 +58,9 @@ const DiscretionaryContainer = ({
 
   /**
    * Create local date range without timezone conversion
-   * DEBUGGING VERSION - with extensive logging
    */
   const createLocalDateRange = useCallback(
     (baseDate, period) => {
-      console.log('🔍 DEBUG: createLocalDateRange input:', {
-        baseDate: baseDate,
-        baseDateString: baseDate.toString(),
-        baseDateISO: baseDate.toISOString(),
-        period: period,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-
       // Create start and end dates with explicit time boundaries
       let startDate, endDate;
 
@@ -178,19 +163,6 @@ const DiscretionaryContainer = ({
         endDateTime: formatDateTimeForAPI(endDate),
       };
 
-      console.log('🔍 DEBUG: createLocalDateRange output:', {
-        startDateObj: startDate,
-        endDateObj: endDate,
-        startDateString: startDate.toString(),
-        endDateString: endDate.toString(),
-        apiStartDate: result.startDate,
-        apiEndDate: result.endDate,
-        apiStartDateTime: result.startDateTime,
-        apiEndDateTime: result.endDateTime,
-        selectedDateFormatted: formatDateForAPI(baseDate),
-        timezoneOffset: startDate.getTimezoneOffset(),
-      });
-
       return result;
     },
     [formatDateForAPI, formatDateTimeForAPI],
@@ -215,11 +187,6 @@ const DiscretionaryContainer = ({
       }
 
       try {
-        console.log(
-          '🔍 Loading discretionary breakdown for:',
-          formatDateForAPI(selectedDate),
-        );
-
         // ✅ FIXED: Use timezone-safe date range creation
         const dateRange = createLocalDateRange(selectedDate, selectedPeriod);
 
@@ -230,22 +197,9 @@ const DiscretionaryContainer = ({
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
 
-        console.log(
-          '📊 Fetching discretionary breakdown with DATETIME filters:',
-          filters,
-        );
-
         // ✅ FIXED: Use the new TrendAPIService method
         const discretionaryResponse =
           await TrendAPIService.getDiscretionaryBreakdown(filters);
-
-        console.log('📊 Discretionary breakdown response received:', {
-          selectedDate: discretionaryResponse?.selectedDate,
-          selectedPeriod: discretionaryResponse?.selectedPeriod,
-          totalAmount: discretionaryResponse?.totalDiscretionaryAmount,
-          transactionCount: discretionaryResponse?.transactions?.length,
-          categoryCount: discretionaryResponse?.categoryBreakdown?.length,
-        });
 
         if (isMountedRef.current) {
           setDiscretionaryData(discretionaryResponse);
@@ -266,7 +220,7 @@ const DiscretionaryContainer = ({
         }
       }
     },
-    [selectedDate, selectedPeriod, formatDateForAPI, createLocalDateRange],
+    [selectedDate, selectedPeriod, createLocalDateRange],
   );
 
   /**
@@ -279,7 +233,6 @@ const DiscretionaryContainer = ({
 
     setRefreshing(true);
     try {
-      console.log('🔄 Refreshing discretionary breakdown data...');
       await loadDiscretionaryData(true); // Force reload
     } catch (refreshingError) {
       console.error('Error refreshing data:', refreshingError);
@@ -290,29 +243,15 @@ const DiscretionaryContainer = ({
 
   /**
    * Handle date selection from calendar
-   * DEBUGGING VERSION - with extensive logging
    */
-  const handleDateChange = useCallback(
-    newDate => {
-      console.log('🔍 DEBUG: handleDateChange called with:', {
-        newDate: newDate,
-        newDateString: newDate.toString(),
-        newDateISO: newDate.toISOString(),
-        currentSelectedDate: selectedDate,
-        currentSelectedDateString: selectedDate.toString(),
-        formattedNewDate: formatDateForAPI(newDate),
-        formattedCurrentDate: formatDateForAPI(selectedDate),
-      });
-      setSelectedDate(newDate);
-    },
-    [formatDateForAPI, selectedDate],
-  );
+  const handleDateChange = useCallback(newDate => {
+    setSelectedDate(newDate);
+  }, []);
 
   /**
    * Handle calendar modal open
    */
   const handleCalendarOpen = useCallback(() => {
-    console.log('📅 Opening calendar modal');
     setShowCalendar(true);
   }, []);
 
@@ -320,7 +259,6 @@ const DiscretionaryContainer = ({
    * Handle category expansion/collapse
    */
   const handleCategoryPress = useCallback(categoryName => {
-    console.log('📂 Category pressed:', categoryName);
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
       if (newSet.has(categoryName)) {
@@ -336,7 +274,6 @@ const DiscretionaryContainer = ({
    * Handle modal close
    */
   const handleClose = useCallback(() => {
-    console.log('🚪 Closing discretionary breakdown modal');
     // Reset state when closing
     setExpandedCategories(new Set());
     setShowCalendar(false);
@@ -349,7 +286,6 @@ const DiscretionaryContainer = ({
   const handleAppStateChange = useCallback(
     nextAppState => {
       if (nextAppState === 'active' && visible) {
-        console.log('📱 App became active, refreshing discretionary data...');
         loadDiscretionaryData(true);
       }
     },
@@ -363,7 +299,6 @@ const DiscretionaryContainer = ({
   // Load data when modal becomes visible
   useEffect(() => {
     if (visible && isMountedRef.current) {
-      console.log('👁️ Discretionary breakdown modal became visible');
       loadDiscretionaryData();
     }
   }, [visible, loadDiscretionaryData]);
@@ -371,13 +306,9 @@ const DiscretionaryContainer = ({
   // Reload data when selected date changes
   useEffect(() => {
     if (visible && isMountedRef.current) {
-      console.log(
-        '📅 Reloading data for new date:',
-        formatDateForAPI(selectedDate),
-      );
       loadDiscretionaryData(true);
     }
-  }, [selectedDate, visible, loadDiscretionaryData, formatDateForAPI]);
+  }, [selectedDate, visible, loadDiscretionaryData]);
 
   // Handle component unmounting
   useEffect(() => {
@@ -400,7 +331,6 @@ const DiscretionaryContainer = ({
   useFocusEffect(
     useCallback(() => {
       if (visible) {
-        console.log('🎯 Focus effect triggered for discretionary modal');
         // Force reload data when focused
         const reloadData = async () => {
           try {
@@ -420,22 +350,11 @@ const DiscretionaryContainer = ({
   // ==============================================
 
   /**
-   * Helper function to format period labels - SIMPLIFIED to use local date
+   * Helper function to format period labels
    */
   const formatPeriodLabel = useCallback(
-    (dateStr, period) => {
-      // ✅ MUCH SIMPLER: Just use the local selectedDate state instead of parsing backend date
-      const date = selectedDate; // This is already a local Date object
-
-      console.log('🗓️ Formatting date:', {
-        backend: dateStr,
-        selectedDate: formatDateForAPI(selectedDate),
-        formatted: date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          day: 'numeric',
-          month: 'short',
-        }),
-      });
+    (_, period) => {
+      const date = selectedDate;
 
       switch (period) {
         case 'daily':
@@ -462,7 +381,7 @@ const DiscretionaryContainer = ({
           });
       }
     },
-    [selectedDate, formatDateForAPI],
+    [selectedDate],
   );
 
   /**
@@ -478,14 +397,6 @@ const DiscretionaryContainer = ({
         totalTransactions: 0,
       };
     }
-
-    console.log('📊 Processing discretionary data for UI:', {
-      selectedDate: discretionaryData.selectedDate,
-      selectedPeriod: discretionaryData.selectedPeriod,
-      totalAmount: discretionaryData.totalDiscretionaryAmount,
-      categoryCount: discretionaryData.categoryBreakdown?.length,
-      transactionCount: discretionaryData.transactions?.length,
-    });
 
     // Create period object compatible with UI
     const period = {
@@ -526,21 +437,6 @@ const DiscretionaryContainer = ({
           }
         }
 
-        console.log('🔄 Processing category:', {
-          name: category.categoryName,
-          backendCategoryColor: category.categoryColor,
-          backendColor: category.color,
-          originalSubcategories: category.subcategories,
-          subcategoriesType: typeof category.subcategories,
-          subcategoriesIsArray: Array.isArray(category.subcategories),
-          subcategoriesIsMap: category.subcategories instanceof Map,
-          subcategoriesKeys: category.subcategories
-            ? Object.keys(category.subcategories)
-            : 'none',
-          processedSubcategories: subcategories,
-          isMap: category.subcategories instanceof Map,
-        });
-
         return {
           name: category.categoryName,
           amount: category.amount,
@@ -576,34 +472,6 @@ const DiscretionaryContainer = ({
   // DEBUGGING & ANALYTICS
   // ==============================================
 
-  /**
-   * Log component state for debugging
-   */
-  React.useEffect(() => {
-    if (__DEV__) {
-      console.log('🔍 DiscretionaryContainer State:', {
-        visible,
-        isLoading,
-        refreshing,
-        hasDiscretionaryData: !!discretionaryData,
-        selectedDate: formatDateForAPI(selectedDate),
-        selectedPeriod,
-        expandedCategoriesCount: expandedCategories.size,
-        showCalendar,
-      });
-    }
-  }, [
-    visible,
-    isLoading,
-    refreshing,
-    discretionaryData,
-    selectedDate,
-    selectedPeriod,
-    expandedCategories,
-    showCalendar,
-    formatDateForAPI,
-  ]);
-
   // ==============================================
   // RENDER UI COMPONENT - PURE UI PATTERN
   // ==============================================
@@ -629,17 +497,6 @@ const DiscretionaryContainer = ({
     onDateChange: handleDateChange,
     onCategoryPress: handleCategoryPress,
   };
-
-  console.log('🚀 Rendering DiscretionaryBreakdown with props:', {
-    visible,
-    hasData: processedBreakdownData.totalAmount > 0,
-    selectedDate: formatDateForAPI(selectedDate),
-    totalAmount: processedBreakdownData.totalAmount,
-    totalTransactions: processedBreakdownData.totalTransactions,
-    categoryCount: processedBreakdownData.categories.length,
-    insightCount: processedBreakdownData.insights.length,
-    expandedCategoriesCount: expandedCategories.size,
-  });
 
   return <DiscretionaryBreakdown {...uiProps} />;
 };
