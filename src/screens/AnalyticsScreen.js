@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   View,
   StyleSheet,
@@ -12,6 +12,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {LineChart} from 'react-native-chart-kit';
 import {colors} from '../styles';
 import DiscretionaryBreakdown from '../components/DiscretionaryBreakdown';
+import SpendingVelocityContainer from '../containers/SpendingVelocityContainer';
 
 // Pro Badge Component - moved outside to prevent recreation on each render
 const ProBadge = () => (
@@ -56,12 +57,33 @@ const AnalyticsScreen = ({
 }) => {
   const insets = useSafeAreaInsets();
 
+  // ✅ NEW: State for Spending Velocity Modal
+  const [showSpendingVelocityModal, setShowSpendingVelocityModal] =
+    useState(false);
+
   // Debug logging
   console.log('🚀 AnalyticsScreen spendingVelocity:', spendingVelocity);
   console.log(
     '🚀 AnalyticsScreen spendingVelocity type:',
     typeof spendingVelocity,
   );
+
+  // ✅ NEW: Handle Spending Velocity tap
+  const handleSpendingVelocityPress = () => {
+    if (isPro) {
+      console.log('🔥 Opening Spending Velocity breakdown for Pro user');
+      setShowSpendingVelocityModal(true);
+    } else {
+      Alert.alert(
+        'Upgrade to Pro',
+        'Access detailed spending velocity analysis including daily burn rate charts, weekly trends, and personalized insights!',
+        [
+          {text: 'Maybe Later', style: 'cancel'},
+          {text: 'Learn More', style: 'default'},
+        ],
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -256,7 +278,7 @@ const AnalyticsScreen = ({
                     )}
                   </Text>
                   {isPro ? (
-                    <Text style={styles.tapHint}>Tap for deatails</Text>
+                    <Text style={styles.tapHint}>Tap for details</Text>
                   ) : (
                     <View style={styles.proIndicator}>
                       <ProBadge />
@@ -305,7 +327,7 @@ const AnalyticsScreen = ({
             </Text>
           </View>
 
-          {/* ✅ NEW: Spending Velocity Insight - Pro Feature */}
+          {/* ✅ ENHANCED: Spending Velocity Insight - Pro Feature with Modal */}
           {spendingVelocity ? (
             <TouchableOpacity
               style={[
@@ -320,21 +342,7 @@ const AnalyticsScreen = ({
                       : colors.danger || '#EF4444',
                 },
               ]}
-              onPress={() => {
-                if (isPro) {
-                  // TODO: Add velocity details modal or navigation
-                  console.log('🚀 Show velocity details');
-                } else {
-                  Alert.alert(
-                    'Upgrade to Pro',
-                    'Access detailed spending velocity analysis with Pro features!',
-                    [
-                      {text: 'Maybe Later', style: 'cancel'},
-                      {text: 'Learn More', style: 'default'},
-                    ],
-                  );
-                }
-              }}>
+              onPress={handleSpendingVelocityPress}>
               <View style={styles.insightContentClean}>
                 <Text style={styles.insightText}>
                   <Text style={styles.insightBold}>Spending Velocity:</Text>{' '}
@@ -380,6 +388,13 @@ const AnalyticsScreen = ({
         isRecurringTransaction={isRecurringTransaction}
         allTransactions={transactions}
         previousPeriodData={data}
+      />
+
+      {/* ✅ NEW: Spending Velocity Modal */}
+      <SpendingVelocityContainer
+        visible={showSpendingVelocityModal}
+        onClose={() => setShowSpendingVelocityModal(false)}
+        selectedPeriod={selectedPeriod}
       />
     </View>
   );

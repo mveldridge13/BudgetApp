@@ -39,11 +39,26 @@ const IncomeSetupContainer = ({navigation, route}) => {
     try {
       // Primary: Load income from backend
       const userProfile = await TrendAPIService.getUserProfile();
+      console.log('📥 Loading existing user profile:', userProfile);
+
       if (userProfile?.income) {
         setIncome(userProfile.income.toString());
       }
 
-      // Secondary: Load frequency and nextPayDate from AsyncStorage
+      // ✅ ENHANCED: Load frequency and nextPayDate from backend if available
+      if (userProfile?.incomeFrequency) {
+        setSelectedFrequency(userProfile.incomeFrequency.toLowerCase()); // 'MONTHLY' → 'monthly'
+      }
+
+      if (userProfile?.nextPayDate) {
+        const backendDate = new Date(userProfile.nextPayDate);
+        if (!isNaN(backendDate.getTime())) {
+          setNextPayDate(backendDate);
+          setHasSelectedDate(true);
+        }
+      }
+
+      // Secondary: Load from AsyncStorage for any missing data
       const existingData = await AsyncStorage.getItem('userSetup');
       if (existingData) {
         const parsedData = JSON.parse(existingData);
@@ -53,11 +68,13 @@ const IncomeSetupContainer = ({navigation, route}) => {
           setIncome(parsedData.income.toString());
         }
 
-        if (parsedData.frequency) {
+        // Use AsyncStorage frequency only if backend doesn't have it
+        if (!userProfile?.incomeFrequency && parsedData.frequency) {
           setSelectedFrequency(parsedData.frequency);
         }
 
-        if (parsedData.nextPayDate) {
+        // Use AsyncStorage nextPayDate only if backend doesn't have it
+        if (!userProfile?.nextPayDate && parsedData.nextPayDate) {
           const storedDate = new Date(parsedData.nextPayDate);
           if (!isNaN(storedDate.getTime())) {
             setNextPayDate(storedDate);
@@ -66,6 +83,8 @@ const IncomeSetupContainer = ({navigation, route}) => {
         }
       }
     } catch (error) {
+      console.error('📥 Error loading existing data from backend:', error);
+
       // Fallback to AsyncStorage only
       try {
         const existingData = await AsyncStorage.getItem('userSetup');
@@ -83,7 +102,10 @@ const IncomeSetupContainer = ({navigation, route}) => {
           }
         }
       } catch (fallbackError) {
-        // Silent fallback failure
+        console.error(
+          '📥 Error loading from AsyncStorage fallback:',
+          fallbackError,
+        );
       }
     }
   }, [isEditMode]);
@@ -105,11 +127,22 @@ const IncomeSetupContainer = ({navigation, route}) => {
     try {
       const incomeAmount = parseFloat(income);
 
-      // Save to backend API (primary storage)
-      await TrendAPIService.updateUserProfile({
+      // ✅ FIXED: Save complete income data to backend API (primary storage)
+      const profileUpdateData = {
         income: incomeAmount,
+        incomeFrequency: selectedFrequency.toUpperCase(), // Convert to WEEKLY/FORTNIGHTLY/MONTHLY
+        nextPayDate: nextPayDate.toISOString(),
         setupComplete: true,
-      });
+      };
+
+      console.log(
+        '💾 Saving complete income data to backend:',
+        profileUpdateData,
+      );
+
+      await TrendAPIService.updateUserProfile(profileUpdateData);
+
+      console.log('✅ Successfully saved to backend!');
 
       // Save complete data to AsyncStorage (backward compatibility)
       const setupData = {
@@ -122,6 +155,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
       };
 
       await AsyncStorage.setItem('userSetup', JSON.stringify(setupData));
+      console.log('💾 Also saved to AsyncStorage for backward compatibility');
 
       // Handle navigation based on mode
       if (isEditMode) {
@@ -135,6 +169,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
         navigation.replace('MainTabs');
       }
     } catch (error) {
+      console.error('💥 Error saving income data:', error);
       Alert.alert(
         'Error',
         'Failed to save your income information. Please check your connection and try again.',
@@ -167,6 +202,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
       if (loading) {
         return;
       }
+      console.log('📅 Frequency selected:', frequencyId);
       setSelectedFrequency(frequencyId);
     },
     [loading],
@@ -176,6 +212,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
    * Handle date selection
    */
   const handleDateChange = useCallback(selectedDate => {
+    console.log('📅 Next pay date selected:', selectedDate);
     setNextPayDate(selectedDate);
     setHasSelectedDate(true);
   }, []);
