@@ -2,8 +2,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 // containers/HomeContainer.js
 import React, {useState, useEffect, useCallback} from 'react';
-import {AppState, Alert} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {AppState, Alert, Platform} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
 import HomeScreen from '../screens/HomeScreen';
@@ -41,15 +40,12 @@ const HomeContainer = ({navigation}) => {
   };
 
   const transformCategoriesForUI = useCallback(backendCategories => {
-
     if (!Array.isArray(backendCategories)) {
       return [];
     }
 
     const mainCategories = backendCategories.filter(cat => !cat.parentId);
     const subcategories = backendCategories.filter(cat => cat.parentId);
-
-
 
     const subcategoriesMap = subcategories.reduce((map, subcat) => {
       if (!map[subcat.parentId]) {
@@ -79,7 +75,6 @@ const HomeContainer = ({navigation}) => {
 
     const sorted = result.sort((a, b) => a.name.localeCompare(b.name));
 
-
     return sorted;
   }, []);
 
@@ -88,7 +83,6 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const resolveCategoryForTransaction = useCallback(
     (transaction, categories) => {
-
       const categoryId = transaction.categoryId;
       const subcategoryId = transaction.subcategoryId;
 
@@ -176,7 +170,6 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const processTransactionsWithCategories = useCallback(
     (transactions, categories) => {
-
       const processedTransactions = transactions.map(transaction => {
         const categoryData = resolveCategoryForTransaction(
           transaction,
@@ -188,65 +181,67 @@ const HomeContainer = ({navigation}) => {
         };
       });
 
-
       return processedTransactions;
     },
     [resolveCategoryForTransaction],
   );
 
   // ==============================================
-  // DATA LOADING
+  // DATA LOADING - ✅ PURE BACKEND VERSION
   // ==============================================
   const loadUserProfile = useCallback(async () => {
     try {
+      console.log('👤 loadUserProfile START - Platform:', Platform.OS);
+
       if (!AuthService.isAuthenticated()) {
         navigation.navigate('Auth');
         return;
       }
 
       const profile = await TrendAPIService.getUserProfile();
+      console.log('👤 Profile received from backend:', {
+        platform: Platform.OS,
+        userId: profile?.id,
+        income: profile?.income,
+        incomeFrequency: profile?.incomeFrequency,
+        nextPayDate: profile?.nextPayDate,
+        setupComplete: profile?.setupComplete,
+      });
+
       setUserProfile(profile);
 
-      if (profile.income) {
-        let additionalData = {};
-        try {
-          const storedData = await AsyncStorage.getItem('userSetup');
-          if (storedData) {
-            const parsedData = JSON.parse(storedData);
-            additionalData = {
-              frequency: parsedData.frequency || 'monthly',
-              nextPayDate: parsedData.nextPayDate || new Date().toISOString(),
-            };
-          }
-        } catch (error) {
-          // Ignore additional data errors
-        }
-
-        setIncomeData({
+      // ✅ NEW: Use PURE backend data - no AsyncStorage
+      if (profile.income && profile.incomeFrequency && profile.nextPayDate) {
+        const finalIncomeData = {
           income: profile.income,
           monthlyIncome: profile.income,
           setupComplete: profile.setupComplete,
-          frequency: additionalData.frequency || 'monthly',
-          nextPayDate: additionalData.nextPayDate || new Date().toISOString(),
+          frequency: profile.incomeFrequency, // ✅ From backend
+          nextPayDate: profile.nextPayDate, // ✅ From backend
+        };
+
+        console.log('👤 Final income data (pure backend):', {
+          platform: Platform.OS,
+          income: finalIncomeData.income,
+          frequency: finalIncomeData.frequency,
+          nextPayDate: finalIncomeData.nextPayDate,
         });
+
+        setIncomeData(finalIncomeData);
       } else {
+        console.log('👤 Incomplete profile data - missing pay schedule:', {
+          hasIncome: !!profile.income,
+          hasFrequency: !!profile.incomeFrequency,
+          hasNextPayDate: !!profile.nextPayDate,
+        });
         setIncomeData(null);
       }
     } catch (error) {
       console.error('HomeContainer: Error loading user profile:', error);
 
-      try {
-        const storedData = await AsyncStorage.getItem('userSetup');
-        if (storedData) {
-          setIncomeData(JSON.parse(storedData));
-        }
-      } catch (cacheError) {
-        console.error('HomeContainer: Error loading cached data:', cacheError);
-      }
-
       Alert.alert(
         'Connection Issue',
-        'Unable to sync your latest data. Showing cached information.',
+        'Unable to load your profile data. Please check your connection.',
         [{text: 'OK'}],
       );
     }
@@ -254,6 +249,8 @@ const HomeContainer = ({navigation}) => {
 
   const loadTransactions = useCallback(async () => {
     try {
+      console.log('💳 loadTransactions START - Platform:', Platform.OS);
+
       if (!AuthService.isAuthenticated()) {
         return;
       }
@@ -262,6 +259,17 @@ const HomeContainer = ({navigation}) => {
       const backendTransactions = response?.transactions || [];
       const sortedTransactions = sortTransactionsByDate(backendTransactions);
 
+      console.log('💳 Transactions loaded:', {
+        platform: Platform.OS,
+        count: sortedTransactions.length,
+        sampleTransactions: sortedTransactions.slice(0, 3).map(t => ({
+          id: t.id,
+          amount: t.amount,
+          type: t.type,
+          date: t.date,
+          description: t.description,
+        })),
+      });
 
       setTransactions(sortedTransactions);
     } catch (error) {
@@ -276,7 +284,6 @@ const HomeContainer = ({navigation}) => {
 
   const loadCategories = useCallback(async () => {
     try {
-
       if (!AuthService.isAuthenticated()) {
         return;
       }
@@ -315,7 +322,6 @@ const HomeContainer = ({navigation}) => {
           throw new Error('User not authenticated');
         }
 
-
         // Optimistic update
         if (isEditing) {
           setTransactions(prev => {
@@ -352,11 +358,10 @@ const HomeContainer = ({navigation}) => {
           amount: transaction.amount,
           description: transaction.description,
           categoryId: transaction.categoryId || transaction.category,
-          subcategoryId: transaction.subcategoryId || transaction.subcategory, // ✅ FIXED: Use subcategoryId
+          subcategoryId: transaction.subcategoryId || transaction.subcategory,
           date: transaction.date.toISOString(),
           recurrence: transaction.recurrence,
         };
-
 
         // Send to backend
         const savedTransaction = isEditing
@@ -365,7 +370,6 @@ const HomeContainer = ({navigation}) => {
               transactionData,
             )
           : await TrendAPIService.createTransaction(transactionData);
-
 
         // Reconcile with server response
         setTransactions(prev => {
@@ -421,7 +425,6 @@ const HomeContainer = ({navigation}) => {
       if (!AuthService.isAuthenticated()) {
         throw new Error('User not authenticated');
       }
-
 
       // Optimistic removal
       setTransactions(prev => {
@@ -493,36 +496,42 @@ const HomeContainer = ({navigation}) => {
   );
 
   // ==============================================
-  // CALCULATIONS
+  // CALCULATIONS - WITH DEBUG LOGGING
   // ==============================================
   const calculateTotalExpenses = useCallback(() => {
     try {
+      console.log('💰 calculateTotalExpenses START - Platform:', Platform.OS);
+      console.log('💰 Input data check:', {
+        platform: Platform.OS,
+        transactionsLength: transactions?.length || 0,
+        incomeData: incomeData ? 'exists' : 'null',
+        nextPayDate: incomeData?.nextPayDate,
+        frequency: incomeData?.frequency,
+      });
 
       if (!transactions?.length) {
+        console.log('💰 No transactions, returning 0');
         return 0;
       }
 
       if (!incomeData?.nextPayDate || !incomeData?.frequency) {
+        console.log('💰 Missing incomeData fields, returning 0:', {
+          nextPayDate: incomeData?.nextPayDate,
+          frequency: incomeData?.frequency,
+        });
         return 0;
       }
 
       // Parse next pay date with error handling
       let nextPayDate;
       try {
-        if (incomeData.nextPayDate.includes('T')) {
-          nextPayDate = new Date(incomeData.nextPayDate);
-        } else {
-          const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-          nextPayDate = new Date(
-            2000 + parseInt(yearStr, 10),
-            parseInt(monthStr, 10) - 1,
-            parseInt(dayStr, 10),
-          );
-        }
+        nextPayDate = new Date(incomeData.nextPayDate);
 
         if (isNaN(nextPayDate.getTime())) {
           throw new Error('Invalid date after parsing');
         }
+
+        console.log('💰 Parsed nextPayDate:', nextPayDate.toISOString());
       } catch (dateError) {
         console.error('🧮 Error parsing next pay date:', dateError);
         nextPayDate = new Date();
@@ -536,7 +545,6 @@ const HomeContainer = ({navigation}) => {
         // Always set period end to end of the next pay date
         periodEnd = new Date(nextPayDate);
         periodEnd.setHours(23, 59, 59, 999);
-
 
         if (incomeData.frequency === 'weekly') {
           periodStart = new Date(nextPayDate);
@@ -563,6 +571,13 @@ const HomeContainer = ({navigation}) => {
         if (isNaN(periodStart.getTime())) {
           throw new Error('Invalid period start date');
         }
+
+        console.log('💰 Period calculated:', {
+          platform: Platform.OS,
+          frequency: incomeData.frequency,
+          periodStart: periodStart.toISOString(),
+          periodEnd: periodEnd.toISOString(),
+        });
       } catch (periodError) {
         console.error('🧮 Error calculating period:', periodError);
         periodStart = new Date(nextPayDate);
@@ -570,7 +585,6 @@ const HomeContainer = ({navigation}) => {
         periodEnd = new Date(nextPayDate);
         periodEnd.setHours(23, 59, 59, 999);
       }
-
 
       // Filter transactions for the period - only count EXPENSE transactions
       const periodTransactions = transactions.filter(transaction => {
@@ -584,12 +598,23 @@ const HomeContainer = ({navigation}) => {
             transactionDate >= periodStart && transactionDate <= periodEnd;
           const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
 
-
           return inPeriod && isExpense;
         } catch (error) {
           console.error('🧮 Error checking transaction:', error, transaction);
           return false;
         }
+      });
+
+      console.log('💰 Transaction filtering results:', {
+        platform: Platform.OS,
+        totalTransactions: transactions.length,
+        periodTransactions: periodTransactions.length,
+        periodTransactionAmounts: periodTransactions.map(t => ({
+          amount: t.amount,
+          date: t.date,
+          type: t.type,
+          description: t.description,
+        })),
       });
 
       // Sum up the expenses for the period
@@ -607,7 +632,10 @@ const HomeContainer = ({navigation}) => {
         }
       }, 0);
 
-
+      console.log('💰 calculateTotalExpenses RESULT:', {
+        platform: Platform.OS,
+        total: total,
+      });
       return total;
     } catch (error) {
       console.error('🧮 Critical error in calculateTotalExpenses:', error);
@@ -615,11 +643,26 @@ const HomeContainer = ({navigation}) => {
     }
   }, [transactions, incomeData]);
 
-  // Update totalExpenses whenever transactions or incomeData changes
+  // ✅ FIXED: Update totalExpenses only when both data sources are available
   useEffect(() => {
-    const newTotal = calculateTotalExpenses();
-    setTotalExpenses(newTotal);
-  }, [calculateTotalExpenses]);
+    // Only calculate when both data sources are available
+    if (incomeData && transactions.length >= 0) {
+      console.log('💰 Triggering calculation with data:', {
+        platform: Platform.OS,
+        hasIncomeData: !!incomeData,
+        transactionCount: transactions.length,
+      });
+
+      const newTotal = calculateTotalExpenses();
+      setTotalExpenses(newTotal);
+    } else {
+      console.log('💰 Skipping calculation - data not ready:', {
+        platform: Platform.OS,
+        hasIncomeData: !!incomeData,
+        transactionCount: transactions.length,
+      });
+    }
+  }, [calculateTotalExpenses, incomeData, transactions]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -713,6 +756,18 @@ const HomeContainer = ({navigation}) => {
     categories,
   );
 
+  // ✅ ADD: Debug what we're passing to the Balance Card
+  console.log('🏠 HomeContainer RENDER DEBUG:', {
+    platform: Platform.OS,
+    incomeDataExists: !!incomeData,
+    incomeAmount: incomeData?.income,
+    frequency: incomeData?.frequency,
+    nextPayDate: incomeData?.nextPayDate,
+    totalExpenses: totalExpenses,
+    transactionCount: transactions.length,
+    userProfileExists: !!userProfile,
+    loading: loading,
+  });
 
   // ==============================================
   // LIFECYCLE
@@ -773,25 +828,9 @@ const HomeContainer = ({navigation}) => {
 
               if (AuthService.isAuthenticated()) {
                 await Promise.all([
-                  TrendAPIService.getUserProfile()
-                    .then(setUserProfile)
-                    .catch(console.error),
-                  TrendAPIService.getTransactions()
-                    .then(response => {
-                      const backendTransactions = response?.transactions || [];
-                      setTransactions(
-                        sortTransactionsByDate(backendTransactions),
-                      );
-                    })
-                    .catch(console.error),
-                  TrendAPIService.getCategories()
-                    .then(response => {
-                      const backendCategories = response?.categories || [];
-                      setCategories(
-                        transformCategoriesForUI(backendCategories),
-                      );
-                    })
-                    .catch(console.error),
+                  loadUserProfile(), // ✅ Will reload backend profile data
+                  loadTransactions(),
+                  loadCategories(),
                 ]);
               }
             } catch (error) {
@@ -810,7 +849,7 @@ const HomeContainer = ({navigation}) => {
       handleAppStateChange,
     );
     return () => subscription?.remove?.();
-  }, [lastActiveDate, selectedDate, transformCategoriesForUI]);
+  }, [lastActiveDate, selectedDate]);
 
   // ==============================================
   // RENDER
@@ -819,7 +858,7 @@ const HomeContainer = ({navigation}) => {
     <HomeScreen
       incomeData={incomeData}
       userProfile={userProfile}
-      transactions={transactionsWithCategories} // ✅ PASS PRE-RESOLVED TRANSACTIONS
+      transactions={transactionsWithCategories}
       categories={categories}
       goals={goals}
       editingTransaction={editingTransaction}
