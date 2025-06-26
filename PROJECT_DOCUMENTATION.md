@@ -22,6 +22,19 @@ The BudgetApp is a React Native personal finance management application that hel
 - **Progressive Onboarding**: Tutorial system with spotlights
 - **Analytics Dashboard**: Spending insights and visualizations
 - **Goal Tracking**: Financial goals with automatic progress updates
+- **Discretionary Spending Analysis**: Enhanced spending breakdown with subcategories
+- **Spending Velocity Tracking**: Day/time pattern analysis for spending habits
+
+### Recent Updates
+
+#### Latest Changes (Git Commits)
+- **HomeContainer Backend Integration**: Moved HomeContainer logic to backend processing
+- **Day/Time Patterns**: Added temporal spending analysis to SpendingVelocity components
+- **Analytics Enhancements**: Improved discretionary spending features with better categorization
+- **Spending Velocity Analysis**: Enhanced velocity calculations and trend analysis
+- **Onboarding Improvements**: Enhanced contextual spotlights and tutorial flows
+- **Category Management**: Improved subcategory handling and discretionary breakdown fixes
+- **Utility Functions**: Enhanced currency, date, and storage helper functions
 
 ## Architecture Overview
 
@@ -71,7 +84,7 @@ The app follows a **Container-Component Pattern** with these layers:
 ```
 BudgetApp/
 ├── src/
-│   ├── components/          # Reusable UI Components (19 files)
+│   ├── components/          # Reusable UI Components (15 files)
 │   │   ├── AddGoalModal.js
 │   │   ├── AddTransactionModal.js
 │   │   ├── AddTransactionSpotlight.js
@@ -82,10 +95,7 @@ BudgetApp/
 │   │   ├── DiscretionaryBreakdown.js
 │   │   ├── GoalCard.js
 │   │   ├── GoalSuggestionsCard.js
-│   │   ├── RecurrencePickerModal.js
 │   │   ├── SpendingVelocityBreakdown.js
-│   │   ├── Spotlight.js
-│   │   ├── SpotlightMask.js
 │   │   ├── TransactionCard.js
 │   │   ├── TransactionList.js
 │   │   ├── TransactionSwipeSpotlight.js
@@ -100,9 +110,8 @@ BudgetApp/
 │   │   ├── IncomeSetupContainer.js
 │   │   └── SpendingVelocityContainer.js
 │   │
-│   ├── data/               # Static Data (2 files)
-│   │   ├── categories.js
-│   │   └── index.js        # Empty file
+│   ├── data/               # Static Data (1 file)
+│   │   └── categories.js
 │   │
 │   ├── hooks/              # Custom React Hooks (3 files)
 │   │   ├── useGoals.js
@@ -133,13 +142,10 @@ BudgetApp/
 │   │   ├── globalStyles.js
 │   │   └── index.js
 │   │
-│   └── utils/              # Utility Functions (6 files)
+│   └── utils/              # Utility Functions (3 files)
 │       ├── currencyHelper.js
 │       ├── dateHelper.js
-│       ├── dateUtils.js
-│       ├── formatting.js
-│       ├── storage.js
-│       └── validation.js
+│       └── storage.js
 │
 ├── Configuration Files
 │   ├── package.json
@@ -771,8 +777,7 @@ class InsightsService {
 
 ```javascript
 // Dependencies
-├── Spotlight (base spotlight component)
-├── React Native: Animated, Dimensions
+├── React Native: Animated, Dimensions, Modal
 └── styles/colors (theming)
 
 // Props Interface
@@ -785,7 +790,7 @@ class InsightsService {
 // Features
 ├── Contextual tutorial overlays
 ├── Precise component targeting
-├── Animated spotlight effects
+├── Animated spotlight effects with masking
 ├── Step-by-step user guidance
 ├── Skippable tutorial flows
 └── Responsive positioning
@@ -862,15 +867,14 @@ class InsightsService {
 // Dependencies
 ├── CalendarModal (date selection)
 ├── CategoryPicker (category selection)
-├── RecurrencePickerModal (repeat options)
 └── React Native: Modal, animations
 
 // Multi-Screen Modal Structure
 ├── Screen 1: Transaction form (amount, description)
 ├── Screen 2: Category picker
 ├── Screen 3: Subcategory picker (if applicable)
-├── Screen 4: Recurrence picker
-└── Screen 5: Calendar (date selection)
+├── Screen 4: Calendar (date selection)
+└── Integrated recurrence options
 
 // Features
 ├── Animated screen transitions
@@ -1172,5 +1176,26 @@ module.exports = mergeConfig(getDefaultConfig(__dirname), config);
 - **Layout Measurements**: Precise onboarding positioning
 - **Form Validation**: Multiple validation layers
 - **Error Boundaries**: Graceful error handling
+
+## File Status Notes
+
+### Utility Consolidation
+Some utility functions originally planned as separate files have been consolidated:
+- **dateUtils.js** - Date utilities integrated into dateHelper.js
+- **formatting.js** - Formatting utilities integrated into currencyHelper.js and other files
+- **validation.js** - Validation logic integrated into services and containers
+
+### Simplified Component Architecture
+The spotlight system has been simplified:
+- **Spotlight.js** and **SpotlightMask.js** - Functionality integrated directly into individual spotlight components
+- **RecurrencePickerModal.js** - Recurrence functionality integrated into AddTransactionModal.js
+
+### Documentation Status
+- **File counts updated** to reflect actual implementation (15 components vs originally documented 19)
+- **Architecture patterns** remain consistent with original design
+- **Data flow and interaction patterns** accurately documented
+- **Recent enhancements** added to feature set
+
+---
 
 This documentation provides a complete understanding of the BudgetApp architecture, file interactions, and development patterns. The codebase demonstrates solid React Native practices with clean separation of concerns and maintainable architecture.
