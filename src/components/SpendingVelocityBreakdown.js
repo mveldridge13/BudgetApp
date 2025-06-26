@@ -12,7 +12,15 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import Svg, {Circle, G, Text as SvgText} from 'react-native-svg';
+import Svg, {
+  Circle,
+  G,
+  Text as SvgText,
+  Path,
+  Defs,
+  LinearGradient,
+  Stop,
+} from 'react-native-svg';
 import {colors} from '../styles';
 
 const {width: screenWidth} = Dimensions.get('window');
@@ -27,6 +35,10 @@ const SpendingVelocityBreakdown = ({
   spendingVelocity,
   // User profile data for context
   userProfile,
+  // ✅ NEW: Day/time patterns data
+  dayTimePatterns,
+  isDayTimePatternsLoading,
+  hasPatternsData,
 }) => {
   // Animations
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
@@ -35,6 +47,8 @@ const SpendingVelocityBreakdown = ({
   // State
   // eslint-disable-next-line no-unused-vars
   const [showInsights, setShowInsights] = useState(true);
+  // eslint-disable-next-line no-unused-vars
+  const [selectedPatternPeriod, setSelectedPatternPeriod] = useState('weekly'); // daily, weekly, monthly
 
   // Reset form function
   const resetForm = () => {
@@ -106,6 +120,278 @@ const SpendingVelocityBreakdown = ({
   const formatCurrency = useCallback(amount => {
     return `$${Math.abs(amount).toFixed(2)}`;
   }, []);
+
+  // ✅ NEW: Render Day/Time Patterns Chart (similar to reference image style)
+  const renderDayTimePatternsChart = () => {
+    if (!hasPatternsData || !dayTimePatterns) {
+      return (
+        <View style={styles.chartContainer}>
+          <Text style={styles.chartTitle}>Day/Time Spending Patterns</Text>
+          <View style={styles.loadingContainer}>
+            {isDayTimePatternsLoading ? (
+              <Text style={styles.loadingText}>Loading patterns...</Text>
+            ) : (
+              <Text style={styles.noDataText}>No pattern data available</Text>
+            )}
+          </View>
+        </View>
+      );
+    }
+
+    // Use dayOfWeekBreakdown for the line chart data
+    const {dayOfWeekBreakdown, weekdayVsWeekend, summary} = dayTimePatterns;
+
+    if (!dayOfWeekBreakdown || dayOfWeekBreakdown.length === 0) {
+      return (
+        <View style={styles.chartContainer}>
+          <Text style={styles.chartTitle}>Day/Time Spending Patterns</Text>
+          <Text style={styles.noDataText}>No pattern data available</Text>
+        </View>
+      );
+    }
+
+    const chartWidth = screenWidth - 80;
+    const chartHeight = 160;
+    const paddingX = 65; // Increased from 50 to 65 for more left space
+    const paddingY = 30;
+    const dataWidth = chartWidth - paddingX * 2;
+    const dataHeight = chartHeight - paddingY * 2;
+
+    // Prepare data for line chart
+    const maxAmount = Math.max(...dayOfWeekBreakdown.map(d => d.amount), 1);
+    const minAmount = Math.min(...dayOfWeekBreakdown.map(d => d.amount), 0);
+    const range = maxAmount - minAmount || 1;
+
+    // Create points for the line chart
+    const points = dayOfWeekBreakdown.map((data, index) => {
+      const x =
+        paddingX + (index * dataWidth) / (dayOfWeekBreakdown.length - 1);
+      const y =
+        paddingY +
+        dataHeight -
+        ((data.amount - minAmount) / range) * dataHeight;
+      return {x, y, data};
+    });
+
+    // Create SVG path for the line
+    const pathData = points.reduce((path, point, index) => {
+      if (index === 0) {
+        return `M ${point.x} ${point.y}`;
+      }
+      // Create smooth curves
+      const prevPoint = points[index - 1];
+      const controlX1 = prevPoint.x + (point.x - prevPoint.x) * 0.3;
+      const controlX2 = point.x - (point.x - prevPoint.x) * 0.3;
+      return (
+        path +
+        ` C ${controlX1} ${prevPoint.y} ${controlX2} ${point.y} ${point.x} ${point.y}`
+      );
+    }, '');
+
+    // Create area fill path
+    const areaPath =
+      pathData +
+      ` L ${points[points.length - 1].x} ${paddingY + dataHeight}` +
+      ` L ${points[0].x} ${paddingY + dataHeight} Z`;
+
+    return (
+      <View style={styles.chartContainer}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Day/Time Spending Patterns</Text>
+          <View style={styles.summaryBadge}>
+            <Text style={styles.summaryBadgeText}>
+              Peak: {summary?.mostActiveDay?.day}
+            </Text>
+          </View>
+        </View>
+
+        {/* Line Chart */}
+        <View style={styles.lineChartContainer}>
+          <Svg width={chartWidth} height={chartHeight}>
+            <Defs>
+              <LinearGradient
+                id="areaGradient"
+                x1="0%"
+                y1="0%"
+                x2="0%"
+                y2="100%">
+                <Stop
+                  offset="0%"
+                  stopColor={colors.primary || '#6366F1'}
+                  stopOpacity="0.3"
+                />
+                <Stop
+                  offset="100%"
+                  stopColor={colors.primary || '#6366F1'}
+                  stopOpacity="0.05"
+                />
+              </LinearGradient>
+              <LinearGradient
+                id="lineGradient"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="0%">
+                <Stop offset="0%" stopColor="#8B5CF6" />
+                <Stop offset="50%" stopColor={colors.primary || '#6366F1'} />
+                <Stop offset="100%" stopColor="#06B6D4" />
+              </LinearGradient>
+            </Defs>
+
+            {/* Grid lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
+              const y = paddingY + dataHeight * ratio;
+              return (
+                <Path
+                  key={index}
+                  d={`M ${paddingX} ${y} L ${chartWidth - paddingX} ${y}`}
+                  stroke="#E5E7EB"
+                  strokeWidth="1"
+                  opacity="0.5"
+                  strokeDasharray="2,2"
+                />
+              );
+            })}
+
+            {/* Area fill */}
+            <Path d={areaPath} fill="url(#areaGradient)" />
+
+            {/* Line */}
+            <Path
+              d={pathData}
+              fill="none"
+              stroke="url(#lineGradient)"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* Data points */}
+            {points.map((point, index) => (
+              <Circle
+                key={index}
+                cx={point.x}
+                cy={point.y}
+                r="5"
+                fill={colors.primary || '#6366F1'}
+                stroke="#FFFFFF"
+                strokeWidth="2"
+              />
+            ))}
+
+            {/* Y-axis labels - positioned with more space */}
+            <SvgText
+              x={paddingX - 25}
+              y={paddingY + 5}
+              fontSize="10"
+              fill={colors.textSecondary || '#6B7280'}
+              textAnchor="end">
+              {formatCurrency(maxAmount)}
+            </SvgText>
+            <SvgText
+              x={paddingX - 25}
+              y={paddingY + dataHeight + 5}
+              fontSize="10"
+              fill={colors.textSecondary || '#6B7280'}
+              textAnchor="end">
+              {formatCurrency(minAmount)}
+            </SvgText>
+          </Svg>
+
+          {/* X-axis labels */}
+          <View style={styles.xAxisLabels}>
+            {dayOfWeekBreakdown.map((data, index) => (
+              <Text key={index} style={styles.xAxisLabel}>
+                {data.day.substring(0, 3)}
+              </Text>
+            ))}
+          </View>
+        </View>
+
+        {/* Pattern Insights */}
+        <View style={styles.patternInsights}>
+          <View style={styles.insightRow}>
+            <View style={styles.insightItem}>
+              <Text style={styles.insightLabel}>Weekdays</Text>
+              <Text style={styles.insightValue}>
+                {weekdayVsWeekend?.weekdays?.percentage?.toFixed(1)}%
+              </Text>
+              <Text style={styles.insightSubtext}>
+                {formatCurrency(weekdayVsWeekend?.weekdays?.amount || 0)}
+              </Text>
+            </View>
+            <View style={styles.insightDivider} />
+            <View style={styles.insightItem}>
+              <Text style={styles.insightLabel}>Weekends</Text>
+              <Text style={styles.insightValue}>
+                {weekdayVsWeekend?.weekends?.percentage?.toFixed(1)}%
+              </Text>
+              <Text style={styles.insightSubtext}>
+                {formatCurrency(weekdayVsWeekend?.weekends?.amount || 0)}
+              </Text>
+            </View>
+            <View style={styles.insightDivider} />
+            <View style={styles.insightItem}>
+              <Text style={styles.insightLabel}>Peak Hour</Text>
+              <Text style={styles.insightValue}>
+                {summary?.peakSpendingHour?.hourFormatted || 'N/A'}
+              </Text>
+              <Text style={styles.insightSubtext}>
+                {formatCurrency(summary?.peakSpendingHour?.amount || 0)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Pattern Recommendations */}
+        {dayTimePatterns.insights && dayTimePatterns.insights.length > 0 && (
+          <View style={styles.patternRecommendations}>
+            <Text style={styles.recommendationTitle}>Pattern Insights</Text>
+            {dayTimePatterns.insights.slice(0, 2).map((insight, index) => (
+              <View key={index} style={styles.recommendationItem}>
+                <View
+                  style={[
+                    styles.recommendationIcon,
+                    {
+                      backgroundColor:
+                        insight.type === 'warning' ? '#FEF3C7' : '#DBEAFE',
+                    },
+                  ]}>
+                  <Icon
+                    name={
+                      insight.type === 'warning'
+                        ? 'warning-outline'
+                        : insight.type === 'tip'
+                        ? 'bulb-outline'
+                        : 'information-circle-outline'
+                    }
+                    size={16}
+                    color={
+                      insight.type === 'warning'
+                        ? '#F59E0B'
+                        : insight.type === 'tip'
+                        ? '#8B5CF6'
+                        : colors.primary
+                    }
+                  />
+                </View>
+                <View style={styles.recommendationContent}>
+                  <Text style={styles.recommendationText}>
+                    {insight.message}
+                  </Text>
+                  {insight.suggestion && (
+                    <Text style={styles.recommendationSuggestion}>
+                      {insight.suggestion}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   // Render Daily Burn Rate Gauge Chart
   const renderBurnRateGauge = () => {
@@ -263,7 +549,6 @@ const SpendingVelocityBreakdown = ({
       dailyBurnRate?.weeklyTrendWithLabels &&
       Array.isArray(dailyBurnRate.weeklyTrendWithLabels)
     ) {
-
       const {weeklyTrendWithLabels} = dailyBurnRate;
       const maxValue = Math.max(
         ...weeklyTrendWithLabels.map(item => item.amount),
@@ -281,7 +566,6 @@ const SpendingVelocityBreakdown = ({
             {weeklyTrendWithLabels.map((item, index) => {
               const barHeight = (item.amount / maxValue) * chartHeight;
               const isToday = item.isToday;
-
 
               return (
                 <View key={`${item.day}-${index}`} style={styles.barContainer}>
@@ -316,9 +600,8 @@ const SpendingVelocityBreakdown = ({
       !dailyBurnRate?.weeklyTrend ||
       !Array.isArray(dailyBurnRate.weeklyTrend)
     ) {
-        return null;
+      return null;
     }
-
 
     const {weeklyTrend} = dailyBurnRate;
     const maxValue = Math.max(...weeklyTrend, 1);
@@ -505,7 +788,7 @@ const SpendingVelocityBreakdown = ({
             },
           ]}>
           <View style={styles.header}>
-            <Text style={styles.title}>Spending Velocity Analysis</Text>
+            <Text style={styles.title}>Spending Analysis</Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
@@ -558,6 +841,9 @@ const SpendingVelocityBreakdown = ({
 
             {/* Weekly Trend */}
             {renderWeeklyTrend()}
+
+            {/* ✅ NEW: Day/Time Patterns Chart */}
+            {renderDayTimePatternsChart()}
 
             {/* Insights */}
             {renderInsights()}
@@ -660,13 +946,131 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   chartTitle: {
     fontSize: 16,
     fontWeight: '300',
     color: colors.text || '#1F2937',
-    marginBottom: 20,
-    textAlign: 'center',
     fontFamily: 'System',
+  },
+  summaryBadge: {
+    backgroundColor: colors.primary || '#6366F1',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  summaryBadgeText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textWhite || '#FFFFFF',
+    fontFamily: 'System',
+  },
+  loadingContainer: {
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textSecondary || '#6B7280',
+    fontFamily: 'System',
+  },
+  lineChartContainer: {
+    marginBottom: 20,
+  },
+  xAxisLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 65, // Updated to match the increased paddingX
+    marginTop: 8,
+  },
+  xAxisLabel: {
+    fontSize: 10,
+    color: colors.textSecondary || '#6B7280',
+    fontFamily: 'System',
+    textAlign: 'center',
+    flex: 1,
+  },
+  patternInsights: {
+    marginBottom: 16,
+  },
+  insightRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.background || '#F8FAFC',
+    borderRadius: 8,
+    padding: 16,
+  },
+  insightItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  insightDivider: {
+    width: 1,
+    backgroundColor: colors.border || '#E5E7EB',
+    marginHorizontal: 16,
+  },
+  insightLabel: {
+    fontSize: 12,
+    color: colors.textSecondary || '#6B7280',
+    fontFamily: 'System',
+    marginBottom: 4,
+  },
+  insightValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text || '#1F2937',
+    fontFamily: 'System',
+    marginBottom: 2,
+  },
+  insightSubtext: {
+    fontSize: 10,
+    color: colors.textSecondary || '#6B7280',
+    fontFamily: 'System',
+  },
+  patternRecommendations: {
+    marginTop: 8,
+  },
+  recommendationTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text || '#1F2937',
+    fontFamily: 'System',
+    marginBottom: 12,
+  },
+  recommendationItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  recommendationIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  recommendationContent: {
+    flex: 1,
+  },
+  recommendationText: {
+    fontSize: 13,
+    color: colors.text || '#1F2937',
+    fontFamily: 'System',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  recommendationSuggestion: {
+    fontSize: 12,
+    color: colors.textSecondary || '#6B7280',
+    fontFamily: 'System',
+    lineHeight: 16,
+    fontStyle: 'italic',
   },
   gaugeContainer: {
     alignItems: 'center',

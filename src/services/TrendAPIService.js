@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_CONFIG = {
-  baseURL: 'http://127.0.0.1:3001/api/v1',
+  baseURL: 'http://localhost:3001/api/v1',
   timeout: 10000,
 };
 
@@ -333,6 +333,16 @@ class TrendAPIService {
     const endpoint = queryString
       ? `/transactions/discretionary-breakdown?${queryString}`
       : '/transactions/discretionary-breakdown';
+
+    return this.makeRequest(endpoint);
+  }
+
+  // ✅ NEW: Get day/time spending patterns analysis
+  async getDayTimePatterns(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/day-time-patterns?${queryString}`
+      : '/transactions/day-time-patterns';
 
     return this.makeRequest(endpoint);
   }
