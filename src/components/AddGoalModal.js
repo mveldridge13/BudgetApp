@@ -249,7 +249,9 @@ const AddGoalModal = ({
 
       // Helper function to safely parse numbers - FIXED to preserve decimals
       const parseNumberSafely = (value, fallback = 0) => {
+        console.log('🔍 PARSE: Input value:', value, 'type:', typeof value);
         if (value === null || value === undefined || value === '') {
+          console.log('🔍 PARSE: Empty value, returning fallback:', fallback);
           return fallback;
         }
 
@@ -257,9 +259,20 @@ const AddGoalModal = ({
           .replace(/[^0-9.-]/g, '')
           .trim();
         const parsed = parseFloat(cleanValue);
+        const result =
+          isNaN(parsed) || parsed < 0
+            ? fallback
+            : Math.round(parsed * 100) / 100;
 
-        // Return valid decimal number, not rounded to integer
-        return isNaN(parsed) || parsed < 0 ? fallback : Math.round(parsed * 100) / 100;
+        console.log(
+          '🔍 PARSE: Cleaned value:',
+          cleanValue,
+          'parsed:',
+          parsed,
+          'result:',
+          result,
+        );
+        return result;
       };
 
       // Create goal data with proper validation
@@ -276,19 +289,28 @@ const AddGoalModal = ({
       // Handle different goal types properly
       if (formData.type === 'debt') {
         // For debt goals, use originalAmount as the target amount
-        goalData.originalAmount = parseNumberSafely(
-          formData.originalAmount,
-          100,
-        );
+        goalData.originalAmount = parseNumberSafely(formData.originalAmount, 0);
         goalData.target = goalData.originalAmount; // Backend expects targetAmount
         console.log('🔍 MODAL - Debt goal processed:');
-        console.log('🔍 MODAL - originalAmount:', goalData.originalAmount, typeof goalData.originalAmount);
-        console.log('🔍 MODAL - target:', goalData.target, typeof goalData.target);
+        console.log(
+          '🔍 MODAL - originalAmount:',
+          goalData.originalAmount,
+          typeof goalData.originalAmount,
+        );
+        console.log(
+          '🔍 MODAL - target:',
+          goalData.target,
+          typeof goalData.target,
+        );
       } else {
         // For savings/spending goals, use target
-        goalData.target = parseNumberSafely(formData.target, 100);
+        goalData.target = parseNumberSafely(formData.target, 0);
         console.log('🔍 MODAL - Non-debt goal processed:');
-        console.log('🔍 MODAL - target:', goalData.target, typeof goalData.target);
+        console.log(
+          '🔍 MODAL - target:',
+          goalData.target,
+          typeof goalData.target,
+        );
       }
 
       // Add auto contribution if specified

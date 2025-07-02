@@ -15,12 +15,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
-import useTransactions from '../hooks/useTransactions';
 import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
-import GoalSuggestionsCard from '../components/GoalSuggestionsCard';
 
-const GoalsScreen = ({navigation}) => {
+const GoalsScreen = () => {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
@@ -47,11 +45,9 @@ const GoalsScreen = ({navigation}) => {
     getBalanceCardGoals,
     getGoalProgress,
     isGoalOverdue,
-    getSmartSuggestions,
     completeGoal,
   } = useGoals();
 
-  const {transactions} = useTransactions();
 
 
   // Consolidated data loading function
@@ -281,10 +277,6 @@ const GoalsScreen = ({navigation}) => {
     [activeGoals],
   );
 
-  const smartSuggestions = React.useMemo(
-    () => getSmartSuggestions(transactions, incomeData),
-    [getSmartSuggestions, transactions, incomeData],
-  );
 
   // Memoize rendered goal lists to prevent unnecessary re-renders
   const renderedActiveGoals = React.useMemo(
@@ -330,16 +322,6 @@ const GoalsScreen = ({navigation}) => {
     [completedGoals, getGoalProgress, formatCurrency],
   );
 
-  // Show loading only on initial load, not on subsequent refreshes
-  // Never show loading screen during navigation - always show content structure
-  if (false) {
-    // Completely disable loading screen
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading goals...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -422,14 +404,6 @@ const GoalsScreen = ({navigation}) => {
         }>
         {activeTab === 'active' && (
           <>
-            {/* Smart Suggestions */}
-            {smartSuggestions.length > 0 && (
-              <GoalSuggestionsCard
-                suggestions={smartSuggestions}
-                onCreateGoal={handleAddGoal}
-                formatCurrency={formatCurrency}
-              />
-            )}
 
             {/* Active Goals */}
             {activeGoals.length > 0 ? (

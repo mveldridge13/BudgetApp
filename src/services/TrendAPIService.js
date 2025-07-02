@@ -436,8 +436,17 @@ class TrendAPIService {
 
   async createGoal(goalData) {
     // Minimal validation
-    if (!goalData.targetAmount || typeof goalData.targetAmount !== 'number') {
-      goalData.targetAmount = 100;
+    // Convert string targetAmount to number if needed
+    if (typeof goalData.targetAmount === 'string') {
+      goalData.targetAmount = parseFloat(goalData.targetAmount);
+    }
+
+    if (!goalData.targetAmount || typeof goalData.targetAmount !== 'number' || goalData.targetAmount <= 0) {
+      throw new Error('Invalid targetAmount: must be a valid number greater than 0');
+    }
+    // Convert string currentAmount to number if needed
+    if (typeof goalData.currentAmount === 'string') {
+      goalData.currentAmount = parseFloat(goalData.currentAmount);
     }
     if (goalData.currentAmount && typeof goalData.currentAmount !== 'number') {
       goalData.currentAmount = 0;
@@ -483,6 +492,11 @@ class TrendAPIService {
 
   async updateGoal(id, goalData) {
     // CRITICAL: Ensure targetAmount is a valid number before sending
+    // Convert string targetAmount to number if needed
+    if (typeof goalData.targetAmount === 'string') {
+      goalData.targetAmount = parseFloat(goalData.targetAmount);
+    }
+
     if (
       goalData.targetAmount !== undefined &&
       (typeof goalData.targetAmount !== 'number' ||
@@ -490,8 +504,8 @@ class TrendAPIService {
         !isFinite(goalData.targetAmount) ||
         goalData.targetAmount <= 0)
     ) {
-      console.error('🔍 ❌ CRITICAL: targetAmount is invalid in update, fixing it');
-      goalData.targetAmount = 100;
+      console.error('🔍 ❌ CRITICAL: targetAmount is invalid in update');
+      throw new Error('Invalid targetAmount: must be a valid number greater than 0');
     }
 
     // Double-check currentAmount too
@@ -556,13 +570,6 @@ class TrendAPIService {
     return this.makeRequest(`/goals/${goalId}/analytics`);
   }
 
-  async getGoalSuggestions(filters = {}) {
-    const queryString = this.buildQueryString(filters);
-    const endpoint = queryString
-      ? `/goals/suggestions?${queryString}`
-      : '/goals/suggestions';
-    return this.makeRequest(endpoint);
-  }
 
   async getGoalsAnalytics(filters = {}) {
     const queryString = this.buildQueryString(filters);
@@ -666,8 +673,7 @@ class TrendAPIService {
         [fieldName]: true,
       };
 
-      // eslint-disable-next-line no-unused-vars
-      const response = await this.updateUserProfile(updateData);
+      await this.updateUserProfile(updateData);
 
       return {
         success: true,
