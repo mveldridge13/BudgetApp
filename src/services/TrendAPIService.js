@@ -1,7 +1,8 @@
+// services/TrendAPIService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.15:3001/api/v1', // Updated with your IP
+  baseURL: 'http://192.168.1.21:3001/api/v1', // Updated with your IP
   timeout: 10000,
 };
 
@@ -421,6 +422,154 @@ class TrendAPIService {
 
   async getBudgetAnalytics(id) {
     return this.makeRequest(`/budgets/${id}/analytics`);
+  }
+
+  // ============================================================================
+  // GOALS METHODS - NEW SECTION
+  // ============================================================================
+
+  async getGoals(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString ? `/goals?${queryString}` : '/goals';
+    return this.makeRequest(endpoint);
+  }
+
+  async createGoal(goalData) {
+    // Minimal validation
+    if (!goalData.targetAmount || typeof goalData.targetAmount !== 'number') {
+      goalData.targetAmount = 100;
+    }
+    if (goalData.currentAmount && typeof goalData.currentAmount !== 'number') {
+      goalData.currentAmount = 0;
+    }
+
+    try {
+      const response = await this.makeRequest('/goals', {
+        method: 'POST',
+        body: goalData,
+      });
+
+      // Handle different possible response formats
+      if (response?.goal) {
+        return response.goal;
+      } else if (response?.data) {
+        return response.data;
+      } else if (response && typeof response === 'object' && response.id) {
+        return response;
+      } else {
+        console.warn('Unexpected create goal response format:', response);
+        return response;
+      }
+    } catch (error) {
+      console.error('CreateGoal API error:', error.message);
+      throw error;
+    }
+  }
+
+  async getGoalById(id) {
+    const response = await this.makeRequest(`/goals/${id}`);
+
+    if (response?.goal) {
+      return response.goal;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn('Unexpected getGoalById response format:', response);
+      return response;
+    }
+  }
+
+  async updateGoal(id, goalData) {
+    // CRITICAL: Ensure targetAmount is a valid number before sending
+    if (
+      goalData.targetAmount !== undefined &&
+      (typeof goalData.targetAmount !== 'number' ||
+        isNaN(goalData.targetAmount) ||
+        !isFinite(goalData.targetAmount) ||
+        goalData.targetAmount <= 0)
+    ) {
+      console.error('🔍 ❌ CRITICAL: targetAmount is invalid in update, fixing it');
+      goalData.targetAmount = 100;
+    }
+
+    // Double-check currentAmount too
+    if (
+      goalData.currentAmount !== undefined &&
+      (typeof goalData.currentAmount !== 'number' ||
+        isNaN(goalData.currentAmount) ||
+        !isFinite(goalData.currentAmount) ||
+        goalData.currentAmount < 0)
+    ) {
+      console.error('🔍 ❌ CRITICAL: currentAmount is invalid in update, fixing it');
+      goalData.currentAmount = 0;
+    }
+
+    const response = await this.makeRequest(`/goals/${id}`, {
+      method: 'PUT',
+      body: goalData,
+    });
+
+    if (response?.goal) {
+      return response.goal;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn('Unexpected updateGoal response format:', response);
+      return response || {id, ...goalData};
+    }
+  }
+
+  async deleteGoal(id) {
+    return this.makeRequest(`/goals/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addGoalContribution(goalId, contributionData) {
+    const response = await this.makeRequest(`/goals/${goalId}/contribute`, {
+      method: 'POST',
+      body: contributionData,
+    });
+
+    if (response?.contribution) {
+      return response.contribution;
+    } else if (response?.data) {
+      return response.data;
+    } else {
+      return response;
+    }
+  }
+
+  async getGoalContributions(goalId, filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/goals/${goalId}/contributions?${queryString}`
+      : `/goals/${goalId}/contributions`;
+    return this.makeRequest(endpoint);
+  }
+
+  async getGoalAnalytics(goalId) {
+    return this.makeRequest(`/goals/${goalId}/analytics`);
+  }
+
+  async getGoalSuggestions(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/goals/suggestions?${queryString}`
+      : '/goals/suggestions';
+    return this.makeRequest(endpoint);
+  }
+
+  async getGoalsAnalytics(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/goals/analytics?${queryString}`
+      : '/goals/analytics';
+    return this.makeRequest(endpoint);
   }
 
   // ============================================================================

@@ -3,10 +3,12 @@
 // containers/HomeContainer.js
 import React, {useState, useEffect, useCallback} from 'react';
 import {AppState, Alert, Platform} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
 import HomeScreen from '../screens/HomeScreen';
 import useOnboarding from '../hooks/useOnboarding';
+import useGoals from '../hooks/useGoals';
 
 const HomeContainer = ({navigation}) => {
   // ==============================================
@@ -16,7 +18,6 @@ const HomeContainer = ({navigation}) => {
   const [userProfile, setUserProfile] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [goals, setGoals] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -29,6 +30,7 @@ const HomeContainer = ({navigation}) => {
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
+  const {goals, loadGoals: loadGoalsFromHook} = useGoals();
 
   // ==============================================
   // UTILITY FUNCTIONS
@@ -77,6 +79,15 @@ const HomeContainer = ({navigation}) => {
 
     return sorted;
   }, []);
+
+  // Reload goals when screen comes into focus (e.g., returning from GoalsScreen)
+  useFocusEffect(
+    useCallback(() => {
+      if (!loading) {
+        loadGoals();
+      }
+    }, [loading, loadGoals])
+  );
 
   // ==============================================
   // CATEGORY RESOLUTION FOR TRANSACTIONS
@@ -303,11 +314,11 @@ const HomeContainer = ({navigation}) => {
 
   const loadGoals = useCallback(async () => {
     try {
-      setGoals([]);
+      await loadGoalsFromHook();
     } catch (error) {
       console.error('HomeContainer: Error loading goals:', error);
     }
-  }, []);
+  }, [loadGoalsFromHook]);
 
   // ==============================================
   // TRANSACTION OPERATIONS

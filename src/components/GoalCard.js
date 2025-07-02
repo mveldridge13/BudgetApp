@@ -26,6 +26,7 @@ const GoalCard = ({
 }) => {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
+  const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(() => goal?.showOnBalanceCard ?? false);
 
   // FIXED: Add safe formatCurrency function
   const safeCurrency = amount => {
@@ -52,7 +53,7 @@ const GoalCard = ({
     priority: goal?.priority || 'medium',
     deadline: goal?.deadline,
     autoContribute: goal?.autoContribute || 0,
-    showOnBalanceCard: goal?.showOnBalanceCard || false,
+    showOnBalanceCard: goal?.showOnBalanceCard ?? false,
     completedDate: goal?.completedDate,
     id: goal?.id,
   };
@@ -338,16 +339,21 @@ const GoalCard = ({
             <Text style={styles.toggleLabel}>Show on Balance Card</Text>
           </View>
           <Switch
-            value={safeGoal.showOnBalanceCard}
-            onValueChange={() =>
-              onToggleBalanceDisplay && onToggleBalanceDisplay(safeGoal.id)
-            }
+            value={localShowOnBalanceCard}
+            onValueChange={(newValue) => {
+              setLocalShowOnBalanceCard(newValue);
+              
+              // Call parent handler to persist the change
+              if (onToggleBalanceDisplay) {
+                onToggleBalanceDisplay(safeGoal.id);
+              }
+            }}
             trackColor={{
               false: colors.border,
               true: colors.primary,
             }}
             thumbColor={
-              safeGoal.showOnBalanceCard
+              localShowOnBalanceCard
                 ? colors.textWhite
                 : colors.textSecondary
             }
@@ -356,13 +362,13 @@ const GoalCard = ({
         </View>
       )}
 
-      {safeGoal.showOnBalanceCard && !isCompleted && (
+      {localShowOnBalanceCard && !isCompleted && (
         <Text style={styles.toggleFeedback}>
           ✓ This goal will appear on your main balance card
         </Text>
       )}
 
-      {!safeGoal.showOnBalanceCard && !isCompleted && (
+      {!localShowOnBalanceCard && !isCompleted && (
         <Text style={styles.toggleHelp}>
           Toggle on to track this goal on your main balance card
         </Text>

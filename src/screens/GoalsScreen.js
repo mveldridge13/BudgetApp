@@ -53,6 +53,7 @@ const GoalsScreen = ({navigation}) => {
 
   const {transactions} = useTransactions();
 
+
   // Consolidated data loading function
   const loadAllData = useCallback(
     async (force = false) => {
@@ -179,7 +180,9 @@ const GoalsScreen = ({navigation}) => {
         if (result && result.success) {
           setShowAddGoal(false);
           clearEditingGoal();
-          return {success: true};
+          // Reload goals to show the new goal
+          await loadGoals(true);
+          return {success: true, goal: result.goal};
         } else {
           return {
             success: false,
@@ -194,7 +197,7 @@ const GoalsScreen = ({navigation}) => {
         };
       }
     },
-    [saveGoal, clearEditingGoal],
+    [saveGoal, clearEditingGoal, loadGoals],
   );
 
   const handleDeleteGoal = useCallback(

@@ -235,6 +235,7 @@ const AddGoalModal = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // FIXED handleSave function
   const handleSave = async () => {
     if (!validateForm()) {
       return;
@@ -243,23 +244,65 @@ const AddGoalModal = ({
     try {
       setSaving(true);
 
+      // Add debugging to see what form data we have
+      console.log('🔍 MODAL - Raw form data:', formData);
+
+      // Helper function to safely parse numbers - FIXED to preserve decimals
+      const parseNumberSafely = (value, fallback = 0) => {
+        if (value === null || value === undefined || value === '') {
+          return fallback;
+        }
+
+        const cleanValue = String(value)
+          .replace(/[^0-9.-]/g, '')
+          .trim();
+        const parsed = parseFloat(cleanValue);
+
+        // Return valid decimal number, not rounded to integer
+        return isNaN(parsed) || parsed < 0 ? fallback : Math.round(parsed * 100) / 100;
+      };
+
+      // Create goal data with proper validation
       const goalData = {
         title: formData.title.trim(),
         type: formData.type,
-        target: formData.type === 'debt' ? 0 : parseFloat(formData.target),
-        current: parseFloat(formData.current),
-        originalAmount:
-          formData.type === 'debt'
-            ? parseFloat(formData.originalAmount)
-            : undefined,
-        deadline: formData.deadline,
         category: formData.category,
         priority: formData.priority,
-        autoContribute: formData.autoContribute
-          ? parseFloat(formData.autoContribute)
-          : 0,
+        deadline: formData.deadline,
+        current: parseNumberSafely(formData.current, 0),
         isActive: true,
       };
+
+      // Handle different goal types properly
+      if (formData.type === 'debt') {
+        // For debt goals, use originalAmount as the target amount
+        goalData.originalAmount = parseNumberSafely(
+          formData.originalAmount,
+          100,
+        );
+        goalData.target = goalData.originalAmount; // Backend expects targetAmount
+        console.log('🔍 MODAL - Debt goal processed:');
+        console.log('🔍 MODAL - originalAmount:', goalData.originalAmount, typeof goalData.originalAmount);
+        console.log('🔍 MODAL - target:', goalData.target, typeof goalData.target);
+      } else {
+        // For savings/spending goals, use target
+        goalData.target = parseNumberSafely(formData.target, 100);
+        console.log('🔍 MODAL - Non-debt goal processed:');
+        console.log('🔍 MODAL - target:', goalData.target, typeof goalData.target);
+      }
+
+      // Add auto contribution if specified
+      if (formData.autoContribute) {
+        goalData.autoContribute = parseNumberSafely(formData.autoContribute, 0);
+      }
+
+      console.log('🔍 MODAL - Processed goal data:', goalData);
+      console.log(
+        '🔍 MODAL - Target amount:',
+        goalData.target,
+        'Type:',
+        typeof goalData.target,
+      );
 
       let result;
       try {
@@ -281,6 +324,7 @@ const AddGoalModal = ({
         Alert.alert('Error', errorMessage);
       }
     } catch (error) {
+      console.error('❌ MODAL - Error in handleSave:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setSaving(false);
