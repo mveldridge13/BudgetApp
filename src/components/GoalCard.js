@@ -42,17 +42,25 @@ const GoalCard = ({
     }
   };
 
+
+  // Debug logging to track prop changes - TEMPORARILY DISABLED
+  // React.useEffect(() => {
+  //   if (goal?.id) {
+  //     console.log(`🔍 GOAL_CARD[${goal.id}]: Received goal.current = ${goal.current} (type: ${typeof goal.current})`);
+  //   }
+  // }, [goal?.current, goal?.id]);
+
   // FIXED: Add safe goal data access
   const safeGoal = {
     title: goal?.title || 'Untitled Goal',
     category: goal?.category || 'Other',
     type: goal?.type || 'savings',
-    current: goal?.current || 0,
-    target: goal?.target || 0,
-    originalAmount: goal?.originalAmount || 0,
+    current: goal?.current ?? 0, // Use nullish coalescing to preserve 0 values
+    target: goal?.target ?? 0,
+    originalAmount: goal?.originalAmount ?? 0,
     priority: goal?.priority || 'medium',
     deadline: goal?.deadline,
-    autoContribute: goal?.autoContribute || 0,
+    autoContribute: goal?.autoContribute ?? 0,
     showOnBalanceCard: goal?.showOnBalanceCard ?? false,
     completedDate: goal?.completedDate,
     id: goal?.id,
@@ -152,6 +160,7 @@ const GoalCard = ({
 
   const handleQuickContribution = () => {
     const amount = safeGoal.autoContribute || 50;
+    
     Alert.alert(
       isDebtGoal ? 'Make Payment' : 'Add Contribution',
       `${isDebtGoal ? 'Pay' : 'Add'} ${safeCurrency(amount)} ${
@@ -161,8 +170,9 @@ const GoalCard = ({
         {text: 'Cancel', style: 'cancel'},
         {
           text: isDebtGoal ? 'Pay' : 'Add',
-          onPress: () =>
-            onUpdateProgress && onUpdateProgress(safeGoal.id, amount),
+          onPress: () => {
+            onUpdateProgress && onUpdateProgress(safeGoal.id, amount);
+          },
         },
       ],
     );
@@ -170,7 +180,9 @@ const GoalCard = ({
 
   // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
+    console.log('🔍 BUTTON PRESSED: Custom amount submit');
     const amount = parseFloat(customAmount);
+    
     if (isNaN(amount) || amount <= 0) {
       Alert.alert(
         'Invalid Amount',

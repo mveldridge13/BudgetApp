@@ -30,6 +30,7 @@ const GoalsScreen = () => {
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
   const hasLoadedOnce = useRef(false); // Track if we've loaded at least once
+  const lastUpdateTime = useRef(0); // Track when we last updated goals
 
   // Hooks
   const {
@@ -46,9 +47,9 @@ const GoalsScreen = () => {
     getGoalProgress,
     isGoalOverdue,
     completeGoal,
+    // eslint-disable-next-line no-unused-vars
+    updateCounter,
   } = useGoals();
-
-
 
   // Consolidated data loading function
   const loadAllData = useCallback(
@@ -132,12 +133,40 @@ const GoalsScreen = () => {
     useCallback(() => {
       // Remove the delay - load immediately but silently
       if (isMountedRef.current && !isLoadingRef.current) {
-        // Only reload if goals are empty - no loading state shown
-        if (goals.length === 0 || !incomeData) {
+        // Don't reload if we just updated goals (within 10 seconds)
+        const timeSinceUpdate = Date.now() - lastUpdateTime.current;
+        if (timeSinceUpdate < 10000) {
+          console.log(
+            '🔍 GOALS_SCREEN: Skipping reload - recent update within',
+            timeSinceUpdate,
+            'ms',
+          );
+          return;
+        }
+
+        // Only reload if goals are empty OR if we've never loaded before
+        const currentGoalsLength = goals.length;
+        if (
+          !hasLoadedOnce.current ||
+          (currentGoalsLength === 0 && !incomeData)
+        ) {
+          console.log(
+            '🔍 GOALS_SCREEN: Loading data (hasLoadedOnce:',
+            hasLoadedOnce.current,
+            'goals.length:',
+            currentGoalsLength,
+            ')',
+          );
           loadAllData();
+        } else {
+          console.log(
+            '🔍 GOALS_SCREEN: Skipping reload - already loaded with',
+            currentGoalsLength,
+            'goals',
+          );
         }
       }
-    }, [loadAllData, goals.length, incomeData]),
+    }, [loadAllData, incomeData, goals.length]),
   );
 
   // Pull-to-refresh handler
@@ -159,7 +188,7 @@ const GoalsScreen = () => {
   const handleEditGoal = useCallback(
     async goal => {
       try {
-        await prepareEditGoal(goal);
+        await prepareEditGoal(goal.id);
         setShowAddGoal(true);
       } catch (error) {
         console.warn('Error preparing edit goal:', error);
@@ -171,21 +200,42 @@ const GoalsScreen = () => {
   const handleSaveGoal = useCallback(
     async goalData => {
       try {
+        console.log('🔍 GOALS_SCREEN: Saving goal with data:', {
+          title: goalData.title,
+          type: goalData.type,
+          category: goalData.category,
+          target: goalData.target,
+        });
+
         const result = await saveGoal(goalData);
 
         if (result && result.success) {
+          console.log('🔍 GOALS_SCREEN: Goal saved successfully:', {
+            id: result.goal?.id,
+            type: result.goal?.type,
+            category: result.goal?.category,
+          });
+
           setShowAddGoal(false);
           clearEditingGoal();
           // Reload goals to show the new goal
-          await loadGoals(true);
+          console.log('🔍 GOALS_SCREEN: Reloading goals after save...');
+          try {
+            await loadGoals(true);
+            console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
+          } catch (reloadError) {
+            console.error('🔍 GOALS_SCREEN: Failed to reload goals:', reloadError);
+          }
           return {success: true, goal: result.goal};
         } else {
+          console.error('🔍 GOALS_SCREEN: Goal save failed:', result?.error);
           return {
             success: false,
             error: result?.error || 'Failed to save goal. Please try again.',
           };
         }
       } catch (error) {
+        console.error('🔍 GOALS_SCREEN: Goal save error:', error);
         return {
           success: false,
           error:
@@ -222,6 +272,8 @@ const GoalsScreen = () => {
     async (goalId, amount) => {
       try {
         await updateGoalProgress(goalId, amount);
+        lastUpdateTime.current = Date.now(); // Mark when we updated
+        console.log('🔍 GOALS_SCREEN: Goal progress updated successfully');
       } catch (error) {
         console.warn('Error updating progress:', error);
       }
@@ -254,10 +306,9 @@ const GoalsScreen = () => {
   }, []);
 
   // Memoize expensive calculations
-  const activeGoals = React.useMemo(
-    () => goals.filter(goal => goal.isActive !== false),
-    [goals],
-  );
+  const activeGoals = React.useMemo(() => {
+    return goals.filter(goal => goal.isActive !== false);
+  }, [goals]);
 
   const completedGoals = React.useMemo(
     () => goals.filter(goal => goal.isActive === false),
@@ -277,36 +328,21 @@ const GoalsScreen = () => {
     [activeGoals],
   );
 
-
-  // Memoize rendered goal lists to prevent unnecessary re-renders
-  const renderedActiveGoals = React.useMemo(
-    () =>
-      activeGoals.map(goal => (
-        <GoalCard
-          key={goal.id}
-          goal={goal}
-          onEdit={handleEditGoal}
-          onDelete={handleDeleteGoal}
-          onToggleBalanceDisplay={handleToggleBalanceDisplay}
-          onUpdateProgress={handleUpdateProgress}
-          onComplete={handleCompleteGoal}
-          getGoalProgress={getGoalProgress}
-          isOverdue={isGoalOverdue(goal)}
-          formatCurrency={formatCurrency}
-        />
-      )),
-    [
-      activeGoals,
-      handleEditGoal,
-      handleDeleteGoal,
-      handleToggleBalanceDisplay,
-      handleUpdateProgress,
-      handleCompleteGoal,
-      getGoalProgress,
-      isGoalOverdue,
-      formatCurrency,
-    ],
-  );
+  // Render goal lists directly without memoization to ensure updates
+  const renderedActiveGoals = activeGoals.map(goal => (
+    <GoalCard
+      key={goal.id}
+      goal={goal}
+      onEdit={handleEditGoal}
+      onDelete={handleDeleteGoal}
+      onToggleBalanceDisplay={handleToggleBalanceDisplay}
+      onUpdateProgress={handleUpdateProgress}
+      onComplete={handleCompleteGoal}
+      getGoalProgress={getGoalProgress}
+      isOverdue={isGoalOverdue(goal)}
+      formatCurrency={formatCurrency}
+    />
+  ));
 
   const renderedCompletedGoals = React.useMemo(
     () =>
@@ -321,7 +357,6 @@ const GoalsScreen = () => {
       )),
     [completedGoals, getGoalProgress, formatCurrency],
   );
-
 
   return (
     <View style={styles.container}>
@@ -404,7 +439,6 @@ const GoalsScreen = () => {
         }>
         {activeTab === 'active' && (
           <>
-
             {/* Active Goals */}
             {activeGoals.length > 0 ? (
               <View style={styles.goalsSection}>

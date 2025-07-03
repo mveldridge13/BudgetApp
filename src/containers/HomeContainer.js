@@ -30,7 +30,7 @@ const HomeContainer = ({navigation}) => {
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
-  const {goals, loadGoals: loadGoalsFromHook} = useGoals();
+  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
 
   // ==============================================
   // UTILITY FUNCTIONS
@@ -81,12 +81,14 @@ const HomeContainer = ({navigation}) => {
   }, []);
 
   // Reload goals when screen comes into focus (e.g., returning from GoalsScreen)
+  // Only loads from cache now - no API calls to prevent race conditions
   useFocusEffect(
     useCallback(() => {
       if (!loading) {
+        console.log('🏠 HomeContainer: Reloading goals from cache on focus');
         loadGoals();
       }
-    }, [loading, loadGoals])
+    }, [loading, loadGoals]),
   );
 
   // ==============================================
@@ -399,6 +401,34 @@ const HomeContainer = ({navigation}) => {
 
         setEditingTransaction(null);
 
+        // Update spending goals if this transaction affects any spending budgets
+        try {
+          console.log('🔍 TRANSACTION: Calling updateSpendingGoals with:', {
+            savedTransaction: savedTransaction?.id,
+            category: savedTransaction?.categoryId,
+            amount: savedTransaction?.amount,
+            isEditing,
+          });
+
+          if (isEditing) {
+            // For edits, pass both original and new transaction
+            await updateSpendingGoals(savedTransaction, transaction);
+          } else {
+            // For new transactions, just pass the new transaction
+            await updateSpendingGoals(savedTransaction, null);
+          }
+
+          console.log(
+            '🔍 TRANSACTION: updateSpendingGoals completed successfully',
+          );
+        } catch (goalError) {
+          console.error(
+            '🔍 TRANSACTION: Failed to update spending goals:',
+            goalError,
+          );
+          // Don't fail the entire transaction save if goal update fails
+        }
+
         return {
           success: true,
           isNewTransaction: !isEditing,
@@ -446,6 +476,33 @@ const HomeContainer = ({navigation}) => {
 
       // Delete on server
       await TrendAPIService.deleteTransaction(transactionId);
+
+      // Update spending goals to remove the deleted transaction's impact
+      if (deletedTransaction) {
+        try {
+          console.log(
+            '🔍 DELETE_TRANSACTION: Updating spending goals for deleted transaction:',
+            {
+              id: deletedTransaction.id,
+              category: deletedTransaction.categoryId,
+              amount: deletedTransaction.amount,
+            },
+          );
+
+          // Pass null as newTransaction and the deleted transaction as originalTransaction
+          await updateSpendingGoals(null, deletedTransaction);
+
+          console.log(
+            '🔍 DELETE_TRANSACTION: Spending goals updated successfully',
+          );
+        } catch (goalError) {
+          console.warn(
+            '🔍 DELETE_TRANSACTION: Failed to update spending goals:',
+            goalError,
+          );
+          // Don't fail the entire transaction delete if goal update fails
+        }
+      }
     } catch (error) {
       console.error('HomeContainer: Transaction delete failed:', error);
 

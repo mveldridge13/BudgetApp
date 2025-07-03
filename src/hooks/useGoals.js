@@ -34,12 +34,8 @@ const useGoals = () => {
     calculateTotalGoalContributions,
     getGoalAnalytics,
   } = useGoalCalculations();
-  const {
-    syncGoalsWithBackend,
-    refreshFromBackend,
-    needsSync,
-    getLastSyncTime,
-  } = useGoalSync();
+  const {syncGoalsWithBackend, refreshFromBackend, needsSync, getLastSyncTime} =
+    useGoalSync();
 
   // Network connectivity check
   const checkNetworkConnectivity = useCallback(async () => {
@@ -53,27 +49,24 @@ const useGoals = () => {
   }, []);
 
   // Loading state management
-  const setLoadingWithTimeout = useCallback(
-    shouldLoad => {
-      if (shouldLoad) {
-        setLoading(true);
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current);
-        }
-        loadingTimeoutRef.current = setTimeout(() => {
-          console.warn('Loading timeout reached, clearing loading state');
-          setLoading(false);
-        }, LOADING_TIMEOUT);
-      } else {
-        setLoading(false);
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current);
-          loadingTimeoutRef.current = null;
-        }
+  const setLoadingWithTimeout = useCallback(shouldLoad => {
+    if (shouldLoad) {
+      setLoading(true);
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
       }
-    },
-    [],
-  );
+      loadingTimeoutRef.current = setTimeout(() => {
+        console.warn('Loading timeout reached, clearing loading state');
+        setLoading(false);
+      }, LOADING_TIMEOUT);
+    } else {
+      setLoading(false);
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    }
+  }, []);
 
   const clearLoadingTimeout = useCallback(() => {
     if (loadingTimeoutRef.current) {
@@ -101,12 +94,7 @@ const useGoals = () => {
         forceAPI,
       );
     },
-    [
-      goalDataModule,
-      goals,
-      setLoadingWithTimeout,
-      clearLoadingTimeout,
-    ],
+    [goalDataModule, goals, setLoadingWithTimeout, clearLoadingTimeout],
   );
 
   const saveGoal = useCallback(
@@ -169,92 +157,88 @@ const useGoals = () => {
 
   const updateGoalProgress = useCallback(
     async (goalId, amount) => {
-      try {
-        if (!goalId) {
-          throw new Error('Goal ID is required');
-        }
-
-        const parsedAmount = Number(amount);
-        if (isNaN(parsedAmount) || parsedAmount <= 0) {
-          throw new Error('Amount must be a positive number');
-        }
-
-        const goalIndex = goals.findIndex(goal => goal.id === goalId);
-        if (goalIndex === -1) {
-          throw new Error('Goal not found');
-        }
-
-        const updatedGoals = goals.map(currentGoal => {
-          if (currentGoal.id !== goalId) {
-            return currentGoal;
-          }
-
-          let newCurrent = currentGoal.current || 0;
-
-          if (currentGoal.type === 'debt') {
-            // For debt goals, reduce the current debt amount
-            newCurrent = Math.max(0, newCurrent - parsedAmount);
-          } else {
-            // For savings goals, increase the current amount
-            newCurrent += parsedAmount;
-          }
-
-          return {
-            ...currentGoal,
-            current: newCurrent,
-            lastUpdated: new Date().toISOString(),
-          };
-        });
-
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
-
-        if (saveResult.success) {
-          setGoals(saveResult.goals);
-          return {success: true};
-        } else {
-          throw new Error(saveResult.error || 'Failed to update goal progress');
-        }
-      } catch (error) {
-        console.error('Error updating goal progress:', error);
-        return {success: false, error: error.message};
-      }
+      console.log(
+        '🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress',
+      );
+      return goalDataModule.updateGoalProgress(goalId, amount, goals, setGoals);
     },
-    [goals, saveGoalsToCache],
+    [goalDataModule, goals],
   );
 
   const updateSpendingGoals = useCallback(
     async (newTransaction = null, originalTransaction = null) => {
       try {
+        console.log('🔍 UPDATE_SPENDING_GOALS: Called with:', {
+          newTransaction: newTransaction?.id,
+          newCategory: newTransaction?.categoryId,
+          newAmount: newTransaction?.amount,
+          originalTransaction: originalTransaction?.id,
+          currentGoalsCount: goals.length,
+        });
+
         // If neither transaction is provided, nothing to do
         if (!newTransaction && !originalTransaction) {
+          console.log(
+            '🔍 UPDATE_SPENDING_GOALS: No transactions provided, returning',
+          );
           return {success: true};
         }
 
         // Get categories using TrendAPIService
         let categories;
         try {
+          console.log('🔍 UPDATE_SPENDING_GOALS: Checking authentication...');
           if (!TrendAPIService.isAuthenticated()) {
+            console.log(
+              '🔍 UPDATE_SPENDING_GOALS: Not authenticated, returning early',
+            );
             return {success: true};
           }
 
+          console.log(
+            '🔍 UPDATE_SPENDING_GOALS: Getting categories from API...',
+          );
           const response = await TrendAPIService.getCategories();
           categories = response?.categories || [];
+          console.log(
+            '🔍 UPDATE_SPENDING_GOALS: Got categories:',
+            categories.length,
+          );
         } catch (error) {
+          console.log(
+            '🔍 UPDATE_SPENDING_GOALS: Categories API failed, returning early:',
+            error.message,
+          );
           return {success: true}; // Gracefully handle missing service
         }
 
         if (!Array.isArray(categories)) {
+          console.error('🔍 UPDATE_SPENDING_GOALS: Invalid categories data');
           throw new Error('Invalid categories data');
         }
 
         // Get FRESH goals data from cache to avoid stale state
+        console.log('🔍 UPDATE_SPENDING_GOALS: Loading goals from cache...');
         const cacheResult = await loadGoalsFromCache();
         let updatedGoals = [...cacheResult.goals];
+        console.log('🔍 UPDATE_SPENDING_GOALS: Loaded goals from cache:', {
+          totalGoals: updatedGoals.length,
+          spendingGoals: updatedGoals.filter(g => g.type === 'spending').length,
+        });
 
         // STEP 1: Remove impact of original transaction (for edits and deletes)
-        if (originalTransaction && originalTransaction.category) {
+        if (
+          originalTransaction &&
+          (originalTransaction.categoryId || originalTransaction.category)
+        ) {
+          const originalCategoryIdToSearch =
+            originalTransaction.categoryId ||
+            (typeof originalTransaction.category === 'string'
+              ? originalTransaction.category
+              : null);
+
           const originalCategory = categories.find(
-            cat => cat.id === originalTransaction.category,
+            cat => cat.id === originalCategoryIdToSearch,
           );
           const originalCategoryName = originalCategory?.name?.toLowerCase();
 
@@ -286,30 +270,78 @@ const useGoals = () => {
         }
 
         // STEP 2: Add impact of new transaction (for new transactions and edits)
-        if (newTransaction && newTransaction.category) {
+        if (
+          newTransaction &&
+          (newTransaction.categoryId || newTransaction.category)
+        ) {
+          console.log('🔍 UPDATE_SPENDING_GOALS: Processing new transaction:', {
+            category: newTransaction.category,
+            categoryId: newTransaction.categoryId,
+            amount: newTransaction.amount,
+          });
+
           const newTransactionAmount = Number(newTransaction.amount);
           if (!isNaN(newTransactionAmount) && newTransactionAmount > 0) {
+            // Use categoryId first, fallback to category if it's a string
+            const categoryIdToSearch =
+              newTransaction.categoryId ||
+              (typeof newTransaction.category === 'string'
+                ? newTransaction.category
+                : null);
+
             const transactionCategory = categories.find(
-              cat => cat.id === newTransaction.category,
+              cat => cat.id === categoryIdToSearch,
             );
             const transactionCategoryName =
               transactionCategory?.name?.toLowerCase();
 
+            console.log(
+              '🔍 UPDATE_SPENDING_GOALS: Transaction category lookup:',
+              {
+                searchingForId: categoryIdToSearch,
+                foundCategory: transactionCategory?.name,
+                normalizedName: transactionCategoryName,
+              },
+            );
+
             if (transactionCategoryName) {
               // Check if any spending goals need updating
+              console.log(
+                '🔍 UPDATE_SPENDING_GOALS: Looking for spending goals with category:',
+                transactionCategoryName,
+              );
+              console.log(
+                '🔍 UPDATE_SPENDING_GOALS: Available spending goals:',
+                updatedGoals
+                  .filter(g => g.type === 'spending')
+                  .map(g => ({
+                    id: g.id,
+                    title: g.title,
+                    category: g.category,
+                    categoryLower: g.category?.toLowerCase(),
+                  })),
+              );
+
               const relevantGoals = updatedGoals.filter(
                 goal =>
                   goal.type === 'spending' &&
                   goal.category?.toLowerCase() === transactionCategoryName,
               );
 
+              console.log(
+                '🔍 UPDATE_SPENDING_GOALS: Found relevant goals:',
+                relevantGoals.length,
+              );
+
               if (relevantGoals.length > 0) {
+                // Update existing spending goals
                 updatedGoals = updatedGoals.map(goal => {
                   if (
                     goal.type === 'spending' &&
                     goal.category?.toLowerCase() === transactionCategoryName
                   ) {
-                    const newCurrent = (goal.current || 0) + newTransactionAmount;
+                    const newCurrent =
+                      (goal.current || 0) + newTransactionAmount;
 
                     return {
                       ...goal,
@@ -319,6 +351,42 @@ const useGoals = () => {
                   }
                   return goal;
                 });
+              } else {
+                // Auto-create spending goal if none exists for this category
+                console.log(
+                  '🔍 UPDATE_SPENDING_GOALS: No spending goal found for category, auto-creating:',
+                  transactionCategoryName,
+                );
+
+                const categoryDisplayName = transactionCategory?.name || 'Other';
+                const newSpendingGoal = {
+                  id: `local_spending_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+                  title: `${categoryDisplayName} Budget`,
+                  type: 'spending',
+                  target: 1000, // Default spending limit
+                  current: newTransactionAmount,
+                  category: categoryDisplayName,
+                  priority: 'medium',
+                  isActive: true,
+                  createdAt: new Date().toISOString(),
+                  lastUpdated: new Date().toISOString(),
+                  showOnBalanceCard: false,
+                  autoContribute: 0,
+                  description: `Auto-created spending budget for ${categoryDisplayName}`,
+                  currency: 'AUD',
+                };
+
+                updatedGoals.push(newSpendingGoal);
+                console.log(
+                  '🔍 UPDATE_SPENDING_GOALS: Created new spending goal:',
+                  {
+                    id: newSpendingGoal.id,
+                    title: newSpendingGoal.title,
+                    category: newSpendingGoal.category,
+                    target: newSpendingGoal.target,
+                    current: newSpendingGoal.current,
+                  },
+                );
               }
             }
           }
@@ -341,7 +409,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [loadGoalsFromCache, saveGoalsToCache],
+    [loadGoalsFromCache, saveGoalsToCache, goals.length],
   );
 
   const completeGoal = useCallback(
@@ -363,9 +431,12 @@ const useGoals = () => {
           TrendAPIService.isAuthenticated() &&
           !goalId.startsWith('local_')
         ) {
-          // Try API completion first
+          // TEMPORARILY DISABLED: Try API completion first
           try {
-            await TrendAPIService.updateGoal(goalId, {isCompleted: true});
+            console.log(
+              '🔍 TEMPORARILY DISABLED: TrendAPIService.updateGoal for completion',
+            );
+            // await TrendAPIService.updateGoal(goalId, {isCompleted: true});
           } catch (apiError) {
             console.warn('API completion failed, updating locally:', apiError);
           }
@@ -428,7 +499,10 @@ const useGoals = () => {
             // This would be an API call if the endpoint existed
             // await TrendAPIService.addGoalContribution(goalId, {amount, description});
           } catch (apiError) {
-            console.warn('API contribution failed, updating locally:', apiError);
+            console.warn(
+              'API contribution failed, updating locally:',
+              apiError,
+            );
           }
         }
 
@@ -489,7 +563,6 @@ const useGoals = () => {
     return syncGoalsWithBackend(goals, setGoals, checkNetworkConnectivity);
   }, [syncGoalsWithBackend, goals, checkNetworkConnectivity]);
 
-
   const refreshFromBackendWrapper = useCallback(async () => {
     return refreshFromBackend(loadGoals);
   }, [refreshFromBackend, loadGoals]);
@@ -520,12 +593,12 @@ const useGoals = () => {
       const connected = state.isConnected && state.isInternetReachable;
       setIsOnline(connected);
 
-      // Auto-sync when coming back online
-      if (connected && needsSyncWrapper()) {
-        setTimeout(() => {
-          syncGoalsWithBackendWrapper();
-        }, 2000); // Small delay to ensure connection is stable
-      }
+      // Auto-sync when coming back online - DISABLED FOR TESTING
+      // if (connected && needsSyncWrapper()) {
+      //   setTimeout(() => {
+      //     syncGoalsWithBackendWrapper();
+      //   }, 2000); // Small delay to ensure connection is stable
+      // }
     });
 
     return unsubscribe;

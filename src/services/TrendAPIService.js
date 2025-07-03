@@ -435,28 +435,71 @@ class TrendAPIService {
   }
 
   async createGoal(goalData) {
-    // Minimal validation
+    console.log('🔍 CREATE_GOAL: Starting with data:', goalData);
+
+    // Create a clean copy to avoid mutating the input
+    const cleanGoalData = {...goalData};
+
     // Convert string targetAmount to number if needed
-    if (typeof goalData.targetAmount === 'string') {
-      goalData.targetAmount = parseFloat(goalData.targetAmount);
+    if (typeof cleanGoalData.targetAmount === 'string') {
+      cleanGoalData.targetAmount = parseFloat(cleanGoalData.targetAmount);
     }
 
-    if (!goalData.targetAmount || typeof goalData.targetAmount !== 'number' || goalData.targetAmount <= 0) {
-      throw new Error('Invalid targetAmount: must be a valid number greater than 0');
+    // Ensure targetAmount is a valid number
+    if (
+      !cleanGoalData.targetAmount ||
+      typeof cleanGoalData.targetAmount !== 'number' ||
+      isNaN(cleanGoalData.targetAmount) ||
+      cleanGoalData.targetAmount <= 0
+    ) {
+      console.error('🔍 CREATE_GOAL: Invalid targetAmount:', {
+        original: goalData.targetAmount,
+        cleaned: cleanGoalData.targetAmount,
+        type: typeof cleanGoalData.targetAmount,
+      });
+      throw new Error(
+        'Invalid targetAmount: must be a valid number greater than 0',
+      );
     }
+
     // Convert string currentAmount to number if needed
-    if (typeof goalData.currentAmount === 'string') {
-      goalData.currentAmount = parseFloat(goalData.currentAmount);
+    if (typeof cleanGoalData.currentAmount === 'string') {
+      cleanGoalData.currentAmount = parseFloat(cleanGoalData.currentAmount);
     }
-    if (goalData.currentAmount && typeof goalData.currentAmount !== 'number') {
-      goalData.currentAmount = 0;
+    if (
+      cleanGoalData.currentAmount &&
+      typeof cleanGoalData.currentAmount !== 'number'
+    ) {
+      cleanGoalData.currentAmount = 0;
     }
+
+    console.log('🔍 CREATE_GOAL: Cleaned data:', {
+      targetAmount: cleanGoalData.targetAmount,
+      currentAmount: cleanGoalData.currentAmount,
+      name: cleanGoalData.name,
+    });
 
     try {
+      console.log(
+        '🔍 CREATE_GOAL: Making API request to:',
+        `${this.baseURL}/goals`,
+      );
+
+      // Add a custom timeout for goal creation (shorter than default)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('🔍 CREATE_GOAL: Request timed out after 5 seconds');
+        controller.abort();
+      }, 5000); // 5 second timeout
+
       const response = await this.makeRequest('/goals', {
         method: 'POST',
-        body: goalData,
+        body: cleanGoalData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+      console.log('🔍 CREATE_GOAL: API response received:', response);
 
       // Handle different possible response formats
       if (response?.goal) {
@@ -491,38 +534,70 @@ class TrendAPIService {
   }
 
   async updateGoal(id, goalData) {
-    // CRITICAL: Ensure targetAmount is a valid number before sending
-    // Convert string targetAmount to number if needed
-    if (typeof goalData.targetAmount === 'string') {
-      goalData.targetAmount = parseFloat(goalData.targetAmount);
+    // FIXED: Better validation with proper error handling
+    console.log('🔍 UPDATE_GOAL: Starting with data:', {
+      id,
+      targetAmount: goalData.targetAmount,
+      currentAmount: goalData.currentAmount,
+      types: {
+        targetAmount: typeof goalData.targetAmount,
+        currentAmount: typeof goalData.currentAmount,
+      },
+    });
+
+    // Create a clean copy to avoid mutating the input
+    const cleanGoalData = {...goalData};
+
+    // FIXED: Convert and validate targetAmount
+    if (cleanGoalData.targetAmount !== undefined) {
+      if (typeof cleanGoalData.targetAmount === 'string') {
+        cleanGoalData.targetAmount = parseFloat(cleanGoalData.targetAmount);
+      }
+      cleanGoalData.targetAmount = Number(cleanGoalData.targetAmount);
+
+      if (
+        isNaN(cleanGoalData.targetAmount) ||
+        !isFinite(cleanGoalData.targetAmount) ||
+        cleanGoalData.targetAmount <= 0
+      ) {
+        console.error(
+          '🔍 ❌ CRITICAL: Invalid targetAmount:',
+          goalData.targetAmount,
+        );
+        throw new Error(
+          'Invalid targetAmount: must be a valid number greater than 0',
+        );
+      }
     }
 
-    if (
-      goalData.targetAmount !== undefined &&
-      (typeof goalData.targetAmount !== 'number' ||
-        isNaN(goalData.targetAmount) ||
-        !isFinite(goalData.targetAmount) ||
-        goalData.targetAmount <= 0)
-    ) {
-      console.error('🔍 ❌ CRITICAL: targetAmount is invalid in update');
-      throw new Error('Invalid targetAmount: must be a valid number greater than 0');
+    // FIXED: Convert and validate currentAmount (allow 0 and positive numbers)
+    if (cleanGoalData.currentAmount !== undefined) {
+      if (typeof cleanGoalData.currentAmount === 'string') {
+        cleanGoalData.currentAmount = parseFloat(cleanGoalData.currentAmount);
+      }
+      cleanGoalData.currentAmount = Number(cleanGoalData.currentAmount);
+
+      if (
+        isNaN(cleanGoalData.currentAmount) ||
+        !isFinite(cleanGoalData.currentAmount) ||
+        cleanGoalData.currentAmount < 0
+      ) {
+        console.warn(
+          '🔍 ⚠️ Invalid currentAmount, setting to 0:',
+          goalData.currentAmount,
+        );
+        cleanGoalData.currentAmount = 0;
+      }
     }
 
-    // Double-check currentAmount too
-    if (
-      goalData.currentAmount !== undefined &&
-      (typeof goalData.currentAmount !== 'number' ||
-        isNaN(goalData.currentAmount) ||
-        !isFinite(goalData.currentAmount) ||
-        goalData.currentAmount < 0)
-    ) {
-      console.error('🔍 ❌ CRITICAL: currentAmount is invalid in update, fixing it');
-      goalData.currentAmount = 0;
-    }
+    console.log('🔍 UPDATE_GOAL: Cleaned data:', {
+      targetAmount: cleanGoalData.targetAmount,
+      currentAmount: cleanGoalData.currentAmount,
+    });
 
     const response = await this.makeRequest(`/goals/${id}`, {
       method: 'PUT',
-      body: goalData,
+      body: cleanGoalData,
     });
 
     if (response?.goal) {
@@ -533,7 +608,7 @@ class TrendAPIService {
       return response;
     } else {
       console.warn('Unexpected updateGoal response format:', response);
-      return response || {id, ...goalData};
+      return response || {id, ...cleanGoalData};
     }
   }
 
@@ -569,7 +644,6 @@ class TrendAPIService {
   async getGoalAnalytics(goalId) {
     return this.makeRequest(`/goals/${goalId}/analytics`);
   }
-
 
   async getGoalsAnalytics(filters = {}) {
     const queryString = this.buildQueryString(filters);

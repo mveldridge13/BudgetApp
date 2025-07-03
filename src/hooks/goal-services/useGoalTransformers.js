@@ -42,7 +42,7 @@ const useGoalTransformers = () => {
       originalAmount:
         Number(backendGoal.originalAmount || backendGoal.targetAmount) || 0,
       deadline: backendGoal.targetDate,
-      category: categoryMapping[backendGoal.category] || 'Other',
+      category: backendGoal.originalCategory || categoryMapping[backendGoal.category] || backendGoal.category || 'Other',
       priority: priorityMapping[backendGoal.priority] || 'medium',
       autoContribute: Number(backendGoal.monthlyTarget) || 0,
       showOnBalanceCard: false, // Default to false since backend doesn't support this field
@@ -104,6 +104,7 @@ const useGoalTransformers = () => {
       value,
       defaultValue = 0,
       fieldName = 'unknown',
+      allowZero = false,
     ) => {
       if (value === null || value === undefined || value === '') {
         return defaultValue;
@@ -116,8 +117,23 @@ const useGoalTransformers = () => {
         numValue = Number(value);
       }
 
-      if (isNaN(numValue) || !isFinite(numValue) || numValue <= 0) {
+      if (isNaN(numValue) || !isFinite(numValue)) {
+        console.warn(`🔍 Invalid ${fieldName}:`, value, '-> using default:', defaultValue);
         return defaultValue;
+      }
+
+      // For currentAmount, allow zero and positive values
+      if (fieldName === 'currentAmount' || allowZero) {
+        if (numValue < 0) {
+          console.warn(`🔍 Negative ${fieldName}:`, value, '-> using default:', defaultValue);
+          return defaultValue;
+        }
+      } else {
+        // For targetAmount, require positive values
+        if (numValue <= 0) {
+          console.warn(`🔍 Non-positive ${fieldName}:`, value, '-> using default:', defaultValue);
+          return defaultValue;
+        }
       }
 
       return numValue;
@@ -150,6 +166,7 @@ const useGoalTransformers = () => {
         frontendGoal.current,
         0,
         'currentAmount',
+        true, // Allow zero for currentAmount
       ).toFixed(2),
       currency: 'AUD',
       category: categoryMapping[frontendGoal.category] || 'GENERAL_SAVINGS',
@@ -158,6 +175,8 @@ const useGoalTransformers = () => {
       isActive: true,
       isCompleted: false,
       showOnBalanceCard: frontendGoal.showOnBalanceCard || false,
+      // PRESERVE original category for local storage (spending goals need exact category matching)
+      originalCategory: frontendGoal.category,
     };
 
     // Add optional fields only if they exist

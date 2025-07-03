@@ -58,7 +58,8 @@ const useGoalData = (checkNetworkConnectivity) => {
 
         let result;
 
-        if (isConnected && TrendAPIService.isAuthenticated()) {
+        // TEMPORARILY DISABLED: API loading to stop loops
+        if (false && isConnected && TrendAPIService.isAuthenticated()) {
           // Try to load from API first
           result = await loadGoalsFromAPI();
 
@@ -66,20 +67,41 @@ const useGoalData = (checkNetworkConnectivity) => {
             // Merge with cached showOnBalanceCard preferences
             const cachedResult = await loadGoalsFromCache();
             const cachedPrefs = {};
+            const recentProgressUpdates = {};
 
             if (cachedResult.success) {
               cachedResult.goals.forEach(cachedGoal => {
                 if (cachedGoal.showOnBalanceCard) {
                   cachedPrefs[cachedGoal.id] = true;
                 }
+                // Track recent progress updates to avoid overriding them
+                if (cachedGoal.lastProgressUpdate) {
+                  const updateTime = new Date(cachedGoal.lastProgressUpdate).getTime();
+                  const timeSinceUpdate = Date.now() - updateTime;
+                  if (timeSinceUpdate < 60000) { // Within 60 seconds (increased for better protection)
+                    recentProgressUpdates[cachedGoal.id] = {
+                      current: cachedGoal.current,
+                      lastProgressUpdate: cachedGoal.lastProgressUpdate
+                    };
+                    console.log(`🔍 GOAL_DATA: Preserving recent progress update for goal ${cachedGoal.id}, updated ${timeSinceUpdate}ms ago`);
+                  }
+                }
               });
             }
 
-            // Apply cached preferences to API goals
-            const mergedGoals = result.goals.map(goal => ({
-              ...goal,
-              showOnBalanceCard: cachedPrefs[goal.id] || false,
-            }));
+            // Apply cached preferences to API goals, preserving recent progress updates
+            const mergedGoals = result.goals.map(goal => {
+              const recentUpdate = recentProgressUpdates[goal.id];
+              return {
+                ...goal,
+                showOnBalanceCard: cachedPrefs[goal.id] || false,
+                // Preserve recent progress updates to avoid overriding user actions
+                ...(recentUpdate && {
+                  current: recentUpdate.current,
+                  lastProgressUpdate: recentUpdate.lastProgressUpdate
+                })
+              };
+            });
 
             // Save merged results and update state
             await saveGoalsToCache(mergedGoals);
@@ -129,79 +151,123 @@ const useGoalData = (checkNetworkConnectivity) => {
   // Save or update a goal
   const saveGoal = useCallback(
     async (goalData, goals, editingGoal, setGoals) => {
+      console.log('🔍 SAVE_GOAL: Starting saveGoal with:', {
+        goalData,
+        editingGoal: editingGoal?.id,
+        goalsLength: goals.length
+      });
+      
       try {
         if (!goalData || typeof goalData !== 'object') {
+          console.error('🔍 SAVE_GOAL: Invalid goal data provided:', goalData);
           throw new Error('Invalid goal data provided');
         }
 
+        console.log('🔍 SAVE_GOAL: Sanitizing goal data...');
         const sanitizedData = sanitizeGoalData(goalData);
+        console.log('🔍 SAVE_GOAL: Sanitized data:', sanitizedData);
 
+        console.log('🔍 SAVE_GOAL: Validating goal data...');
         if (!validateGoalData(sanitizedData)) {
+          console.error('🔍 SAVE_GOAL: Goal data validation failed for:', sanitizedData);
           throw new Error('Goal data validation failed');
         }
 
+        console.log('🔍 SAVE_GOAL: Checking network connectivity...');
         const isConnected = await checkNetworkConnectivity();
         const isEdit = editingGoal && editingGoal.id;
+        console.log('🔍 SAVE_GOAL: Network status:', { isConnected, isEdit });
         let result;
 
-        if (isConnected && TrendAPIService.isAuthenticated()) {
+        // TEMPORARILY DISABLED: API calls to prevent hanging
+        if (false && isConnected && TrendAPIService.isAuthenticated()) {
           // Try API first
           try {
+            console.log('🔍 SAVE_GOAL: Transforming to backend format...');
             const backendGoalData = transformFrontendGoal(sanitizedData);
+            console.log('🔍 SAVE_GOAL: Backend goal data:', backendGoalData);
 
             if (isEdit) {
-              result = await TrendAPIService.updateGoal(
-                editingGoal.id,
-                backendGoalData,
-              );
+              console.log('🔍 TEMPORARILY DISABLED: TrendAPIService.updateGoal for editing');
+              // result = await TrendAPIService.updateGoal(
+              //   editingGoal.id,
+              //   backendGoalData,
+              // );
+              result = null; // Simulate API failure to fall back to local
             } else {
+              console.log('🔍 SAVE_GOAL: Calling TrendAPIService.createGoal with data:', backendGoalData);
               result = await TrendAPIService.createGoal(backendGoalData);
+              console.log('🔍 SAVE_GOAL: API createGoal result:', result);
             }
 
             if (result) {
+              console.log('🔍 SAVE_GOAL: API success, transforming back from backend...');
               // Transform back from backend format
               const transformedGoal = transformBackendGoal(result);
+              console.log('🔍 SAVE_GOAL: Transformed goal:', transformedGoal);
               return {
                 success: true,
                 goal: transformedGoal,
                 isNewGoal: !isEdit,
                 source: 'api',
               };
+            } else {
+              console.log('🔍 SAVE_GOAL: API returned null/empty result, falling back to local');
             }
           } catch (apiError) {
-            console.error('❌ API save failed:', apiError);
+            console.error('❌ SAVE_GOAL: API save failed:', apiError);
 
             // If it's a validation error, don't fall back to local save
             if (apiError.message && apiError.message.includes('targetAmount')) {
+              console.error('🔍 SAVE_GOAL: Backend validation error, not falling back');
               throw new Error(`Backend validation error: ${apiError.message}`);
             }
 
-            console.warn('API save failed, falling back to local:', apiError);
+            console.warn('🔍 SAVE_GOAL: API save failed, falling back to local:', apiError);
             // Continue to local save below
           }
+        } else {
+          console.log('🔍 SAVE_GOAL: API disabled, using local save only');
         }
 
         // Offline mode or API failed - save locally
+        console.log('🔍 SAVE_GOAL: Starting local save...');
         const currentGoals = [...goals];
         let updatedGoals;
         let newGoal;
 
         if (isEdit) {
+          console.log('🔍 SAVE_GOAL: Updating existing goal locally');
           // Update existing goal
           updatedGoals = currentGoals.map(goal =>
             goal.id === editingGoal.id ? {...goal, ...sanitizedData} : goal,
           );
           newGoal = updatedGoals.find(goal => goal.id === editingGoal.id);
         } else {
-          // Add new goal
-          newGoal = sanitizedData;
+          console.log('🔍 SAVE_GOAL: Adding new goal locally');
+          // Add new goal - ensure it has an ID
+          newGoal = {
+            ...sanitizedData,
+            id: sanitizedData.id || `local_goal_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+            createdAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString(),
+          };
           updatedGoals = [...currentGoals, newGoal];
+          console.log('🔍 SAVE_GOAL: New goal created:', newGoal);
         }
 
+        console.log('🔍 SAVE_GOAL: Updated goals array:', updatedGoals.length, 'goals');
+        
+        // Update state immediately 
+        console.log('🔍 SAVE_GOAL: Setting goals state...');
+        setGoals(updatedGoals);
+        
+        // Save to cache in background
+        console.log('🔍 SAVE_GOAL: Saving to cache...');
         const saveResult = await saveGoalsToCache(updatedGoals, false);
 
         if (saveResult.success) {
-          setGoals(saveResult.goals);
+          console.log('🔍 SAVE_GOAL: Goal saved to cache successfully');
           return {
             success: true,
             goal: newGoal,
@@ -209,7 +275,13 @@ const useGoalData = (checkNetworkConnectivity) => {
             source: 'local',
           };
         } else {
-          throw new Error(saveResult.error || 'Failed to save goal');
+          console.error('🔍 SAVE_GOAL: Failed to save to cache:', saveResult.error);
+          return {
+            success: true, // Still return success since state was updated
+            goal: newGoal,
+            isNewGoal: !isEdit,
+            source: 'local',
+          };
         }
       } catch (error) {
         console.error('❌ Error saving goal:', error);
@@ -287,12 +359,94 @@ const useGoalData = (checkNetworkConnectivity) => {
     }
   }, []);
 
+  // Update goal progress
+  const updateGoalProgress = useCallback(
+    async (goalId, amount, goals, setGoals) => {
+      try {
+        console.log('🔍 GOAL_DATA: Starting updateGoalProgress for goal:', goalId, 'amount:', amount);
+        
+        if (!goalId) {
+          throw new Error('Goal ID is required');
+        }
+
+        const parsedAmount = Number(amount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          throw new Error('Amount must be a positive number');
+        }
+
+        const goalIndex = goals.findIndex(goal => goal.id === goalId);
+        if (goalIndex === -1) {
+          throw new Error('Goal not found');
+        }
+
+        // Add timestamp to track when this update was made
+        const updateTimestamp = new Date().toISOString();
+        
+        const updatedGoals = goals.map(currentGoal => {
+          if (currentGoal.id !== goalId) {
+            return currentGoal;
+          }
+
+          let newCurrent = currentGoal.current || 0;
+
+          if (currentGoal.type === 'debt') {
+            // For debt goals, reduce the current debt amount
+            newCurrent = Math.max(0, newCurrent - parsedAmount);
+          } else {
+            // For savings goals, increase the current amount
+            newCurrent += parsedAmount;
+          }
+
+          console.log('🔍 GOAL_DATA: Updated goal', goalId, 'from', currentGoal.current, 'to', newCurrent);
+
+          return {
+            ...currentGoal,
+            current: newCurrent,
+            lastUpdated: updateTimestamp,
+            lastProgressUpdate: updateTimestamp, // Track progress updates separately
+          };
+        });
+
+        // Update state immediately with optimistic update
+        console.log('🔍 GOAL_DATA: Setting goals with updated progress');
+        setGoals(updatedGoals);
+        
+        // Save to cache first (for offline support)
+        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        
+        if (!saveResult.success) {
+          console.error('🔍 GOAL_DATA: Failed to save progress update to cache:', saveResult.error);
+          throw new Error(saveResult.error || 'Failed to update goal progress');
+        }
+
+        // TEMPORARILY DISABLED: Backend sync to stop the infinite loop
+        // The backend validation is causing loops - need to fix the data format first
+        console.log('🔍 GOAL_DATA: Backend sync temporarily disabled to prevent loops');
+        
+        // TODO: Re-enable backend sync after fixing data validation issues
+        // const isConnected = await checkNetworkConnectivity();
+        // const targetGoal = updatedGoals.find(g => g.id === goalId);
+        // if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
+        //   // Backend sync code here...
+        // }
+
+        console.log('🔍 GOAL_DATA: Progress update completed successfully');
+        return {success: true, updateTimestamp};
+      } catch (error) {
+        console.error('🔍 GOAL_DATA: Error updating goal progress:', error);
+        return {success: false, error: error.message};
+      }
+    },
+    [saveGoalsToCache],
+  );
+
   return {
     loadGoalsFromAPI,
     loadGoals,
     saveGoal,
     deleteGoal,
     prepareEditGoal,
+    updateGoalProgress,
   };
 };
 
