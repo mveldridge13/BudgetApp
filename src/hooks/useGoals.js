@@ -160,7 +160,13 @@ const useGoals = () => {
       console.log(
         '🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress',
       );
-      return goalDataModule.updateGoalProgress(goalId, amount, paymentSource, goals, setGoals);
+      return goalDataModule.updateGoalProgress(
+        goalId,
+        amount,
+        paymentSource,
+        goals,
+        setGoals,
+      );
     },
     [goalDataModule, goals],
   );
@@ -319,8 +325,26 @@ const useGoals = () => {
                     title: g.title,
                     category: g.category,
                     categoryLower: g.category?.toLowerCase(),
+                    type: g.type,
                   })),
               );
+
+              console.log('🔍 DEBUG: Transaction category vs goal categories:');
+              console.log(
+                'Transaction category (normalized):',
+                transactionCategoryName,
+              );
+              updatedGoals
+                .filter(g => g.type === 'spending')
+                .forEach(goal => {
+                  console.log(
+                    `Goal "${goal.title}": category="${
+                      goal.category
+                    }" lowercase="${goal.category?.toLowerCase()}" matches=${
+                      goal.category?.toLowerCase() === transactionCategoryName
+                    }`,
+                  );
+                });
 
               const relevantGoals = updatedGoals.filter(
                 goal =>
@@ -362,7 +386,101 @@ const useGoals = () => {
           }
         }
 
-        // STEP 3: Save the updated goals
+        // STEP 3: Sync updated spending goals to backend (moved outside new transaction block)
+        console.log(
+          '🔍 UPDATE_SPENDING_GOALS: Checking for goals that need backend sync',
+        );
+
+        // Find all spending goals that were modified (either from addition or removal)
+        const modifiedGoals = [];
+
+        // Check goals that were affected by original transaction removal
+        if (
+          originalTransaction &&
+          (originalTransaction.categoryId || originalTransaction.category)
+        ) {
+          const originalCategoryIdToSearch =
+            originalTransaction.categoryId ||
+            (typeof originalTransaction.category === 'string'
+              ? originalTransaction.category
+              : null);
+
+          const originalCategory = categories.find(
+            cat => cat.id === originalCategoryIdToSearch,
+          );
+          const originalCategoryName = originalCategory?.name?.toLowerCase();
+
+          if (originalCategoryName) {
+            const affectedGoals = updatedGoals.filter(
+              goal =>
+                goal.type === 'spending' &&
+                goal.category?.toLowerCase() === originalCategoryName &&
+                !goal.id.startsWith('local_'),
+            );
+            modifiedGoals.push(...affectedGoals);
+          }
+        }
+
+        // Check goals that were affected by new transaction addition
+        if (
+          newTransaction &&
+          (newTransaction.categoryId || newTransaction.category)
+        ) {
+          const newCategoryIdToSearch =
+            newTransaction.categoryId ||
+            (typeof newTransaction.category === 'string'
+              ? newTransaction.category
+              : null);
+
+          const newCategory = categories.find(
+            cat => cat.id === newCategoryIdToSearch,
+          );
+          const newCategoryName = newCategory?.name?.toLowerCase();
+
+          if (newCategoryName) {
+            const affectedGoals = updatedGoals.filter(
+              goal =>
+                goal.type === 'spending' &&
+                goal.category?.toLowerCase() === newCategoryName &&
+                !goal.id.startsWith('local_'),
+            );
+            modifiedGoals.push(...affectedGoals);
+          }
+        }
+
+        // Remove duplicates
+        const uniqueModifiedGoals = modifiedGoals.filter(
+          (goal, index, self) =>
+            index === self.findIndex(g => g.id === goal.id),
+        );
+
+        console.log(
+          `🔍 UPDATE_SPENDING_GOALS: Found ${uniqueModifiedGoals.length} goals needing backend sync`,
+        );
+
+        // Sync all modified goals to backend
+        for (const modifiedGoal of uniqueModifiedGoals) {
+          try {
+            const backendGoalData = {
+              currentAmount: modifiedGoal.current,
+            };
+
+            console.log(
+              `🔍 UPDATE_SPENDING_GOALS: Syncing goal ${modifiedGoal.id} with amount ${modifiedGoal.current}`,
+            );
+            await TrendAPIService.updateGoal(modifiedGoal.id, backendGoalData);
+            console.log(
+              `🔍 UPDATE_SPENDING_GOALS: Successfully synced goal ${modifiedGoal.id}`,
+            );
+          } catch (syncError) {
+            console.error(
+              `🔍 UPDATE_SPENDING_GOALS: Failed to sync goal ${modifiedGoal.id}:`,
+              syncError,
+            );
+          }
+        }
+
+        // STEP 4: Save the updated goals
         const saveResult = await saveGoalsToCache(updatedGoals, false);
 
         if (saveResult.success) {

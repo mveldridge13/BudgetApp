@@ -166,7 +166,7 @@ const GoalCard = ({
   const handleCustomAmountSubmit = () => {
     console.log('🔍 BUTTON PRESSED: Custom amount submit');
     const amount = parseFloat(customAmount);
-    
+
     if (isNaN(amount) || amount <= 0) {
       Alert.alert(
         'Invalid Amount',
@@ -340,7 +340,7 @@ const GoalCard = ({
             value={localShowOnBalanceCard}
             onValueChange={(newValue) => {
               setLocalShowOnBalanceCard(newValue);
-              
+
               // Call parent handler to persist the change
               if (onToggleBalanceDisplay) {
                 onToggleBalanceDisplay(safeGoal.id);
@@ -378,10 +378,10 @@ const GoalCard = ({
           <Text style={styles.customAmountTitle}>
             {isDebtGoal ? 'Enter Payment Amount' : 'Enter Contribution Amount'}
           </Text>
-          
+
           <View style={styles.sourceSelectionContainer}>
             <Text style={styles.sourceSelectionLabel}>Payment Source</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.sourceSelectionButton}
               onPress={() => {
                 if (Platform.OS === 'ios') {
@@ -414,7 +414,7 @@ const GoalCard = ({
               <Icon name="chevron-down" size={16} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.customAmountInputRow}>
             <TextInput
               style={styles.customAmountInput}
