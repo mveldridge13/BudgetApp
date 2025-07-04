@@ -361,9 +361,9 @@ const useGoalData = (checkNetworkConnectivity) => {
 
   // Update goal progress
   const updateGoalProgress = useCallback(
-    async (goalId, amount, goals, setGoals) => {
+    async (goalId, amount, paymentSource = 'income', goals, setGoals) => {
       try {
-        console.log('🔍 GOAL_DATA: Starting updateGoalProgress for goal:', goalId, 'amount:', amount);
+        console.log('🔍 GOAL_DATA: Starting updateGoalProgress for goal:', goalId, 'amount:', amount, 'source:', paymentSource);
         
         if (!goalId) {
           throw new Error('Goal ID is required');
@@ -429,6 +429,44 @@ const useGoalData = (checkNetworkConnectivity) => {
         // if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
         //   // Backend sync code here...
         // }
+
+        // Track income-based payments for balance calculation
+        if (paymentSource === 'income') {
+          console.log('🔍 GOAL_DATA: Tracking income-based payment of', parsedAmount, 'for goal', goalId);
+          
+          // Create a new array with income payment tracking
+          const goalsWithIncomeTracking = updatedGoals.map(goal => {
+            if (goal.id === goalId) {
+              const currentIncomePayments = goal.totalIncomePayments || 0;
+              return {
+                ...goal,
+                totalIncomePayments: currentIncomePayments + parsedAmount,
+                lastIncomePayment: {
+                  amount: parsedAmount,
+                  date: updateTimestamp
+                }
+              };
+            }
+            return goal;
+          });
+          
+          // Update state with the income payment tracking
+          setGoals(goalsWithIncomeTracking);
+          
+          // Save updated goals with income payment tracking
+          await saveGoalsToCache(goalsWithIncomeTracking, false);
+          
+          // Trigger balance card update event
+          if (typeof window !== 'undefined' && window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('goalIncomePaymentMade', {
+              detail: { 
+                goalId: goalId,
+                amount: parsedAmount,
+                totalIncomePayments: (goalsWithIncomeTracking.find(g => g.id === goalId)?.totalIncomePayments || 0)
+              }
+            }));
+          }
+        }
 
         console.log('🔍 GOAL_DATA: Progress update completed successfully');
         return {success: true, updateTimestamp};

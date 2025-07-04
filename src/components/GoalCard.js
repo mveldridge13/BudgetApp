@@ -8,6 +8,8 @@ import {
   Alert,
   Switch,
   TextInput,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
@@ -26,6 +28,7 @@ const GoalCard = ({
 }) => {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
+  const [paymentSource, setPaymentSource] = useState('income');
   const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(() => goal?.showOnBalanceCard ?? false);
 
   // FIXED: Add safe formatCurrency function
@@ -176,14 +179,15 @@ const GoalCard = ({
       isDebtGoal ? 'Make Payment' : 'Add Contribution',
       `${isDebtGoal ? 'Pay' : 'Add'} ${safeCurrency(amount)} ${
         isDebtGoal ? 'toward' : 'to'
-      } ${safeGoal.title}?`,
+      } ${safeGoal.title} from ${paymentSource === 'income' ? 'Income' : paymentSource}?`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
           text: isDebtGoal ? 'Pay' : 'Add',
           onPress: () => {
-            onUpdateProgress && onUpdateProgress(safeGoal.id, amount);
+            onUpdateProgress && onUpdateProgress(safeGoal.id, amount, paymentSource);
             setCustomAmount('');
+            setPaymentSource('income');
             setShowProgressUpdate(false);
           },
         },
@@ -194,6 +198,7 @@ const GoalCard = ({
   // NEW: Cancel custom amount input
   const handleCancelCustomAmount = () => {
     setCustomAmount('');
+    setPaymentSource('income');
     setShowProgressUpdate(false);
   };
 
@@ -373,6 +378,43 @@ const GoalCard = ({
           <Text style={styles.customAmountTitle}>
             {isDebtGoal ? 'Enter Payment Amount' : 'Enter Contribution Amount'}
           </Text>
+          
+          <View style={styles.sourceSelectionContainer}>
+            <Text style={styles.sourceSelectionLabel}>Payment Source</Text>
+            <TouchableOpacity 
+              style={styles.sourceSelectionButton}
+              onPress={() => {
+                if (Platform.OS === 'ios') {
+                  ActionSheetIOS.showActionSheetWithOptions(
+                    {
+                      options: ['Cancel', 'Income'],
+                      cancelButtonIndex: 0,
+                    },
+                    (buttonIndex) => {
+                      if (buttonIndex === 1) {
+                        setPaymentSource('income');
+                      }
+                    }
+                  );
+                } else {
+                  Alert.alert(
+                    'Select Payment Source',
+                    '',
+                    [
+                      {text: 'Cancel', style: 'cancel'},
+                      {text: 'Income', onPress: () => setPaymentSource('income')},
+                    ]
+                  );
+                }
+              }}
+              activeOpacity={0.7}>
+              <Text style={styles.sourceSelectionText}>
+                {paymentSource === 'income' ? 'Income' : 'Select Source'}
+              </Text>
+              <Icon name="chevron-down" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          
           <View style={styles.customAmountInputRow}>
             <TextInput
               style={styles.customAmountInput}
@@ -716,6 +758,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sourceSelectionContainer: {
+    marginBottom: 16,
+  },
+  sourceSelectionLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  sourceSelectionButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 50,
+  },
+  sourceSelectionText: {
+    fontSize: 16,
+    fontFamily: 'System',
+    color: colors.text,
+    flex: 1,
   },
   actionButtonsContainer: {
     flexDirection: 'row',

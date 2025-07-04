@@ -93,10 +93,16 @@ const BalanceCard = ({
     0,
   );
 
+  // Calculate total income-based payments to all goals
+  const totalIncomePayments = goals.reduce(
+    (sum, goal) => sum + (goal.totalIncomePayments || 0),
+    0,
+  );
+
   // Calculate values
   const incomeAmount = incomeData?.income || 0;
   const leftToSpend = incomeAmount - totalExpenses;
-  const adjustedLeftToSpend = leftToSpend - totalGoalContributions;
+  const adjustedLeftToSpend = leftToSpend - totalGoalContributions - totalIncomePayments;
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
 
@@ -265,9 +271,9 @@ const BalanceCard = ({
                 isOverBudget && styles.overBudgetText,
                 isCloseToLimit && styles.warningText,
               ]}>
-              {loading ? '$0.00' : formatCurrency(leftToSpend)}
+              {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
             </Text>
-            {totalGoalContributions > 0 && (
+            {(totalGoalContributions > 0 || totalIncomePayments > 0) && (
               <View style={styles.adjustedAmountContainer}>
                 <Text style={styles.adjustedLabel}>After goals:</Text>
                 <Text style={styles.adjustedAmount}>

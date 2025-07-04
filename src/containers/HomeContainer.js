@@ -919,6 +919,28 @@ const HomeContainer = ({navigation}) => {
     return () => subscription?.remove?.();
   }, [lastActiveDate, selectedDate]);
 
+  // Listen for goal income payments to update balance calculations
+  useEffect(() => {
+    const handleGoalIncomePayment = () => {
+      console.log('🔍 HOME_CONTAINER: Goal income payment made, updating balance calculations');
+      // Force a recalculation of total expenses by updating state
+      // This will trigger the useEffect that recalculates totalExpenses
+      setTotalExpenses(prevTotal => {
+        const newTotal = calculateTotalExpenses();
+        console.log('🔍 HOME_CONTAINER: Updated total expenses from', prevTotal, 'to', newTotal);
+        return newTotal;
+      });
+    };
+
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
+
+      return () => {
+        window.removeEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
+      };
+    }
+  }, [calculateTotalExpenses]);
+
   // ==============================================
   // RENDER
   // ==============================================
