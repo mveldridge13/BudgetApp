@@ -224,7 +224,10 @@ const GoalsScreen = () => {
             await loadGoals(true);
             console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
           } catch (reloadError) {
-            console.error('🔍 GOALS_SCREEN: Failed to reload goals:', reloadError);
+            console.error(
+              '🔍 GOALS_SCREEN: Failed to reload goals:',
+              reloadError,
+            );
           }
           return {success: true, goal: result.goal};
         } else {
@@ -328,21 +331,76 @@ const GoalsScreen = () => {
     [activeGoals],
   );
 
-  // Render goal lists directly without memoization to ensure updates
-  const renderedActiveGoals = activeGoals.map(goal => (
-    <GoalCard
-      key={goal.id}
-      goal={goal}
-      onEdit={handleEditGoal}
-      onDelete={handleDeleteGoal}
-      onToggleBalanceDisplay={handleToggleBalanceDisplay}
-      onUpdateProgress={handleUpdateProgress}
-      onComplete={handleCompleteGoal}
-      getGoalProgress={getGoalProgress}
-      isOverdue={isGoalOverdue(goal)}
-      formatCurrency={formatCurrency}
-    />
-  ));
+  // Group goals by type for organized display
+  const groupedActiveGoals = React.useMemo(() => {
+    const grouped = {
+      spending: [],
+      debt: [],
+      savings: [],
+    };
+
+    activeGoals.forEach(goal => {
+      if (goal.type === 'spending') {
+        grouped.spending.push(goal);
+      } else if (goal.type === 'debt') {
+        grouped.debt.push(goal);
+      } else if (goal.type === 'savings') {
+        grouped.savings.push(goal);
+      }
+    });
+
+    return grouped;
+  }, [activeGoals]);
+
+  // Render goal cards for a specific type
+  const renderGoalsByType = (typeGoals, type) => {
+    if (typeGoals.length === 0) {
+      return null;
+    }
+
+    const typeLabels = {
+      spending: 'Spending Budgets',
+      debt: 'Debt Payments',
+      savings: 'Savings Goals',
+    };
+
+    const typeIcons = {
+      spending: 'shopping-cart',
+      debt: 'credit-card',
+      savings: 'dollar-sign',
+    };
+
+    return (
+      <View style={styles.goalTypeSection}>
+        <View style={styles.sectionHeader}>
+          <Icon
+            name={typeIcons[type]}
+            size={16}
+            color={colors.primary}
+            style={styles.sectionIcon}
+          />
+          <Text style={styles.sectionTypeTitle}>{typeLabels[type]}</Text>
+          <View style={styles.goalCount}>
+            <Text style={styles.goalCountText}>{typeGoals.length}</Text>
+          </View>
+        </View>
+        {typeGoals.map(goal => (
+          <GoalCard
+            key={goal.id}
+            goal={goal}
+            onEdit={handleEditGoal}
+            onDelete={handleDeleteGoal}
+            onToggleBalanceDisplay={handleToggleBalanceDisplay}
+            onUpdateProgress={handleUpdateProgress}
+            onComplete={handleCompleteGoal}
+            getGoalProgress={getGoalProgress}
+            isOverdue={isGoalOverdue(goal)}
+            formatCurrency={formatCurrency}
+          />
+        ))}
+      </View>
+    );
+  };
 
   const renderedCompletedGoals = React.useMemo(
     () =>
@@ -439,11 +497,12 @@ const GoalsScreen = () => {
         }>
         {activeTab === 'active' && (
           <>
-            {/* Active Goals */}
+            {/* Active Goals - Grouped by Type */}
             {activeGoals.length > 0 ? (
               <View style={styles.goalsSection}>
-                <Text style={styles.sectionTitle}>Active Goals</Text>
-                {renderedActiveGoals}
+                {renderGoalsByType(groupedActiveGoals.spending, 'spending')}
+                {renderGoalsByType(groupedActiveGoals.debt, 'debt')}
+                {renderGoalsByType(groupedActiveGoals.savings, 'savings')}
               </View>
             ) : (
               <View style={styles.emptyState}>
@@ -644,6 +703,40 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  goalTypeSection: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  sectionIcon: {
+    marginRight: 8,
+  },
+  sectionTypeTitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.text,
+    flex: 1,
+  },
+  goalCount: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalCountText: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.primary,
   },
   addGoalButton: {
     backgroundColor: colors.surface,
