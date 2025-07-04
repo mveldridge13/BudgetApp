@@ -352,40 +352,10 @@ const useGoals = () => {
                   return goal;
                 });
               } else {
-                // Auto-create spending goal if none exists for this category
+                // Skip auto-creation - goals are only manually created
                 console.log(
-                  '🔍 UPDATE_SPENDING_GOALS: No spending goal found for category, auto-creating:',
+                  '🔍 UPDATE_SPENDING_GOALS: No spending goal found for category, skipping auto-creation:',
                   transactionCategoryName,
-                );
-
-                const categoryDisplayName = transactionCategory?.name || 'Other';
-                const newSpendingGoal = {
-                  id: `local_spending_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-                  title: `${categoryDisplayName} Budget`,
-                  type: 'spending',
-                  target: 1000, // Default spending limit
-                  current: newTransactionAmount,
-                  category: categoryDisplayName,
-                  priority: 'medium',
-                  isActive: true,
-                  createdAt: new Date().toISOString(),
-                  lastUpdated: new Date().toISOString(),
-                  showOnBalanceCard: false,
-                  autoContribute: 0,
-                  description: `Auto-created spending budget for ${categoryDisplayName}`,
-                  currency: 'AUD',
-                };
-
-                updatedGoals.push(newSpendingGoal);
-                console.log(
-                  '🔍 UPDATE_SPENDING_GOALS: Created new spending goal:',
-                  {
-                    id: newSpendingGoal.id,
-                    title: newSpendingGoal.title,
-                    category: newSpendingGoal.category,
-                    target: newSpendingGoal.target,
-                    current: newSpendingGoal.current,
-                  },
                 );
               }
             }
