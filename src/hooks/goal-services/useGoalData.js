@@ -40,6 +40,14 @@ const useGoalData = (checkNetworkConnectivity) => {
     async (goals, setGoals, hasInitiallyLoaded, lastSyncTime, setLoadingWithTimeout, clearLoadingTimeout, setLoading, isLoadingRef, forceLoading = false, forceAPI = false) => {
       // Prevent multiple simultaneous loads
       if (isLoadingRef.current && !forceAPI) {
+        console.log('🔍 LOAD_GOALS: Already loading, skipping...');
+        return {success: true, goals};
+      }
+
+      // Prevent too frequent API calls (debounce with 1 second minimum)
+      const now = Date.now();
+      if (lastSyncTime.current && (now - lastSyncTime.current) < 1000 && !forceAPI) {
+        console.log('🔍 LOAD_GOALS: Too soon since last sync, skipping API call');
         return {success: true, goals};
       }
 
@@ -58,10 +66,14 @@ const useGoalData = (checkNetworkConnectivity) => {
 
         let result;
 
-        // TEMPORARILY DISABLED: API loading to stop loops
-        if (false && isConnected && TrendAPIService.isAuthenticated()) {
+        // Re-enabled API loading with proper safeguards
+        console.log('🔍 LOAD_GOALS: Network status:', { isConnected, authenticated: TrendAPIService.isAuthenticated() });
+        
+        if (isConnected && TrendAPIService.isAuthenticated()) {
+          console.log('🔍 LOAD_GOALS: Loading goals from backend API...');
           // Try to load from API first
           result = await loadGoalsFromAPI();
+          console.log('🔍 LOAD_GOALS: API result:', result);
 
           if (result.success) {
             // Merge with cached showOnBalanceCard preferences
@@ -179,8 +191,8 @@ const useGoalData = (checkNetworkConnectivity) => {
         console.log('🔍 SAVE_GOAL: Network status:', { isConnected, isEdit });
         let result;
 
-        // TEMPORARILY DISABLED: API calls to prevent hanging
-        if (false && isConnected && TrendAPIService.isAuthenticated()) {
+        // Re-enable API calls for backend goal creation
+        if (isConnected && TrendAPIService.isAuthenticated()) {
           // Try API first
           try {
             console.log('🔍 SAVE_GOAL: Transforming to backend format...');
@@ -188,12 +200,11 @@ const useGoalData = (checkNetworkConnectivity) => {
             console.log('🔍 SAVE_GOAL: Backend goal data:', backendGoalData);
 
             if (isEdit) {
-              console.log('🔍 TEMPORARILY DISABLED: TrendAPIService.updateGoal for editing');
-              // result = await TrendAPIService.updateGoal(
-              //   editingGoal.id,
-              //   backendGoalData,
-              // );
-              result = null; // Simulate API failure to fall back to local
+              console.log('🔍 SAVE_GOAL: Calling TrendAPIService.updateGoal for editing');
+              result = await TrendAPIService.updateGoal(
+                editingGoal.id,
+                backendGoalData,
+              );
             } else {
               console.log('🔍 SAVE_GOAL: Calling TrendAPIService.createGoal with data:', backendGoalData);
               result = await TrendAPIService.createGoal(backendGoalData);
@@ -419,16 +430,21 @@ const useGoalData = (checkNetworkConnectivity) => {
           throw new Error(saveResult.error || 'Failed to update goal progress');
         }
 
-        // TEMPORARILY DISABLED: Backend sync to stop the infinite loop
-        // The backend validation is causing loops - need to fix the data format first
-        console.log('🔍 GOAL_DATA: Backend sync temporarily disabled to prevent loops');
+        // Re-enable backend sync with proper data validation
+        const isConnected = await checkNetworkConnectivity();
+        const targetGoal = updatedGoals.find(g => g.id === goalId);
         
-        // TODO: Re-enable backend sync after fixing data validation issues
-        // const isConnected = await checkNetworkConnectivity();
-        // const targetGoal = updatedGoals.find(g => g.id === goalId);
-        // if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
-        //   // Backend sync code here...
-        // }
+        if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
+          try {
+            console.log('🔍 GOAL_DATA: Syncing goal update to backend');
+            const backendGoalData = transformFrontendGoal(targetGoal);
+            await TrendAPIService.updateGoal(goalId, backendGoalData);
+            console.log('🔍 GOAL_DATA: Successfully synced goal to backend');
+          } catch (backendSyncError) {
+            console.error('🔍 GOAL_DATA: Failed to sync goal to backend:', backendSyncError);
+            // Don't fail the goal update if backend sync fails
+          }
+        }
 
         // Create backend goal contribution if payment source is income and goal is on backend
         if (paymentSource === 'income') {
@@ -438,9 +454,10 @@ const useGoalData = (checkNetworkConnectivity) => {
           if (!goalId.startsWith('local_')) {
             try {
               const contributionData = {
-                amount: parsedAmount,
-                source: 'income',
+                amount: parsedAmount.toFixed(2), // Backend expects decimal string
+                currency: 'AUD',
                 description: `Income payment to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`,
+                type: 'MANUAL', // Use MANUAL type for manual income payments
                 date: updateTimestamp
               };
 

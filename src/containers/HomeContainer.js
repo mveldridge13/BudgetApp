@@ -937,7 +937,7 @@ const HomeContainer = ({navigation}) => {
         if (!goal.id.startsWith('local_')) { // Only fetch for backend goals
           try {
             const contributions = await TrendAPIService.getGoalContributions(goal.id, {
-              source: 'income', // Filter for income contributions only
+              type: 'MANUAL', // Filter for manual contributions (income payments)
             });
 
             if (contributions && Array.isArray(contributions)) {

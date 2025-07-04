@@ -619,7 +619,7 @@ class TrendAPIService {
   }
 
   async addGoalContribution(goalId, contributionData) {
-    const response = await this.makeRequest(`/goals/${goalId}/contribute`, {
+    const response = await this.makeRequest(`/goals/${goalId}/contributions`, {
       method: 'POST',
       body: contributionData,
     });
