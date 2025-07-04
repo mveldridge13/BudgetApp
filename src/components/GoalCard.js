@@ -158,25 +158,6 @@ const GoalCard = ({
     ]);
   };
 
-  const handleQuickContribution = () => {
-    const amount = safeGoal.autoContribute || 50;
-    
-    Alert.alert(
-      isDebtGoal ? 'Make Payment' : 'Add Contribution',
-      `${isDebtGoal ? 'Pay' : 'Add'} ${safeCurrency(amount)} ${
-        isDebtGoal ? 'toward' : 'to'
-      } ${safeGoal.title}?`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: isDebtGoal ? 'Pay' : 'Add',
-          onPress: () => {
-            onUpdateProgress && onUpdateProgress(safeGoal.id, amount);
-          },
-        },
-      ],
-    );
-  };
 
   // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
@@ -426,37 +407,21 @@ const GoalCard = ({
       {!isCompleted && !showProgressUpdate && (
         <View style={styles.actionButtonsContainer}>
           {safeGoal.type === 'savings' && (
-            <>
-              <TouchableOpacity
-                style={[styles.primaryButton, {backgroundColor: goalColor}]}
-                onPress={handleQuickContribution}
-                activeOpacity={0.8}>
-                <Text style={styles.primaryButtonText}>Add Money</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setShowProgressUpdate(true)}
-                activeOpacity={0.8}>
-                <Text style={styles.secondaryButtonText}>Custom Amount</Text>
-              </TouchableOpacity>
-            </>
+            <TouchableOpacity
+              style={[styles.primaryButton, {backgroundColor: goalColor}]}
+              onPress={() => setShowProgressUpdate(true)}
+              activeOpacity={0.8}>
+              <Text style={styles.primaryButtonText}>Add Money</Text>
+            </TouchableOpacity>
           )}
 
           {safeGoal.type === 'debt' && (
-            <>
-              <TouchableOpacity
-                style={[styles.primaryButton, {backgroundColor: goalColor}]}
-                onPress={handleQuickContribution}
-                activeOpacity={0.8}>
-                <Text style={styles.primaryButtonText}>Make Payment</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setShowProgressUpdate(true)}
-                activeOpacity={0.8}>
-                <Text style={styles.secondaryButtonText}>Custom Payment</Text>
-              </TouchableOpacity>
-            </>
+            <TouchableOpacity
+              style={[styles.primaryButton, {backgroundColor: goalColor}]}
+              onPress={() => setShowProgressUpdate(true)}
+              activeOpacity={0.8}>
+              <Text style={styles.primaryButtonText}>Make Payment</Text>
+            </TouchableOpacity>
           )}
 
           {/* UPDATED: Improved spending budget alert */}
