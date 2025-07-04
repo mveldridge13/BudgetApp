@@ -9,6 +9,7 @@ const BalanceCard = ({
   incomeData,
   loading,
   totalExpenses,
+  totalIncomePayments = 0,
   onEditIncome,
   onCalendarPress,
   selectedDate,
@@ -93,16 +94,22 @@ const BalanceCard = ({
     0,
   );
 
-  // Calculate total income-based payments to all goals
-  const totalIncomePayments = goals.reduce(
-    (sum, goal) => sum + (goal.totalIncomePayments || 0),
+  // Calculate total local income payments for goals not synced to backend
+  const localIncomePayments = goals.reduce(
+    (sum, goal) => {
+      // Only count local goals' income payments (backend payments are in totalIncomePayments prop)
+      if (goal.id.startsWith('local_')) {
+        return sum + (goal.totalIncomePayments || 0);
+      }
+      return sum;
+    },
     0,
   );
 
   // Calculate values
   const incomeAmount = incomeData?.income || 0;
   const leftToSpend = incomeAmount - totalExpenses;
-  const adjustedLeftToSpend = leftToSpend - totalGoalContributions - totalIncomePayments;
+  const adjustedLeftToSpend = leftToSpend - totalGoalContributions - totalIncomePayments - localIncomePayments;
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
 

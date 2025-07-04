@@ -919,17 +919,54 @@ const HomeContainer = ({navigation}) => {
     return () => subscription?.remove?.();
   }, [lastActiveDate, selectedDate]);
 
-  // Listen for goal income payments to update balance calculations
+  // State for total income payments from backend
+  const [totalIncomePayments, setTotalIncomePayments] = useState(0);
+
+  // Load total income payments from backend
+  const loadTotalIncomePayments = useCallback(async () => {
+    try {
+      if (!AuthService.isAuthenticated() || goals.length === 0) {
+        return;
+      }
+
+      console.log('🔍 HOME_CONTAINER: Loading income payments from backend');
+      let totalPayments = 0;
+
+      // Get contributions for all goals and sum up income payments
+      for (const goal of goals) {
+        if (!goal.id.startsWith('local_')) { // Only fetch for backend goals
+          try {
+            const contributions = await TrendAPIService.getGoalContributions(goal.id, {
+              source: 'income', // Filter for income contributions only
+            });
+
+            if (contributions && Array.isArray(contributions)) {
+              const incomeTotal = contributions.reduce((sum, contrib) => sum + (contrib.amount || 0), 0);
+              totalPayments += incomeTotal;
+            }
+          } catch (error) {
+            console.warn('🔍 HOME_CONTAINER: Failed to load contributions for goal', goal.id, error);
+          }
+        }
+      }
+
+      console.log('🔍 HOME_CONTAINER: Total income payments from backend:', totalPayments);
+      setTotalIncomePayments(totalPayments);
+    } catch (error) {
+      console.error('🔍 HOME_CONTAINER: Error loading income payments:', error);
+    }
+  }, [goals]);
+
+  // Load income payments when goals change
+  useEffect(() => {
+    loadTotalIncomePayments();
+  }, [loadTotalIncomePayments]);
+
+  // Listen for goal income payments to reload income payment totals
   useEffect(() => {
     const handleGoalIncomePayment = () => {
-      console.log('🔍 HOME_CONTAINER: Goal income payment made, updating balance calculations');
-      // Force a recalculation of total expenses by updating state
-      // This will trigger the useEffect that recalculates totalExpenses
-      setTotalExpenses(prevTotal => {
-        const newTotal = calculateTotalExpenses();
-        console.log('🔍 HOME_CONTAINER: Updated total expenses from', prevTotal, 'to', newTotal);
-        return newTotal;
-      });
+      console.log('🔍 HOME_CONTAINER: Goal income payment made, reloading income payments');
+      loadTotalIncomePayments();
     };
 
     if (typeof window !== 'undefined' && window.addEventListener) {
@@ -939,7 +976,7 @@ const HomeContainer = ({navigation}) => {
         window.removeEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
       };
     }
-  }, [calculateTotalExpenses]);
+  }, [loadTotalIncomePayments]);
 
   // ==============================================
   // RENDER
@@ -955,6 +992,7 @@ const HomeContainer = ({navigation}) => {
       loading={loading || onboarding.loading}
       selectedDate={selectedDate}
       totalExpenses={totalExpenses}
+      totalIncomePayments={totalIncomePayments}
       onDateChange={setSelectedDate}
       onSaveTransaction={handleSaveTransaction}
       onDeleteTransaction={handleDeleteTransaction}

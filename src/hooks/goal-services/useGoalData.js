@@ -430,39 +430,55 @@ const useGoalData = (checkNetworkConnectivity) => {
         //   // Backend sync code here...
         // }
 
-        // Track income-based payments for balance calculation
+        // Create backend goal contribution if payment source is income and goal is on backend
         if (paymentSource === 'income') {
-          console.log('🔍 GOAL_DATA: Tracking income-based payment of', parsedAmount, 'for goal', goalId);
+          console.log('🔍 GOAL_DATA: Processing income payment of', parsedAmount, 'for goal', goalId);
           
-          // Create a new array with income payment tracking
-          const goalsWithIncomeTracking = updatedGoals.map(goal => {
-            if (goal.id === goalId) {
-              const currentIncomePayments = goal.totalIncomePayments || 0;
-              return {
-                ...goal,
-                totalIncomePayments: currentIncomePayments + parsedAmount,
+          // Only create backend contribution for backend goals (not local goals)
+          if (!goalId.startsWith('local_')) {
+            try {
+              const contributionData = {
+                amount: parsedAmount,
+                source: 'income',
+                description: `Income payment to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`,
+                date: updateTimestamp
+              };
+
+              console.log('🔍 GOAL_DATA: Creating backend contribution for backend goal');
+              await TrendAPIService.addGoalContribution(goalId, contributionData);
+              console.log('🔍 GOAL_DATA: Successfully created backend goal contribution');
+              
+            } catch (contributionError) {
+              console.error('🔍 GOAL_DATA: Failed to create goal contribution:', contributionError);
+              // Don't fail the goal update if contribution creation fails
+            }
+          } else {
+            console.log('🔍 GOAL_DATA: Skipping backend contribution for local goal');
+            // For local goals, we'll track income payments locally until they're synced
+            // Update the local goal with income payment tracking
+            const localGoalIndex = updatedGoals.findIndex(g => g.id === goalId);
+            if (localGoalIndex !== -1) {
+              updatedGoals[localGoalIndex] = {
+                ...updatedGoals[localGoalIndex],
+                totalIncomePayments: (updatedGoals[localGoalIndex].totalIncomePayments || 0) + parsedAmount,
                 lastIncomePayment: {
                   amount: parsedAmount,
                   date: updateTimestamp
                 }
               };
+              
+              // Save updated local goals
+              setGoals(updatedGoals);
+              await saveGoalsToCache(updatedGoals, false);
             }
-            return goal;
-          });
+          }
           
-          // Update state with the income payment tracking
-          setGoals(goalsWithIncomeTracking);
-          
-          // Save updated goals with income payment tracking
-          await saveGoalsToCache(goalsWithIncomeTracking, false);
-          
-          // Trigger balance card update event
+          // Trigger balance card update event for both backend and local goals
           if (typeof window !== 'undefined' && window.dispatchEvent) {
             window.dispatchEvent(new CustomEvent('goalIncomePaymentMade', {
               detail: { 
                 goalId: goalId,
-                amount: parsedAmount,
-                totalIncomePayments: (goalsWithIncomeTracking.find(g => g.id === goalId)?.totalIncomePayments || 0)
+                amount: parsedAmount
               }
             }));
           }
