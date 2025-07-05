@@ -411,8 +411,18 @@ const HomeContainer = ({navigation}) => {
           });
 
           if (isEditing) {
-            // For edits, pass both original and new transaction
-            await updateSpendingGoals(savedTransaction, transaction);
+            // For edits, find the original transaction from our current state
+            const originalTransaction = transactions.find(
+              t => t.id === transaction.id,
+            );
+            console.log('🔍 TRANSACTION: Found original transaction:', {
+              originalId: originalTransaction?.id,
+              originalCategory: originalTransaction?.categoryId,
+              originalAmount: originalTransaction?.amount,
+            });
+
+            // Pass the new saved transaction and the original transaction
+            await updateSpendingGoals(savedTransaction, originalTransaction);
           } else {
             // For new transactions, just pass the new transaction
             await updateSpendingGoals(savedTransaction, null);
@@ -934,23 +944,37 @@ const HomeContainer = ({navigation}) => {
 
       // Get contributions for all goals and sum up income payments
       for (const goal of goals) {
-        if (!goal.id.startsWith('local_')) { // Only fetch for backend goals
+        if (!goal.id.startsWith('local_')) {
+          // Only fetch for backend goals
           try {
-            const contributions = await TrendAPIService.getGoalContributions(goal.id, {
-              type: 'MANUAL', // Filter for manual contributions (income payments)
-            });
+            const contributions = await TrendAPIService.getGoalContributions(
+              goal.id,
+              {
+                type: 'MANUAL', // Filter for manual contributions (income payments)
+              },
+            );
 
             if (contributions && Array.isArray(contributions)) {
-              const incomeTotal = contributions.reduce((sum, contrib) => sum + (contrib.amount || 0), 0);
+              const incomeTotal = contributions.reduce(
+                (sum, contrib) => sum + (contrib.amount || 0),
+                0,
+              );
               totalPayments += incomeTotal;
             }
           } catch (error) {
-            console.warn('🔍 HOME_CONTAINER: Failed to load contributions for goal', goal.id, error);
+            console.warn(
+              '🔍 HOME_CONTAINER: Failed to load contributions for goal',
+              goal.id,
+              error,
+            );
           }
         }
       }
 
-      console.log('🔍 HOME_CONTAINER: Total income payments from backend:', totalPayments);
+      console.log(
+        '🔍 HOME_CONTAINER: Total income payments from backend:',
+        totalPayments,
+      );
       setTotalIncomePayments(totalPayments);
     } catch (error) {
       console.error('🔍 HOME_CONTAINER: Error loading income payments:', error);
@@ -965,7 +989,9 @@ const HomeContainer = ({navigation}) => {
   // Listen for goal income payments to reload income payment totals
   useEffect(() => {
     const handleGoalIncomePayment = () => {
-      console.log('🔍 HOME_CONTAINER: Goal income payment made, reloading income payments');
+      console.log(
+        '🔍 HOME_CONTAINER: Goal income payment made, reloading income payments',
+      );
       loadTotalIncomePayments();
     };
 
@@ -973,7 +999,10 @@ const HomeContainer = ({navigation}) => {
       window.addEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
 
       return () => {
-        window.removeEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
+        window.removeEventListener(
+          'goalIncomePaymentMade',
+          handleGoalIncomePayment,
+        );
       };
     }
   }, [loadTotalIncomePayments]);
