@@ -1,5 +1,5 @@
 // hooks/goal-services/useGoalData.js
-import {useCallback} from 'react';
+import {useCallback, useState, useRef} from 'react';
 import TrendAPIService from '../../services/TrendAPIService';
 import useGoalTransformers from './useGoalTransformers';
 import useGoalValidation from './useGoalValidation';
@@ -9,6 +9,10 @@ const useGoalData = (checkNetworkConnectivity) => {
   const {transformBackendGoal, transformFrontendGoal} = useGoalTransformers();
   const {validateGoalData, sanitizeGoalData} = useGoalValidation();
   const {saveGoalsToCache, loadGoalsFromCache} = useGoalCache();
+  
+  // Track payments in progress to prevent duplicates
+  const [processingPayments, setProcessingPayments] = useState(new Set());
+  const lastPaymentTime = useRef({});
 
   // Load goals from backend API
   const loadGoalsFromAPI = useCallback(async () => {
@@ -390,14 +394,49 @@ const useGoalData = (checkNetworkConnectivity) => {
           throw new Error('Goal not found');
         }
 
+        // Prevent duplicate payments for income source
+        if (paymentSource === 'income') {
+          const paymentKey = `${goalId}-${parsedAmount}`;
+          const now = Date.now();
+          const lastPayment = lastPaymentTime.current[paymentKey] || 0;
+          
+          // Prevent payments within 3 seconds of each other for same goal/amount
+          if (now - lastPayment < 3000) {
+            console.log('🔍 GOAL_DATA: Duplicate payment detected, ignoring');
+            throw new Error('Please wait before making another payment');
+          }
+          
+          // Check if payment is already processing
+          if (processingPayments.has(paymentKey)) {
+            console.log('🔍 GOAL_DATA: Payment already in progress');
+            throw new Error('Payment already in progress');
+          }
+          
+          // Mark payment as processing
+          setProcessingPayments(prev => new Set(prev).add(paymentKey));
+          lastPaymentTime.current[paymentKey] = now;
+        }
+
         // Add timestamp to track when this update was made
         const updateTimestamp = new Date().toISOString();
 
+        // For income payments, don't update currentAmount locally - let backend handle it
         const updatedGoals = goals.map(currentGoal => {
           if (currentGoal.id !== goalId) {
             return currentGoal;
           }
 
+          // For income payments, backend addContribution handles the amount update
+          if (paymentSource === 'income') {
+            console.log('🔍 GOAL_DATA: Income payment - letting backend handle amount update for goal', goalId);
+            return {
+              ...currentGoal,
+              lastUpdated: updateTimestamp,
+              lastProgressUpdate: updateTimestamp,
+            };
+          }
+
+          // For non-income payments, update locally
           let newCurrent = currentGoal.current || 0;
 
           if (currentGoal.type === 'debt') {
@@ -430,20 +469,25 @@ const useGoalData = (checkNetworkConnectivity) => {
           throw new Error(saveResult.error || 'Failed to update goal progress');
         }
 
-        // Re-enable backend sync with proper data validation
-        const isConnected = await checkNetworkConnectivity();
-        const targetGoal = updatedGoals.find(g => g.id === goalId);
+        // For income payments, skip goal sync since backend addContribution handles it
+        // For non-income payments, sync the goal update to backend
+        if (paymentSource !== 'income') {
+          const isConnected = await checkNetworkConnectivity();
+          const targetGoal = updatedGoals.find(g => g.id === goalId);
 
-        if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
-          try {
-            console.log('🔍 GOAL_DATA: Syncing goal update to backend');
-            const backendGoalData = transformFrontendGoal(targetGoal);
-            await TrendAPIService.updateGoal(goalId, backendGoalData);
-            console.log('🔍 GOAL_DATA: Successfully synced goal to backend');
-          } catch (backendSyncError) {
-            console.error('🔍 GOAL_DATA: Failed to sync goal to backend:', backendSyncError);
-            // Don't fail the goal update if backend sync fails
+          if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
+            try {
+              console.log('🔍 GOAL_DATA: Syncing goal update to backend');
+              const backendGoalData = transformFrontendGoal(targetGoal);
+              await TrendAPIService.updateGoal(goalId, backendGoalData);
+              console.log('🔍 GOAL_DATA: Successfully synced goal to backend');
+            } catch (backendSyncError) {
+              console.error('🔍 GOAL_DATA: Failed to sync goal to backend:', backendSyncError);
+              // Don't fail the goal update if backend sync fails
+            }
           }
+        } else {
+          console.log('🔍 GOAL_DATA: Skipping goal sync for income payment - backend handles it');
         }
 
         // Create backend goal contribution if payment source is income and goal is on backend
@@ -461,13 +505,14 @@ const useGoalData = (checkNetworkConnectivity) => {
                 date: updateTimestamp,
               };
 
-              console.log('🔍 GOAL_DATA: Creating backend contribution for backend goal');
-              await TrendAPIService.addGoalContribution(goalId, contributionData);
-              console.log('🔍 GOAL_DATA: Successfully created backend goal contribution');
+              console.log('🔍 GOAL_DATA: Creating backend contribution for backend goal', goalId, 'type:', updatedGoals.find(g => g.id === goalId)?.type);
+              const contributionResult = await TrendAPIService.addGoalContribution(goalId, contributionData);
+              console.log('🔍 GOAL_DATA: Successfully created backend goal contribution', contributionResult);
 
             } catch (contributionError) {
               console.error('🔍 GOAL_DATA: Failed to create goal contribution:', contributionError);
-              // Don't fail the goal update if contribution creation fails
+              // Throw error to let the caller handle it properly
+              throw new Error(`Failed to save payment: ${contributionError.message || 'Network error'}`);
             }
           } else {
             console.log('🔍 GOAL_DATA: Skipping backend contribution for local goal');
@@ -508,14 +553,52 @@ const useGoalData = (checkNetworkConnectivity) => {
           }
         }
 
+        // For income payments, reload goals from backend to get updated amounts
+        if (paymentSource === 'income') {
+          console.log('🔍 GOAL_DATA: Reloading goals from backend after income payment');
+          try {
+            // Preserve showOnBalanceCard preferences before reloading
+            const currentPreferences = {};
+            updatedGoals.forEach(goal => {
+              if (goal.showOnBalanceCard) {
+                currentPreferences[goal.id] = true;
+              }
+            });
+            
+            const backendGoals = await loadGoalsFromAPI();
+            if (backendGoals.success) {
+              // Merge preserved preferences back into backend goals
+              const goalsWithPreferences = backendGoals.goals.map(goal => ({
+                ...goal,
+                showOnBalanceCard: currentPreferences[goal.id] || false,
+              }));
+              
+              setGoals(goalsWithPreferences);
+              await saveGoalsToCache(goalsWithPreferences, false);
+            }
+          } catch (reloadError) {
+            console.warn('🔍 GOAL_DATA: Failed to reload goals after income payment:', reloadError);
+          }
+        }
+
         console.log('🔍 GOAL_DATA: Progress update completed successfully');
         return {success: true, updateTimestamp};
       } catch (error) {
         console.error('🔍 GOAL_DATA: Error updating goal progress:', error);
         return {success: false, error: error.message};
+      } finally {
+        // Clean up processing payment state
+        if (paymentSource === 'income') {
+          const paymentKey = `${goalId}-${Number(amount)}`;
+          setProcessingPayments(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(paymentKey);
+            return newSet;
+          });
+        }
       }
     },
-    [saveGoalsToCache, checkNetworkConnectivity, transformFrontendGoal],
+    [saveGoalsToCache, checkNetworkConnectivity, transformFrontendGoal, processingPayments, setProcessingPayments],
   );
 
   return {

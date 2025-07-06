@@ -600,6 +600,8 @@ class TrendAPIService {
       body: cleanGoalData,
     });
 
+    console.log('🔍 UPDATE_GOAL: Backend response:', response);
+
     if (response?.goal) {
       return response.goal;
     } else if (response?.data) {
@@ -619,11 +621,13 @@ class TrendAPIService {
   }
 
   async addGoalContribution(goalId, contributionData) {
+    console.log('🔍 TREND_API: Adding goal contribution for goal', goalId, 'data:', contributionData);
     const response = await this.makeRequest(`/goals/${goalId}/contributions`, {
       method: 'POST',
       body: contributionData,
     });
 
+    console.log('🔍 TREND_API: Goal contribution response:', response);
     if (response?.contribution) {
       return response.contribution;
     } else if (response?.data) {

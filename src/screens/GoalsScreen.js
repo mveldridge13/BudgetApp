@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   AppState,
+  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
@@ -279,6 +280,16 @@ const GoalsScreen = () => {
         console.log('🔍 GOALS_SCREEN: Goal progress updated successfully');
       } catch (error) {
         console.warn('Error updating progress:', error);
+        Alert.alert(
+          'Payment Failed',
+          error.message || 'Unable to save payment. Please check your connection and try again.',
+          [
+            {
+              text: 'OK',
+              style: 'default',
+            },
+          ],
+        );
       }
     },
     [updateGoalProgress],
