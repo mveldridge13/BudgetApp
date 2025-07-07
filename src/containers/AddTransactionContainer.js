@@ -363,31 +363,34 @@ const AddTransactionContainer = ({
     setShowCalendar(false);
   }, []);
 
-  const handleTransactionTypeChange = useCallback(type => {
-    console.log(
-      '🔍 DEBUG: handleTransactionTypeChange called with type:',
-      type,
-    );
-    
-    // Check if current description matches a category name (auto-generated)
-    const descriptionMatchesCategory = categories.some(
-      cat =>
-        cat.name === description.trim() ||
-        (cat.subcategories &&
-          cat.subcategories.some(sub => sub.name === description.trim())),
-    );
-    
-    setSelectedTransactionType(type);
-    // Clear category selection when transaction type changes
-    setSelectedCategory(null);
-    setSelectedSubcategory(null);
-    setCurrentSubcategoryData(null);
-    
-    // Clear description if it was auto-generated (matches a category name)
-    if (descriptionMatchesCategory) {
-      setDescription('');
-    }
-  }, [categories, description]);
+  const handleTransactionTypeChange = useCallback(
+    type => {
+      console.log(
+        '🔍 DEBUG: handleTransactionTypeChange called with type:',
+        type,
+      );
+
+      // Check if current description matches a category name (auto-generated)
+      const descriptionMatchesCategory = categories.some(
+        cat =>
+          cat.name === description.trim() ||
+          (cat.subcategories &&
+            cat.subcategories.some(sub => sub.name === description.trim())),
+      );
+
+      setSelectedTransactionType(type);
+      // Clear category selection when transaction type changes
+      setSelectedCategory(null);
+      setSelectedSubcategory(null);
+      setCurrentSubcategoryData(null);
+
+      // Clear description if it was auto-generated (matches a category name)
+      if (descriptionMatchesCategory) {
+        setDescription('');
+      }
+    },
+    [categories, description],
+  );
 
   // ==============================================
   // AUTO-DESCRIPTION LOGIC
