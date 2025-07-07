@@ -110,21 +110,9 @@ const AddTransactionContainer = ({
           'categories',
         );
       } else if (transactionType === 'INCOME') {
-        // For income, show subcategories as top-level categories
-        const incomeCategory = result.find(
+        result = result.filter(
           category => category.name.toLowerCase() === 'income',
         );
-        if (incomeCategory && incomeCategory.subcategories) {
-          result = incomeCategory.subcategories.map(subcat => ({
-            ...subcat,
-            hasSubcategories: false, // Treat as top-level categories
-            parentId: incomeCategory.id, // Keep reference to income category
-          }));
-        } else {
-          result = result.filter(
-            category => category.name.toLowerCase() === 'income',
-          );
-        }
         console.log(
           '🔍 DEBUG: After INCOME filter, result has',
           result.length,
@@ -144,42 +132,8 @@ const AddTransactionContainer = ({
   // ======
 
   const getCategoryById = useCallback(
-    id => {
-      // First try filtered categories, then fall back to all categories
-      const fromFiltered = categories.find(cat => cat.id === id);
-      if (fromFiltered) {
-        return fromFiltered;
-      }
-
-      // Transform the specific category from allCategories if not found in filtered
-      const fromAll = allCategories.find(cat => cat.id === id && !cat.parentId);
-      if (fromAll) {
-        const subcategories = allCategories
-          .filter(cat => cat.parentId === id)
-          .map(subcat => ({
-            id: subcat.id,
-            name: subcat.name,
-            icon: subcat.icon || 'albums-outline',
-            color: subcat.color || '#4ECDC4',
-            isCustom: !subcat.isSystem,
-            parentId: subcat.parentId,
-          }));
-
-        return {
-          id: fromAll.id,
-          name: fromAll.name,
-          icon: fromAll.icon || 'albums-outline',
-          color: fromAll.color || '#4ECDC4',
-          isCustom: !fromAll.isSystem,
-          parentId: fromAll.parentId,
-          hasSubcategories: subcategories.length > 0,
-          subcategories: subcategories,
-        };
-      }
-
-      return undefined;
-    },
-    [categories, allCategories],
+    id => categories.find(cat => cat.id === id),
+    [categories],
   );
 
   const getRecurrenceById = useCallback(
@@ -414,12 +368,26 @@ const AddTransactionContainer = ({
       '🔍 DEBUG: handleTransactionTypeChange called with type:',
       type,
     );
+    
+    // Check if current description matches a category name (auto-generated)
+    const descriptionMatchesCategory = categories.some(
+      cat =>
+        cat.name === description.trim() ||
+        (cat.subcategories &&
+          cat.subcategories.some(sub => sub.name === description.trim())),
+    );
+    
     setSelectedTransactionType(type);
     // Clear category selection when transaction type changes
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setCurrentSubcategoryData(null);
-  }, []);
+    
+    // Clear description if it was auto-generated (matches a category name)
+    if (descriptionMatchesCategory) {
+      setDescription('');
+    }
+  }, [categories, description]);
 
   // ==============================================
   // AUTO-DESCRIPTION LOGIC
@@ -427,13 +395,25 @@ const AddTransactionContainer = ({
 
   // Effect to auto-update description when category changes
   useEffect(() => {
+    console.log('🟦 AUTO-DESC: Effect triggered', {
+      visible,
+      selectedCategory,
+      categoriesLength: categories.length,
+      description,
+    });
+
     if (!visible || !selectedCategory || categories.length === 0) {
+      console.log('🟦 AUTO-DESC: Early return - missing requirements');
       return;
     }
 
     const newCategoryDisplayName = getCategoryDisplayName(
       selectedCategory,
       selectedSubcategory,
+    );
+    console.log(
+      '🟦 AUTO-DESC: New category display name:',
+      newCategoryDisplayName,
     );
 
     if (isEditMode && editingTransaction) {
@@ -456,12 +436,43 @@ const AddTransactionContainer = ({
               cat.subcategories.some(sub => sub.name === description.trim())),
         );
 
+      console.log(
+        '🟦 AUTO-DESC: Edit mode shouldAutoUpdate:',
+        shouldAutoUpdate,
+      );
       if (shouldAutoUpdate) {
+        console.log(
+          '🟦 AUTO-DESC: Setting description to:',
+          newCategoryDisplayName,
+        );
         setDescription(newCategoryDisplayName);
       }
     } else {
-      // For new transactions, always auto-update if description is empty
-      if (!description.trim()) {
+      // For new transactions, auto-update if description is empty OR matches a category name
+      const descriptionMatchesCategory = categories.some(
+        cat =>
+          cat.name === description.trim() ||
+          (cat.subcategories &&
+            cat.subcategories.some(sub => sub.name === description.trim())),
+      );
+
+      const shouldAutoUpdate =
+        !description.trim() || descriptionMatchesCategory;
+
+      console.log(
+        '🟦 AUTO-DESC: New transaction mode, shouldAutoUpdate?',
+        shouldAutoUpdate,
+        'empty?',
+        !description.trim(),
+        'matchesCategory?',
+        descriptionMatchesCategory,
+      );
+
+      if (shouldAutoUpdate) {
+        console.log(
+          '🟦 AUTO-DESC: Setting description to:',
+          newCategoryDisplayName,
+        );
         setDescription(newCategoryDisplayName);
       }
     }
@@ -504,13 +515,6 @@ const AddTransactionContainer = ({
       );
       console.log('🔍 DEBUG: Setting filtered categories:', filteredCategories);
       setCategories(filteredCategories);
-
-      // Clear selection when switching transaction types
-      if (selectedTransactionType === 'INCOME') {
-        setSelectedCategory(null);
-        setSelectedSubcategory(null);
-        setCurrentSubcategoryData(null);
-      }
     }
   }, [selectedTransactionType, allCategories, transformCategoriesForUI]);
 
