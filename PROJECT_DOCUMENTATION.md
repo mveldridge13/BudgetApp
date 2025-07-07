@@ -28,13 +28,13 @@ The BudgetApp is a React Native personal finance management application that hel
 ### Recent Updates
 
 #### Latest Changes (Git Commits)
-- **HomeContainer Backend Integration**: Moved HomeContainer logic to backend processing
-- **Day/Time Patterns**: Added temporal spending analysis to SpendingVelocity components
-- **Analytics Enhancements**: Improved discretionary spending features with better categorization
-- **Spending Velocity Analysis**: Enhanced velocity calculations and trend analysis
-- **Onboarding Improvements**: Enhanced contextual spotlights and tutorial flows
-- **Category Management**: Improved subcategory handling and discretionary breakdown fixes
-- **Utility Functions**: Enhanced currency, date, and storage helper functions
+- **b02bd1f - Savings goal duplicate issue fixed**: Fixed duplicate savings goal creation issues
+- **0e0e21b - Update spending budget issue fixed**: Resolved spending budget calculation problems
+- **4e04c84 - ✅ Savings Goals - FULLY BACKEND INTEGRATED**: Complete backend integration for savings goals system
+- **6c5fa40 - What's Stored in Backend Database**: Backend database schema updates for goal storage
+- **7bc09e3 - Backend-driven income payment system**: Hybrid approach for goal payments with real-time BalanceCard updates
+- **Goal Service Architecture**: New modular goal service system with specialized hooks
+- **Enhanced Goal Management**: Improved goal tracking with backend synchronization
 
 ## Architecture Overview
 
@@ -113,7 +113,14 @@ BudgetApp/
 │   ├── data/               # Static Data (1 file)
 │   │   └── categories.js
 │   │
-│   ├── hooks/              # Custom React Hooks (3 files)
+│   ├── hooks/              # Custom React Hooks (9 files)
+│   │   ├── goal-services/  # Modular Goal Service Architecture (6 files)
+│   │   │   ├── useGoalCache.js
+│   │   │   ├── useGoalCalculations.js
+│   │   │   ├── useGoalData.js
+│   │   │   ├── useGoalSync.js
+│   │   │   ├── useGoalTransformers.js
+│   │   │   └── useGoalValidation.js
 │   │   ├── useGoals.js
 │   │   ├── useOnboarding.js
 │   │   └── useTransactions.js
@@ -334,7 +341,8 @@ class InsightsService {
 ```javascript
 // Dependencies
 ├── AsyncStorage (offline storage)
-└── TrendAPIService (API operations)
+├── TrendAPIService (API operations)
+└── Goal Service Modules (modular architecture)
 
 // Exported Functions
 ├── loadGoals() - Load user goals
@@ -348,6 +356,70 @@ class InsightsService {
 **Used By:**
 
 - GoalsScreen.js (primary usage)
+
+#### **Goal Service Architecture** - Modular Goal Management
+
+**useGoalCache.js** - Caching and Local Storage Management
+```javascript
+// Dependencies
+├── AsyncStorage (persistent storage)
+└── Goal state management
+
+// Functions
+├── getCachedGoals() - Retrieve cached goal data
+├── setCachedGoals() - Store goals locally
+├── clearGoalCache() - Clear cached data
+└── syncCacheWithAPI() - Synchronize local cache with backend
+```
+
+**useGoalCalculations.js** - Goal Progress and Financial Calculations
+```javascript
+// Functions
+├── calculateGoalProgress() - Calculate completion percentage
+├── calculateProjectedCompletion() - Estimate completion dates
+├── calculateRequiredSavings() - Calculate needed savings rate
+└── calculateGoalImpact() - Assess goal impact on budget
+```
+
+**useGoalData.js** - Backend Goal Data Management
+```javascript
+// Dependencies
+├── TrendAPIService (API operations)
+└── Goal data transformation
+
+// Functions
+├── fetchGoalsFromAPI() - Retrieve goals from backend
+├── saveGoalToAPI() - Persist goal to backend
+├── deleteGoalFromAPI() - Remove goal from backend
+└── syncGoalData() - Synchronize goal data
+```
+
+**useGoalSync.js** - Synchronization and Conflict Resolution
+```javascript
+// Functions
+├── syncGoalWithBackend() - Sync individual goal
+├── resolveConflicts() - Handle sync conflicts
+├── handleOfflineChanges() - Manage offline modifications
+└── batchSync() - Sync multiple goals efficiently
+```
+
+**useGoalTransformers.js** - Data Transformation and Formatting
+```javascript
+// Functions
+├── transformGoalForAPI() - Format goal for backend
+├── transformGoalForUI() - Format goal for display
+├── validateGoalData() - Validate goal structure
+└── normalizeGoalData() - Standardize goal format
+```
+
+**useGoalValidation.js** - Goal Validation and Error Handling
+```javascript
+// Functions
+├── validateGoalAmount() - Validate monetary amounts
+├── validateGoalDate() - Validate target dates
+├── validateGoalType() - Validate goal category
+└── validateGoalForm() - Comprehensive form validation
+```
 
 #### **useOnboarding.js** - Onboarding Flow Hook
 
@@ -1191,10 +1263,13 @@ The spotlight system has been simplified:
 - **RecurrencePickerModal.js** - Recurrence functionality integrated into AddTransactionModal.js
 
 ### Documentation Status
-- **File counts updated** to reflect actual implementation (15 components vs originally documented 19)
+- **File counts updated** to reflect actual implementation (15 components, 9 hooks including goal services)
 - **Architecture patterns** remain consistent with original design
 - **Data flow and interaction patterns** accurately documented
 - **Recent enhancements** added to feature set
+- **Goal Service Architecture** - New modular goal management system documented
+- **Backend Integration** - Updated to reflect full backend integration for savings goals
+- **Recent commits** - Documentation updated with latest 5 commits and file changes
 
 ---
 
