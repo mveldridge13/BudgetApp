@@ -99,6 +99,8 @@ const AddTransactionModal = ({
     }
   }, [visible, slideAnim, modalAnim, fadeAnim]);
 
+  // Removed auto-navigation to subcategory picker for better UX
+
   // ==============================================
   // UI EVENT HANDLERS
   // ==============================================

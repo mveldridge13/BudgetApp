@@ -34,6 +34,7 @@ const AddTransactionContainer = ({
     useState('EXPENSE');
 
   // Categories data
+  const [allCategories, setAllCategories] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorState, setErrorState] = useState(null);
@@ -49,55 +50,136 @@ const AddTransactionContainer = ({
   // DATA TRANSFORMATION
   // ==============================================
 
-  const transformCategoriesForUI = useCallback(backendCategories => {
-    if (!Array.isArray(backendCategories)) {
-      return [];
-    }
-
-    // Separate main categories and subcategories
-    const mainCategories = backendCategories.filter(cat => !cat.parentId);
-    const subcategories = backendCategories.filter(cat => cat.parentId);
-
-    const subcategoriesMap = subcategories.reduce((map, subcat) => {
-      if (!map[subcat.parentId]) {
-        map[subcat.parentId] = [];
+  const transformCategoriesForUI = useCallback(
+    (backendCategories, transactionType) => {
+      if (!Array.isArray(backendCategories)) {
+        return [];
       }
-      map[subcat.parentId].push({
-        id: subcat.id,
-        name: subcat.name,
-        icon: subcat.icon || 'albums-outline',
-        color: subcat.color || '#4ECDC4',
-        isCustom: !subcat.isSystem,
-        parentId: subcat.parentId,
-      });
-      return map;
-    }, {});
 
-    // Transform main categories and attach their subcategories
-    const result = mainCategories.map(category => ({
-      id: category.id,
-      name: category.name,
-      icon: category.icon || 'albums-outline',
-      color: category.color || '#4ECDC4',
-      isCustom: !category.isSystem,
-      parentId: category.parentId,
-      hasSubcategories:
-        subcategoriesMap[category.id] &&
-        subcategoriesMap[category.id].length > 0,
-      subcategories: subcategoriesMap[category.id] || [],
-    }));
+      // Separate main categories and subcategories
+      const mainCategories = backendCategories.filter(cat => !cat.parentId);
+      const subcategories = backendCategories.filter(cat => cat.parentId);
 
-    // Sort main categories alphabetically by name
-    return result.sort((a, b) => a.name.localeCompare(b.name));
-  }, []);
+      const subcategoriesMap = subcategories.reduce((map, subcat) => {
+        if (!map[subcat.parentId]) {
+          map[subcat.parentId] = [];
+        }
+        map[subcat.parentId].push({
+          id: subcat.id,
+          name: subcat.name,
+          icon: subcat.icon || 'albums-outline',
+          color: subcat.color || '#4ECDC4',
+          isCustom: !subcat.isSystem,
+          parentId: subcat.parentId,
+        });
+        return map;
+      }, {});
+
+      // Transform main categories and attach their subcategories
+      let result = mainCategories.map(category => ({
+        id: category.id,
+        name: category.name,
+        icon: category.icon || 'albums-outline',
+        color: category.color || '#4ECDC4',
+        isCustom: !category.isSystem,
+        parentId: category.parentId,
+        hasSubcategories:
+          subcategoriesMap[category.id] &&
+          subcategoriesMap[category.id].length > 0,
+        subcategories: subcategoriesMap[category.id] || [],
+      }));
+
+      // Filter categories based on transaction type
+      console.log(
+        '🔍 DEBUG: Before filtering, result has',
+        result.length,
+        'categories',
+      );
+      console.log(
+        '🔍 DEBUG: All category names:',
+        result.map(c => c.name),
+      );
+
+      if (transactionType === 'EXPENSE') {
+        result = result.filter(
+          category => category.name.toLowerCase() !== 'income',
+        );
+        console.log(
+          '🔍 DEBUG: After EXPENSE filter, result has',
+          result.length,
+          'categories',
+        );
+      } else if (transactionType === 'INCOME') {
+        // For income, show subcategories as top-level categories
+        const incomeCategory = result.find(
+          category => category.name.toLowerCase() === 'income',
+        );
+        if (incomeCategory && incomeCategory.subcategories) {
+          result = incomeCategory.subcategories.map(subcat => ({
+            ...subcat,
+            hasSubcategories: false, // Treat as top-level categories
+            parentId: incomeCategory.id, // Keep reference to income category
+          }));
+        } else {
+          result = result.filter(
+            category => category.name.toLowerCase() === 'income',
+          );
+        }
+        console.log(
+          '🔍 DEBUG: After INCOME filter, result has',
+          result.length,
+          'categories',
+        );
+      }
+
+      // Sort main categories alphabetically by name
+      return result.sort((a, b) => a.name.localeCompare(b.name));
+    },
+    [],
+  );
 
   // ==============================================
   // HELPER FUNCTIONS
-  // ==============================================
+  // ========================================
+  // ======
 
   const getCategoryById = useCallback(
-    id => categories.find(cat => cat.id === id),
-    [categories],
+    id => {
+      // First try filtered categories, then fall back to all categories
+      const fromFiltered = categories.find(cat => cat.id === id);
+      if (fromFiltered) {
+        return fromFiltered;
+      }
+
+      // Transform the specific category from allCategories if not found in filtered
+      const fromAll = allCategories.find(cat => cat.id === id && !cat.parentId);
+      if (fromAll) {
+        const subcategories = allCategories
+          .filter(cat => cat.parentId === id)
+          .map(subcat => ({
+            id: subcat.id,
+            name: subcat.name,
+            icon: subcat.icon || 'albums-outline',
+            color: subcat.color || '#4ECDC4',
+            isCustom: !subcat.isSystem,
+            parentId: subcat.parentId,
+          }));
+
+        return {
+          id: fromAll.id,
+          name: fromAll.name,
+          icon: fromAll.icon || 'albums-outline',
+          color: fromAll.color || '#4ECDC4',
+          isCustom: !fromAll.isSystem,
+          parentId: fromAll.parentId,
+          hasSubcategories: subcategories.length > 0,
+          subcategories: subcategories,
+        };
+      }
+
+      return undefined;
+    },
+    [categories, allCategories],
   );
 
   const getRecurrenceById = useCallback(
@@ -145,8 +227,10 @@ const AddTransactionContainer = ({
       const response = await TrendAPIService.getCategories();
       const backendCategories = response?.categories || [];
 
-      const transformedCategories = transformCategoriesForUI(backendCategories);
-      setCategories(transformedCategories);
+      setAllCategories(backendCategories);
+
+      // Don't filter here - let the useEffect handle filtering
+      // This prevents circular dependency issues
     } catch (apiError) {
       console.error(
         'AddTransactionContainer: Error loading categories:',
@@ -167,7 +251,7 @@ const AddTransactionContainer = ({
     } finally {
       setIsLoading(false);
     }
-  }, [navigation, transformCategoriesForUI]);
+  }, [navigation]);
 
   // ==============================================
   // FORM MANAGEMENT
@@ -202,11 +286,9 @@ const AddTransactionContainer = ({
           setCurrentSubcategoryData(category);
         }
       }
-    } else if (!editingTransaction && visible) {
-      // Reset form for new transaction
-      resetForm();
     }
-  }, [editingTransaction, visible, resetForm, getCategoryById]);
+    // Remove the resetForm() call for new transactions - let user set their own transaction type
+  }, [editingTransaction, visible, getCategoryById]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -328,7 +410,15 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleTransactionTypeChange = useCallback(type => {
+    console.log(
+      '🔍 DEBUG: handleTransactionTypeChange called with type:',
+      type,
+    );
     setSelectedTransactionType(type);
+    // Clear category selection when transaction type changes
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setCurrentSubcategoryData(null);
   }, []);
 
   // ==============================================
@@ -400,6 +490,29 @@ const AddTransactionContainer = ({
   useEffect(() => {
     populateFormForEdit();
   }, [populateFormForEdit]);
+
+  // Effect to update categories when transaction type changes
+  useEffect(() => {
+    console.log('🔍 DEBUG: useEffect for transaction type change triggered');
+    console.log('🔍 DEBUG: selectedTransactionType:', selectedTransactionType);
+    console.log('🔍 DEBUG: allCategories.length:', allCategories.length);
+
+    if (allCategories.length > 0) {
+      const filteredCategories = transformCategoriesForUI(
+        allCategories,
+        selectedTransactionType,
+      );
+      console.log('🔍 DEBUG: Setting filtered categories:', filteredCategories);
+      setCategories(filteredCategories);
+
+      // Clear selection when switching transaction types
+      if (selectedTransactionType === 'INCOME') {
+        setSelectedCategory(null);
+        setSelectedSubcategory(null);
+        setCurrentSubcategoryData(null);
+      }
+    }
+  }, [selectedTransactionType, allCategories, transformCategoriesForUI]);
 
   // ==============================================
   // RENDER
