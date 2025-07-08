@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import {Platform} from 'react-native';
+import TrendAPIService from '../services/TrendAPIService';
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
@@ -57,14 +58,12 @@ const SettingsScreen = ({navigation}) => {
 
     try {
       const [
-        userSetup,
         storedSettings,
         backupInfo,
         transactions,
         goals,
         proStatus,
       ] = await Promise.all([
-        AsyncStorage.getItem('userSetup'),
         AsyncStorage.getItem('appSettings'),
         AsyncStorage.getItem('lastBackup'),
         AsyncStorage.getItem('transactions'),
@@ -72,11 +71,21 @@ const SettingsScreen = ({navigation}) => {
         AsyncStorage.getItem('isPro'),
       ]);
 
-      if (isMountedRef.current) {
-        // Set user profile
-        if (userSetup) {
-          setUserProfile(JSON.parse(userSetup));
+      // Load user profile from API
+      try {
+        await TrendAPIService.initialize();
+        if (TrendAPIService.isAuthenticated()) {
+          const profileResponse = await TrendAPIService.getUserProfile();
+          if (profileResponse && isMountedRef.current) {
+            setUserProfile(profileResponse);
+          }
         }
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+        // Don't set loading to false here, continue with other data
+      }
+
+      if (isMountedRef.current) {
 
         // Set app settings
         if (storedSettings) {
@@ -380,7 +389,9 @@ const SettingsScreen = ({navigation}) => {
               </View>
               <View style={styles.profileDetails}>
                 <Text style={styles.profileName}>
-                  {userProfile.name || 'User'}
+                  {userProfile.firstName && userProfile.lastName 
+                    ? `${userProfile.firstName} ${userProfile.lastName}`
+                    : userProfile.name || userProfile.email || 'User'}
                 </Text>
                 <Text style={styles.profileIncome}>
                   {formatIncomeDisplay(userProfile)}
