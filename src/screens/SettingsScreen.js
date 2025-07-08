@@ -291,6 +291,32 @@ const SettingsScreen = ({navigation}) => {
     Linking.openURL('https://budgetapp.com/terms');
   }, []);
 
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await TrendAPIService.logout();
+              navigation.reset({
+                index: 0,
+                routes: [{name: 'Auth'}],
+              });
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to log out. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }, [navigation]);
+
   const formatCurrency = useCallback(
     amount => {
       return new Intl.NumberFormat('en-AU', {
@@ -733,6 +759,22 @@ const SettingsScreen = ({navigation}) => {
           </View>
         </View>
 
+        {/* Logout Section */}
+        <View style={styles.settingCard}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}>
+            <View style={styles.settingInfo}>
+              <View style={styles.settingIconContainer}>
+                <Icon name="log-out" size={18} color={colors.error} />
+              </View>
+              <View style={styles.settingText}>
+                <Text style={[styles.settingLabel, styles.logoutText]}>Log Out</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* App Info */}
         <View style={styles.appInfoCard}>
           <Text style={styles.appVersion}>Version {appVersion}</Text>
@@ -966,6 +1008,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  logoutButton: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  logoutText: {
+    color: colors.error,
+    fontWeight: '600',
   },
 });
 
