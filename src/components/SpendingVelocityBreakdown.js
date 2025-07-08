@@ -509,13 +509,6 @@ const SpendingVelocityBreakdown = ({
               per day
             </SvgText>
           </Svg>
-
-          {/* Status indicator */}
-          <View style={[styles.statusIndicator, {borderColor: statusColor}]}>
-            <Text style={[styles.statusText, {color: statusColor}]}>
-              {burnRateStatus}
-            </Text>
-          </View>
         </View>
 
         {/* Burn rate legend */}
@@ -1079,17 +1072,22 @@ const styles = StyleSheet.create({
   },
   statusIndicator: {
     position: 'absolute',
-    bottom: 10,
+    bottom: '8%',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
     borderWidth: 1,
     backgroundColor: colors.background || '#F8FAFC',
+    zIndex: 10,
+    elevation: 5,
+    minWidth: 80,
+    alignItems: 'center',
   },
   statusText: {
     fontSize: 12,
     fontWeight: '600',
     fontFamily: 'System',
+    textAlign: 'center',
   },
   burnRateLegend: {
     marginTop: 20,
