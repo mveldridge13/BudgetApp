@@ -32,7 +32,6 @@ const SettingsScreen = ({navigation}) => {
     currency: 'AUD',
     budgetPeriod: 'monthly',
     dataBackup: true,
-    expenseCategories: true,
   });
 
   // Pro feature state
@@ -57,19 +56,14 @@ const SettingsScreen = ({navigation}) => {
     isLoadingRef.current = true;
 
     try {
-      const [
-        storedSettings,
-        backupInfo,
-        transactions,
-        goals,
-        proStatus,
-      ] = await Promise.all([
-        AsyncStorage.getItem('appSettings'),
-        AsyncStorage.getItem('lastBackup'),
-        AsyncStorage.getItem('transactions'),
-        AsyncStorage.getItem('goals'),
-        AsyncStorage.getItem('isPro'),
-      ]);
+      const [storedSettings, backupInfo, transactions, goals, proStatus] =
+        await Promise.all([
+          AsyncStorage.getItem('appSettings'),
+          AsyncStorage.getItem('lastBackup'),
+          AsyncStorage.getItem('transactions'),
+          AsyncStorage.getItem('goals'),
+          AsyncStorage.getItem('isPro'),
+        ]);
 
       // Load user profile from API
       try {
@@ -86,7 +80,6 @@ const SettingsScreen = ({navigation}) => {
       }
 
       if (isMountedRef.current) {
-
         // Set app settings
         if (storedSettings) {
           setAppSettings(prev => ({...prev, ...JSON.parse(storedSettings)}));
@@ -180,13 +173,6 @@ const SettingsScreen = ({navigation}) => {
   const handleEditProfile = useCallback(() => {
     navigation.navigate('IncomeSetup', {editMode: true});
   }, [navigation]);
-
-  const handleManageCategories = useCallback(() => {
-    Alert.alert(
-      'Coming Soon',
-      'Category management will be available in a future update.',
-    );
-  }, []);
 
   const handleExportData = useCallback(async () => {
     try {
@@ -292,29 +278,25 @@ const SettingsScreen = ({navigation}) => {
   }, []);
 
   const handleLogout = useCallback(() => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await TrendAPIService.logout();
-              navigation.reset({
-                index: 0,
-                routes: [{name: 'Auth'}],
-              });
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to log out. Please try again.');
-            }
-          },
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await TrendAPIService.logout();
+            navigation.reset({
+              index: 0,
+              routes: [{name: 'Auth'}],
+            });
+          } catch (error) {
+            console.error('Logout error:', error);
+            Alert.alert('Error', 'Failed to log out. Please try again.');
+          }
         },
-      ],
-    );
+      },
+    ]);
   }, [navigation]);
 
   const formatCurrency = useCallback(
@@ -415,7 +397,7 @@ const SettingsScreen = ({navigation}) => {
               </View>
               <View style={styles.profileDetails}>
                 <Text style={styles.profileName}>
-                  {userProfile.firstName && userProfile.lastName 
+                  {userProfile.firstName && userProfile.lastName
                     ? `${userProfile.firstName} ${userProfile.lastName}`
                     : userProfile.name || userProfile.email || 'User'}
                 </Text>
@@ -565,29 +547,6 @@ const SettingsScreen = ({navigation}) => {
                 ios_backgroundColor={colors.border}
               />
             </View>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleManageCategories}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="tag" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Expense Categories</Text>
-                  <Text style={styles.settingDescription}>
-                    Manage spending categories
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -761,15 +720,15 @@ const SettingsScreen = ({navigation}) => {
 
         {/* Logout Section */}
         <View style={styles.settingCard}>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <View style={styles.settingInfo}>
               <View style={styles.settingIconContainer}>
                 <Icon name="log-out" size={18} color={colors.error} />
               </View>
               <View style={styles.settingText}>
-                <Text style={[styles.settingLabel, styles.logoutText]}>Log Out</Text>
+                <Text style={[styles.settingLabel, styles.logoutText]}>
+                  Log Out
+                </Text>
               </View>
             </View>
           </TouchableOpacity>
@@ -1012,7 +971,7 @@ const styles = StyleSheet.create({
   logoutButton: {
     padding: 16,
     borderRadius: 12,
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.surface,
   },
   logoutText: {
     color: colors.error,
