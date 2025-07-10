@@ -5,11 +5,11 @@ import useGoalTransformers from './useGoalTransformers';
 import useGoalValidation from './useGoalValidation';
 import useGoalCache from './useGoalCache';
 
-const useGoalData = (checkNetworkConnectivity) => {
+const useGoalData = checkNetworkConnectivity => {
   const {transformBackendGoal, transformFrontendGoal} = useGoalTransformers();
   const {validateGoalData, sanitizeGoalData} = useGoalValidation();
   const {saveGoalsToCache, loadGoalsFromCache} = useGoalCache();
-  
+
   // Track payments in progress to prevent duplicates
   const [processingPayments, setProcessingPayments] = useState(new Set());
   const lastPaymentTime = useRef({});
@@ -41,7 +41,18 @@ const useGoalData = (checkNetworkConnectivity) => {
 
   // Main load goals function - tries API first, falls back to cache
   const loadGoals = useCallback(
-    async (goals, setGoals, hasInitiallyLoaded, lastSyncTime, setLoadingWithTimeout, clearLoadingTimeout, setLoading, isLoadingRef, forceLoading = false, forceAPI = false) => {
+    async (
+      goals,
+      setGoals,
+      hasInitiallyLoaded,
+      lastSyncTime,
+      setLoadingWithTimeout,
+      clearLoadingTimeout,
+      setLoading,
+      isLoadingRef,
+      forceLoading = false,
+      forceAPI = false,
+    ) => {
       // Prevent multiple simultaneous loads
       if (isLoadingRef.current && !forceAPI) {
         console.log('🔍 LOAD_GOALS: Already loading, skipping...');
@@ -50,8 +61,14 @@ const useGoalData = (checkNetworkConnectivity) => {
 
       // Prevent too frequent API calls (debounce with 1 second minimum)
       const now = Date.now();
-      if (lastSyncTime.current && (now - lastSyncTime.current) < 1000 && !forceAPI) {
-        console.log('🔍 LOAD_GOALS: Too soon since last sync, skipping API call');
+      if (
+        lastSyncTime.current &&
+        now - lastSyncTime.current < 1000 &&
+        !forceAPI
+      ) {
+        console.log(
+          '🔍 LOAD_GOALS: Too soon since last sync, skipping API call',
+        );
         return {success: true, goals};
       }
 
@@ -71,7 +88,10 @@ const useGoalData = (checkNetworkConnectivity) => {
         let result;
 
         // Re-enabled API loading with proper safeguards
-        console.log('🔍 LOAD_GOALS: Network status:', { isConnected, authenticated: TrendAPIService.isAuthenticated() });
+        console.log('🔍 LOAD_GOALS: Network status:', {
+          isConnected,
+          authenticated: TrendAPIService.isAuthenticated(),
+        });
 
         if (isConnected && TrendAPIService.isAuthenticated()) {
           console.log('🔍 LOAD_GOALS: Loading goals from backend API...');
@@ -92,14 +112,19 @@ const useGoalData = (checkNetworkConnectivity) => {
                 }
                 // Track recent progress updates to avoid overriding them
                 if (cachedGoal.lastProgressUpdate) {
-                  const updateTime = new Date(cachedGoal.lastProgressUpdate).getTime();
+                  const updateTime = new Date(
+                    cachedGoal.lastProgressUpdate,
+                  ).getTime();
                   const timeSinceUpdate = Date.now() - updateTime;
-                  if (timeSinceUpdate < 60000) { // Within 60 seconds (increased for better protection)
+                  if (timeSinceUpdate < 60000) {
+                    // Within 60 seconds (increased for better protection)
                     recentProgressUpdates[cachedGoal.id] = {
                       current: cachedGoal.current,
                       lastProgressUpdate: cachedGoal.lastProgressUpdate,
                     };
-                    console.log(`🔍 GOAL_DATA: Preserving recent progress update for goal ${cachedGoal.id}, updated ${timeSinceUpdate}ms ago`);
+                    console.log(
+                      `🔍 GOAL_DATA: Preserving recent progress update for goal ${cachedGoal.id}, updated ${timeSinceUpdate}ms ago`,
+                    );
                   }
                 }
               });
@@ -185,14 +210,17 @@ const useGoalData = (checkNetworkConnectivity) => {
 
         console.log('🔍 SAVE_GOAL: Validating goal data...');
         if (!validateGoalData(sanitizedData)) {
-          console.error('🔍 SAVE_GOAL: Goal data validation failed for:', sanitizedData);
+          console.error(
+            '🔍 SAVE_GOAL: Goal data validation failed for:',
+            sanitizedData,
+          );
           throw new Error('Goal data validation failed');
         }
 
         console.log('🔍 SAVE_GOAL: Checking network connectivity...');
         const isConnected = await checkNetworkConnectivity();
         const isEdit = editingGoal && editingGoal.id;
-        console.log('🔍 SAVE_GOAL: Network status:', { isConnected, isEdit });
+        console.log('🔍 SAVE_GOAL: Network status:', {isConnected, isEdit});
         let result;
 
         // Re-enable API calls for backend goal creation
@@ -204,19 +232,26 @@ const useGoalData = (checkNetworkConnectivity) => {
             console.log('🔍 SAVE_GOAL: Backend goal data:', backendGoalData);
 
             if (isEdit) {
-              console.log('🔍 SAVE_GOAL: Calling TrendAPIService.updateGoal for editing');
+              console.log(
+                '🔍 SAVE_GOAL: Calling TrendAPIService.updateGoal for editing',
+              );
               result = await TrendAPIService.updateGoal(
                 editingGoal.id,
                 backendGoalData,
               );
             } else {
-              console.log('🔍 SAVE_GOAL: Calling TrendAPIService.createGoal with data:', backendGoalData);
+              console.log(
+                '🔍 SAVE_GOAL: Calling TrendAPIService.createGoal with data:',
+                backendGoalData,
+              );
               result = await TrendAPIService.createGoal(backendGoalData);
               console.log('🔍 SAVE_GOAL: API createGoal result:', result);
             }
 
             if (result) {
-              console.log('🔍 SAVE_GOAL: API success, transforming back from backend...');
+              console.log(
+                '🔍 SAVE_GOAL: API success, transforming back from backend...',
+              );
               // Transform back from backend format
               const transformedGoal = transformBackendGoal(result);
               console.log('🔍 SAVE_GOAL: Transformed goal:', transformedGoal);
@@ -227,18 +262,25 @@ const useGoalData = (checkNetworkConnectivity) => {
                 source: 'api',
               };
             } else {
-              console.log('🔍 SAVE_GOAL: API returned null/empty result, falling back to local');
+              console.log(
+                '🔍 SAVE_GOAL: API returned null/empty result, falling back to local',
+              );
             }
           } catch (apiError) {
             console.error('❌ SAVE_GOAL: API save failed:', apiError);
 
             // If it's a validation error, don't fall back to local save
             if (apiError.message && apiError.message.includes('targetAmount')) {
-              console.error('🔍 SAVE_GOAL: Backend validation error, not falling back');
+              console.error(
+                '🔍 SAVE_GOAL: Backend validation error, not falling back',
+              );
               throw new Error(`Backend validation error: ${apiError.message}`);
             }
 
-            console.warn('🔍 SAVE_GOAL: API save failed, falling back to local:', apiError);
+            console.warn(
+              '🔍 SAVE_GOAL: API save failed, falling back to local:',
+              apiError,
+            );
             // Continue to local save below
           }
         } else {
@@ -263,7 +305,11 @@ const useGoalData = (checkNetworkConnectivity) => {
           // Add new goal - ensure it has an ID
           newGoal = {
             ...sanitizedData,
-            id: sanitizedData.id || `local_goal_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+            id:
+              sanitizedData.id ||
+              `local_goal_${Date.now()}_${Math.random()
+                .toString(36)
+                .substring(2, 11)}`,
             createdAt: new Date().toISOString(),
             lastUpdated: new Date().toISOString(),
           };
@@ -271,7 +317,11 @@ const useGoalData = (checkNetworkConnectivity) => {
           console.log('🔍 SAVE_GOAL: New goal created:', newGoal);
         }
 
-        console.log('🔍 SAVE_GOAL: Updated goals array:', updatedGoals.length, 'goals');
+        console.log(
+          '🔍 SAVE_GOAL: Updated goals array:',
+          updatedGoals.length,
+          'goals',
+        );
 
         // Update state immediately
         console.log('🔍 SAVE_GOAL: Setting goals state...');
@@ -290,7 +340,10 @@ const useGoalData = (checkNetworkConnectivity) => {
             source: 'local',
           };
         } else {
-          console.error('🔍 SAVE_GOAL: Failed to save to cache:', saveResult.error);
+          console.error(
+            '🔍 SAVE_GOAL: Failed to save to cache:',
+            saveResult.error,
+          );
           return {
             success: true, // Still return success since state was updated
             goal: newGoal,
@@ -378,7 +431,14 @@ const useGoalData = (checkNetworkConnectivity) => {
   const updateGoalProgress = useCallback(
     async (goalId, amount, paymentSource = 'income', goals, setGoals) => {
       try {
-        console.log('🔍 GOAL_DATA: Starting updateGoalProgress for goal:', goalId, 'amount:', amount, 'source:', paymentSource);
+        console.log(
+          '🔍 GOAL_DATA: Starting updateGoalProgress for goal:',
+          goalId,
+          'amount:',
+          amount,
+          'source:',
+          paymentSource,
+        );
 
         if (!goalId) {
           throw new Error('Goal ID is required');
@@ -399,19 +459,19 @@ const useGoalData = (checkNetworkConnectivity) => {
           const paymentKey = `${goalId}-${parsedAmount}`;
           const now = Date.now();
           const lastPayment = lastPaymentTime.current[paymentKey] || 0;
-          
+
           // Prevent payments within 3 seconds of each other for same goal/amount
           if (now - lastPayment < 3000) {
             console.log('🔍 GOAL_DATA: Duplicate payment detected, ignoring');
             throw new Error('Please wait before making another payment');
           }
-          
+
           // Check if payment is already processing
           if (processingPayments.has(paymentKey)) {
             console.log('🔍 GOAL_DATA: Payment already in progress');
             throw new Error('Payment already in progress');
           }
-          
+
           // Mark payment as processing
           setProcessingPayments(prev => new Set(prev).add(paymentKey));
           lastPaymentTime.current[paymentKey] = now;
@@ -428,7 +488,10 @@ const useGoalData = (checkNetworkConnectivity) => {
 
           // For income payments, backend addContribution handles the amount update
           if (paymentSource === 'income') {
-            console.log('🔍 GOAL_DATA: Income payment - letting backend handle amount update for goal', goalId);
+            console.log(
+              '🔍 GOAL_DATA: Income payment - letting backend handle amount update for goal',
+              goalId,
+            );
             return {
               ...currentGoal,
               lastUpdated: updateTimestamp,
@@ -447,7 +510,14 @@ const useGoalData = (checkNetworkConnectivity) => {
             newCurrent += parsedAmount;
           }
 
-          console.log('🔍 GOAL_DATA: Updated goal', goalId, 'from', currentGoal.current, 'to', newCurrent);
+          console.log(
+            '🔍 GOAL_DATA: Updated goal',
+            goalId,
+            'from',
+            currentGoal.current,
+            'to',
+            newCurrent,
+          );
 
           return {
             ...currentGoal,
@@ -465,7 +535,10 @@ const useGoalData = (checkNetworkConnectivity) => {
         const saveResult = await saveGoalsToCache(updatedGoals, false);
 
         if (!saveResult.success) {
-          console.error('🔍 GOAL_DATA: Failed to save progress update to cache:', saveResult.error);
+          console.error(
+            '🔍 GOAL_DATA: Failed to save progress update to cache:',
+            saveResult.error,
+          );
           throw new Error(saveResult.error || 'Failed to update goal progress');
         }
 
@@ -475,24 +548,39 @@ const useGoalData = (checkNetworkConnectivity) => {
           const isConnected = await checkNetworkConnectivity();
           const targetGoal = updatedGoals.find(g => g.id === goalId);
 
-          if (isConnected && TrendAPIService.isAuthenticated() && !goalId.startsWith('local_') && targetGoal) {
+          if (
+            isConnected &&
+            TrendAPIService.isAuthenticated() &&
+            !goalId.startsWith('local_') &&
+            targetGoal
+          ) {
             try {
               console.log('🔍 GOAL_DATA: Syncing goal update to backend');
               const backendGoalData = transformFrontendGoal(targetGoal);
               await TrendAPIService.updateGoal(goalId, backendGoalData);
               console.log('🔍 GOAL_DATA: Successfully synced goal to backend');
             } catch (backendSyncError) {
-              console.error('🔍 GOAL_DATA: Failed to sync goal to backend:', backendSyncError);
+              console.error(
+                '🔍 GOAL_DATA: Failed to sync goal to backend:',
+                backendSyncError,
+              );
               // Don't fail the goal update if backend sync fails
             }
           }
         } else {
-          console.log('🔍 GOAL_DATA: Skipping goal sync for income payment - backend handles it');
+          console.log(
+            '🔍 GOAL_DATA: Skipping goal sync for income payment - backend handles it',
+          );
         }
 
         // Create backend goal contribution if payment source is income and goal is on backend
         if (paymentSource === 'income') {
-          console.log('🔍 GOAL_DATA: Processing income payment of', parsedAmount, 'for goal', goalId);
+          console.log(
+            '🔍 GOAL_DATA: Processing income payment of',
+            parsedAmount,
+            'for goal',
+            goalId,
+          );
 
           // Only create backend contribution for backend goals (not local goals)
           if (!goalId.startsWith('local_')) {
@@ -500,29 +588,53 @@ const useGoalData = (checkNetworkConnectivity) => {
               const contributionData = {
                 amount: parsedAmount.toFixed(2), // Backend expects decimal string
                 currency: 'AUD',
-                description: `Income payment to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`,
+                description: `Income payment to ${
+                  updatedGoals.find(g => g.id === goalId)?.title || 'goal'
+                }`,
                 type: 'MANUAL', // Use MANUAL type for manual income payments
                 date: updateTimestamp,
               };
 
-              console.log('🔍 GOAL_DATA: Creating backend contribution for backend goal', goalId, 'type:', updatedGoals.find(g => g.id === goalId)?.type);
-              const contributionResult = await TrendAPIService.addGoalContribution(goalId, contributionData);
-              console.log('🔍 GOAL_DATA: Successfully created backend goal contribution', contributionResult);
-
+              console.log(
+                '🔍 GOAL_DATA: Creating backend contribution for backend goal',
+                goalId,
+                'type:',
+                updatedGoals.find(g => g.id === goalId)?.type,
+              );
+              const contributionResult =
+                await TrendAPIService.addGoalContribution(
+                  goalId,
+                  contributionData,
+                );
+              console.log(
+                '🔍 GOAL_DATA: Successfully created backend goal contribution',
+                contributionResult,
+              );
             } catch (contributionError) {
-              console.error('🔍 GOAL_DATA: Failed to create goal contribution:', contributionError);
+              console.error(
+                '🔍 GOAL_DATA: Failed to create goal contribution:',
+                contributionError,
+              );
               // Throw error to let the caller handle it properly
-              throw new Error(`Failed to save payment: ${contributionError.message || 'Network error'}`);
+              throw new Error(
+                `Failed to save payment: ${
+                  contributionError.message || 'Network error'
+                }`,
+              );
             }
           } else {
-            console.log('🔍 GOAL_DATA: Skipping backend contribution for local goal');
+            console.log(
+              '🔍 GOAL_DATA: Skipping backend contribution for local goal',
+            );
             // For local goals, we'll track income payments locally until they're synced
             // Update the local goal with income payment tracking
             const localGoalIndex = updatedGoals.findIndex(g => g.id === goalId);
             if (localGoalIndex !== -1) {
               updatedGoals[localGoalIndex] = {
                 ...updatedGoals[localGoalIndex],
-                totalIncomePayments: (updatedGoals[localGoalIndex].totalIncomePayments || 0) + parsedAmount,
+                totalIncomePayments:
+                  (updatedGoals[localGoalIndex].totalIncomePayments || 0) +
+                  parsedAmount,
                 lastIncomePayment: {
                   amount: parsedAmount,
                   date: updateTimestamp,
@@ -548,14 +660,18 @@ const useGoalData = (checkNetworkConnectivity) => {
               window.dispatchEvent(event);
             } catch (e) {
               // CustomEvent not available, ignore
-              console.warn('CustomEvent not available for goal payment notification');
+              console.warn(
+                'CustomEvent not available for goal payment notification',
+              );
             }
           }
         }
 
         // For income payments, reload goals from backend to get updated amounts
         if (paymentSource === 'income') {
-          console.log('🔍 GOAL_DATA: Reloading goals from backend after income payment');
+          console.log(
+            '🔍 GOAL_DATA: Reloading goals from backend after income payment',
+          );
           try {
             // Preserve showOnBalanceCard preferences before reloading
             const currentPreferences = {};
@@ -564,7 +680,7 @@ const useGoalData = (checkNetworkConnectivity) => {
                 currentPreferences[goal.id] = true;
               }
             });
-            
+
             const backendGoals = await loadGoalsFromAPI();
             if (backendGoals.success) {
               // Merge preserved preferences back into backend goals
@@ -572,12 +688,15 @@ const useGoalData = (checkNetworkConnectivity) => {
                 ...goal,
                 showOnBalanceCard: currentPreferences[goal.id] || false,
               }));
-              
+
               setGoals(goalsWithPreferences);
               await saveGoalsToCache(goalsWithPreferences, false);
             }
           } catch (reloadError) {
-            console.warn('🔍 GOAL_DATA: Failed to reload goals after income payment:', reloadError);
+            console.warn(
+              '🔍 GOAL_DATA: Failed to reload goals after income payment:',
+              reloadError,
+            );
           }
         }
 
@@ -598,7 +717,13 @@ const useGoalData = (checkNetworkConnectivity) => {
         }
       }
     },
-    [saveGoalsToCache, checkNetworkConnectivity, transformFrontendGoal, processingPayments, setProcessingPayments],
+    [
+      saveGoalsToCache,
+      processingPayments,
+      checkNetworkConnectivity,
+      transformFrontendGoal,
+      loadGoalsFromAPI,
+    ],
   );
 
   return {
