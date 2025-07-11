@@ -272,12 +272,22 @@ const GoalsScreen = () => {
   const handleToggleBalanceDisplay = useCallback(
     async goalId => {
       try {
-        await toggleGoalBalanceDisplay(goalId);
+        console.log('🎯 GoalsScreen: Toggling balance display for goal:', goalId);
+        const result = await toggleGoalBalanceDisplay(goalId);
+        console.log('🎯 GoalsScreen: Toggle result:', result);
+
+        // Log the updated goals state
+        const updatedGoal = goals.find(g => g.id === goalId);
+        console.log('🎯 GoalsScreen: Updated goal state:', {
+          id: updatedGoal?.id,
+          title: updatedGoal?.title,
+          showOnBalanceCard: updatedGoal?.showOnBalanceCard,
+        });
       } catch (error) {
         console.warn('Error toggling balance display:', error);
       }
     },
-    [toggleGoalBalanceDisplay],
+    [toggleGoalBalanceDisplay, goals],
   );
 
   const handleUpdateProgress = useCallback(

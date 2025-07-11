@@ -3,7 +3,7 @@
 // containers/HomeContainer.js
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {AppState, Alert, Platform} from 'react-native';
-import {useFocusEffect} from '@react-navigation/native';
+// import {useFocusEffect} from '@react-navigation/native'; // Removed to eliminate reload delay
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
 import HomeScreen from '../screens/HomeScreen';
@@ -31,6 +31,18 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const onboarding = useOnboarding();
   const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
+
+  // Debug: Log goals state changes
+  useEffect(() => {
+    console.log('🏠 HomeContainer: Goals state changed:', {
+      goalsCount: goals.length,
+      balanceCardGoals: goals.filter(g => g.showOnBalanceCard).map(g => ({
+        id: g.id,
+        title: g.title,
+        showOnBalanceCard: g.showOnBalanceCard,
+      })),
+    });
+  }, [goals]);
 
   // ==============================================
   // UTILITY FUNCTIONS
@@ -87,14 +99,15 @@ const HomeContainer = ({navigation}) => {
   useEffect(() => {
     loadGoalsRef.current = loadGoals;
   });
-  useFocusEffect(
-    useCallback(() => {
-      if (!loading && loadGoalsRef.current) {
-        console.log('🏠 HomeContainer: Reloading goals from cache on focus');
-        loadGoalsRef.current();
-      }
-    }, [loading]), // ✅ FIXED: Removed loadGoals dependency to prevent loops
-  );
+  // Remove focus effect reload - goals state should persist across navigation
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     if (loadGoalsRef.current) {
+  //       console.log('🏠 HomeContainer: Reloading goals from cache on focus');
+  //       loadGoalsRef.current();
+  //     }
+  //   }, []),
+  // );
 
   // ==============================================
   // CATEGORY RESOLUTION FOR TRANSACTIONS

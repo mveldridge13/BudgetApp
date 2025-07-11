@@ -12,12 +12,39 @@ import useGoalSync from './goal-services/useGoalSync';
 // Constants
 const LOADING_TIMEOUT = 10000; // 10 second timeout for operations
 
+// Global state for goals to share between components
+let globalGoalsState = [];
+const globalGoalsListeners = new Set();
+
+const notifyGoalsListeners = newGoals => {
+  globalGoalsState = newGoals;
+  globalGoalsListeners.forEach(listener => listener(newGoals));
+};
+
 const useGoals = () => {
-  // State
-  const [goals, setGoals] = useState([]);
+  // State - sync with global state
+  const [goals, setGoalsLocal] = useState(globalGoalsState);
   const [loading, setLoading] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
+
+  // Wrapper to update both local and global state
+  const setGoals = useCallback(newGoals => {
+    setGoalsLocal(newGoals);
+    notifyGoalsListeners(newGoals);
+  }, []);
+
+  // Subscribe to global state changes
+  useEffect(() => {
+    const listener = newGoals => {
+      setGoalsLocal(newGoals);
+    };
+    globalGoalsListeners.add(listener);
+
+    return () => {
+      globalGoalsListeners.delete(listener);
+    };
+  }, []);
 
   // Refs
   const loadingTimeoutRef = useRef(null);
@@ -118,14 +145,14 @@ const useGoals = () => {
     async goalData => {
       return goalDataModule.saveGoal(goalData, goals, editingGoal, setGoals);
     },
-    [goalDataModule, goals, editingGoal],
+    [goalDataModule, goals, editingGoal, setGoals],
   );
 
   const deleteGoal = useCallback(
     async goalId => {
       return goalDataModule.deleteGoal(goalId, goals, setGoals);
     },
-    [goalDataModule, goals],
+    [goalDataModule, goals, setGoals],
   );
 
   // Goal management operations
@@ -154,11 +181,13 @@ const useGoals = () => {
 
         setGoals(updatedGoals);
 
-        // Save to cache only (backend doesn't support showOnBalanceCard)
+        // Save to cache immediately to ensure persistence across screen navigation
         const saveResult = await saveGoalsToCache(updatedGoals, false);
 
         if (saveResult.success) {
-          return {success: true};
+          // Force a synchronous state update to ensure immediate UI reflection
+          // This prevents flicker when navigating between screens
+          return {success: true, updatedGoals};
         } else {
           // Revert the optimistic update on failure
           setGoals(goals);
@@ -169,7 +198,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [goals, saveGoalsToCache],
+    [goals, saveGoalsToCache, setGoals],
   );
 
   const updateGoalProgress = useCallback(
@@ -185,7 +214,7 @@ const useGoals = () => {
         setGoals,
       );
     },
-    [goalDataModule, goals],
+    [goalDataModule, goals, setGoals],
   );
 
   const updateSpendingGoals = useCallback(
@@ -514,7 +543,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [loadGoalsFromCache, saveGoalsToCache, goals.length],
+    [loadGoalsFromCache, saveGoalsToCache, goals.length, setGoals],
   );
 
   const completeGoal = useCallback(
@@ -572,7 +601,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [goals, checkNetworkConnectivity, saveGoalsToCache],
+    [goals, checkNetworkConnectivity, saveGoalsToCache, setGoals],
   );
 
   const addGoalContribution = useCallback(
@@ -666,10 +695,12 @@ const useGoals = () => {
 
   const syncGoalsWithBackendWrapper = useCallback(async () => {
     return syncGoalsWithBackend(goals, setGoals, checkNetworkConnectivity);
-  }, [syncGoalsWithBackend, goals, checkNetworkConnectivity]);
+  }, [syncGoalsWithBackend, goals, checkNetworkConnectivity, setGoals]);
 
   const refreshFromBackendWrapper = useCallback(async () => {
-    return refreshFromBackend(loadGoalsRef.current || (() => Promise.resolve()));
+    return refreshFromBackend(
+      loadGoalsRef.current || (() => Promise.resolve()),
+    );
   }, [refreshFromBackend]); // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
 
   const needsSyncWrapper = useCallback(() => {
