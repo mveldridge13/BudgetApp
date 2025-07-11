@@ -16,6 +16,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 // Import API services
 import AuthService from '../services/AuthService';
 import TrendAPIService from '../services/TrendAPIService';
+import UserProfileCache from '../services/UserProfileCache';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -153,8 +154,14 @@ export default function AppNavigator() {
         return;
       }
 
-      // NEW: Get user profile from backend instead of AsyncStorage
+      // NEW: Get user profile from backend and cache it for immediate use by other screens
       const userProfile = await TrendAPIService.getUserProfile();
+      
+      // Cache the profile so SettingsScreen and other screens can use it immediately
+      if (userProfile) {
+        await UserProfileCache.set(userProfile);
+        console.log('🔍 APP_NAVIGATOR: Cached user profile for immediate screen access');
+      }
 
       if (!userProfile.hasSeenWelcome) {
         setInitialRoute('Welcome');

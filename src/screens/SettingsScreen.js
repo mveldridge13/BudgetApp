@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import {Platform} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
+import UserProfileCache from '../services/UserProfileCache';
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
@@ -41,13 +42,98 @@ const SettingsScreen = ({navigation}) => {
   const [appVersion] = useState('1.0');
   const [dataSize, setDataSize] = useState(0);
   const [lastBackup, setLastBackup] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   // Refs for component lifecycle
   const isMountedRef = useRef(true);
   const isLoadingRef = useRef(false);
 
-  // Load all settings data
+  // Cache-first user profile loading
+  const loadUserProfileWithCache = useCallback(async () => {
+    try {
+      console.log('🔍 SETTINGS: Loading user profile with cache-first strategy');
+
+      // Step 1: Try to load from cache immediately
+      const cached = await UserProfileCache.get();
+      if (cached && cached.profile && isMountedRef.current) {
+        console.log('🔍 SETTINGS: Using cached profile data', {
+          age: Math.round(cached.age / 1000 / 60), // minutes
+          isStale: cached.isStale,
+        });
+        setUserProfile(cached.profile);
+      }
+
+      // Step 2: Fetch fresh data from API in background (if authenticated)
+      try {
+        // TrendAPIService should already be initialized by AppNavigator
+        if (TrendAPIService.isAuthenticated()) {
+          console.log('🔍 SETTINGS: Fetching fresh profile from API');
+          const freshProfile = await TrendAPIService.getUserProfile();
+
+          if (freshProfile && isMountedRef.current) {
+            // Only update UI if data actually changed
+            const hasChanged = !cached ||
+              JSON.stringify(cached.profile) !== JSON.stringify(freshProfile);
+
+            if (hasChanged) {
+              console.log('🔍 SETTINGS: Profile data changed, updating UI');
+              setUserProfile(freshProfile);
+            } else {
+              console.log('🔍 SETTINGS: Profile data unchanged, keeping current UI');
+            }
+
+            // Always update cache with fresh data
+            await UserProfileCache.set(freshProfile);
+          }
+        }
+      } catch (error) {
+        console.error('🔍 SETTINGS: API fetch failed, using cached data:', error);
+        // Graceful fallback - we already have cached data loaded
+      }
+    } catch (error) {
+      console.error('🔍 SETTINGS: Cache-first loading failed:', error);
+
+      // Final fallback: try direct API call
+      try {
+        if (TrendAPIService.isAuthenticated()) {
+          const profileResponse = await TrendAPIService.getUserProfile();
+          if (profileResponse && isMountedRef.current) {
+            setUserProfile(profileResponse);
+            await UserProfileCache.set(profileResponse);
+          }
+        }
+      } catch (fallbackError) {
+        console.error('🔍 SETTINGS: All profile loading methods failed:', fallbackError);
+      }
+    }
+  }, []);
+
+  // Load cached data immediately (synchronous) to show UI instantly
+  const loadCachedData = useCallback(async () => {
+    try {
+      // Load only the cached user profile for immediate display
+      const cached = await UserProfileCache.get();
+      if (cached && cached.profile && isMountedRef.current) {
+        console.log('🔍 SETTINGS: Loaded cached profile for immediate display');
+        setUserProfile(cached.profile);
+      }
+
+      // Load app settings from AsyncStorage (fast)
+      const storedSettings = await AsyncStorage.getItem('appSettings');
+      if (storedSettings && isMountedRef.current) {
+        setAppSettings(prev => ({...prev, ...JSON.parse(storedSettings)}));
+      }
+
+      // Load pro status (fast)
+      const proStatus = await AsyncStorage.getItem('isPro');
+      if (isMountedRef.current) {
+        setIsPro(proStatus === 'true');
+      }
+    } catch (error) {
+      console.error('Error loading cached data:', error);
+    }
+  }, []);
+
+  // Load fresh/additional data in background
   const loadSettingsData = useCallback(async () => {
     if (isLoadingRef.current) {
       return;
@@ -56,38 +142,17 @@ const SettingsScreen = ({navigation}) => {
     isLoadingRef.current = true;
 
     try {
-      const [storedSettings, backupInfo, transactions, goals, proStatus] =
-        await Promise.all([
-          AsyncStorage.getItem('appSettings'),
-          AsyncStorage.getItem('lastBackup'),
-          AsyncStorage.getItem('transactions'),
-          AsyncStorage.getItem('goals'),
-          AsyncStorage.getItem('isPro'),
-        ]);
+      // Load fresh user profile data (cache-first, background refresh)
+      await loadUserProfileWithCache();
 
-      // Load user profile from API
-      try {
-        await TrendAPIService.initialize();
-        if (TrendAPIService.isAuthenticated()) {
-          const profileResponse = await TrendAPIService.getUserProfile();
-          if (profileResponse && isMountedRef.current) {
-            setUserProfile(profileResponse);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading user profile:', error);
-        // Don't set loading to false here, continue with other data
-      }
+      // Load additional data for data size calculation
+      const [backupInfo, transactions, goals] = await Promise.all([
+        AsyncStorage.getItem('lastBackup'),
+        AsyncStorage.getItem('transactions'),
+        AsyncStorage.getItem('goals'),
+      ]);
 
       if (isMountedRef.current) {
-        // Set app settings
-        if (storedSettings) {
-          setAppSettings(prev => ({...prev, ...JSON.parse(storedSettings)}));
-        }
-
-        // Set Pro status
-        setIsPro(proStatus === 'true');
-
         // Calculate data size
         const transactionSize = transactions
           ? JSON.stringify(transactions).length
@@ -102,32 +167,39 @@ const SettingsScreen = ({navigation}) => {
         }
       }
     } catch (error) {
-      console.error('Error loading settings:', error);
+      console.error('Error loading additional settings data:', error);
     } finally {
       if (isMountedRef.current) {
-        setLoading(false);
         isLoadingRef.current = false;
       }
     }
-  }, []);
+  }, [loadUserProfileWithCache]);
 
-  // Initial load
+  // Initial load - load cached data first, then fresh data
   useEffect(() => {
     isMountedRef.current = true;
+
+    // Step 1: Load cached data immediately to show UI
+    loadCachedData();
+
+    // Step 2: Load fresh data in background
     loadSettingsData();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadSettingsData]);
+  }, [loadCachedData, loadSettingsData]);
 
-  // Reload on focus
+  // Reload on focus - load cached data first, then fresh data
   useFocusEffect(
     useCallback(() => {
       if (isMountedRef.current) {
+        // Load cached data first for immediate display
+        loadCachedData();
+        // Then load fresh data in background
         loadSettingsData();
       }
-    }, [loadSettingsData]),
+    }, [loadCachedData, loadSettingsData]),
   );
 
   // Save app settings
@@ -170,7 +242,9 @@ const SettingsScreen = ({navigation}) => {
     [appSettings, saveAppSettings],
   );
 
-  const handleEditProfile = useCallback(() => {
+  const handleEditProfile = useCallback(async () => {
+    // Clear cache before editing to ensure fresh data when returning
+    await UserProfileCache.clear();
     navigation.navigate('IncomeSetup', {editMode: true});
   }, [navigation]);
 
@@ -364,13 +438,6 @@ const SettingsScreen = ({navigation}) => {
     </View>
   );
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading settings...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -386,29 +453,41 @@ const SettingsScreen = ({navigation}) => {
           {isPro && <ProBadge size="large" />}
         </View>
 
-        {/* User Profile Card */}
-        {userProfile && (
-          <TouchableOpacity
-            style={styles.profileCard}
-            onPress={handleEditProfile}>
-            <View style={styles.profileInfo}>
-              <View style={styles.profileAvatar}>
-                <Icon name="user" size={24} color={colors.textWhite} />
-              </View>
-              <View style={styles.profileDetails}>
-                <Text style={styles.profileName}>
-                  {userProfile.firstName && userProfile.lastName
-                    ? `${userProfile.firstName} ${userProfile.lastName}`
-                    : userProfile.name || userProfile.email || 'User'}
-                </Text>
-                <Text style={styles.profileIncome}>
-                  {formatIncomeDisplay(userProfile)}
-                </Text>
-              </View>
+        {/* User Profile Card - Always visible to prevent flicker */}
+        <TouchableOpacity
+          style={styles.profileCard}
+          onPress={userProfile ? handleEditProfile : undefined}
+          disabled={!userProfile}>
+          <View style={styles.profileInfo}>
+            <View style={styles.profileAvatar}>
+              <Icon name="user" size={24} color={colors.textWhite} />
             </View>
-            <Icon name="chevron-right" size={20} color={colors.textWhite} />
-          </TouchableOpacity>
-        )}
+            <View style={styles.profileDetails}>
+              {userProfile ? (
+                <>
+                  <Text style={styles.profileName}>
+                    {userProfile.firstName && userProfile.lastName
+                      ? `${userProfile.firstName} ${userProfile.lastName}`
+                      : userProfile.name || userProfile.email || 'User'}
+                  </Text>
+                  <Text style={styles.profileIncome}>
+                    {formatIncomeDisplay(userProfile)}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.skeletonText, styles.skeletonName]} />
+                  <View style={[styles.skeletonText, styles.skeletonIncome]} />
+                </>
+              )}
+            </View>
+          </View>
+          <Icon
+            name="chevron-right"
+            size={20}
+            color={userProfile ? colors.textWhite : colors.textGray}
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -751,15 +830,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: 'System',
-    color: colors.textSecondary,
-  },
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: 20,
@@ -976,6 +1046,20 @@ const styles = StyleSheet.create({
   logoutText: {
     color: colors.error,
     fontWeight: '600',
+  },
+  // Skeleton loading styles
+  skeletonText: {
+    backgroundColor: colors.textGray + '30', // 30% opacity
+    borderRadius: 4,
+  },
+  skeletonName: {
+    height: 20,
+    width: '60%',
+    marginBottom: 6,
+  },
+  skeletonIncome: {
+    height: 16,
+    width: '40%',
   },
 });
 
