@@ -52,6 +52,12 @@ const GoalsScreen = () => {
     updateCounter,
   } = useGoals();
 
+  // Use ref to store loadGoals to prevent dependency loops
+  const loadGoalsRef = useRef();
+  useEffect(() => {
+    loadGoalsRef.current = loadGoals;
+  });
+
   // Consolidated data loading function
   const loadAllData = useCallback(
     async (force = false) => {
@@ -64,7 +70,7 @@ const GoalsScreen = () => {
       try {
         // Load goals and income data in parallel
         const [, incomeResult] = await Promise.all([
-          loadGoals(force), // Pass force parameter to loadGoals
+          loadGoalsRef.current ? loadGoalsRef.current(force) : Promise.resolve(), // Use ref to prevent dependency loop
           loadIncomeData(),
         ]);
 
@@ -81,7 +87,7 @@ const GoalsScreen = () => {
         }
       }
     },
-    [loadGoals, loadIncomeData],
+    [loadIncomeData], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
   );
 
   const loadIncomeData = useCallback(async () => {
@@ -222,8 +228,10 @@ const GoalsScreen = () => {
           // Reload goals to show the new goal
           console.log('🔍 GOALS_SCREEN: Reloading goals after save...');
           try {
-            await loadGoals(true);
-            console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
+            if (loadGoalsRef.current) {
+              await loadGoalsRef.current(true);
+              console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
+            }
           } catch (reloadError) {
             console.error(
               '🔍 GOALS_SCREEN: Failed to reload goals:',
@@ -247,7 +255,7 @@ const GoalsScreen = () => {
         };
       }
     },
-    [saveGoal, clearEditingGoal, loadGoals],
+    [saveGoal, clearEditingGoal], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
   );
 
   const handleDeleteGoal = useCallback(

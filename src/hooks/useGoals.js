@@ -1,5 +1,5 @@
 // hooks/useGoals.js - Refactored main orchestrator
-import {useState, useRef, useLayoutEffect, useCallback} from 'react';
+import {useState, useRef, useLayoutEffect, useCallback, useEffect} from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import TrendAPIService from '../services/TrendAPIService';
 
@@ -37,7 +37,7 @@ const useGoals = () => {
   const {syncGoalsWithBackend, refreshFromBackend, needsSync, getLastSyncTime} =
     useGoalSync();
 
-  // Network connectivity check
+  // Network connectivity check - STABILIZED to prevent loops
   const checkNetworkConnectivity = useCallback(async () => {
     try {
       const state = await NetInfo.fetch();
@@ -46,7 +46,7 @@ const useGoals = () => {
       console.error('Error checking network connectivity:', error);
       return false;
     }
-  }, []);
+  }, []); // ✅ FIXED: No dependencies to prevent recreation
 
   // Loading state management
   const setLoadingWithTimeout = useCallback(shouldLoad => {
@@ -75,10 +75,10 @@ const useGoals = () => {
     }
   }, []);
 
-  // Initialize goal data module with dependencies
+  // Initialize goal data module with dependencies - STABILIZED
   const goalDataModule = useGoalData(checkNetworkConnectivity);
 
-  // Core CRUD operations (delegated to modules)
+  // Core CRUD operations (delegated to modules) - STABILIZED
   const loadGoals = useCallback(
     async (forceLoading = false, forceAPI = false) => {
       return goalDataModule.loadGoals(
@@ -94,8 +94,25 @@ const useGoals = () => {
         forceAPI,
       );
     },
-    [goalDataModule, goals, setLoadingWithTimeout, clearLoadingTimeout],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [goalDataModule, setLoadingWithTimeout, clearLoadingTimeout], // ✅ FIXED: Removed goals dependency to prevent infinite loops
   );
+
+  // Only call loadGoals on mount - using ref to avoid dependencies
+  const hasCalledInitialLoad = useRef(false);
+  const loadGoalsRef = useRef();
+
+  useEffect(() => {
+    loadGoalsRef.current = loadGoals;
+  });
+  useEffect(() => {
+    if (!hasCalledInitialLoad.current) {
+      hasCalledInitialLoad.current = true;
+      if (loadGoalsRef.current) {
+        loadGoalsRef.current();
+      }
+    }
+  }, []); // ✅ FIXED: Empty dependency array to only run on mount
 
   const saveGoal = useCallback(
     async goalData => {
@@ -631,7 +648,7 @@ const useGoals = () => {
     setEditingGoal(null);
   }, []);
 
-  // Wrapper functions for module methods that need goals passed
+  // Wrapper functions for module methods that need goals passed - STABILIZED
   const getBalanceCardGoalsWrapper = useCallback(() => {
     return getBalanceCardGoals(goals);
   }, [getBalanceCardGoals, goals]);
@@ -652,12 +669,12 @@ const useGoals = () => {
   }, [syncGoalsWithBackend, goals, checkNetworkConnectivity]);
 
   const refreshFromBackendWrapper = useCallback(async () => {
-    return refreshFromBackend(loadGoals);
-  }, [refreshFromBackend, loadGoals]);
+    return refreshFromBackend(loadGoalsRef.current || (() => Promise.resolve()));
+  }, [refreshFromBackend]); // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
 
   const needsSyncWrapper = useCallback(() => {
     return needsSync(goals);
-  }, [needsSync, goals]);
+  }, [goals, needsSync]);
 
   const getLastSyncTimeWrapper = useCallback(() => {
     return getLastSyncTime(lastSyncTime);

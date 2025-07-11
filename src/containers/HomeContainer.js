@@ -1,7 +1,7 @@
 /* eslint-disable no-shadow */
 /* eslint-disable react-hooks/exhaustive-deps */
 // containers/HomeContainer.js
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {AppState, Alert, Platform} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import TrendAPIService from '../services/TrendAPIService';
@@ -82,13 +82,18 @@ const HomeContainer = ({navigation}) => {
 
   // Reload goals when screen comes into focus (e.g., returning from GoalsScreen)
   // Only loads from cache now - no API calls to prevent race conditions
+  const loadGoalsRef = useRef();
+
+  useEffect(() => {
+    loadGoalsRef.current = loadGoals;
+  });
   useFocusEffect(
     useCallback(() => {
-      if (!loading) {
+      if (!loading && loadGoalsRef.current) {
         console.log('🏠 HomeContainer: Reloading goals from cache on focus');
-        loadGoals();
+        loadGoalsRef.current();
       }
-    }, [loading, loadGoals]),
+    }, [loading]), // ✅ FIXED: Removed loadGoals dependency to prevent loops
   );
 
   // ==============================================

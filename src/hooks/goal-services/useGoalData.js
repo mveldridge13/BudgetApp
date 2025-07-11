@@ -181,12 +181,12 @@ const useGoalData = checkNetworkConnectivity => {
         setLoading(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      checkNetworkConnectivity,
       loadGoalsFromAPI,
       loadGoalsFromCache,
       saveGoalsToCache,
-    ],
+    ], // ✅ FIXED: Removed checkNetworkConnectivity dependency to prevent infinite loops
   );
 
   // Save or update a goal
@@ -356,14 +356,14 @@ const useGoalData = checkNetworkConnectivity => {
         return {success: false, error: error.message};
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       sanitizeGoalData,
       validateGoalData,
-      checkNetworkConnectivity,
+      saveGoalsToCache,
       transformFrontendGoal,
       transformBackendGoal,
-      saveGoalsToCache,
-    ],
+    ], // ✅ FIXED: Removed checkNetworkConnectivity dependency to prevent infinite loops
   );
 
   // Delete a goal
@@ -408,7 +408,8 @@ const useGoalData = checkNetworkConnectivity => {
         return {success: false, error: error.message};
       }
     },
-    [checkNetworkConnectivity, saveGoalsToCache],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [saveGoalsToCache], // ✅ FIXED: Removed checkNetworkConnectivity dependency to prevent infinite loops
   );
 
   // Prepare goal for editing
@@ -717,13 +718,13 @@ const useGoalData = checkNetworkConnectivity => {
         }
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       saveGoalsToCache,
       processingPayments,
-      checkNetworkConnectivity,
       transformFrontendGoal,
       loadGoalsFromAPI,
-    ],
+    ], // ✅ FIXED: Removed checkNetworkConnectivity dependency to prevent infinite loops
   );
 
   return {
