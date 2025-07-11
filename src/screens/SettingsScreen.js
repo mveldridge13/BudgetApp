@@ -26,17 +26,10 @@ const SettingsScreen = ({navigation}) => {
 
   // User settings state
   const [userProfile, setUserProfile] = useState(null);
-  const [appSettings, setAppSettings] = useState({
-    notifications: true,
-    biometricAuth: false,
-    darkMode: false,
-    currency: 'AUD',
-    budgetPeriod: 'monthly',
-    dataBackup: true,
-  });
+  const [appSettings, setAppSettings] = useState(null); // ✅ Start with null to prevent flicker
 
   // Pro feature state
-  const [isPro, setIsPro] = useState(false);
+  const [isPro, setIsPro] = useState(null); // ✅ Start with null to prevent flicker
 
   // App state tracking
   const [appVersion] = useState('1.0');
@@ -119,8 +112,29 @@ const SettingsScreen = ({navigation}) => {
 
       // Load app settings from AsyncStorage (fast)
       const storedSettings = await AsyncStorage.getItem('appSettings');
-      if (storedSettings && isMountedRef.current) {
-        setAppSettings(prev => ({...prev, ...JSON.parse(storedSettings)}));
+      if (isMountedRef.current) {
+        if (storedSettings) {
+          // Merge stored settings with defaults
+          const defaultSettings = {
+            notifications: true,
+            biometricAuth: false,
+            darkMode: false,
+            currency: 'AUD',
+            budgetPeriod: 'monthly',
+            dataBackup: true,
+          };
+          setAppSettings({...defaultSettings, ...JSON.parse(storedSettings)});
+        } else {
+          // Set defaults if no stored settings
+          setAppSettings({
+            notifications: true,
+            biometricAuth: false,
+            darkMode: false,
+            currency: 'AUD',
+            budgetPeriod: 'monthly',
+            dataBackup: true,
+          });
+        }
       }
 
       // Load pro status (fast)
@@ -236,6 +250,11 @@ const SettingsScreen = ({navigation}) => {
   // Settings handlers
   const handleToggleSetting = useCallback(
     key => {
+      // Don't allow toggling if settings aren't loaded yet
+      if (!appSettings) {
+        console.warn('Settings not loaded yet, ignoring toggle');
+        return;
+      }
       const newSettings = {...appSettings, [key]: !appSettings[key]};
       saveAppSettings(newSettings);
     },
@@ -377,11 +396,11 @@ const SettingsScreen = ({navigation}) => {
     amount => {
       return new Intl.NumberFormat('en-AU', {
         style: 'currency',
-        currency: appSettings.currency,
+        currency: appSettings?.currency || 'AUD', // ✅ Safe fallback
         minimumFractionDigits: 0,
       }).format(amount || 0);
     },
-    [appSettings.currency],
+    [appSettings?.currency],
   );
 
   const formatIncomeDisplay = useCallback(
@@ -521,8 +540,9 @@ const SettingsScreen = ({navigation}) => {
                 </View>
               </View>
               <Switch
-                value={isPro}
+                value={isPro || false} // ✅ Prevent null/undefined issues
                 onValueChange={handleTogglePro}
+                disabled={isPro === null} // ✅ Disable until data loads
                 trackColor={{
                   false: colors.border,
                   true: colors.warning,
@@ -552,14 +572,15 @@ const SettingsScreen = ({navigation}) => {
                 </View>
               </View>
               <Switch
-                value={appSettings.notifications}
+                value={appSettings?.notifications || false} // ✅ Prevent null/undefined issues
                 onValueChange={() => handleToggleSetting('notifications')}
+                disabled={appSettings === null} // ✅ Disable until data loads
                 trackColor={{
                   false: colors.border,
                   true: colors.primary,
                 }}
                 thumbColor={
-                  appSettings.notifications
+                  appSettings?.notifications
                     ? colors.textWhite
                     : colors.textSecondary
                 }
@@ -584,14 +605,15 @@ const SettingsScreen = ({navigation}) => {
                 </View>
               </View>
               <Switch
-                value={appSettings.biometricAuth}
+                value={appSettings?.biometricAuth || false} // ✅ Prevent null/undefined issues
                 onValueChange={() => handleToggleSetting('biometricAuth')}
+                disabled={appSettings === null} // ✅ Disable until data loads
                 trackColor={{
                   false: colors.border,
                   true: colors.primary,
                 }}
                 thumbColor={
-                  appSettings.biometricAuth
+                  appSettings?.biometricAuth
                     ? colors.textWhite
                     : colors.textSecondary
                 }
@@ -614,14 +636,15 @@ const SettingsScreen = ({navigation}) => {
                 </View>
               </View>
               <Switch
-                value={appSettings.darkMode}
+                value={appSettings?.darkMode || false} // ✅ Prevent null/undefined issues
                 onValueChange={() => handleToggleSetting('darkMode')}
+                disabled={appSettings === null} // ✅ Disable until data loads
                 trackColor={{
                   false: colors.border,
                   true: colors.primary,
                 }}
                 thumbColor={
-                  appSettings.darkMode ? colors.textWhite : colors.textSecondary
+                  appSettings?.darkMode ? colors.textWhite : colors.textSecondary
                 }
                 ios_backgroundColor={colors.border}
               />
