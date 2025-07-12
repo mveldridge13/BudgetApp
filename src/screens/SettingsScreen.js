@@ -489,6 +489,11 @@ const SettingsScreen = ({navigation}) => {
                       ? `${userProfile.firstName} ${userProfile.lastName}`
                       : userProfile.name || userProfile.email || 'User'}
                   </Text>
+                  {userProfile.email && (
+                    <Text style={styles.profileEmail}>
+                      {userProfile.email}
+                    </Text>
+                  )}
                   <Text style={styles.profileIncome}>
                     {formatIncomeDisplay(userProfile)}
                   </Text>
@@ -496,6 +501,7 @@ const SettingsScreen = ({navigation}) => {
               ) : (
                 <>
                   <View style={[styles.skeletonText, styles.skeletonName]} />
+                  <View style={[styles.skeletonText, styles.skeletonEmail]} />
                   <View style={[styles.skeletonText, styles.skeletonIncome]} />
                 </>
               )}
@@ -940,6 +946,13 @@ const styles = StyleSheet.create({
     color: colors.textWhite,
     marginBottom: 2,
   },
+  profileEmail: {
+    fontSize: 13,
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+    marginBottom: 2,
+  },
   profileIncome: {
     fontSize: 14,
     fontFamily: 'System',
@@ -1078,6 +1091,11 @@ const styles = StyleSheet.create({
   skeletonName: {
     height: 20,
     width: '60%',
+    marginBottom: 6,
+  },
+  skeletonEmail: {
+    height: 14,
+    width: '75%',
     marginBottom: 6,
   },
   skeletonIncome: {
