@@ -38,6 +38,9 @@
 	<string>Take photos of receipts to attach to your expenses</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select receipt images from your photo library to attach to expenses</string>
+	<!-- Biometric Authentication Permission -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to securely unlock Budget App</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Feather.ttf</string>

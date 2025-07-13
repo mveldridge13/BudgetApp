@@ -12,11 +12,13 @@ import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import 
 import AnalyticsContainer from '../containers/AnalyticsContainer'; // ✅ CHANGED: Import AnalyticsContainer instead of AnalyticsScreen
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import BiometricWrapper from '../components/BiometricWrapper';
 
 // Import API services
 import AuthService from '../services/AuthService';
 import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
+import BiometricAuth from '../services/BiometricAuth';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -41,58 +43,60 @@ const SettingsIcon = ({color, size}) => (
 // Main Tab Navigator
 function MainTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#8B5CF6',
-        tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          backgroundColor: 'white',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          paddingBottom: 20,
-          paddingTop: 10,
-          height: 90,
-        },
-        tabBarLabelStyle: {
-          paddingBottom: 5,
-        },
-      }}>
-      <Tab.Screen
-        name="Home"
-        component={HomeContainer} // ✅ CHANGED: Use HomeContainer instead of HomeScreen
-        options={{
-          tabBarIcon: HomeIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Analytics"
-        component={AnalyticsContainer} // ✅ CHANGED: Use AnalyticsContainer instead of AnalyticsScreen
-        options={{
-          tabBarIcon: AnalyticsIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Goals"
-        component={GoalsScreen}
-        options={{
-          tabBarIcon: GoalsIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          tabBarIcon: SettingsIcon,
-        }}
-      />
-    </Tab.Navigator>
+    <BiometricWrapper>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#8B5CF6',
+          tabBarInactiveTintColor: '#9CA3AF',
+          tabBarStyle: {
+            backgroundColor: 'white',
+            borderTopWidth: 1,
+            borderTopColor: '#E5E7EB',
+            paddingBottom: 20,
+            paddingTop: 10,
+            height: 90,
+          },
+          tabBarLabelStyle: {
+            paddingBottom: 5,
+          },
+        }}>
+        <Tab.Screen
+          name="Home"
+          component={HomeContainer} // ✅ CHANGED: Use HomeContainer instead of HomeScreen
+          options={{
+            tabBarIcon: HomeIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Analytics"
+          component={AnalyticsContainer} // ✅ CHANGED: Use AnalyticsContainer instead of AnalyticsScreen
+          options={{
+            tabBarIcon: AnalyticsIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Goals"
+          component={GoalsScreen}
+          options={{
+            tabBarIcon: GoalsIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            tabBarIcon: SettingsIcon,
+          }}
+        />
+      </Tab.Navigator>
+    </BiometricWrapper>
   );
 }
 
 // Authentication Screen Wrapper
 function AuthScreen({navigation}) {
-  const handleAuthSuccess = async user => {
+  const handleAuthSuccess = async () => {
 
     try {
       // NEW: Get user profile from backend instead of AsyncStorage
@@ -146,8 +150,13 @@ export default function AppNavigator() {
 
       // Initialize AuthService and check authentication first
       await AuthService.initialize();
+      
+      // Initialize BiometricAuth service early
+      // This will check if the app should be locked on startup
+      console.log('🔐 AppNavigator: Initializing BiometricAuth service');
+      // Note: BiometricAuth service auto-initializes, but we can ensure it's ready
+      
       const isAuthenticated = AuthService.isAuthenticated();
-
 
       if (!isAuthenticated) {
         setInitialRoute('Auth');

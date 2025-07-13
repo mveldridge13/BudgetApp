@@ -20,6 +20,7 @@ import {colors} from '../styles';
 import {Platform} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
+import BiometricAuth from '../services/BiometricAuth';
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
@@ -249,14 +250,65 @@ const SettingsScreen = ({navigation}) => {
 
   // Settings handlers
   const handleToggleSetting = useCallback(
-    key => {
+    async key => {
       // Don't allow toggling if settings aren't loaded yet
       if (!appSettings) {
         console.warn('Settings not loaded yet, ignoring toggle');
         return;
       }
-      const newSettings = {...appSettings, [key]: !appSettings[key]};
-      saveAppSettings(newSettings);
+
+      // Special handling for biometric authentication
+      if (key === 'biometricAuth') {
+        try {
+          const isSupported = await BiometricAuth.isBiometricSupported();
+          
+          if (!isSupported) {
+            Alert.alert(
+              'Biometric Authentication Unavailable',
+              'Your device does not support biometric authentication or it is not set up.',
+              [{text: 'OK'}]
+            );
+            return;
+          }
+
+          const newValue = !appSettings[key];
+          
+          if (newValue) {
+            // Enabling biometric auth - test it first
+            const authResult = await BiometricAuth.promptBiometricAuth('Enable biometric authentication');
+            
+            if (authResult.success) {
+              await BiometricAuth.setBiometricEnabled(true);
+              const newSettings = {...appSettings, [key]: true};
+              saveAppSettings(newSettings);
+              
+            } else {
+              Alert.alert(
+                'Authentication Failed',
+                'Biometric authentication is required to enable this feature.',
+                [{text: 'OK'}]
+              );
+            }
+          } else {
+            // Disabling biometric auth
+            await BiometricAuth.setBiometricEnabled(false);
+            const newSettings = {...appSettings, [key]: false};
+            saveAppSettings(newSettings);
+            
+          }
+        } catch (error) {
+          console.error('Error handling biometric toggle:', error);
+          Alert.alert(
+            'Error',
+            'Failed to update biometric authentication setting. Please try again.',
+            [{text: 'OK'}]
+          );
+        }
+      } else {
+        // Normal setting toggle
+        const newSettings = {...appSettings, [key]: !appSettings[key]};
+        saveAppSettings(newSettings);
+      }
     },
     [appSettings, saveAppSettings],
   );
