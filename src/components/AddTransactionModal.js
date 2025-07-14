@@ -32,6 +32,7 @@ const AddTransactionModal = ({
   selectedSubcategory,
   selectedDate,
   selectedRecurrence,
+  selectedDueDate,
   selectedTransactionType,
 
   // Categories data
@@ -49,6 +50,7 @@ const AddTransactionModal = ({
   onCategorySelect,
   onSubcategorySelect,
   onRecurrenceSelect,
+  onDueDateChange,
   onDateChange,
   onShowCalendar,
   onHideCalendar,
@@ -585,6 +587,41 @@ const AddTransactionModal = ({
                     color={colors.textSecondary}
                   />
                 </TouchableOpacity>
+
+                {/* Due Date Field */}
+                <TouchableOpacity
+                  style={styles.dueDateField}
+                  onPress={() => onShowCalendar('dueDate')}
+                  activeOpacity={0.7}>
+                  <View style={styles.dueDateLeft}>
+                    <Icon
+                      name="calendar-outline"
+                      size={18}
+                      color={
+                        selectedDueDate ? colors.primary : colors.textSecondary
+                      }
+                      style={styles.dueDateIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.dueDateText,
+                        selectedDueDate && styles.dueDateActiveText,
+                      ]}>
+                      {selectedDueDate
+                        ? selectedDueDate.toLocaleDateString('en-AU', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })
+                        : 'Due Date (Optional)'}
+                    </Text>
+                  </View>
+                  <Icon
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
               </ScrollView>
             </View>
 
@@ -1011,6 +1048,32 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   recurrenceActiveText: {
+    color: colors.textPrimary,
+  },
+  dueDateField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 32,
+  },
+  dueDateLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dueDateIcon: {
+    marginRight: 12,
+  },
+  dueDateText: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  dueDateActiveText: {
     color: colors.textPrimary,
   },
   loadingContainer: {

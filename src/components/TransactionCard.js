@@ -184,6 +184,28 @@ const TransactionCard = ({
     }
   };
 
+  const formatDueDate = dueDate => {
+    if (!dueDate) {
+      return null;
+    }
+
+    const dueDateObj = new Date(dueDate);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (dueDateObj.toDateString() === today.toDateString()) {
+      return 'Due today';
+    } else if (dueDateObj.toDateString() === tomorrow.toDateString()) {
+      return 'Due tomorrow';
+    } else {
+      return `Due ${dueDateObj.toLocaleDateString('en-AU', {
+        day: 'numeric',
+        month: 'short',
+      })}`;
+    }
+  };
+
   const getRecurrenceText = recurrence => {
     switch (recurrence) {
       case 'monthly':
@@ -330,6 +352,9 @@ const TransactionCard = ({
                 )}
               </View>
               <Text style={styles.metadata}>{getMetadataText()}</Text>
+              {transaction.dueDate && (
+                <Text style={styles.dueDate}>{formatDueDate(transaction.dueDate)}</Text>
+              )}
             </View>
 
             <Text style={[styles.amount, {color: getAmountColor()}]}>
@@ -461,6 +486,14 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     letterSpacing: -0.1,
+  },
+  dueDate: {
+    fontSize: 11,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: '#FF6B35',
+    letterSpacing: -0.1,
+    marginTop: 2,
   },
   amount: {
     fontSize: 16,

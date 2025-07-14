@@ -34,7 +34,28 @@ const useTransactions = () => {
   }, []);
 
   const sortTransactions = useCallback(
-    txs => txs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
+    txs => txs.sort((a, b) => {
+      const aHasDueDate = a.dueDate;
+      const bHasDueDate = b.dueDate;
+      
+      // Both have due dates - sort by due date ascending (soonest first)
+      if (aHasDueDate && bHasDueDate) {
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      }
+      
+      // Only a has due date - a comes first
+      if (aHasDueDate && !bHasDueDate) {
+        return -1;
+      }
+      
+      // Only b has due date - b comes first
+      if (!aHasDueDate && bHasDueDate) {
+        return 1;
+      }
+      
+      // Neither has due date - sort by transaction date descending (newest first)
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    }),
     [],
   );
 

@@ -50,9 +50,28 @@ const HomeContainer = ({navigation}) => {
   // UTILITY FUNCTIONS
   // ==============================================
   const sortTransactionsByDate = txs => {
-    return [...txs].sort(
-      (a, b) => new Date(b.date || 0) - new Date(a.date || 0),
-    );
+    return [...txs].sort((a, b) => {
+      const aHasDueDate = a.dueDate;
+      const bHasDueDate = b.dueDate;
+      
+      // Both have due dates - sort by due date ascending (soonest first)
+      if (aHasDueDate && bHasDueDate) {
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      }
+      
+      // Only a has due date - a comes first
+      if (aHasDueDate && !bHasDueDate) {
+        return -1;
+      }
+      
+      // Only b has due date - b comes first
+      if (!aHasDueDate && bHasDueDate) {
+        return 1;
+      }
+      
+      // Neither has due date - sort by transaction date descending (newest first)
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    });
   };
 
   const transformCategoriesForUI = useCallback(backendCategories => {
@@ -425,6 +444,7 @@ const HomeContainer = ({navigation}) => {
           subcategoryId: transaction.subcategoryId || transaction.subcategory,
           date: transaction.date.toISOString(),
           recurrence: transaction.recurrence,
+          dueDate: transaction.dueDate ? transaction.dueDate.toISOString() : null,
         };
 
         // Send to backend

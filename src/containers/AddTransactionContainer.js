@@ -29,6 +29,7 @@ const AddTransactionContainer = ({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDueDate, setSelectedDueDate] = useState(null);
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
   const [selectedTransactionType, setSelectedTransactionType] =
     useState('EXPENSE');
@@ -42,6 +43,7 @@ const AddTransactionContainer = ({
 
   // Other modals state
   const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMode, setCalendarMode] = useState('transaction'); // 'transaction' or 'dueDate'
 
   // Check if we're in edit mode
   const isEditMode = !!editingTransaction;
@@ -217,6 +219,7 @@ const AddTransactionContainer = ({
     setSelectedCategory(null);
     setSelectedSubcategory(null);
     setSelectedDate(new Date());
+    setSelectedDueDate(null);
     setSelectedRecurrence('none');
     setSelectedTransactionType('EXPENSE');
     setCurrentSubcategoryData(null);
@@ -230,6 +233,7 @@ const AddTransactionContainer = ({
       setSelectedCategory(editingTransaction.categoryId);
       setSelectedSubcategory(editingTransaction.subcategoryId || null);
       setSelectedDate(new Date(editingTransaction.date));
+      setSelectedDueDate(editingTransaction.dueDate ? new Date(editingTransaction.dueDate) : null);
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
       setSelectedTransactionType(editingTransaction.type || 'EXPENSE');
 
@@ -266,6 +270,7 @@ const AddTransactionContainer = ({
       categoryId: selectedCategory, // ✅ CORRECT field name
       subcategoryId: selectedSubcategory, // ✅ FIXED - was 'subcategory'
       date: selectedDate,
+      dueDate: selectedDueDate,
       recurrence: selectedRecurrence,
       type: selectedTransactionType,
       createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
@@ -288,6 +293,7 @@ const AddTransactionContainer = ({
     getCategoryDisplayName,
     selectedSubcategory,
     selectedDate,
+    selectedDueDate,
     selectedRecurrence,
     selectedTransactionType,
     isEditMode,
@@ -351,11 +357,20 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleDateChange = useCallback(date => {
-    setSelectedDate(date);
+    if (calendarMode === 'dueDate') {
+      setSelectedDueDate(date);
+    } else {
+      setSelectedDate(date);
+    }
     setShowCalendar(false);
+  }, [calendarMode]);
+
+  const handleDueDateChange = useCallback(date => {
+    setSelectedDueDate(date);
   }, []);
 
-  const handleShowCalendar = useCallback(() => {
+  const handleShowCalendar = useCallback((mode = 'transaction') => {
+    setCalendarMode(mode);
     setShowCalendar(true);
   }, []);
 
@@ -538,6 +553,7 @@ const AddTransactionContainer = ({
       selectedCategory={selectedCategory}
       selectedSubcategory={selectedSubcategory}
       selectedDate={selectedDate}
+      selectedDueDate={selectedDueDate}
       selectedRecurrence={selectedRecurrence}
       selectedTransactionType={selectedTransactionType}
       // Categories data
@@ -554,6 +570,7 @@ const AddTransactionContainer = ({
       onSubcategorySelect={handleSubcategorySelect}
       onRecurrenceSelect={handleRecurrenceSelect}
       onDateChange={handleDateChange}
+      onDueDateChange={handleDueDateChange}
       onShowCalendar={handleShowCalendar}
       onHideCalendar={handleHideCalendar}
       onTransactionTypeChange={handleTransactionTypeChange}
