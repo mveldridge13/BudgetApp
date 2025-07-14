@@ -223,6 +223,33 @@ const TransactionCard = ({
     }
   };
 
+  const getPaymentStatusText = status => {
+    switch (status) {
+      case 'UPCOMING':
+        return 'Upcoming';
+      case 'PAID':
+        return 'Paid';
+      case 'OVERDUE':
+        return 'Overdue';
+      default:
+        return null;
+    }
+  };
+
+  const getPaymentStatusColor = status => {
+    switch (status) {
+      case 'UPCOMING':
+        return '#007AFF';
+      case 'PAID':
+        return '#4CAF50';
+      case 'OVERDUE':
+        return '#F44336';
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+
   // ✅ PURE UI DISPLAY LOGIC (uses pre-resolved categoryData)
   const getMetadataText = () => {
     const recurrenceText = getRecurrenceText(transaction.recurrence);
@@ -354,6 +381,11 @@ const TransactionCard = ({
               <Text style={styles.metadata}>{getMetadataText()}</Text>
               {transaction.dueDate && (
                 <Text style={styles.dueDate}>{formatDueDate(transaction.dueDate)}</Text>
+              )}
+              {transaction.status && (
+                <Text style={[styles.paymentStatus, {color: getPaymentStatusColor(transaction.status)}]}>
+                  {getPaymentStatusText(transaction.status)}
+                </Text>
               )}
             </View>
 
@@ -492,6 +524,13 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'System',
     color: '#FF6B35',
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
+  paymentStatus: {
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: 'System',
     letterSpacing: -0.1,
     marginTop: 2,
   },

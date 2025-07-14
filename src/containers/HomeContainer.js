@@ -38,11 +38,13 @@ const HomeContainer = ({navigation}) => {
   useEffect(() => {
     console.log('🏠 HomeContainer: Goals state changed:', {
       goalsCount: goals.length,
-      balanceCardGoals: goals.filter(g => g.showOnBalanceCard).map(g => ({
-        id: g.id,
-        title: g.title,
-        showOnBalanceCard: g.showOnBalanceCard,
-      })),
+      balanceCardGoals: goals
+        .filter(g => g.showOnBalanceCard)
+        .map(g => ({
+          id: g.id,
+          title: g.title,
+          showOnBalanceCard: g.showOnBalanceCard,
+        })),
     });
   }, [goals]);
 
@@ -53,22 +55,22 @@ const HomeContainer = ({navigation}) => {
     return [...txs].sort((a, b) => {
       const aHasDueDate = a.dueDate;
       const bHasDueDate = b.dueDate;
-      
+
       // Both have due dates - sort by due date ascending (soonest first)
       if (aHasDueDate && bHasDueDate) {
         return new Date(a.dueDate) - new Date(b.dueDate);
       }
-      
+
       // Only a has due date - a comes first
       if (aHasDueDate && !bHasDueDate) {
         return -1;
       }
-      
+
       // Only b has due date - b comes first
       if (!aHasDueDate && bHasDueDate) {
         return 1;
       }
-      
+
       // Neither has due date - sort by transaction date descending (newest first)
       return new Date(b.date || 0) - new Date(a.date || 0);
     });
@@ -146,7 +148,9 @@ const HomeContainer = ({navigation}) => {
         // For subcategories, we want to show the PARENT category name instead
         // Use the categoryId to look up the main category
         if (transaction.categoryId && categories && categories.length > 0) {
-          const mainCategory = categories.find(cat => cat.id === transaction.categoryId);
+          const mainCategory = categories.find(
+            cat => cat.id === transaction.categoryId,
+          );
           if (mainCategory) {
             return {
               id: mainCategory.id,
@@ -156,7 +160,7 @@ const HomeContainer = ({navigation}) => {
             };
           }
         }
-        
+
         // Fallback to subcategory if parent not found
         return {
           id: transaction.subcategory.id,
@@ -444,8 +448,12 @@ const HomeContainer = ({navigation}) => {
           subcategoryId: transaction.subcategoryId || transaction.subcategory,
           date: transaction.date.toISOString(),
           recurrence: transaction.recurrence,
-          dueDate: transaction.dueDate ? transaction.dueDate.toISOString() : null,
+          dueDate: transaction.dueDate
+            ? transaction.dueDate.toISOString()
+            : null,
+          status: transaction.status,
         };
+
 
         // Send to backend
         const savedTransaction = isEditing
@@ -454,6 +462,7 @@ const HomeContainer = ({navigation}) => {
               transactionData,
             )
           : await TrendAPIService.createTransaction(transactionData);
+
 
         // Reconcile with server response
         setTransactions(prev => {
@@ -847,7 +856,10 @@ const HomeContainer = ({navigation}) => {
           throw new Error('Invalid date after parsing');
         }
       } catch (dateError) {
-        console.error('🧮 Date parsing error for additional income:', dateError);
+        console.error(
+          '🧮 Date parsing error for additional income:',
+          dateError,
+        );
         nextPayDate = new Date(); // Fallback to current date
       }
 
@@ -887,7 +899,11 @@ const HomeContainer = ({navigation}) => {
 
           return inPeriod && isIncome;
         } catch (error) {
-          console.error('🧮 Error checking income transaction:', error, transaction);
+          console.error(
+            '🧮 Error checking income transaction:',
+            error,
+            transaction,
+          );
           return false;
         }
       });
@@ -898,10 +914,12 @@ const HomeContainer = ({navigation}) => {
         return sum + amount;
       }, 0);
 
-
       return total;
     } catch (error) {
-      console.error('🧮 Critical error in calculateTotalAdditionalIncome:', error);
+      console.error(
+        '🧮 Critical error in calculateTotalAdditionalIncome:',
+        error,
+      );
       return 0; // Graceful fallback
     }
   }, [transactions, incomeData]);

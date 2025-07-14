@@ -34,6 +34,7 @@ const AddTransactionModal = ({
   selectedRecurrence,
   selectedDueDate,
   selectedTransactionType,
+  selectedPaymentStatus,
 
   // Categories data
   categories,
@@ -55,12 +56,14 @@ const AddTransactionModal = ({
   onShowCalendar,
   onHideCalendar,
   onTransactionTypeChange,
+  onPaymentStatusChange,
 
   // Helper functions
   getCategoryById,
   getRecurrenceById,
   getCategoryDisplayName,
   recurrenceOptions,
+  paymentStatusOptions,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -218,6 +221,14 @@ const AddTransactionModal = ({
     }).start();
   };
 
+  const showPaymentStatusPicker = () => {
+    Animated.timing(slideAnim, {
+      toValue: -screenWidth * 4,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const hideCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -235,6 +246,14 @@ const AddTransactionModal = ({
   };
 
   const hideRecurrencePicker = () => {
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const hidePaymentStatusPicker = () => {
     Animated.timing(slideAnim, {
       toValue: 0,
       duration: 300,
@@ -275,6 +294,11 @@ const AddTransactionModal = ({
 
   const handleTransactionTypeSelect = type => {
     onTransactionTypeChange(type);
+  };
+
+  const handlePaymentStatusSelect = status => {
+    onPaymentStatusChange(status);
+    hidePaymentStatusPicker();
   };
 
   // ==============================================
@@ -343,6 +367,57 @@ const AddTransactionModal = ({
     }
 
     return mainCategory.icon;
+  };
+
+  const getPaymentStatusDisplayName = () => {
+    if (!selectedPaymentStatus) {
+      return 'Payment Status (Optional)';
+    }
+
+    switch (selectedPaymentStatus) {
+      case 'UPCOMING':
+        return 'Upcoming';
+      case 'PAID':
+        return 'Paid';
+      case 'OVERDUE':
+        return 'Overdue';
+      default:
+        return 'Payment Status (Optional)';
+    }
+  };
+
+  const getPaymentStatusIcon = (status = selectedPaymentStatus) => {
+    if (!status) {
+      return 'time-outline';
+    }
+
+    switch (status) {
+      case 'UPCOMING':
+        return 'time-outline';
+      case 'PAID':
+        return 'checkmark-circle-outline';
+      case 'OVERDUE':
+        return 'warning-outline';
+      default:
+        return 'time-outline';
+    }
+  };
+
+  const getPaymentStatusColor = (status = selectedPaymentStatus) => {
+    if (!status) {
+      return colors.textSecondary;
+    }
+
+    switch (status) {
+      case 'UPCOMING':
+        return '#007AFF';
+      case 'PAID':
+        return '#4CAF50';
+      case 'OVERDUE':
+        return '#F44336';
+      default:
+        return colors.textSecondary;
+    }
   };
 
   // ==============================================
@@ -622,6 +697,33 @@ const AddTransactionModal = ({
                     color={colors.textSecondary}
                   />
                 </TouchableOpacity>
+
+                {/* Payment Status Field */}
+                <TouchableOpacity
+                  style={styles.paymentStatusField}
+                  onPress={showPaymentStatusPicker}
+                  activeOpacity={0.7}>
+                  <View style={styles.paymentStatusLeft}>
+                    <Icon
+                      name={getPaymentStatusIcon()}
+                      size={18}
+                      color={getPaymentStatusColor()}
+                      style={styles.paymentStatusIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.paymentStatusText,
+                        selectedPaymentStatus && styles.paymentStatusActiveText,
+                      ]}>
+                      {getPaymentStatusDisplayName()}
+                    </Text>
+                  </View>
+                  <Icon
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
               </ScrollView>
             </View>
 
@@ -801,6 +903,52 @@ const AddTransactionModal = ({
                 ))}
               </ScrollView>
             </View>
+
+            {/* Payment Status Picker View */}
+            <View style={styles.view}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+                <TouchableOpacity
+                  onPress={hidePaymentStatusPicker}
+                  style={styles.cancelButton}>
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Payment Status</Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.formContainer}
+                showsVerticalScrollIndicator={false}>
+                {paymentStatusOptions.map(option => (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.categoryOption,
+                      selectedPaymentStatus === option.id &&
+                        styles.selectedOption,
+                    ]}
+                    onPress={() => handlePaymentStatusSelect(option.id)}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      <Icon
+                        name={getPaymentStatusIcon(option.id)}
+                        size={18}
+                        color={getPaymentStatusColor(option.id)}
+                        style={styles.paymentStatusOptionIcon}
+                      />
+                      <Text style={styles.categoryName}>{option.name}</Text>
+                    </View>
+                    {selectedPaymentStatus === option.id && (
+                      <Icon name="checkmark" size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -828,7 +976,7 @@ const styles = StyleSheet.create({
   },
   viewContainer: {
     flexDirection: 'row',
-    width: screenWidth * 4, // 4 views: Transaction, Category, Subcategory, Recurrence
+    width: screenWidth * 5, // 5 views: Transaction, Category, Subcategory, Recurrence, PaymentStatus
     height: '100%',
   },
   view: {
@@ -1075,6 +1223,35 @@ const styles = StyleSheet.create({
   },
   dueDateActiveText: {
     color: colors.textPrimary,
+  },
+  paymentStatusField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 32,
+  },
+  paymentStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentStatusIcon: {
+    marginRight: 12,
+  },
+  paymentStatusText: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  paymentStatusActiveText: {
+    color: colors.textPrimary,
+  },
+  paymentStatusOptionIcon: {
+    marginRight: 12,
   },
   loadingContainer: {
     paddingVertical: 40,

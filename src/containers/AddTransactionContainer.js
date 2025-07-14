@@ -12,6 +12,12 @@ const recurrenceOptions = [
   {id: 'yearly', name: 'Yearly'},
 ];
 
+const paymentStatusOptions = [
+  {id: 'UPCOMING', name: 'Upcoming'},
+  {id: 'PAID', name: 'Paid'},
+  {id: 'OVERDUE', name: 'Overdue'},
+];
+
 const AddTransactionContainer = ({
   visible,
   onClose,
@@ -33,6 +39,7 @@ const AddTransactionContainer = ({
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
   const [selectedTransactionType, setSelectedTransactionType] =
     useState('EXPENSE');
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState(null);
 
   // Categories data
   const [allCategories, setAllCategories] = useState([]);
@@ -222,6 +229,7 @@ const AddTransactionContainer = ({
     setSelectedDueDate(null);
     setSelectedRecurrence('none');
     setSelectedTransactionType('EXPENSE');
+    setSelectedPaymentStatus(null);
     setCurrentSubcategoryData(null);
   }, []);
 
@@ -233,9 +241,14 @@ const AddTransactionContainer = ({
       setSelectedCategory(editingTransaction.categoryId);
       setSelectedSubcategory(editingTransaction.subcategoryId || null);
       setSelectedDate(new Date(editingTransaction.date));
-      setSelectedDueDate(editingTransaction.dueDate ? new Date(editingTransaction.dueDate) : null);
+      setSelectedDueDate(
+        editingTransaction.dueDate
+          ? new Date(editingTransaction.dueDate)
+          : null,
+      );
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
       setSelectedTransactionType(editingTransaction.type || 'EXPENSE');
+      setSelectedPaymentStatus(editingTransaction.status || null);
 
       // Set currentSubcategoryData for edit mode
       if (editingTransaction.categoryId) {
@@ -273,6 +286,7 @@ const AddTransactionContainer = ({
       dueDate: selectedDueDate,
       recurrence: selectedRecurrence,
       type: selectedTransactionType,
+      status: selectedPaymentStatus,
       createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
       updatedAt: isEditMode ? new Date() : undefined,
     };
@@ -296,6 +310,7 @@ const AddTransactionContainer = ({
     selectedDueDate,
     selectedRecurrence,
     selectedTransactionType,
+    selectedPaymentStatus,
     isEditMode,
     editingTransaction,
     onSave,
@@ -348,6 +363,10 @@ const AddTransactionContainer = ({
     setSelectedRecurrence(recurrenceId);
   }, []);
 
+  const handlePaymentStatusChange = useCallback(statusId => {
+    setSelectedPaymentStatus(statusId);
+  }, []);
+
   const handleAmountChange = useCallback(text => {
     setAmount(text);
   }, []);
@@ -356,14 +375,17 @@ const AddTransactionContainer = ({
     setDescription(text);
   }, []);
 
-  const handleDateChange = useCallback(date => {
-    if (calendarMode === 'dueDate') {
-      setSelectedDueDate(date);
-    } else {
-      setSelectedDate(date);
-    }
-    setShowCalendar(false);
-  }, [calendarMode]);
+  const handleDateChange = useCallback(
+    date => {
+      if (calendarMode === 'dueDate') {
+        setSelectedDueDate(date);
+      } else {
+        setSelectedDate(date);
+      }
+      setShowCalendar(false);
+    },
+    [calendarMode],
+  );
 
   const handleDueDateChange = useCallback(date => {
     setSelectedDueDate(date);
@@ -556,6 +578,7 @@ const AddTransactionContainer = ({
       selectedDueDate={selectedDueDate}
       selectedRecurrence={selectedRecurrence}
       selectedTransactionType={selectedTransactionType}
+      selectedPaymentStatus={selectedPaymentStatus}
       // Categories data
       categories={categories}
       isLoading={isLoading}
@@ -574,11 +597,13 @@ const AddTransactionContainer = ({
       onShowCalendar={handleShowCalendar}
       onHideCalendar={handleHideCalendar}
       onTransactionTypeChange={handleTransactionTypeChange}
+      onPaymentStatusChange={handlePaymentStatusChange}
       // Helper functions
       getCategoryById={getCategoryById}
       getRecurrenceById={getRecurrenceById}
       getCategoryDisplayName={getCategoryDisplayName}
       recurrenceOptions={recurrenceOptions}
+      paymentStatusOptions={paymentStatusOptions}
     />
   );
 };
