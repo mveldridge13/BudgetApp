@@ -130,7 +130,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
       const profileUpdateData = {
         income: incomeAmount,
         incomeFrequency: selectedFrequency.toUpperCase(), // Convert to WEEKLY/FORTNIGHTLY/MONTHLY
-        nextPayDate: nextPayDate.toISOString(),
+        nextPayDate: nextPayDate.toISOString().split('T')[0],
         setupComplete: true,
       };
 
@@ -142,7 +142,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
       const setupData = {
         income: incomeAmount,
         frequency: selectedFrequency,
-        nextPayDate: nextPayDate.toISOString(),
+        nextPayDate: nextPayDate.toISOString().split('T')[0],
         setupComplete: true,
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),

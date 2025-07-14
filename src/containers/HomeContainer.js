@@ -683,7 +683,13 @@ const HomeContainer = ({navigation}) => {
       // Parse next pay date with error handling
       let nextPayDate;
       try {
-        nextPayDate = new Date(incomeData.nextPayDate);
+        // Handle both date-only format (YYYY-MM-DD) and full ISO string
+        if (incomeData.nextPayDate.includes('T')) {
+          nextPayDate = new Date(incomeData.nextPayDate);
+        } else {
+          // For date-only format, create date in local timezone at noon to avoid timezone issues
+          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+        }
 
         if (isNaN(nextPayDate.getTime())) {
           throw new Error('Invalid date after parsing');
@@ -700,10 +706,11 @@ const HomeContainer = ({navigation}) => {
       let periodEnd;
 
       try {
-        // Always set period end to end of the next pay date
+        // Set period end to the next pay date
         periodEnd = new Date(nextPayDate);
         periodEnd.setHours(23, 59, 59, 999);
 
+        // Calculate the PREVIOUS pay date - this becomes the start of the current period
         if (incomeData.frequency === 'weekly') {
           periodStart = new Date(nextPayDate);
           periodStart.setDate(periodStart.getDate() - 7);
@@ -725,6 +732,9 @@ const HomeContainer = ({navigation}) => {
           periodStart.setMonth(periodStart.getMonth() - 1);
         }
 
+        // Set period start to beginning of day to include all transactions from that day
+        periodStart.setHours(0, 0, 0, 0);
+
         // Ensure periodStart is not invalid
         if (isNaN(periodStart.getTime())) {
           throw new Error('Invalid period start date');
@@ -733,8 +743,10 @@ const HomeContainer = ({navigation}) => {
         console.log('💰 Period calculated:', {
           platform: Platform.OS,
           frequency: incomeData.frequency,
+          nextPayDate: nextPayDate.toISOString(),
           periodStart: periodStart.toISOString(),
           periodEnd: periodEnd.toISOString(),
+          today: new Date().toISOString(),
         });
       } catch (periodError) {
         console.error('🧮 Error calculating period:', periodError);
@@ -767,6 +779,13 @@ const HomeContainer = ({navigation}) => {
         platform: Platform.OS,
         totalTransactions: transactions.length,
         periodTransactions: periodTransactions.length,
+        allTransactionDates: transactions.map(t => ({
+          date: t.date,
+          type: t.type,
+          amount: t.amount,
+          description: t.description,
+          inPeriod: new Date(t.date) >= periodStart && new Date(t.date) <= periodEnd,
+        })),
         periodTransactionAmounts: periodTransactions.map(t => ({
           amount: t.amount,
           date: t.date,
@@ -841,14 +860,20 @@ const HomeContainer = ({navigation}) => {
       // Parse next pay date with error handling
       let nextPayDate;
       try {
+        // Handle both date-only format (YYYY-MM-DD) and full ISO string
         if (incomeData.nextPayDate.includes('T')) {
           nextPayDate = new Date(incomeData.nextPayDate);
+        } else if (incomeData.nextPayDate.includes('-')) {
+          // YYYY-MM-DD format
+          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
         } else {
+          // Legacy DD/MM/YYYY format
           const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
           nextPayDate = new Date(
             2000 + parseInt(yearStr, 10),
             parseInt(monthStr, 10) - 1,
             parseInt(dayStr, 10),
+            12, 0, 0, 0
           );
         }
 
