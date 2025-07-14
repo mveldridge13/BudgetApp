@@ -32,6 +32,7 @@ const HomeScreen = ({
   totalExpenses = 0,
   totalIncomePayments = 0,
   totalAdditionalIncome = 0,
+  currency = 'AUD',
 
   // ==============================================
   // EVENT HANDLER PROPS
@@ -163,6 +164,7 @@ const HomeScreen = ({
           balanceCardRef={onboarding?.balanceCardRef}
           goals={goals}
           onGoalsPress={onGoalsPress}
+          currency={currency}
         />
       </View>
 

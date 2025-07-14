@@ -3,6 +3,7 @@
 // containers/HomeContainer.js
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {AppState, Alert, Platform} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // import {useFocusEffect} from '@react-navigation/native'; // Removed to eliminate reload delay
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
@@ -25,6 +26,7 @@ const HomeContainer = ({navigation}) => {
     new Date().toDateString(),
   );
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [currency, setCurrency] = useState('AUD');
 
   // ==============================================
   // HOOKS
@@ -122,6 +124,21 @@ const HomeContainer = ({navigation}) => {
         transaction.subcategory &&
         typeof transaction.subcategory === 'object'
       ) {
+        // For subcategories, we want to show the PARENT category name instead
+        // Use the categoryId to look up the main category
+        if (transaction.categoryId && categories && categories.length > 0) {
+          const mainCategory = categories.find(cat => cat.id === transaction.categoryId);
+          if (mainCategory) {
+            return {
+              id: mainCategory.id,
+              name: mainCategory.name,
+              icon: mainCategory.icon || 'albums-outline',
+              color: mainCategory.color || '#4ECDC4',
+            };
+          }
+        }
+        
+        // Fallback to subcategory if parent not found
         return {
           id: transaction.subcategory.id,
           name: transaction.subcategory.name,
@@ -277,6 +294,22 @@ const HomeContainer = ({navigation}) => {
       );
     }
   }, [navigation]);
+
+  // Load currency setting from app settings
+  const loadCurrencySetting = useCallback(async () => {
+    try {
+      const appSettings = await AsyncStorage.getItem('appSettings');
+      if (appSettings) {
+        const settings = JSON.parse(appSettings);
+        setCurrency(settings.currency || 'AUD');
+      } else {
+        setCurrency('AUD'); // Default
+      }
+    } catch (error) {
+      console.error('Error loading currency setting:', error);
+      setCurrency('AUD'); // Fallback
+    }
+  }, []);
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -986,6 +1019,7 @@ const HomeContainer = ({navigation}) => {
           loadTransactions(),
           loadCategories(),
           loadGoals(),
+          loadCurrencySetting(),
         ]);
       } catch (error) {
         console.error('HomeContainer: Error in loadInitialData:', error);
@@ -1142,6 +1176,7 @@ const HomeContainer = ({navigation}) => {
       totalExpenses={totalExpenses}
       totalIncomePayments={totalIncomePayments}
       totalAdditionalIncome={totalAdditionalIncome}
+      currency={currency}
       onDateChange={setSelectedDate}
       onSaveTransaction={handleSaveTransaction}
       onDeleteTransaction={handleDeleteTransaction}

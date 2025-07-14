@@ -4,6 +4,7 @@ import React from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+import {formatCurrencySync} from '../utils/currencyHelper';
 
 const BalanceCard = ({
   incomeData,
@@ -18,12 +19,11 @@ const BalanceCard = ({
   // New goal-related props
   goals = [],
   onGoalsPress,
+  // Currency setting
+  currency = 'AUD',
 }) => {
   const formatCurrency = amount => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount || 0);
+    return formatCurrencySync(amount, currency);
   };
 
   const getCurrentDate = () => {

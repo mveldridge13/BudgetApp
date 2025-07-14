@@ -119,7 +119,6 @@ const SettingsScreen = ({navigation}) => {
           const defaultSettings = {
             notifications: true,
             biometricAuth: false,
-            darkMode: false,
             currency: 'AUD',
             budgetPeriod: 'monthly',
             dataBackup: true,
@@ -130,7 +129,6 @@ const SettingsScreen = ({navigation}) => {
           setAppSettings({
             notifications: true,
             biometricAuth: false,
-            darkMode: false,
             currency: 'AUD',
             budgetPeriod: 'monthly',
             dataBackup: true,
@@ -318,6 +316,35 @@ const SettingsScreen = ({navigation}) => {
     await UserProfileCache.clear();
     navigation.navigate('IncomeSetup', {editMode: true});
   }, [navigation]);
+
+  const handleCurrencySelection = useCallback(() => {
+    const currencies = [
+      { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
+      { code: 'USD', name: 'US Dollar', symbol: '$' },
+      { code: 'EUR', name: 'Euro', symbol: '€' },
+      { code: 'GBP', name: 'British Pound', symbol: '£' },
+      { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
+      { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
+      { code: 'NZD', name: 'New Zealand Dollar', symbol: '$' },
+    ];
+
+    const buttons = currencies.map(currency => ({
+      text: `${currency.symbol} ${currency.code} - ${currency.name}`,
+      onPress: () => {
+        const newSettings = { ...appSettings, currency: currency.code };
+        saveAppSettings(newSettings);
+      },
+    }));
+
+    buttons.push({ text: 'Cancel', style: 'cancel' });
+
+    Alert.alert(
+      'Select Currency',
+      'Choose your preferred currency for transactions and balance display',
+      buttons,
+      { cancelable: true }
+    );
+  }, [appSettings, saveAppSettings]);
 
   const handleExportData = useCallback(async () => {
     try {
@@ -681,32 +708,32 @@ const SettingsScreen = ({navigation}) => {
 
             <View style={styles.settingDivider} />
 
-            <View style={styles.settingRow}>
+            <TouchableOpacity 
+              style={styles.settingRow}
+              onPress={() => handleCurrencySelection()}
+              disabled={appSettings === null}>
               <View style={styles.settingInfo}>
                 <View style={styles.settingIconContainer}>
-                  <Icon name="moon" size={18} color={colors.primary} />
+                  <Icon name="dollar-sign" size={18} color={colors.primary} />
                 </View>
                 <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Dark Mode</Text>
+                  <Text style={styles.settingLabel}>Currency</Text>
                   <Text style={styles.settingDescription}>
-                    Use dark theme throughout the app
+                    Default currency for transactions
                   </Text>
                 </View>
               </View>
-              <Switch
-                value={appSettings?.darkMode || false} // ✅ Prevent null/undefined issues
-                onValueChange={() => handleToggleSetting('darkMode')}
-                disabled={appSettings === null} // ✅ Disable until data loads
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary,
-                }}
-                thumbColor={
-                  appSettings?.darkMode ? colors.textWhite : colors.textSecondary
-                }
-                ios_backgroundColor={colors.border}
-              />
-            </View>
+              <View style={styles.settingMeta}>
+                <Text style={styles.currencyDisplay}>
+                  {appSettings?.currency || 'AUD'}
+                </Text>
+                <Icon
+                  name="chevron-right"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1089,6 +1116,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dataSize: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  currencyDisplay: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'System',
