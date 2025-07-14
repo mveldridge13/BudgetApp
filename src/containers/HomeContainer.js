@@ -761,6 +761,107 @@ const HomeContainer = ({navigation}) => {
   }, [calculateTotalExpenses, incomeData, transactions]);
 
   // ==============================================
+  // ADDITIONAL INCOME CALCULATION
+  // ==============================================
+  const [totalAdditionalIncome, setTotalAdditionalIncome] = useState(0);
+
+  const calculateTotalAdditionalIncome = useCallback(() => {
+    try {
+      // Input validation - early returns for invalid state
+      if (!transactions?.length) {
+        return 0;
+      }
+
+      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
+        return 0;
+      }
+
+      // Parse next pay date with error handling
+      let nextPayDate;
+      try {
+        if (incomeData.nextPayDate.includes('T')) {
+          nextPayDate = new Date(incomeData.nextPayDate);
+        } else {
+          const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
+          nextPayDate = new Date(
+            2000 + parseInt(yearStr, 10),
+            parseInt(monthStr, 10) - 1,
+            parseInt(dayStr, 10),
+          );
+        }
+
+        if (isNaN(nextPayDate.getTime())) {
+          throw new Error('Invalid date after parsing');
+        }
+      } catch (dateError) {
+        console.error('🧮 Date parsing error for additional income:', dateError);
+        nextPayDate = new Date(); // Fallback to current date
+      }
+
+      // Calculate period boundaries (same logic as calculateTotalExpenses)
+      let periodStart, periodEnd;
+      periodEnd = new Date(nextPayDate);
+      periodEnd.setHours(23, 59, 59, 999);
+
+      if (incomeData.frequency === 'weekly') {
+        periodStart = new Date(nextPayDate);
+        periodStart.setDate(periodStart.getDate() - 7);
+      } else if (incomeData.frequency === 'fortnightly') {
+        periodStart = new Date(nextPayDate);
+        periodStart.setDate(periodStart.getDate() - 14);
+      } else if (incomeData.frequency === 'monthly') {
+        periodStart = new Date(nextPayDate);
+        periodStart.setMonth(periodStart.getMonth() - 1);
+      } else {
+        // Default to monthly if frequency is unknown
+        periodStart = new Date(nextPayDate);
+        periodStart.setMonth(periodStart.getMonth() - 1);
+      }
+
+      periodStart.setHours(0, 0, 0, 0);
+
+      // Filter transactions for the period - only count INCOME transactions
+      const periodIncomeTransactions = transactions.filter(transaction => {
+        try {
+          const transactionDate = new Date(transaction.date);
+          if (isNaN(transactionDate.getTime())) {
+            return false;
+          }
+
+          const inPeriod =
+            transactionDate >= periodStart && transactionDate <= periodEnd;
+          const isIncome = transaction.type === 'INCOME';
+
+          return inPeriod && isIncome;
+        } catch (error) {
+          console.error('🧮 Error checking income transaction:', error, transaction);
+          return false;
+        }
+      });
+
+      // Calculate total additional income
+      const total = periodIncomeTransactions.reduce((sum, transaction) => {
+        const amount = parseFloat(transaction.amount) || 0;
+        return sum + amount;
+      }, 0);
+
+
+      return total;
+    } catch (error) {
+      console.error('🧮 Critical error in calculateTotalAdditionalIncome:', error);
+      return 0; // Graceful fallback
+    }
+  }, [transactions, incomeData]);
+
+  // Auto-calculate additional income when dependencies change
+  useEffect(() => {
+    if (incomeData && transactions.length >= 0) {
+      const newTotal = calculateTotalAdditionalIncome();
+      setTotalAdditionalIncome(newTotal);
+    }
+  }, [calculateTotalAdditionalIncome, incomeData, transactions]);
+
+  // ==============================================
   // EVENT HANDLERS
   // ==============================================
   const handleSaveTransaction = useCallback(
@@ -1040,6 +1141,7 @@ const HomeContainer = ({navigation}) => {
       selectedDate={selectedDate}
       totalExpenses={totalExpenses}
       totalIncomePayments={totalIncomePayments}
+      totalAdditionalIncome={totalAdditionalIncome}
       onDateChange={setSelectedDate}
       onSaveTransaction={handleSaveTransaction}
       onDeleteTransaction={handleDeleteTransaction}

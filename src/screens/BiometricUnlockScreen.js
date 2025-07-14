@@ -1,12 +1,6 @@
 // screens/BiometricUnlockScreen.js
-import React, {useState, useEffect, useCallback} from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-} from 'react-native';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
+import {View, Text, StyleSheet, TouchableOpacity, Animated} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
@@ -18,11 +12,11 @@ const BiometricUnlockScreen = ({onUnlock}) => {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState(null);
   const [isUnlocking, setIsUnlocking] = useState(false);
-  
+
   // Animation values
-  const iconScale = new Animated.Value(1);
-  const pulseAnim = new Animated.Value(1);
-  const fadeAnim = new Animated.Value(1);
+  const iconScale = useMemo(() => new Animated.Value(1), []);
+  const pulseAnim = useMemo(() => new Animated.Value(1), []);
+  const fadeAnim = useMemo(() => new Animated.Value(1), []);
 
   // Load biometry type on mount
   useEffect(() => {
@@ -31,8 +25,8 @@ const BiometricUnlockScreen = ({onUnlock}) => {
         const type = await BiometricAuth.getBiometryType();
         setBiometryType(type);
         console.log('🔐 BiometricUnlock: Biometry type:', type);
-      } catch (error) {
-        console.error('🔐 BiometricUnlock: Error loading biometry info:', error);
+      } catch (err) {
+        console.error('🔐 BiometricUnlock: Error loading biometry info:', err);
       }
     };
 
@@ -54,7 +48,7 @@ const BiometricUnlockScreen = ({onUnlock}) => {
             duration: 1000,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
     };
 
@@ -116,15 +110,17 @@ const BiometricUnlockScreen = ({onUnlock}) => {
     ]).start();
 
     try {
-      const result = await BiometricAuth.promptBiometricAuth('Unlock Budget App');
-      
+      const result = await BiometricAuth.promptBiometricAuth(
+        'Unlock Budget App',
+      );
+
       if (result.success) {
         console.log('🔐 BiometricUnlock: Authentication successful');
         setIsUnlocking(true);
-        
+
         // Start data pre-loading immediately
         onUnlock?.();
-        
+
         // Fade out animation with slightly longer duration for smoother transition
         Animated.timing(fadeAnim, {
           toValue: 0,
@@ -135,13 +131,13 @@ const BiometricUnlockScreen = ({onUnlock}) => {
         console.log('🔐 BiometricUnlock: Authentication failed:', result.error);
         setError(result.error || 'Authentication failed');
       }
-    } catch (error) {
-      console.error('🔐 BiometricUnlock: Authentication error:', error);
+    } catch (authError) {
+      console.error('🔐 BiometricUnlock: Authentication error:', authError);
       setError('Authentication failed. Please try again.');
     } finally {
       setIsAuthenticating(false);
     }
-  }, [isAuthenticating, iconScale, onUnlock]);
+  }, [isAuthenticating, iconScale, onUnlock, fadeAnim]);
 
   // Auto-trigger biometric prompt on mount
   useEffect(() => {
@@ -159,16 +155,15 @@ const BiometricUnlockScreen = ({onUnlock}) => {
     <View style={[styles.container, {paddingTop: insets.top}]}>
       {/* Background Gradient Effect */}
       <View style={styles.backgroundGradient} />
-      
+
       {/* Content with fade animation */}
-      <Animated.View 
+      <Animated.View
         style={[
           styles.content,
           {
             opacity: fadeAnim,
           },
-        ]}
-      >
+        ]}>
         {/* App Logo/Title */}
         <View style={styles.header}>
           <Text style={styles.appTitle}>Budget App</Text>
@@ -176,28 +171,19 @@ const BiometricUnlockScreen = ({onUnlock}) => {
         </View>
 
         {/* Biometric Icon */}
-        <Animated.View 
+        <Animated.View
           style={[
             styles.biometricContainer,
             {
-              transform: [
-                {scale: pulseAnim},
-                {scale: iconScale},
-              ],
+              transform: [{scale: pulseAnim}, {scale: iconScale}],
             },
-          ]}
-        >
+          ]}>
           <TouchableOpacity
             style={styles.biometricButton}
             onPress={handleBiometricAuth}
             disabled={isAuthenticating}
-            activeOpacity={0.8}
-          >
-            <Icon 
-              name={biometricInfo.icon} 
-              size={48} 
-              color={colors.primary} 
-            />
+            activeOpacity={0.8}>
+            <Icon name={biometricInfo.icon} size={48} color={colors.primary} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -205,12 +191,11 @@ const BiometricUnlockScreen = ({onUnlock}) => {
         <View style={styles.instructions}>
           <Text style={styles.title}>{biometricInfo.title}</Text>
           <Text style={styles.description}>
-            {isUnlocking 
-              ? 'Unlocking...' 
-              : isAuthenticating 
-                ? 'Authenticating...' 
-                : biometricInfo.subtitle
-            }
+            {isUnlocking
+              ? 'Unlocking...'
+              : isAuthenticating
+              ? 'Authenticating...'
+              : biometricInfo.subtitle}
           </Text>
         </View>
 
@@ -226,15 +211,13 @@ const BiometricUnlockScreen = ({onUnlock}) => {
         <TouchableOpacity
           style={styles.retryButton}
           onPress={handleBiometricAuth}
-          disabled={isAuthenticating || isUnlocking}
-        >
+          disabled={isAuthenticating || isUnlocking}>
           <Text style={styles.retryButtonText}>
-            {isUnlocking 
-              ? 'Unlocking...' 
-              : isAuthenticating 
-                ? 'Authenticating...' 
-                : 'Try Again'
-            }
+            {isUnlocking
+              ? 'Unlocking...'
+              : isAuthenticating
+              ? 'Authenticating...'
+              : 'Try Again'}
           </Text>
         </TouchableOpacity>
       </Animated.View>

@@ -31,6 +31,7 @@ const HomeScreen = ({
   selectedDate = new Date(),
   totalExpenses = 0,
   totalIncomePayments = 0,
+  totalAdditionalIncome = 0,
 
   // ==============================================
   // EVENT HANDLER PROPS
@@ -155,6 +156,7 @@ const HomeScreen = ({
           loading={loading}
           totalExpenses={totalExpenses}
           totalIncomePayments={totalIncomePayments}
+          totalAdditionalIncome={totalAdditionalIncome}
           onCalendarPress={() => setShowCalendar(true)}
           onEditIncome={onEditIncome}
           selectedDate={selectedDate}

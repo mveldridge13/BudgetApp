@@ -10,6 +10,7 @@ const BalanceCard = ({
   loading,
   totalExpenses,
   totalIncomePayments = 0,
+  totalAdditionalIncome = 0,
   onEditIncome,
   onCalendarPress,
   selectedDate,
@@ -105,6 +106,7 @@ const BalanceCard = ({
     },
     0,
   );
+
 
   // Calculate values
   const incomeAmount = incomeData?.income || 0;
@@ -280,11 +282,11 @@ const BalanceCard = ({
               ]}>
               {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
             </Text>
-            {(totalGoalContributions > 0 || totalIncomePayments > 0) && (
+            {totalAdditionalIncome > 0 && (
               <View style={styles.adjustedAmountContainer}>
-                <Text style={styles.adjustedLabel}>After goals:</Text>
+                <Text style={styles.adjustedLabel}>Additional income:</Text>
                 <Text style={styles.adjustedAmount}>
-                  {formatCurrency(adjustedLeftToSpend)}
+                  +{formatCurrency(totalAdditionalIncome)}
                 </Text>
               </View>
             )}
