@@ -1,7 +1,14 @@
 /* eslint-disable no-shadow */
 /* eslint-disable react-hooks/exhaustive-deps */
 // containers/HomeContainer.js
-import React, {useState, useEffect, useCallback, useRef, useMemo, startTransition} from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+  startTransition,
+} from 'react';
 import {AppState, Alert, Platform} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // import {useFocusEffect} from '@react-navigation/native'; // Removed to eliminate reload delay
@@ -202,7 +209,8 @@ const HomeContainer = ({navigation}) => {
           const parentCategory = categoryMap[subcategory.parentId];
           return {
             ...subcategory,
-            color: subcategory.color || (parentCategory && parentCategory.color),
+            color:
+              subcategory.color || (parentCategory && parentCategory.color),
             icon: subcategory.icon || (parentCategory && parentCategory.icon),
           };
         }
@@ -242,7 +250,7 @@ const HomeContainer = ({navigation}) => {
   // ENHANCED TRANSACTION PROCESSING
   // ==============================================
   const processTransactionsWithCategories = useCallback(
-    (transactions) => {
+    transactions => {
       const processedTransactions = transactions.map(transaction => {
         const categoryData = resolveCategoryForTransaction(
           transaction,
@@ -458,7 +466,6 @@ const HomeContainer = ({navigation}) => {
           status: transaction.status,
         };
 
-
         // Send to backend
         const savedTransaction = isEditing
           ? await TrendAPIService.updateTransaction(
@@ -467,23 +474,19 @@ const HomeContainer = ({navigation}) => {
             )
           : await TrendAPIService.createTransaction(transactionData);
 
-
-
-        // Reconcile with server response (non-blocking)
-        startTransition(() => {
-          setTransactions(prev => {
-            const updated = prev.map(t => {
-              if (isEditing && t.id === transaction.id) {
-                return savedTransaction;
-              }
-              if (!isEditing && t.id === tempId) {
-                return savedTransaction;
-              }
-              return t;
-            });
-            const final = sortTransactionsByDate(updated);
-            return final;
+        // Reconcile with server response (synchronous for proper state update)
+        setTransactions(prev => {
+          const updated = prev.map(t => {
+            if (isEditing && t.id === transaction.id) {
+              return savedTransaction;
+            }
+            if (!isEditing && t.id === tempId) {
+              return savedTransaction;
+            }
+            return t;
           });
+          const final = sortTransactionsByDate(updated);
+          return final;
         });
 
         setEditingTransaction(null);
@@ -622,14 +625,8 @@ const HomeContainer = ({navigation}) => {
           throw new Error('User not authenticated');
         }
 
-        // Use local transaction data if available (no backend fetch needed)
-        const localTransaction = transactions.find(t => t.id === transactionId);
-        if (localTransaction) {
-          setEditingTransaction(localTransaction);
-          return localTransaction;
-        }
+        // Always fetch fresh data from backend to ensure latest status
 
-        // Fallback: If not in local state, fetch from backend
         const freshTransaction = await TrendAPIService.getTransactionById(
           transactionId,
         );
@@ -639,9 +636,13 @@ const HomeContainer = ({navigation}) => {
           return null;
         }
 
+
         // Update local state and set for editing
         setTransactions(prev =>
-          sortTransactionsByDate([freshTransaction, ...prev.filter(t => t.id !== transactionId)])
+          sortTransactionsByDate([
+            freshTransaction,
+            ...prev.filter(t => t.id !== transactionId),
+          ]),
         );
         setEditingTransaction(freshTransaction);
         return freshTransaction;
@@ -796,7 +797,8 @@ const HomeContainer = ({navigation}) => {
           type: t.type,
           amount: t.amount,
           description: t.description,
-          inPeriod: new Date(t.date) >= periodStart && new Date(t.date) <= periodEnd,
+          inPeriod:
+            new Date(t.date) >= periodStart && new Date(t.date) <= periodEnd,
         })),
         periodTransactionAmounts: periodTransactions.map(t => ({
           amount: t.amount,
@@ -834,13 +836,15 @@ const HomeContainer = ({navigation}) => {
 
   // Create stable dependency for memoization - only changes when actual data changes
   const transactionsSignature = useMemo(() => {
-    return JSON.stringify(transactions.map(t => ({
-      id: t.id,
-      amount: t.amount,
-      type: t.type,
-      date: t.date,
-      status: t.status,
-    })));
+    return JSON.stringify(
+      transactions.map(t => ({
+        id: t.id,
+        amount: t.amount,
+        type: t.type,
+        date: t.date,
+        status: t.status,
+      })),
+    );
   }, [transactions]);
 
   const incomeSignature = useMemo(() => {
@@ -899,7 +903,10 @@ const HomeContainer = ({navigation}) => {
             2000 + parseInt(yearStr, 10),
             parseInt(monthStr, 10) - 1,
             parseInt(dayStr, 10),
-            12, 0, 0, 0
+            12,
+            0,
+            0,
+            0,
           );
         }
 
@@ -1077,9 +1084,9 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   // CALCULATED VALUES WITH CATEGORY RESOLUTION (STABLE MEMOIZED TO PREVENT FLICKER)
   // ==============================================
-  const transactionsWithCategories = useMemo(() =>
-    processTransactionsWithCategories(transactions),
-    [transactionsSignature, processTransactionsWithCategories]
+  const transactionsWithCategories = useMemo(
+    () => processTransactionsWithCategories(transactions),
+    [transactionsSignature, processTransactionsWithCategories],
   );
 
   // Debug what we're passing to the Balance Card (commented out to reduce noise)
