@@ -162,65 +162,39 @@ const HomeContainer = ({navigation}) => {
       const categoryId = transaction.categoryId;
       const subcategoryId = transaction.subcategoryId;
 
-      // Check if backend returned subcategory object directly
-      if (
-        transaction.subcategory &&
-        typeof transaction.subcategory === 'object'
-      ) {
-        // For subcategories, we want to show the PARENT category name instead
-        // Use the categoryId to look up the main category
-        if (transaction.categoryId && Object.keys(categoryMap).length > 0) {
-          const mainCategory = categoryMap[transaction.categoryId];
-          if (mainCategory) {
+
+      // CONSISTENT LOGIC: Always return MAIN CATEGORY for metadata display
+      // If we have a subcategoryId, find its parent category
+      if (subcategoryId && Object.keys(categoryMap).length > 0) {
+        const subcategory = categoryMap[subcategoryId];
+        if (subcategory && subcategory.parentId) {
+          const parentCategory = categoryMap[subcategory.parentId];
+          if (parentCategory) {
             return {
-              id: mainCategory.id,
-              name: mainCategory.name,
-              icon: mainCategory.icon || 'albums-outline',
-              color: mainCategory.color || '#4ECDC4',
+              id: parentCategory.id,
+              name: parentCategory.name,
+              icon: parentCategory.icon || 'albums-outline',
+              color: parentCategory.color || '#4ECDC4',
             };
           }
         }
-
-        // Fallback to subcategory if parent not found
-        return {
-          id: transaction.subcategory.id,
-          name: transaction.subcategory.name,
-          icon: transaction.subcategory.icon || 'albums-outline',
-          color: transaction.subcategory.color || '#4ECDC4',
-        };
       }
 
-      // Check if backend returned category object directly
-      if (transaction.category && typeof transaction.category === 'object') {
-        return {
-          id: transaction.category.id,
-          name: transaction.category.name,
-          icon: transaction.category.icon || 'albums-outline',
-          color: transaction.category.color || '#4ECDC4',
-        };
-      }
-
-      // Use categoryMap for efficient lookup
-      if (Object.keys(categoryMap).length > 0) {
-        // If we have a subcategoryId, look it up directly
-        if (subcategoryId && categoryMap[subcategoryId]) {
-          const subcategory = categoryMap[subcategoryId];
-          // Find parent category for fallback color/icon
-          const parentCategory = categoryMap[subcategory.parentId];
+      // If we have a categoryId, use the main category
+      if (categoryId && Object.keys(categoryMap).length > 0) {
+        const mainCategory = categoryMap[categoryId];
+        if (mainCategory) {
           return {
-            ...subcategory,
-            color:
-              subcategory.color || (parentCategory && parentCategory.color),
-            icon: subcategory.icon || (parentCategory && parentCategory.icon),
+            id: mainCategory.id,
+            name: mainCategory.name,
+            icon: mainCategory.icon || 'albums-outline',
+            color: mainCategory.color || '#4ECDC4',
           };
         }
+      }
 
-        // If no subcategory found, look for main category
-        if (categoryId && categoryMap[categoryId]) {
-          return categoryMap[categoryId];
-        }
-
-        // Fallback: look for "other" category in categoryMap
+      // Fallback: look for "other" category in categoryMap
+      if (Object.keys(categoryMap).length > 0) {
         const otherCategory = Object.values(categoryMap).find(
           cat => cat.name.toLowerCase() === 'other' || cat.id === 'other',
         );
@@ -635,7 +609,6 @@ const HomeContainer = ({navigation}) => {
           console.warn('Transaction not found on server');
           return null;
         }
-
 
         // Update local state and set for editing
         setTransactions(prev =>
