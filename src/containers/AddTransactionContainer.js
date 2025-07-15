@@ -48,6 +48,9 @@ const AddTransactionContainer = ({
   const [errorState, setErrorState] = useState(null);
   const [currentSubcategoryData, setCurrentSubcategoryData] = useState(null);
 
+  // Track if user manually entered description
+  const [hasManualDescription, setHasManualDescription] = useState(false);
+
   // Other modals state
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMode, setCalendarMode] = useState('transaction'); // 'transaction' or 'dueDate'
@@ -231,6 +234,7 @@ const AddTransactionContainer = ({
     setSelectedTransactionType('EXPENSE');
     setSelectedPaymentStatus(null);
     setCurrentSubcategoryData(null);
+    setHasManualDescription(false);
   }, []);
 
   const populateFormForEdit = useCallback(() => {
@@ -257,9 +261,19 @@ const AddTransactionContainer = ({
           setCurrentSubcategoryData(category);
         }
       }
+
+      // Check if the existing description was manually entered
+      const categoryDisplayName = getCategoryDisplayName(
+        editingTransaction.categoryId,
+        editingTransaction.subcategoryId,
+      );
+      const hasCustomDescription =
+        editingTransaction.description &&
+        editingTransaction.description.trim() !== categoryDisplayName;
+      setHasManualDescription(hasCustomDescription);
     }
     // Remove the resetForm() call for new transactions - let user set their own transaction type
-  }, [editingTransaction, visible, getCategoryById]);
+  }, [editingTransaction, visible, getCategoryById, getCategoryDisplayName]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -371,9 +385,24 @@ const AddTransactionContainer = ({
     setAmount(text);
   }, []);
 
-  const handleDescriptionChange = useCallback(text => {
-    setDescription(text);
-  }, []);
+  const handleDescriptionChange = useCallback(
+    text => {
+      setDescription(text);
+      // Mark as manually entered if user types anything different from category names
+      if (
+        text.trim() &&
+        !categories.some(
+          cat =>
+            cat.name === text.trim() ||
+            (cat.subcategories &&
+              cat.subcategories.some(sub => sub.name === text.trim())),
+        )
+      ) {
+        setHasManualDescription(true);
+      }
+    },
+    [categories],
+  );
 
   const handleDateChange = useCallback(
     date => {
@@ -457,28 +486,28 @@ const AddTransactionContainer = ({
     );
 
     if (isEditMode && editingTransaction) {
+      // Don't auto-update if user has manually entered a description
+      if (hasManualDescription) {
+        console.log('🟦 AUTO-DESC: Skipping - user has manual description');
+        return;
+      }
+
       // Get the original category display name properly
       const originalCategoryDisplayName = getCategoryDisplayName(
         editingTransaction.categoryId,
         editingTransaction.subcategoryId,
       );
 
-      // Check multiple conditions for when to auto-update description
+      // Only auto-update if description is empty OR matches the original category name
       const shouldAutoUpdate =
         !description.trim() || // Empty description
-        description.trim() === originalCategoryDisplayName || // Matches original category
-        description.trim() === editingTransaction.description || // Matches original description
-        // Also check if current description matches any category name
-        categories.some(
-          cat =>
-            cat.name === description.trim() ||
-            (cat.subcategories &&
-              cat.subcategories.some(sub => sub.name === description.trim())),
-        );
+        description.trim() === originalCategoryDisplayName; // Matches original category
 
       console.log(
         '🟦 AUTO-DESC: Edit mode shouldAutoUpdate:',
         shouldAutoUpdate,
+        'hasManualDescription:',
+        hasManualDescription,
       );
       if (shouldAutoUpdate) {
         console.log(
@@ -488,6 +517,14 @@ const AddTransactionContainer = ({
         setDescription(newCategoryDisplayName);
       }
     } else {
+      // For new transactions, don't auto-update if user has manually entered a description
+      if (hasManualDescription) {
+        console.log(
+          '🟦 AUTO-DESC: Skipping new transaction - user has manual description',
+        );
+        return;
+      }
+
       // For new transactions, auto-update if description is empty OR matches a category name
       const descriptionMatchesCategory = categories.some(
         cat =>
@@ -506,6 +543,8 @@ const AddTransactionContainer = ({
         !description.trim(),
         'matchesCategory?',
         descriptionMatchesCategory,
+        'hasManualDescription:',
+        hasManualDescription,
       );
 
       if (shouldAutoUpdate) {
@@ -525,6 +564,7 @@ const AddTransactionContainer = ({
     categories,
     getCategoryDisplayName,
     editingTransaction,
+    hasManualDescription,
   ]);
 
   // ==============================================
