@@ -1,5 +1,5 @@
 /* eslint-disable react-native/no-inline-styles */
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
+import PaymentStatusModal from './PaymentStatusModal';
+import RecurrenceModal from './RecurrenceModal';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -72,6 +74,10 @@ const AddTransactionModal = ({
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Modal states
+  const [showPaymentStatusModal, setShowPaymentStatusModal] = useState(false);
+  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+
   // ==============================================
   // ANIMATION HANDLING
   // ==============================================
@@ -103,8 +109,6 @@ const AddTransactionModal = ({
       fadeAnim.setValue(0);
     }
   }, [visible, slideAnim, modalAnim, fadeAnim]);
-
-  // Removed auto-navigation to subcategory picker for better UX
 
   // ==============================================
   // UI EVENT HANDLERS
@@ -205,7 +209,7 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const showSubcategoryPicker = category => {
+  const showSubcategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth * 2,
       duration: 300,
@@ -214,19 +218,7 @@ const AddTransactionModal = ({
   };
 
   const showRecurrencePicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 3,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const showPaymentStatusPicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 4,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    setShowRecurrenceModal(true);
   };
 
   const hideCategoryPicker = () => {
@@ -240,22 +232,6 @@ const AddTransactionModal = ({
   const hideSubcategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const hideRecurrencePicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const hidePaymentStatusPicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
       duration: 300,
       useNativeDriver: true,
     }).start();
@@ -289,16 +265,11 @@ const AddTransactionModal = ({
 
   const handleRecurrenceSelect = recurrenceId => {
     onRecurrenceSelect(recurrenceId);
-    hideRecurrencePicker();
+    setShowRecurrenceModal(false);
   };
 
   const handleTransactionTypeSelect = type => {
     onTransactionTypeChange(type);
-  };
-
-  const handlePaymentStatusSelect = status => {
-    onPaymentStatusChange(status);
-    hidePaymentStatusPicker();
   };
 
   // ==============================================
@@ -701,7 +672,7 @@ const AddTransactionModal = ({
                 {/* Payment Status Field */}
                 <TouchableOpacity
                   style={styles.paymentStatusField}
-                  onPress={showPaymentStatusPicker}
+                  onPress={() => setShowPaymentStatusModal(true)}
                   activeOpacity={0.7}>
                   <View style={styles.paymentStatusLeft}>
                     <Icon
@@ -864,91 +835,6 @@ const AddTransactionModal = ({
                 ))}
               </ScrollView>
             </View>
-
-            {/* Recurrence Picker View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hideRecurrencePicker}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Repeat</Text>
-                <View style={styles.placeholder} />
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {recurrenceOptions.map(option => (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.categoryOption,
-                      selectedRecurrence === option.id && styles.selectedOption,
-                    ]}
-                    onPress={() => handleRecurrenceSelect(option.id)}
-                    activeOpacity={0.7}>
-                    <View style={styles.categoryLeft}>
-                      <Text style={styles.categoryName}>{option.name}</Text>
-                    </View>
-                    {selectedRecurrence === option.id && (
-                      <Icon name="checkmark" size={20} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Payment Status Picker View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hidePaymentStatusPicker}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Payment Status</Text>
-                <View style={styles.placeholder} />
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {paymentStatusOptions.map(option => (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.categoryOption,
-                      selectedPaymentStatus === option.id &&
-                        styles.selectedOption,
-                    ]}
-                    onPress={() => handlePaymentStatusSelect(option.id)}
-                    activeOpacity={0.7}>
-                    <View style={styles.categoryLeft}>
-                      <Icon
-                        name={getPaymentStatusIcon(option.id)}
-                        size={18}
-                        color={getPaymentStatusColor(option.id)}
-                        style={styles.paymentStatusOptionIcon}
-                      />
-                      <Text style={styles.categoryName}>{option.name}</Text>
-                    </View>
-                    {selectedPaymentStatus === option.id && (
-                      <Icon name="checkmark" size={20} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -959,6 +845,24 @@ const AddTransactionModal = ({
         onClose={onHideCalendar}
         selectedDate={selectedDate}
         onDateChange={onDateChange}
+      />
+
+      {/* Payment Status Modal */}
+      <PaymentStatusModal
+        visible={showPaymentStatusModal}
+        onClose={() => setShowPaymentStatusModal(false)}
+        selectedPaymentStatus={selectedPaymentStatus}
+        onPaymentStatusSelect={onPaymentStatusChange}
+        paymentStatusOptions={paymentStatusOptions}
+      />
+
+      {/* Recurrence Modal */}
+      <RecurrenceModal
+        visible={showRecurrenceModal}
+        onClose={() => setShowRecurrenceModal(false)}
+        selectedRecurrence={selectedRecurrence}
+        onRecurrenceSelect={handleRecurrenceSelect}
+        recurrenceOptions={recurrenceOptions}
       />
     </Modal>
   );
@@ -976,7 +880,7 @@ const styles = StyleSheet.create({
   },
   viewContainer: {
     flexDirection: 'row',
-    width: screenWidth * 5, // 5 views: Transaction, Category, Subcategory, Recurrence, PaymentStatus
+    width: screenWidth * 3, // 3 views: Transaction, Category, Subcategory
     height: '100%',
   },
   view: {
@@ -1249,9 +1153,6 @@ const styles = StyleSheet.create({
   },
   paymentStatusActiveText: {
     color: colors.textPrimary,
-  },
-  paymentStatusOptionIcon: {
-    marginRight: 12,
   },
   loadingContainer: {
     paddingVertical: 40,
