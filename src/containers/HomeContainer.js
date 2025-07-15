@@ -1,7 +1,7 @@
 /* eslint-disable no-shadow */
 /* eslint-disable react-hooks/exhaustive-deps */
 // containers/HomeContainer.js
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useRef, useMemo, startTransition} from 'react';
 import {AppState, Alert, Platform} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // import {useFocusEffect} from '@react-navigation/native'; // Removed to eliminate reload delay
@@ -133,10 +133,25 @@ const HomeContainer = ({navigation}) => {
   // );
 
   // ==============================================
+  // MEMOIZED CATEGORY MAP (PREVENTS FLICKER)
+  // ==============================================
+  const categoryMap = useMemo(() => {
+    return categories.reduce((map, category) => {
+      map[category.id] = category;
+      if (category.subcategories) {
+        category.subcategories.forEach(sub => {
+          map[sub.id] = sub;
+        });
+      }
+      return map;
+    }, {});
+  }, [categories]);
+
+  // ==============================================
   // CATEGORY RESOLUTION FOR TRANSACTIONS
   // ==============================================
   const resolveCategoryForTransaction = useCallback(
-    (transaction, categories) => {
+    (transaction, categoryMap) => {
       const categoryId = transaction.categoryId;
       const subcategoryId = transaction.subcategoryId;
 
@@ -147,10 +162,8 @@ const HomeContainer = ({navigation}) => {
       ) {
         // For subcategories, we want to show the PARENT category name instead
         // Use the categoryId to look up the main category
-        if (transaction.categoryId && categories && categories.length > 0) {
-          const mainCategory = categories.find(
-            cat => cat.id === transaction.categoryId,
-          );
+        if (transaction.categoryId && Object.keys(categoryMap).length > 0) {
+          const mainCategory = categoryMap[transaction.categoryId];
           if (mainCategory) {
             return {
               id: mainCategory.id,
@@ -180,39 +193,27 @@ const HomeContainer = ({navigation}) => {
         };
       }
 
-      // Use passed categories to look up by ID
-      if (categories && categories.length > 0) {
-        // If we have a subcategoryId, prioritize finding the subcategory
-        if (subcategoryId) {
-          for (const mainCategory of categories) {
-            if (
-              mainCategory.subcategories &&
-              Array.isArray(mainCategory.subcategories)
-            ) {
-              const subcategory = mainCategory.subcategories.find(
-                sub => sub.id === subcategoryId,
-              );
-              if (subcategory) {
-                return {
-                  ...subcategory,
-                  color: subcategory.color || mainCategory.color,
-                  icon: subcategory.icon || mainCategory.icon,
-                };
-              }
-            }
-          }
+      // Use categoryMap for efficient lookup
+      if (Object.keys(categoryMap).length > 0) {
+        // If we have a subcategoryId, look it up directly
+        if (subcategoryId && categoryMap[subcategoryId]) {
+          const subcategory = categoryMap[subcategoryId];
+          // Find parent category for fallback color/icon
+          const parentCategory = categoryMap[subcategory.parentId];
+          return {
+            ...subcategory,
+            color: subcategory.color || (parentCategory && parentCategory.color),
+            icon: subcategory.icon || (parentCategory && parentCategory.icon),
+          };
         }
 
         // If no subcategory found, look for main category
-        if (categoryId) {
-          const mainCategory = categories.find(cat => cat.id === categoryId);
-          if (mainCategory) {
-            return mainCategory;
-          }
+        if (categoryId && categoryMap[categoryId]) {
+          return categoryMap[categoryId];
         }
 
-        // Fallback: look for "other" category in passed categories
-        const otherCategory = categories.find(
+        // Fallback: look for "other" category in categoryMap
+        const otherCategory = Object.values(categoryMap).find(
           cat => cat.name.toLowerCase() === 'other' || cat.id === 'other',
         );
         if (otherCategory) {
@@ -220,8 +221,9 @@ const HomeContainer = ({navigation}) => {
         }
 
         // If no "other" category found, use the first available category
-        if (categories.length > 0) {
-          return categories[0];
+        const firstCategory = Object.values(categoryMap)[0];
+        if (firstCategory) {
+          return firstCategory;
         }
       }
 
@@ -233,18 +235,18 @@ const HomeContainer = ({navigation}) => {
         color: '#95A5A6',
       };
     },
-    [],
+    [categoryMap],
   );
 
   // ==============================================
   // ENHANCED TRANSACTION PROCESSING
   // ==============================================
   const processTransactionsWithCategories = useCallback(
-    (transactions, categories) => {
+    (transactions) => {
       const processedTransactions = transactions.map(transaction => {
         const categoryData = resolveCategoryForTransaction(
           transaction,
-          categories,
+          categoryMap,
         );
         return {
           ...transaction,
@@ -254,7 +256,7 @@ const HomeContainer = ({navigation}) => {
 
       return processedTransactions;
     },
-    [resolveCategoryForTransaction],
+    [resolveCategoryForTransaction, categoryMap],
   );
 
   // ==============================================
@@ -411,15 +413,17 @@ const HomeContainer = ({navigation}) => {
 
         // Optimistic update
         if (isEditing) {
-          setTransactions(prev => {
-            const updated = sortTransactionsByDate(
-              prev.map(t =>
-                t.id === transaction.id
-                  ? {...transaction, updatedAt: new Date().toISOString()}
-                  : t,
-              ),
-            );
-            return updated;
+          startTransition(() => {
+            setTransactions(prev => {
+              const updated = sortTransactionsByDate(
+                prev.map(t =>
+                  t.id === transaction.id
+                    ? {...transaction, updatedAt: new Date().toISOString()}
+                    : t,
+                ),
+              );
+              return updated;
+            });
           });
         } else {
           tempId = `temp_${Date.now()}_${Math.random()}`;
@@ -464,19 +468,22 @@ const HomeContainer = ({navigation}) => {
           : await TrendAPIService.createTransaction(transactionData);
 
 
-        // Reconcile with server response
-        setTransactions(prev => {
-          const updated = prev.map(t => {
-            if (isEditing && t.id === transaction.id) {
-              return savedTransaction;
-            }
-            if (!isEditing && t.id === tempId) {
-              return savedTransaction;
-            }
-            return t;
+
+        // Reconcile with server response (non-blocking)
+        startTransition(() => {
+          setTransactions(prev => {
+            const updated = prev.map(t => {
+              if (isEditing && t.id === transaction.id) {
+                return savedTransaction;
+              }
+              if (!isEditing && t.id === tempId) {
+                return savedTransaction;
+              }
+              return t;
+            });
+            const final = sortTransactionsByDate(updated);
+            return final;
           });
-          const final = sortTransactionsByDate(updated);
-          return final;
         });
 
         setEditingTransaction(null);
@@ -615,7 +622,14 @@ const HomeContainer = ({navigation}) => {
           throw new Error('User not authenticated');
         }
 
-        // Fetch fresh data from backend
+        // Use local transaction data if available (no backend fetch needed)
+        const localTransaction = transactions.find(t => t.id === transactionId);
+        if (localTransaction) {
+          setEditingTransaction(localTransaction);
+          return localTransaction;
+        }
+
+        // Fallback: If not in local state, fetch from backend
         const freshTransaction = await TrendAPIService.getTransactionById(
           transactionId,
         );
@@ -625,13 +639,10 @@ const HomeContainer = ({navigation}) => {
           return null;
         }
 
-        // Update local state with fresh data
+        // Update local state and set for editing
         setTransactions(prev =>
-          sortTransactionsByDate(
-            prev.map(t => (t.id === transactionId ? freshTransaction : t)),
-          ),
+          sortTransactionsByDate([freshTransaction, ...prev.filter(t => t.id !== transactionId)])
         );
-
         setEditingTransaction(freshTransaction);
         return freshTransaction;
       } catch (error) {
@@ -658,14 +669,15 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const calculateTotalExpenses = useCallback(() => {
     try {
-      console.log('💰 calculateTotalExpenses START - Platform:', Platform.OS);
-      console.log('💰 Input data check:', {
-        platform: Platform.OS,
-        transactionsLength: transactions?.length || 0,
-        incomeData: incomeData ? 'exists' : 'null',
-        nextPayDate: incomeData?.nextPayDate,
-        frequency: incomeData?.frequency,
-      });
+      // Reduced logging to prevent console spam
+      // console.log('💰 calculateTotalExpenses START - Platform:', Platform.OS);
+      // console.log('💰 Input data check:', {
+      //   platform: Platform.OS,
+      //   transactionsLength: transactions?.length || 0,
+      //   incomeData: incomeData ? 'exists' : 'null',
+      //   nextPayDate: incomeData?.nextPayDate,
+      //   frequency: incomeData?.frequency,
+      // });
 
       if (!transactions?.length) {
         console.log('💰 No transactions, returning 0');
@@ -820,26 +832,40 @@ const HomeContainer = ({navigation}) => {
     }
   }, [transactions, incomeData]);
 
-  // ✅ FIXED: Update totalExpenses only when both data sources are available
-  useEffect(() => {
+  // Create stable dependency for memoization - only changes when actual data changes
+  const transactionsSignature = useMemo(() => {
+    return JSON.stringify(transactions.map(t => ({
+      id: t.id,
+      amount: t.amount,
+      type: t.type,
+      date: t.date,
+      status: t.status,
+    })));
+  }, [transactions]);
+
+  const incomeSignature = useMemo(() => {
+    return JSON.stringify({
+      income: incomeData?.income,
+      frequency: incomeData?.frequency,
+      nextPayDate: incomeData?.nextPayDate,
+    });
+  }, [incomeData]);
+
+  // ✅ FIXED: Update totalExpenses only when actual data changes (stable memoization)
+  const totalExpensesValue = useMemo(() => {
     // Only calculate when both data sources are available
     if (incomeData && transactions.length >= 0) {
-      console.log('💰 Triggering calculation with data:', {
-        platform: Platform.OS,
-        hasIncomeData: !!incomeData,
-        transactionCount: transactions.length,
-      });
-
-      const newTotal = calculateTotalExpenses();
-      setTotalExpenses(newTotal);
-    } else {
-      console.log('💰 Skipping calculation - data not ready:', {
-        platform: Platform.OS,
-        hasIncomeData: !!incomeData,
-        transactionCount: transactions.length,
-      });
+      return calculateTotalExpenses();
     }
-  }, [calculateTotalExpenses, incomeData, transactions]);
+    return 0;
+  }, [transactionsSignature, incomeSignature, calculateTotalExpenses]);
+
+  // Update state only when memoized value changes (non-blocking)
+  useEffect(() => {
+    startTransition(() => {
+      setTotalExpenses(totalExpensesValue);
+    });
+  }, [totalExpensesValue]);
 
   // ==============================================
   // ADDITIONAL INCOME CALCULATION
@@ -949,13 +975,20 @@ const HomeContainer = ({navigation}) => {
     }
   }, [transactions, incomeData]);
 
-  // Auto-calculate additional income when dependencies change
-  useEffect(() => {
+  // Auto-calculate additional income when dependencies change (stable memoized)
+  const totalAdditionalIncomeValue = useMemo(() => {
     if (incomeData && transactions.length >= 0) {
-      const newTotal = calculateTotalAdditionalIncome();
-      setTotalAdditionalIncome(newTotal);
+      return calculateTotalAdditionalIncome();
     }
-  }, [calculateTotalAdditionalIncome, incomeData, transactions]);
+    return 0;
+  }, [transactionsSignature, incomeSignature, calculateTotalAdditionalIncome]);
+
+  // Update state only when memoized value changes (non-blocking)
+  useEffect(() => {
+    startTransition(() => {
+      setTotalAdditionalIncome(totalAdditionalIncomeValue);
+    });
+  }, [totalAdditionalIncomeValue]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -1042,14 +1075,15 @@ const HomeContainer = ({navigation}) => {
   }, [navigation]);
 
   // ==============================================
-  // CALCULATED VALUES WITH CATEGORY RESOLUTION
+  // CALCULATED VALUES WITH CATEGORY RESOLUTION (STABLE MEMOIZED TO PREVENT FLICKER)
   // ==============================================
-  const transactionsWithCategories = processTransactionsWithCategories(
-    transactions,
-    categories,
+  const transactionsWithCategories = useMemo(() =>
+    processTransactionsWithCategories(transactions),
+    [transactionsSignature, processTransactionsWithCategories]
   );
 
-  // ✅ ADD: Debug what we're passing to the Balance Card
+  // Debug what we're passing to the Balance Card (commented out to reduce noise)
+  /*
   console.log('🏠 HomeContainer RENDER DEBUG:', {
     platform: Platform.OS,
     incomeDataExists: !!incomeData,
@@ -1061,6 +1095,7 @@ const HomeContainer = ({navigation}) => {
     userProfileExists: !!userProfile,
     loading: loading,
   });
+  */
 
   // ==============================================
   // LIFECYCLE
@@ -1199,7 +1234,15 @@ const HomeContainer = ({navigation}) => {
 
   // Load income payments when goals change
   useEffect(() => {
-    loadTotalIncomePayments();
+    if (goals.length > 0) {
+      loadTotalIncomePayments();
+    }
+  }, [goals.length]); // Remove function dependency, use goals.length instead
+
+  // Store current loadTotalIncomePayments in a ref for event handlers
+  const loadTotalIncomePaymentsRef = useRef(loadTotalIncomePayments);
+  useEffect(() => {
+    loadTotalIncomePaymentsRef.current = loadTotalIncomePayments;
   }, [loadTotalIncomePayments]);
 
   // Listen for goal income payments to reload income payment totals
@@ -1208,7 +1251,7 @@ const HomeContainer = ({navigation}) => {
       console.log(
         '🔍 HOME_CONTAINER: Goal income payment made, reloading income payments',
       );
-      loadTotalIncomePayments();
+      loadTotalIncomePaymentsRef.current();
     };
 
     if (typeof window !== 'undefined' && window.addEventListener) {
@@ -1221,7 +1264,7 @@ const HomeContainer = ({navigation}) => {
         );
       };
     }
-  }, [loadTotalIncomePayments]);
+  }, []); // Now safe to use empty dependency - handler uses ref
 
   // ==============================================
   // RENDER
