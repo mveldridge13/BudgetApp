@@ -328,6 +328,15 @@ class TrendAPIService {
     return this.makeRequest(endpoint);
   }
 
+  // ✅ NEW: Get bills analytics - backend-calculated bills data
+  async getBillsAnalytics(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/transactions/bills-analytics?${queryString}`
+      : '/transactions/bills-analytics';
+    return this.makeRequest(endpoint);
+  }
+
   // ✅ NEW: Get discretionary breakdown for daily spending analysis
   async getDiscretionaryBreakdown(filters = {}) {
     const queryString = this.buildQueryString(filters);

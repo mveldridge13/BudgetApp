@@ -4,6 +4,7 @@ import {Alert} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import TrendAPIService from '../services/TrendAPIService';
+import billsAnalyticsCache from '../services/BillsAnalyticsCache';
 
 const TRANSACTIONS_KEY = 'transactions';
 const TRANSACTION_QUEUE_KEY = 'transaction_queue';
@@ -135,6 +136,11 @@ const useTransactions = () => {
         JSON.stringify(updatedTransactions),
       );
       setTransactions(sortTransactions(updatedTransactions));
+      
+      // Invalidate bills analytics cache after sync
+      if (newQueue.length !== queue.length) {
+        await billsAnalyticsCache.invalidate();
+      }
     } finally {
       syncInProgress.current = false;
       setSyncing(false);
@@ -223,6 +229,9 @@ const useTransactions = () => {
         }
 
         setEditingTransaction(null);
+        
+        // Invalidate bills analytics cache when transactions change
+        await billsAnalyticsCache.invalidate();
       } catch (error) {
         Alert.alert('Error', 'Failed to save transaction.');
         throw error;
@@ -249,6 +258,9 @@ const useTransactions = () => {
           TRANSACTIONS_KEY,
           JSON.stringify(updatedTransactions),
         );
+        
+        // Invalidate bills analytics cache when transactions are deleted
+        await billsAnalyticsCache.invalidate();
       } catch (error) {
         Alert.alert('Error', 'Failed to delete transaction.');
         throw error;

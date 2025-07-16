@@ -46,6 +46,9 @@ const AnalyticsScreen = ({
   // ✅ NEW: Spending velocity data
   spendingVelocity,
 
+  // ✅ NEW: Bills analytics data
+  billsAnalytics,
+
   // Event handlers
   onPeriodChange,
   onComparisonToggle,
@@ -56,12 +59,13 @@ const AnalyticsScreen = ({
   // Helper functions
   isRecurringTransaction,
 }) => {
+  // Tab navigation state
+  const [selectedTab, setSelectedTab] = useState('spending');
   const insets = useSafeAreaInsets();
 
   // ✅ NEW: State for Spending Velocity Modal
   const [showSpendingVelocityModal, setShowSpendingVelocityModal] =
     useState(false);
-
 
   // ✅ NEW: Handle Spending Velocity tap
   const handleSpendingVelocityPress = () => {
@@ -76,6 +80,31 @@ const AnalyticsScreen = ({
           {text: 'Learn More', style: 'default'},
         ],
       );
+    }
+  };
+
+  // Helper function to format due dates
+  const formatDueDate = dueDate => {
+    const date = new Date(dueDate);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Due: Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Due: Tomorrow';
+    } else if (date < today) {
+      return `Overdue: ${date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      })}`;
+    } else {
+      return `Due: ${date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })}`;
     }
   };
 
@@ -94,6 +123,52 @@ const AnalyticsScreen = ({
         </View>
       </View>
 
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            selectedTab === 'spending' && styles.tabButtonActive,
+          ]}
+          onPress={() => setSelectedTab('spending')}>
+          <Text
+            style={[
+              styles.tabText,
+              selectedTab === 'spending' && styles.tabTextActive,
+            ]}>
+            Spending
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            selectedTab === 'income' && styles.tabButtonActive,
+          ]}
+          onPress={() => setSelectedTab('income')}>
+          <Text
+            style={[
+              styles.tabText,
+              selectedTab === 'income' && styles.tabTextActive,
+            ]}>
+            Income
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            selectedTab === 'bills' && styles.tabButtonActive,
+          ]}
+          onPress={() => setSelectedTab('bills')}>
+          <Text
+            style={[
+              styles.tabText,
+              selectedTab === 'bills' && styles.tabTextActive,
+            ]}>
+            Bills
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
@@ -107,269 +182,818 @@ const AnalyticsScreen = ({
             titleColor={colors.textSecondary || '#6B7280'}
           />
         }>
-        {/* Period Selector */}
-        <View style={styles.selectorContainer}>
-          <View style={styles.periodButtons}>
-            {['daily', 'weekly', 'monthly'].map(period => (
+        {selectedTab === 'spending' && (
+          <>
+            {/* Period Selector */}
+            <View style={styles.selectorContainer}>
+              <View style={styles.periodButtons}>
+                {['daily', 'weekly', 'monthly'].map(period => (
+                  <TouchableOpacity
+                    key={period}
+                    onPress={() => onPeriodChange(period)}
+                    style={[
+                      styles.periodButton,
+                      selectedPeriod === period && styles.periodButtonActive,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.periodButtonText,
+                        selectedPeriod === period &&
+                          styles.periodButtonTextActive,
+                      ]}>
+                      {period.charAt(0).toUpperCase() + period.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity
-                key={period}
-                onPress={() => onPeriodChange(period)}
-                style={[
-                  styles.periodButton,
-                  selectedPeriod === period && styles.periodButtonActive,
-                ]}>
+                style={styles.comparisonToggle}
+                onPress={onComparisonToggle}>
+                <View
+                  style={[
+                    styles.checkbox,
+                    comparisonMode && styles.checkboxActive,
+                  ]}>
+                  {comparisonMode && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.comparisonText}>
+                  Compare with previous period
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Total Spending</Text>
+                <Text style={styles.statValue}>
+                  ${statistics.currentTotal.toFixed(2)}
+                </Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>
+                  {selectedPeriod.charAt(0).toUpperCase() +
+                    selectedPeriod.slice(1)}{' '}
+                  Average
+                </Text>
+                <Text style={styles.statValue}>
+                  ${statistics.averageSpending.toFixed(2)}
+                </Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>vs Previous Period</Text>
                 <Text
                   style={[
-                    styles.periodButtonText,
-                    selectedPeriod === period && styles.periodButtonTextActive,
+                    styles.statValue,
+                    {
+                      color:
+                        statistics.percentageChange >= 0
+                          ? colors.danger || '#EF4444'
+                          : colors.success || '#10B981',
+                    },
                   ]}>
-                  {period.charAt(0).toUpperCase() + period.slice(1)}
+                  {statistics.percentageChange >= 0 ? '+' : ''}
+                  {statistics.percentageChange.toFixed(1)}%
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={styles.comparisonToggle}
-            onPress={onComparisonToggle}>
-            <View
-              style={[
-                styles.checkbox,
-                comparisonMode && styles.checkboxActive,
-              ]}>
-              {comparisonMode && <Text style={styles.checkmark}>✓</Text>}
+              </View>
             </View>
-            <Text style={styles.comparisonText}>
-              Compare with previous period
-            </Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Total Spending</Text>
-            <Text style={styles.statValue}>
-              ${statistics.currentTotal.toFixed(2)}
-            </Text>
-          </View>
+            {/* Discretionary Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Discretionary Spending</Text>
+                <Text style={styles.statValue}>
+                  ${statistics.currentDiscretionary.toFixed(2)}
+                </Text>
+              </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>
-              {selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}{' '}
-              Average
-            </Text>
-            <Text style={styles.statValue}>
-              ${statistics.averageSpending.toFixed(2)}
-            </Text>
-          </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Discretionary Average</Text>
+                <Text style={styles.statValue}>
+                  ${statistics.averageDiscretionary.toFixed(2)}
+                </Text>
+              </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>vs Previous Period</Text>
-            <Text
-              style={[
-                styles.statValue,
-                {
-                  color:
-                    statistics.percentageChange >= 0
-                      ? colors.danger || '#EF4444'
-                      : colors.success || '#10B981',
-                },
-              ]}>
-              {statistics.percentageChange >= 0 ? '+' : ''}
-              {statistics.percentageChange.toFixed(1)}%
-            </Text>
-          </View>
-        </View>
-
-        {/* Discretionary Stats Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Discretionary Spending</Text>
-            <Text style={styles.statValue}>
-              ${statistics.currentDiscretionary.toFixed(2)}
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Discretionary Average</Text>
-            <Text style={styles.statValue}>
-              ${statistics.averageDiscretionary.toFixed(2)}
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Discretionary vs Previous</Text>
-            <Text
-              style={[
-                styles.statValue,
-                {
-                  color:
-                    statistics.discretionaryPercentageChange >= 0
-                      ? colors.danger || '#EF4444'
-                      : colors.success || '#10B981',
-                },
-              ]}>
-              {statistics.discretionaryPercentageChange >= 0 ? '+' : ''}
-              {statistics.discretionaryPercentageChange.toFixed(1)}%
-            </Text>
-          </View>
-        </View>
-
-        {/* Chart - Using pre-formatted data from container */}
-        {chartData && chartData.labels && chartData.labels.length > 0 && (
-          <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Spending Over Time</Text>
-            <LineChart
-              data={chartData}
-              width={screenWidth - 60}
-              height={220}
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chart}
-              withVerticalLabels={true}
-              withHorizontalLabels={true}
-              withDots={true}
-              withShadow={false}
-              withVerticalLines={false}
-              withHorizontalLines={true}
-            />
-          </View>
-        )}
-
-        {/* Insights */}
-        <View style={styles.insightsContainer}>
-          <Text style={styles.insightsTitle}>Key Insights</Text>
-
-          {statistics.highestSpendingPeriod && (
-            <View
-              style={[styles.insightCard, {borderLeftColor: colors.primary}]}>
-              <Text style={styles.insightText}>
-                <Text style={styles.insightBold}>Highest total spending:</Text>{' '}
-                {statistics.highestSpendingPeriod.label} with $
-                {statistics.highestSpendingPeriod.amount.toFixed(2)}
-              </Text>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Discretionary vs Previous</Text>
+                <Text
+                  style={[
+                    styles.statValue,
+                    {
+                      color:
+                        statistics.discretionaryPercentageChange >= 0
+                          ? colors.danger || '#EF4444'
+                          : colors.success || '#10B981',
+                    },
+                  ]}>
+                  {statistics.discretionaryPercentageChange >= 0 ? '+' : ''}
+                  {statistics.discretionaryPercentageChange.toFixed(1)}%
+                </Text>
+              </View>
             </View>
-          )}
 
-          {statistics.highestDiscretionaryPeriod &&
-            statistics.highestDiscretionaryPeriod.discretionaryAmount > 0 && (
-              <TouchableOpacity
-                style={[
-                  styles.insightCard,
-                  styles.clickableInsight,
-                  {borderLeftColor: colors.secondary || '#10B981'},
-                ]}
-                onPress={onDiscretionaryClick}>
-                <View style={styles.insightContentClean}>
-                  <Text style={styles.insightText}>
-                    <Text style={styles.insightBold}>
-                      Highest discretionary spending:
-                    </Text>{' '}
-                    {statistics.highestDiscretionaryPeriod.label} with $
-                    {statistics.highestDiscretionaryPeriod.discretionaryAmount.toFixed(
-                      2,
-                    )}
-                  </Text>
-                  {isPro ? (
-                    <Text style={styles.tapHint}>Tap for details</Text>
-                  ) : (
-                    <View style={styles.proIndicator}>
-                      <ProBadge />
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
+            {/* Chart - Using pre-formatted data from container */}
+            {chartData && chartData.labels && chartData.labels.length > 0 && (
+              <View style={styles.chartContainer}>
+                <Text style={styles.chartTitle}>Spending Over Time</Text>
+                <LineChart
+                  data={chartData}
+                  width={screenWidth - 60}
+                  height={220}
+                  chartConfig={chartConfig}
+                  bezier
+                  style={styles.chart}
+                  withVerticalLabels={true}
+                  withHorizontalLabels={true}
+                  withDots={true}
+                  withShadow={false}
+                  withVerticalLines={false}
+                  withHorizontalLines={true}
+                />
+              </View>
             )}
 
-          <View
-            style={[
-              styles.insightCard,
-              {
-                borderLeftColor:
-                  statistics.percentageChange >= 0
-                    ? colors.danger || '#EF4444'
-                    : colors.success || '#10B981',
-              },
-            ]}>
-            <Text style={styles.insightText}>
-              <Text style={styles.insightBold}>Total spending trend:</Text>{' '}
-              You're spending {Math.abs(statistics.percentageChange).toFixed(1)}
-              % {statistics.percentageChange >= 0 ? 'more' : 'less'} than last
-              period
-            </Text>
-          </View>
+            {/* Insights */}
+            <View style={styles.insightsContainer}>
+              <Text style={styles.insightsTitle}>Key Insights</Text>
 
-          <View
-            style={[
-              styles.insightCard,
-              {
-                borderLeftColor:
-                  statistics.discretionaryPercentageChange >= 0
-                    ? colors.danger || '#EF4444'
-                    : colors.success || '#10B981',
-              },
-            ]}>
-            <Text style={styles.insightText}>
-              <Text style={styles.insightBold}>Discretionary trend:</Text> Your
-              discretionary spending is{' '}
-              {Math.abs(statistics.discretionaryPercentageChange).toFixed(1)}%{' '}
-              {statistics.discretionaryPercentageChange >= 0
-                ? 'higher'
-                : 'lower'}{' '}
-              than last period
-            </Text>
-          </View>
+              {statistics.highestSpendingPeriod && (
+                <View
+                  style={[
+                    styles.insightCard,
+                    {borderLeftColor: colors.primary},
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>
+                      Highest total spending:
+                    </Text>{' '}
+                    {statistics.highestSpendingPeriod.label} with $
+                    {statistics.highestSpendingPeriod.amount.toFixed(2)}
+                  </Text>
+                </View>
+              )}
 
-          {/* ✅ ENHANCED: Spending Velocity Insight - Pro Feature with Modal */}
-          {spendingVelocity ? (
-            <TouchableOpacity
-              style={[
-                styles.insightCard,
-                isPro && styles.clickableInsight, // Only clickable if Pro
-                {
-                  borderLeftColor:
-                    spendingVelocity.velocityStatus === 'ON_TRACK'
-                      ? colors.success || '#10B981'
-                      : spendingVelocity.velocityStatus === 'SLIGHTLY_HIGH'
-                      ? colors.warning || '#F59E0B'
-                      : colors.danger || '#EF4444',
-                },
-              ]}
-              onPress={handleSpendingVelocityPress}>
-              <View style={styles.insightContentClean}>
+              {statistics.highestDiscretionaryPeriod &&
+                statistics.highestDiscretionaryPeriod.discretionaryAmount >
+                  0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.insightCard,
+                      styles.clickableInsight,
+                      {borderLeftColor: colors.secondary || '#10B981'},
+                    ]}
+                    onPress={onDiscretionaryClick}>
+                    <View style={styles.insightContentClean}>
+                      <Text style={styles.insightText}>
+                        <Text style={styles.insightBold}>
+                          Highest discretionary spending:
+                        </Text>{' '}
+                        {statistics.highestDiscretionaryPeriod.label} with $
+                        {statistics.highestDiscretionaryPeriod.discretionaryAmount.toFixed(
+                          2,
+                        )}
+                      </Text>
+                      {isPro ? (
+                        <Text style={styles.tapHint}>Tap for details</Text>
+                      ) : (
+                        <View style={styles.proIndicator}>
+                          <ProBadge />
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                )}
+
+              <View
+                style={[
+                  styles.insightCard,
+                  {
+                    borderLeftColor:
+                      statistics.percentageChange >= 0
+                        ? colors.danger || '#EF4444'
+                        : colors.success || '#10B981',
+                  },
+                ]}>
                 <Text style={styles.insightText}>
-                  <Text style={styles.insightBold}>Spending Velocity:</Text>{' '}
-                  {spendingVelocity.velocityStatus === 'ON_TRACK' && 'On Track'}
-                  {spendingVelocity.velocityStatus === 'SLIGHTLY_HIGH' &&
-                    'Slightly High'}
-                  {spendingVelocity.velocityStatus === 'HIGH' && 'High'}
-                  {spendingVelocity.velocityStatus === 'VERY_HIGH' &&
-                    'Very High'}
+                  <Text style={styles.insightBold}>Total spending trend:</Text>{' '}
+                  You're spending{' '}
+                  {Math.abs(statistics.percentageChange).toFixed(1)}%{' '}
+                  {statistics.percentageChange >= 0 ? 'more' : 'less'} than last
+                  period
                 </Text>
-                {isPro ? (
-                  <Text style={styles.tapHint}>Tap for details</Text>
+              </View>
+
+              <View
+                style={[
+                  styles.insightCard,
+                  {
+                    borderLeftColor:
+                      statistics.discretionaryPercentageChange >= 0
+                        ? colors.danger || '#EF4444'
+                        : colors.success || '#10B981',
+                  },
+                ]}>
+                <Text style={styles.insightText}>
+                  <Text style={styles.insightBold}>Discretionary trend:</Text>{' '}
+                  Your discretionary spending is{' '}
+                  {Math.abs(statistics.discretionaryPercentageChange).toFixed(
+                    1,
+                  )}
+                  %{' '}
+                  {statistics.discretionaryPercentageChange >= 0
+                    ? 'higher'
+                    : 'lower'}{' '}
+                  than last period
+                </Text>
+              </View>
+
+              {/* ✅ ENHANCED: Spending Velocity Insight - Pro Feature with Modal */}
+              {spendingVelocity ? (
+                <TouchableOpacity
+                  style={[
+                    styles.insightCard,
+                    isPro && styles.clickableInsight, // Only clickable if Pro
+                    {
+                      borderLeftColor:
+                        spendingVelocity.velocityStatus === 'ON_TRACK'
+                          ? colors.success || '#10B981'
+                          : spendingVelocity.velocityStatus === 'SLIGHTLY_HIGH'
+                          ? colors.warning || '#F59E0B'
+                          : colors.danger || '#EF4444',
+                    },
+                  ]}
+                  onPress={handleSpendingVelocityPress}>
+                  <View style={styles.insightContentClean}>
+                    <Text style={styles.insightText}>
+                      <Text style={styles.insightBold}>Spending Velocity:</Text>{' '}
+                      {spendingVelocity.velocityStatus === 'ON_TRACK' &&
+                        'On Track'}
+                      {spendingVelocity.velocityStatus === 'SLIGHTLY_HIGH' &&
+                        'Slightly High'}
+                      {spendingVelocity.velocityStatus === 'HIGH' && 'High'}
+                      {spendingVelocity.velocityStatus === 'VERY_HIGH' &&
+                        'Very High'}
+                    </Text>
+                    {isPro ? (
+                      <Text style={styles.tapHint}>Tap for details</Text>
+                    ) : (
+                      <View style={styles.proIndicator}>
+                        <ProBadge />
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                // Fallback for no velocity data
+                <View
+                  style={[
+                    styles.insightCard,
+                    {borderLeftColor: colors.warning || '#F59E0B'},
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>No data:</Text> Start
+                    adding transactions to see your spending trends
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {selectedTab === 'income' && (
+          <>
+            {/* Income Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Total This Month</Text>
+                <Text style={styles.statValue}>$3,200.00</Text>
+                <Text style={styles.statChange}>+12% from last month</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>This Pay Period</Text>
+                <Text style={styles.statValue}>$1,600.00</Text>
+                <Text style={styles.statSubtext}>Fortnightly</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>This Week</Text>
+                <Text style={styles.statValue}>$800.00</Text>
+                <Text style={styles.statSubtext}>7 days</Text>
+              </View>
+            </View>
+
+            {/* Income by Source */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Income by Source</Text>
+              <View style={styles.incomeSourceContainer}>
+                <View style={styles.incomeSourceItem}>
+                  <View style={styles.incomeSourceHeader}>
+                    <View
+                      style={[
+                        styles.incomeSourceDot,
+                        {backgroundColor: colors.primary},
+                      ]}
+                    />
+                    <Text style={styles.incomeSourceLabel}>Salary</Text>
+                    <Text style={styles.incomeSourceAmount}>$2,800.00</Text>
+                  </View>
+                  <View style={styles.incomeSourceBar}>
+                    <View
+                      style={[
+                        styles.incomeSourceBarFill,
+                        // eslint-disable-next-line react-native/no-inline-styles
+                        {width: '87%', backgroundColor: colors.primary},
+                      ]}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.incomeSourceItem}>
+                  <View style={styles.incomeSourceHeader}>
+                    <View
+                      style={[
+                        styles.incomeSourceDot,
+                        {backgroundColor: colors.success},
+                      ]}
+                    />
+                    <Text style={styles.incomeSourceLabel}>Commission</Text>
+                    <Text style={styles.incomeSourceAmount}>$300.00</Text>
+                  </View>
+                  <View style={styles.incomeSourceBar}>
+                    <View
+                      style={[
+                        styles.incomeSourceBarFill,
+                        // eslint-disable-next-line react-native/no-inline-styles
+                        {width: '10%', backgroundColor: colors.success},
+                      ]}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.incomeSourceItem}>
+                  <View style={styles.incomeSourceHeader}>
+                    <View
+                      style={[
+                        styles.incomeSourceDot,
+                        {backgroundColor: colors.warning},
+                      ]}
+                    />
+                    <Text style={styles.incomeSourceLabel}>Side Hustle</Text>
+                    <Text style={styles.incomeSourceAmount}>$100.00</Text>
+                  </View>
+                  <View style={styles.incomeSourceBar}>
+                    <View
+                      style={[
+                        styles.incomeSourceBarFill,
+                        // eslint-disable-next-line react-native/no-inline-styles
+                        {width: '3%', backgroundColor: colors.warning},
+                      ]}
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Recurring vs Ad-hoc Income */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Recurring vs Ad-hoc Income</Text>
+              <View style={styles.incomeTypeContainer}>
+                <View style={styles.incomeTypeItem}>
+                  <Text style={styles.incomeTypeLabel}>Recurring</Text>
+                  <Text style={styles.incomeTypeAmount}>$2,900.00</Text>
+                  <Text style={styles.incomeTypePercentage}>91%</Text>
+                </View>
+                <View style={styles.incomeTypeItem}>
+                  <Text style={styles.incomeTypeLabel}>Ad-hoc</Text>
+                  <Text style={styles.incomeTypeAmount}>$300.00</Text>
+                  <Text style={styles.incomeTypePercentage}>9%</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Recent Income Entries */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Recent Income Entries</Text>
+              <View style={styles.incomeListContainer}>
+                <View style={styles.incomeListItem}>
+                  <View style={styles.incomeListLeft}>
+                    <Text style={styles.incomeListSource}>Salary</Text>
+                    <Text style={styles.incomeListDate}>July 15, 2024</Text>
+                  </View>
+                  <Text style={styles.incomeListAmount}>$1,400.00</Text>
+                </View>
+
+                <View style={styles.incomeListItem}>
+                  <View style={styles.incomeListLeft}>
+                    <Text style={styles.incomeListSource}>Commission</Text>
+                    <Text style={styles.incomeListDate}>July 10, 2024</Text>
+                  </View>
+                  <Text style={styles.incomeListAmount}>$150.00</Text>
+                </View>
+
+                <View style={styles.incomeListItem}>
+                  <View style={styles.incomeListLeft}>
+                    <Text style={styles.incomeListSource}>Side Hustle</Text>
+                    <Text style={styles.incomeListDate}>July 8, 2024</Text>
+                  </View>
+                  <Text style={styles.incomeListAmount}>$100.00</Text>
+                </View>
+
+                <View style={styles.incomeListItem}>
+                  <View style={styles.incomeListLeft}>
+                    <Text style={styles.incomeListSource}>Salary</Text>
+                    <Text style={styles.incomeListDate}>July 1, 2024</Text>
+                  </View>
+                  <Text style={styles.incomeListAmount}>$1,400.00</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Income Insights */}
+            <View style={styles.insightsContainer}>
+              <Text style={styles.insightsTitle}>Income Insights</Text>
+
+              {/* Placeholder insights - these will be populated with real data */}
+              <View
+                style={[
+                  styles.insightCard,
+                  {borderLeftColor: colors.success || '#10B981'},
+                ]}>
+                <Text style={styles.insightText}>
+                  <Text style={styles.insightBold}>Steady income:</Text> Your
+                  income has been consistent over the past {selectedPeriod}{' '}
+                  period
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.insightCard,
+                  {borderLeftColor: colors.primary || '#6366F1'},
+                ]}>
+                <Text style={styles.insightText}>
+                  <Text style={styles.insightBold}>Savings potential:</Text> You
+                  could save {statistics?.savingsPercentage || 0}% more by
+                  reducing discretionary spending
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {selectedTab === 'bills' && (
+          <>
+            {/* Bills Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Total Bills This Month</Text>
+                <Text style={styles.statValue}>
+                  ${billsAnalytics?.totalAmount?.toFixed(2) || '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>
+                  {billsAnalytics?.totalBills || 0} bills total
+                </Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Paid</Text>
+                <Text style={[styles.statValue, {color: colors.success}]}>
+                  ${billsAnalytics?.paidAmount?.toFixed(2) || '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>
+                  {billsAnalytics?.paidBills || 0} of{' '}
+                  {billsAnalytics?.totalBills || 0} bills
+                </Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>
+                  {billsAnalytics?.overdueBills > 0 ? 'Overdue' : 'Unpaid'}
+                </Text>
+                <Text
+                  style={[
+                    styles.statValue,
+                    {
+                      color:
+                        billsAnalytics?.overdueBills > 0
+                          ? colors.danger
+                          : colors.warning,
+                    },
+                  ]}>
+                  $
+                  {billsAnalytics?.overdueBills > 0
+                    ? billsAnalytics?.overdueAmount?.toFixed(2) || '0.00'
+                    : billsAnalytics?.unpaidAmount?.toFixed(2) || '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>
+                  {billsAnalytics?.overdueBills > 0
+                    ? `${billsAnalytics.overdueBills} overdue`
+                    : `${billsAnalytics?.unpaidBills || 0} remaining`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Progress Tracker */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Bills Progress</Text>
+              <View style={styles.billsProgressContainer}>
+                <Text style={styles.billsProgressText}>
+                  {billsAnalytics?.paidBills || 0} of{' '}
+                  {billsAnalytics?.totalBills || 0} bills paid • $
+                  {billsAnalytics?.paidAmount?.toFixed(2) || '0.00'} of $
+                  {billsAnalytics?.totalAmount?.toFixed(2) || '0.00'} settled
+                </Text>
+                <View style={styles.billsProgressBar}>
+                  <View
+                    style={[
+                      styles.billsProgressFill,
+                      {width: `${billsAnalytics?.progress || 0}%`},
+                    ]}
+                  />
+                </View>
+                <Text style={styles.billsProgressPercentage}>
+                  {billsAnalytics?.progress || 0}% complete
+                </Text>
+              </View>
+            </View>
+
+
+            {/* Upcoming Bills (Next 7 Days) */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>
+                Upcoming Bills (Next 7 Days)
+              </Text>
+              <View style={styles.billsListContainer}>
+                {billsAnalytics?.upcomingBills?.length > 0 ? (
+                  billsAnalytics.upcomingBills.map((bill, index) => (
+                    <View key={index} style={styles.billsListItem}>
+                      <View style={styles.billsListLeft}>
+                        <Text style={styles.billsListName}>
+                          {bill.description || bill.category?.name || 'Bill'}
+                        </Text>
+                        <Text style={styles.billsListCategory}>
+                          {bill.category?.name || 'General'}
+                        </Text>
+                        <Text style={styles.billsListDueDate}>
+                          {formatDueDate(bill.dueDate)}
+                        </Text>
+                      </View>
+                      <View style={styles.billsListRight}>
+                        <Text style={styles.billsListAmount}>
+                          ${Math.abs(bill.amount).toFixed(2)}
+                        </Text>
+                        <View
+                          style={[
+                            styles.billsStatusBadge,
+                            styles.billsStatusUpcoming,
+                          ]}>
+                          <Text style={styles.billsStatusText}>Due Soon</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))
                 ) : (
-                  <View style={styles.proIndicator}>
-                    <ProBadge />
+                  <View style={styles.billsListItem}>
+                    <Text style={styles.billsListName}>
+                      No bills due in the next 7 days
+                    </Text>
                   </View>
                 )}
               </View>
-            </TouchableOpacity>
-          ) : (
-            // Fallback for no velocity data
-            <View
-              style={[
-                styles.insightCard,
-                {borderLeftColor: colors.warning || '#F59E0B'},
-              ]}>
-              <Text style={styles.insightText}>
-                <Text style={styles.insightBold}>No data:</Text> Start adding
-                transactions to see your spending trends
-              </Text>
             </View>
-          )}
-        </View>
+
+            {/* All Bills by Status */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>All Bills by Status</Text>
+
+              {/* Paid Bills */}
+              {billsAnalytics?.paidBillsList?.length > 0 && (
+                <>
+                  <Text style={styles.billsSubheading}>Paid Bills</Text>
+                  <View style={styles.billsListContainer}>
+                    {billsAnalytics.paidBillsList.map((bill, index) => (
+                      <View key={index} style={styles.billsListItem}>
+                        <View style={styles.billsListLeft}>
+                          <Text style={styles.billsListName}>
+                            {bill.description || bill.category?.name || 'Bill'}
+                          </Text>
+                          <Text style={styles.billsListCategory}>
+                            {bill.category?.name || 'General'}
+                          </Text>
+                          <Text style={styles.billsListDueDate}>
+                            Paid:{' '}
+                            {new Date(bill.dueDate).toLocaleDateString(
+                              'en-US',
+                              {month: 'short', day: 'numeric', year: 'numeric'},
+                            )}
+                          </Text>
+                        </View>
+                        <View style={styles.billsListRight}>
+                          <Text style={styles.billsListAmount}>
+                            ${Math.abs(bill.amount).toFixed(2)}
+                          </Text>
+                          <View
+                            style={[
+                              styles.billsStatusBadge,
+                              styles.billsStatusPaid,
+                            ]}>
+                            <Text style={styles.billsStatusText}>Paid</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {/* Overdue Bills */}
+              {billsAnalytics?.overdueBillsList?.length > 0 && (
+                <>
+                  <Text style={styles.billsSubheading}>Overdue Bills</Text>
+                  <View style={styles.billsListContainer}>
+                    {billsAnalytics.overdueBillsList.map((bill, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.billsListItem,
+                          styles.billsListItemLate,
+                        ]}>
+                        <View style={styles.billsListLeft}>
+                          <Text style={styles.billsListName}>
+                            {bill.description || bill.category?.name || 'Bill'}
+                          </Text>
+                          <Text style={styles.billsListCategory}>
+                            {bill.category?.name || 'General'}
+                          </Text>
+                          <Text style={styles.billsListDueDate}>
+                            {formatDueDate(bill.dueDate)}
+                          </Text>
+                        </View>
+                        <View style={styles.billsListRight}>
+                          <Text style={styles.billsListAmount}>
+                            ${Math.abs(bill.amount).toFixed(2)}
+                          </Text>
+                          <View
+                            style={[
+                              styles.billsStatusBadge,
+                              styles.billsStatusLate,
+                            ]}>
+                            <Text style={styles.billsStatusText}>Late</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {/* Unpaid Bills */}
+              {billsAnalytics?.unpaidBillsList?.length > 0 && (
+                <>
+                  <Text style={styles.billsSubheading}>Unpaid Bills</Text>
+                  <View style={styles.billsListContainer}>
+                    {billsAnalytics.unpaidBillsList.map((bill, index) => (
+                      <View key={index} style={styles.billsListItem}>
+                        <View style={styles.billsListLeft}>
+                          <Text style={styles.billsListName}>
+                            {bill.description || bill.category?.name || 'Bill'}
+                          </Text>
+                          <Text style={styles.billsListCategory}>
+                            {bill.category?.name || 'General'}
+                          </Text>
+                          <Text style={styles.billsListDueDate}>
+                            {formatDueDate(bill.dueDate)}
+                          </Text>
+                        </View>
+                        <View style={styles.billsListRight}>
+                          <Text style={styles.billsListAmount}>
+                            ${Math.abs(bill.amount).toFixed(2)}
+                          </Text>
+                          <View
+                            style={[
+                              styles.billsStatusBadge,
+                              styles.billsStatusUnpaid,
+                            ]}>
+                            <Text style={styles.billsStatusText}>Unpaid</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              {/* No Bills Message */}
+              {(!billsAnalytics?.totalBills ||
+                billsAnalytics.totalBills === 0) && (
+                <View style={styles.billsListContainer}>
+                  <View style={styles.billsListItem}>
+                    <Text style={styles.billsListName}>
+                      No bills found for this month. Add transactions with due
+                      dates to track your bills here.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Bills Insights */}
+            <View style={styles.insightsContainer}>
+              <Text style={styles.insightsTitle}>Bills Insights</Text>
+
+              {/* Overdue Bills Alert */}
+              {billsAnalytics?.overdueBills > 0 && (
+                <View
+                  style={[
+                    styles.insightCard,
+                    {borderLeftColor: colors.danger || '#EF4444'},
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>Late payment alert:</Text>{' '}
+                    You have {billsAnalytics.overdueBills} overdue{' '}
+                    {billsAnalytics.overdueBills === 1 ? 'bill' : 'bills'}{' '}
+                    totaling ${billsAnalytics.overdueAmount.toFixed(2)}.
+                    Consider setting up automatic payments.
+                  </Text>
+                </View>
+              )}
+
+              {/* Upcoming Bills Warning */}
+              {billsAnalytics?.upcomingBills?.length > 0 && (
+                <View
+                  style={[
+                    styles.insightCard,
+                    {borderLeftColor: colors.warning || '#F59E0B'},
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>Upcoming deadlines:</Text>{' '}
+                    You have {billsAnalytics.upcomingBills.length}{' '}
+                    {billsAnalytics.upcomingBills.length === 1
+                      ? 'bill'
+                      : 'bills'}{' '}
+                    due in the next 7 days totaling $
+                    {billsAnalytics.upcomingBills
+                      .reduce((sum, bill) => sum + Math.abs(bill.amount), 0)
+                      .toFixed(2)}
+                    .
+                  </Text>
+                </View>
+              )}
+
+              {/* Progress Insight */}
+              {billsAnalytics?.totalBills > 0 && (
+                <View
+                  style={[
+                    styles.insightCard,
+                    {
+                      borderLeftColor:
+                        billsAnalytics.progress >= 50
+                          ? colors.success || '#10B981'
+                          : colors.warning || '#F59E0B',
+                    },
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>
+                      {billsAnalytics.progress >= 80
+                        ? 'Excellent progress:'
+                        : billsAnalytics.progress >= 50
+                        ? 'Good progress:'
+                        : 'Room for improvement:'}
+                    </Text>{' '}
+                    You've paid {billsAnalytics.progress}% of your monthly
+                    bills.
+                    {billsAnalytics.progress >= 80
+                      ? ' Keep up the great work!'
+                      : billsAnalytics.progress >= 50
+                      ? " You're on track!"
+                      : ' Consider setting up automatic payments to stay on top of your bills.'}
+                  </Text>
+                </View>
+              )}
+
+              {/* No Bills Insight */}
+              {(!billsAnalytics?.totalBills ||
+                billsAnalytics.totalBills === 0) && (
+                <View
+                  style={[
+                    styles.insightCard,
+                    {borderLeftColor: colors.primary || '#6366F1'},
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>Get started:</Text> Add
+                    your recurring bills and expenses with due dates to track
+                    them here. This helps you stay on top of your financial
+                    obligations.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* ✅ FIXED: Use DiscretionaryContainer instead of DiscretionaryBreakdown */}
@@ -619,6 +1243,304 @@ const styles = StyleSheet.create({
   },
   insightBold: {
     fontWeight: '600',
+    fontFamily: 'System',
+  },
+
+  // Tab navigation styles
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background || '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1', // Show the underline for inactive tabs
+  },
+  tabButtonActive: {
+    backgroundColor: colors.primary || '#6366F1',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1', // Same color as background to hide the underline
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+  tabTextActive: {
+    color: colors.textWhite || '#FFFFFF',
+    fontWeight: '600',
+  },
+
+  // Income analytics styles
+  statSubtext: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+    marginTop: 2,
+  },
+
+  // Income by Source styles
+  incomeSourceContainer: {
+    gap: 16,
+    marginTop: 16,
+  },
+  incomeSourceItem: {
+    gap: 8,
+  },
+  incomeSourceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  incomeSourceDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  incomeSourceLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    flex: 1,
+  },
+  incomeSourceAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+  },
+  incomeSourceBar: {
+    height: 8,
+    backgroundColor: colors.background || '#F3F4F6',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  incomeSourceBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+
+  // Recurring vs Ad-hoc styles
+  incomeTypeContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 16,
+  },
+  incomeTypeItem: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.overlayLight || '#E5E7EB',
+  },
+  incomeTypeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+    marginBottom: 8,
+  },
+  incomeTypeAmount: {
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    marginBottom: 4,
+  },
+  incomeTypePercentage: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.primary || '#6366F1',
+  },
+
+  // Recent Income Entries styles
+  incomeListContainer: {
+    gap: 12,
+    marginTop: 16,
+  },
+  incomeListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.overlayLight || '#E5E7EB',
+  },
+  incomeListLeft: {
+    flex: 1,
+  },
+  incomeListSource: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    marginBottom: 4,
+  },
+  incomeListDate: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+  incomeListAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.success || '#10B981',
+  },
+
+  // Bills analytics styles
+  billsProgressContainer: {
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 12,
+  },
+  billsProgressText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    textAlign: 'center',
+  },
+  billsProgressBar: {
+    width: '100%',
+    height: 12,
+    backgroundColor: colors.background || '#F3F4F6',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  billsProgressFill: {
+    height: '100%',
+    backgroundColor: colors.success || '#10B981',
+    borderRadius: 6,
+  },
+  billsProgressPercentage: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+
+
+  // Bills list styles
+  billsSubheading: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  billsListContainer: {
+    gap: 12,
+  },
+  billsListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.overlayLight || '#E5E7EB',
+  },
+  billsListItemLate: {
+    borderColor: colors.danger || '#EF4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+  },
+  billsListLeft: {
+    flex: 1,
+  },
+  billsListName: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    marginBottom: 4,
+  },
+  billsListCategory: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+    marginBottom: 4,
+  },
+  billsListDueDate: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+  billsListRight: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  billsListAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+  },
+
+  // Bills status badges
+  billsStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  billsStatusPaid: {
+    backgroundColor: colors.successLight || 'rgba(16, 185, 129, 0.1)',
+  },
+  billsStatusUnpaid: {
+    backgroundColor: colors.warningLight || 'rgba(245, 158, 11, 0.1)',
+  },
+  billsStatusUpcoming: {
+    backgroundColor: colors.primaryLight || 'rgba(99, 102, 241, 0.1)',
+  },
+  billsStatusLate: {
+    backgroundColor: colors.dangerLight || 'rgba(239, 68, 68, 0.1)',
+  },
+  billsStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'System',
+    textTransform: 'uppercase',
+  },
+
+  // Placeholder styles
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: colors.textSecondary || '#6B7280',
     fontFamily: 'System',
   },
 });
