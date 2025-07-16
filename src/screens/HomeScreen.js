@@ -165,6 +165,7 @@ const HomeScreen = ({
           goals={goals}
           onGoalsPress={onGoalsPress}
           currency={currency}
+          transactions={transactions}
         />
       </View>
 

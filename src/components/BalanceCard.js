@@ -1,10 +1,11 @@
 /* eslint-disable react-native/no-inline-styles */
 // components/BalanceCard.js (Improved goal readability with larger fonts and better spacing)
-import React from 'react';
+import React, {useMemo} from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import {formatCurrencySync} from '../utils/currencyHelper';
+import {getExpenseBreakdownSync} from '../utils/expenseBreakdownCalculator';
 
 const BalanceCard = ({
   incomeData,
@@ -21,6 +22,8 @@ const BalanceCard = ({
   onGoalsPress,
   // Currency setting
   currency = 'AUD',
+  // Transactions for expense breakdown
+  transactions = [],
 }) => {
   const formatCurrency = amount => {
     return formatCurrencySync(amount, currency);
@@ -96,22 +99,27 @@ const BalanceCard = ({
   );
 
   // Calculate total local income payments for goals not synced to backend
-  const localIncomePayments = goals.reduce(
-    (sum, goal) => {
-      // Only count local goals' income payments (backend payments are in totalIncomePayments prop)
-      if (goal.id.startsWith('local_')) {
-        return sum + (goal.totalIncomePayments || 0);
-      }
-      return sum;
-    },
-    0,
-  );
+  const localIncomePayments = goals.reduce((sum, goal) => {
+    // Only count local goals' income payments (backend payments are in totalIncomePayments prop)
+    if (goal.id.startsWith('local_')) {
+      return sum + (goal.totalIncomePayments || 0);
+    }
+    return sum;
+  }, 0);
 
+  // Calculate expense breakdown with memoization
+  const expenseBreakdown = useMemo(() => {
+    return getExpenseBreakdownSync(transactions);
+  }, [transactions]);
 
   // Calculate values
   const incomeAmount = incomeData?.income || 0;
   const leftToSpend = incomeAmount - totalExpenses;
-  const adjustedLeftToSpend = leftToSpend - totalGoalContributions - totalIncomePayments - localIncomePayments;
+  const adjustedLeftToSpend =
+    leftToSpend -
+    totalGoalContributions -
+    totalIncomePayments -
+    localIncomePayments;
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
 
@@ -185,6 +193,31 @@ const BalanceCard = ({
             <Text style={styles.balanceAmount}>
               {formatCurrency(totalExpenses)}
             </Text>
+
+            {/* Expense Breakdown */}
+            {!loading &&
+              expenseBreakdown &&
+              (expenseBreakdown.committed > 0 ||
+                expenseBreakdown.discretionary > 0) && (
+                <View style={styles.expenseBreakdown}>
+                  <View style={styles.expenseBreakdownRow}>
+                    <Text style={styles.expenseBreakdownLabel}>
+                      └─ Committed:
+                    </Text>
+                    <Text style={styles.expenseBreakdownAmount}>
+                      {formatCurrency(expenseBreakdown.committed)}
+                    </Text>
+                  </View>
+                  <View style={styles.expenseBreakdownRow}>
+                    <Text style={styles.expenseBreakdownLabel}>
+                      └─ Discretionary:
+                    </Text>
+                    <Text style={styles.expenseBreakdownAmount}>
+                      {formatCurrency(expenseBreakdown.discretionary)}
+                    </Text>
+                  </View>
+                </View>
+              )}
           </View>
         </View>
 
@@ -429,7 +462,7 @@ const styles = StyleSheet.create({
   balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 15,
   },
   balanceItem: {
@@ -454,6 +487,32 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite,
     letterSpacing: -0.2,
+  },
+  expenseBreakdown: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.overlayLight,
+  },
+  expenseBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  expenseBreakdownLabel: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+  },
+  expenseBreakdownAmount: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
   },
   totalIncome: {
     fontSize: 24,
