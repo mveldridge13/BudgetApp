@@ -503,6 +503,14 @@ const HomeContainer = ({navigation}) => {
           // Don't fail the entire transaction save if goal update fails
         }
 
+        // Reload categories to ensure category map is up to date with any new categories
+        try {
+          await loadCategories();
+        } catch (categoryError) {
+          console.error('Failed to reload categories after transaction save:', categoryError);
+          // Don't fail the transaction save if category reload fails
+        }
+
         return {
           success: true,
           isNewTransaction: !isEditing,
