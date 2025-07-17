@@ -6,13 +6,13 @@ const DEFAULT_CURRENCY = 'AUD';
 
 // Currency configurations
 const CURRENCY_CONFIG = {
-  AUD: { symbol: '$', code: 'AUD', name: 'Australian Dollar' },
-  USD: { symbol: '$', code: 'USD', name: 'US Dollar' },
-  EUR: { symbol: '¬', code: 'EUR', name: 'Euro' },
-  GBP: { symbol: '£', code: 'GBP', name: 'British Pound' },
-  CAD: { symbol: '$', code: 'CAD', name: 'Canadian Dollar' },
-  JPY: { symbol: '¥', code: 'JPY', name: 'Japanese Yen' },
-  NZD: { symbol: '$', code: 'NZD', name: 'New Zealand Dollar' },
+  AUD: {symbol: '$', code: 'AUD', name: 'Australian Dollar'},
+  USD: {symbol: '$', code: 'USD', name: 'US Dollar'},
+  EUR: {symbol: 'ï¿½', code: 'EUR', name: 'Euro'},
+  GBP: {symbol: 'ï¿½', code: 'GBP', name: 'British Pound'},
+  CAD: {symbol: '$', code: 'CAD', name: 'Canadian Dollar'},
+  JPY: {symbol: 'ï¿½', code: 'JPY', name: 'Japanese Yen'},
+  NZD: {symbol: '$', code: 'NZD', name: 'New Zealand Dollar'},
 };
 
 // Cache for current currency
@@ -45,7 +45,7 @@ export const getCurrentCurrency = async () => {
 /**
  * Set the current currency (used when settings change)
  */
-export const setCurrentCurrency = (currency) => {
+export const setCurrentCurrency = currency => {
   if (CURRENCY_CONFIG[currency]) {
     currentCurrency = currency;
   }
@@ -56,8 +56,8 @@ export const setCurrentCurrency = (currency) => {
  */
 export const formatCurrency = async (amount, currency = null) => {
   try {
-    const currencyCode = currency || await getCurrentCurrency();
-    
+    const currencyCode = currency || (await getCurrentCurrency());
+
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: currencyCode,
@@ -83,7 +83,8 @@ export const formatCurrencySync = (amount, currency = DEFAULT_CURRENCY) => {
   } catch (error) {
     console.error('Error formatting currency sync:', error);
     // Fallback formatting
-    const config = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG[DEFAULT_CURRENCY];
+    const config =
+      CURRENCY_CONFIG[currency] || CURRENCY_CONFIG[DEFAULT_CURRENCY];
     return `${config.symbol}${(amount || 0).toFixed(2)}`;
   }
 };
@@ -93,7 +94,7 @@ export const formatCurrencySync = (amount, currency = DEFAULT_CURRENCY) => {
  */
 export const getCurrencySymbol = async (currency = null) => {
   try {
-    const currencyCode = currency || await getCurrentCurrency();
+    const currencyCode = currency || (await getCurrentCurrency());
     const config = CURRENCY_CONFIG[currencyCode];
     return config ? config.symbol : '$';
   } catch (error) {
@@ -113,17 +114,17 @@ export const getCurrencySymbolSync = (currency = DEFAULT_CURRENCY) => {
 /**
  * Parse currency string to number
  */
-export const parseCurrency = (currencyString) => {
+export const parseCurrency = currencyString => {
   try {
     if (typeof currencyString === 'number') {
       return currencyString;
     }
-    
+
     // Remove currency symbols and spaces, parse as float
     const numericString = String(currencyString)
       .replace(/[^\d.-]/g, '')
       .trim();
-      
+
     const parsed = parseFloat(numericString);
     return isNaN(parsed) ? 0 : parsed;
   } catch (error) {
@@ -142,7 +143,7 @@ export const getAvailableCurrencies = () => {
 /**
  * Validate currency code
  */
-export const isValidCurrency = (currency) => {
+export const isValidCurrency = currency => {
   return currency && CURRENCY_CONFIG.hasOwnProperty(currency);
 };
 

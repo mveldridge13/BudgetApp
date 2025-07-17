@@ -20,10 +20,8 @@ const AnalyticsContainer = () => {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [billsAnalytics, setBillsAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // Cache state for bills analytics
-  const [billsCacheAge, setBillsCacheAge] = useState(null);
-  const [isBillsStale, setIsBillsStale] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
   // Refs for optimization
@@ -70,9 +68,9 @@ const AnalyticsContainer = () => {
     const unsubscribe = NetInfo.addEventListener(state => {
       const wasOffline = !isOnline;
       const isNowOnline = state.isConnected && state.isInternetReachable;
-      
+
       setIsOnline(isNowOnline);
-      
+
       // If coming back online and bills cache is stale, refresh
       if (wasOffline && isNowOnline && isMountedRef.current) {
         billsAnalyticsCache.isFresh().then(isFresh => {
@@ -129,11 +127,9 @@ const AnalyticsContainer = () => {
           age: Math.round(cached.age / 1000 / 60),
           isStale: cached.isStale,
         });
-        
+
         setBillsAnalytics(cached.data);
-        setBillsCacheAge(cached.age);
-        setIsBillsStale(cached.isStale);
-        
+
         // If data is fresh and not forcing refresh, we're done
         if (!cached.isStale && !forceRefresh) {
           return;
@@ -146,13 +142,13 @@ const AnalyticsContainer = () => {
       }
     } catch (err) {
       console.error('Error in cache-first bills analytics loading:', err);
-      
+
       // If cache loading fails, try backend directly
       if (isMountedRef.current) {
         await loadBillsAnalyticsFromBackend();
       }
     }
-  }, []);
+  }, [loadBillsAnalyticsFromBackend]);
 
   // Backend bills analytics loading with cache update
   const loadBillsAnalyticsFromBackend = useCallback(async () => {
@@ -163,29 +159,25 @@ const AnalyticsContainer = () => {
         const cached = await billsAnalyticsCache.get();
         if (cached && cached.data && isMountedRef.current) {
           setBillsAnalytics(cached.data);
-          setBillsCacheAge(cached.age);
-          setIsBillsStale(true); // Mark as stale due to offline state
         }
         return;
       }
 
       console.log('📋 Fetching bills analytics from backend...');
-      
+
       // Try backend bills analytics first
       const billsResponse = await TrendAPIService.getBillsAnalytics();
 
       if (isMountedRef.current && billsResponse) {
         setBillsAnalytics(billsResponse);
-        setBillsCacheAge(0); // Fresh data
-        setIsBillsStale(false);
-        
+
         // Cache the response for future use
         await billsAnalyticsCache.set(billsResponse);
         console.log('📋 Bills analytics cached successfully');
       }
     } catch (err) {
       console.error('Error loading bills analytics from backend:', err);
-      
+
       // Fallback: if backend endpoint doesn't exist yet, calculate client-side temporarily
       if (err.message && err.message.includes('404')) {
         console.warn('Bills analytics endpoint not implemented yet, falling back to client-side processing');
@@ -196,8 +188,6 @@ const AnalyticsContainer = () => {
         if (cached && cached.data && isMountedRef.current) {
           console.log('📋 Backend failed, using stale cache data');
           setBillsAnalytics(cached.data);
-          setBillsCacheAge(cached.age);
-          setIsBillsStale(true); // Mark as stale due to backend failure
         } else if (isMountedRef.current) {
           setBillsAnalytics(null);
         }
@@ -211,15 +201,15 @@ const AnalyticsContainer = () => {
       // Get all transactions with due dates (bills)
       const response = await TrendAPIService.getTransactions();
       const allTransactions = response?.transactions || [];
-      
+
       console.log('📋 Bills Analytics: Fetched transactions:', {
         responseType: typeof response,
         transactionsType: typeof allTransactions,
         isArray: Array.isArray(allTransactions),
         length: allTransactions?.length || 0,
-        sample: allTransactions?.slice(0, 2) || 'no data'
+        sample: allTransactions?.slice(0, 2) || 'no data',
       });
-      
+
       // Check if transactions data is valid
       if (!allTransactions || !Array.isArray(allTransactions)) {
         console.warn('No transactions data available for bills analytics');
@@ -242,7 +232,7 @@ const AnalyticsContainer = () => {
         }
         return;
       }
-      
+
       const billTransactions = allTransactions.filter(
         tx => tx.dueDate || (tx.recurrence && tx.recurrence !== 'none'),
       );
@@ -257,7 +247,7 @@ const AnalyticsContainer = () => {
           dueDate: tx.dueDate,
           recurrence: tx.recurrence,
           status: tx.status,
-        }))
+        })),
       });
 
       // Process bills analytics client-side (temporary)
@@ -346,9 +336,7 @@ const AnalyticsContainer = () => {
 
       if (isMountedRef.current) {
         setBillsAnalytics(fallbackAnalytics);
-        setBillsCacheAge(0); // Fresh fallback data
-        setIsBillsStale(false);
-        
+
         // Cache the fallback results for future use
         await billsAnalyticsCache.set(fallbackAnalytics);
         console.log('📋 Fallback bills analytics cached successfully');
