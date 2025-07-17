@@ -25,6 +25,14 @@ const IncomeSetupContainer = ({navigation, route}) => {
   const isEditMode = route?.params?.editMode || false;
 
   // ==============================================
+  // DEBUGGING HELPER (REMOVED - METHOD NOT AVAILABLE)
+  // ==============================================
+
+  // const debugAPIConnection = async () => {
+  //   // Debug code removed - methods don't exist in current API service
+  // };
+
+  // ==============================================
   // BACKEND INTEGRATION METHODS
   // ==============================================
 
@@ -38,7 +46,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
 
     try {
       // Primary: Load income from backend
-      const userProfile = await TrendAPIService.getUserProfile();
+      const userProfile = await TrendAPIService.getIncomeProfile();
 
       if (userProfile?.income) {
         setIncome(userProfile.income.toString());
@@ -124,19 +132,85 @@ const IncomeSetupContainer = ({navigation, route}) => {
     setLoading(true);
 
     try {
+      // Debug API connection (commented out - method doesn't exist yet)
+      // console.log('💰 IncomeSetup: Starting debug checks...');
+      // const debugResults = await debugAPIConnection();
+      // console.log('💰 IncomeSetup: Debug results:', debugResults);
+
+      // Check authentication status before making API call
+      console.log('💰 IncomeSetup: Checking authentication status...');
+
+      // Ensure API service is initialized
+      await TrendAPIService.initialize();
+
+      const isAuthenticated = TrendAPIService.isAuthenticated();
+      console.log('💰 IncomeSetup: Is authenticated:', isAuthenticated);
+
+      if (!isAuthenticated) {
+        console.error('💰 IncomeSetup: User is not authenticated');
+        Alert.alert(
+          'Authentication Error',
+          'You need to be logged in to save your income information. Please restart the app and try again.',
+        );
+        return;
+      }
+
       const incomeAmount = parseFloat(income);
 
       // ✅ FIXED: Save complete income data to backend API (primary storage)
       const profileUpdateData = {
         income: incomeAmount,
         incomeFrequency: selectedFrequency.toUpperCase(), // Convert to WEEKLY/FORTNIGHTLY/MONTHLY
-        nextPayDate: nextPayDate.toISOString().split('T')[0],
+        nextPayDate: nextPayDate.toISOString(), // ✅ Send full DateTime format
         setupComplete: true,
       };
 
+      // ✅ ENHANCED: Validate data before sending
+      console.log('💰 IncomeSetup: Validating profile data...');
+      console.log('💰 IncomeSetup: Profile data to save:', {
+        income: incomeAmount,
+        incomeType: typeof incomeAmount,
+        incomeFrequency: selectedFrequency.toUpperCase(),
+        nextPayDate: nextPayDate.toISOString().split('T')[0],
+        setupComplete: true,
+      });
 
-      await TrendAPIService.updateUserProfile(profileUpdateData);
+      // Validate income amount
+      if (!incomeAmount || isNaN(incomeAmount) || incomeAmount <= 0) {
+        throw new Error('Invalid income amount: must be a positive number');
+      }
 
+      // Validate frequency
+      const validFrequencies = ['WEEKLY', 'FORTNIGHTLY', 'MONTHLY'];
+      if (!validFrequencies.includes(selectedFrequency.toUpperCase())) {
+        throw new Error(
+          'Invalid income frequency: must be WEEKLY, FORTNIGHTLY, or MONTHLY',
+        );
+      }
+
+      // Validate date format
+      if (!nextPayDate || isNaN(nextPayDate.getTime())) {
+        throw new Error('Invalid date: must be a valid date');
+      }
+
+      console.log(
+        '💰 IncomeSetup: Data validation passed, saving to backend...',
+      );
+
+      // ✅ ENHANCED: Try to save and handle specific errors
+      try {
+        await TrendAPIService.updateIncomeProfile(profileUpdateData);
+        console.log('💰 IncomeSetup: Income profile update successful');
+      } catch (saveError) {
+        console.error('💰 IncomeSetup: Save error details:', {
+          message: saveError.message,
+          stack: saveError.stack,
+          profileData: profileUpdateData,
+        });
+
+        // Re-throw with more context
+        throw new Error(`Failed to save income data: ${saveError.message}`);
+      }
 
       // Save complete data to AsyncStorage (backward compatibility)
       const setupData = {
@@ -163,11 +237,88 @@ const IncomeSetupContainer = ({navigation, route}) => {
       }
     } catch (error) {
       console.error('💥 Error saving income data:', error);
-      Alert.alert(
-        'Error',
-        'Failed to save your income information. Please check your connection and try again.',
-        [{text: 'OK'}],
-      );
+
+      // ✅ ENHANCED: Provide more specific error messages
+      let errorMessage =
+        'Failed to save your income information. Please check your connection and try again.';
+
+      if (error.message?.includes('Authentication')) {
+        errorMessage =
+          'Authentication failed. Please log out and log back in to continue.';
+      } else if (
+        error.message?.includes('Network') ||
+        error.message?.includes('fetch')
+      ) {
+        errorMessage =
+          'Network error. Please check your internet connection and try again.';
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (error.message?.includes('401')) {
+        errorMessage = 'Session expired. Please log out and log back in.';
+      } else if (error.message?.includes('400')) {
+        errorMessage =
+          'Invalid data provided. Please check your inputs and try again.';
+      } else if (error.message?.includes('500')) {
+        errorMessage = 'Server error. Please try again in a few moments.';
+      } else if (error.message?.includes('404')) {
+        errorMessage =
+          'The income setup feature is not available on the server. Please contact support.';
+      }
+
+      // ✅ ENHANCED: Offer to save locally as fallback
+      Alert.alert('Error', errorMessage, [
+        {
+          text: 'Try Again',
+          onPress: () => {
+            // User can try again
+          },
+        },
+        {
+          text: 'Save Locally',
+          onPress: async () => {
+            try {
+              // Save to AsyncStorage as fallback
+              const setupData = {
+                income: parseFloat(income),
+                frequency: selectedFrequency,
+                nextPayDate: nextPayDate.toISOString(), // ✅ Full DateTime
+                setupComplete: true,
+                createdAt: new Date().toISOString(),
+                lastUpdated: new Date().toISOString(),
+                savedLocally: true, // Flag to indicate local save
+              };
+
+              await AsyncStorage.setItem(
+                'userSetup',
+                JSON.stringify(setupData),
+              );
+
+              Alert.alert(
+                'Saved Locally',
+                'Your income data has been saved locally. It will sync when the server connection is restored.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      if (isEditMode) {
+                        navigation.goBack();
+                      } else {
+                        navigation.replace('MainTabs');
+                      }
+                    },
+                  },
+                ],
+              );
+            } catch (localSaveError) {
+              console.error('Failed to save locally:', localSaveError);
+              Alert.alert(
+                'Error',
+                'Failed to save data locally. Please try again.',
+              );
+            }
+          },
+        },
+      ]);
     } finally {
       setLoading(false);
     }

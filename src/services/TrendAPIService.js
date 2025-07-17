@@ -233,6 +233,17 @@ class TrendAPIService {
     });
   }
 
+  async updateIncomeProfile(incomeData) {
+    return this.makeRequest('/users/income', {
+      method: 'PUT',
+      body: incomeData,
+    });
+  }
+
+  async getIncomeProfile() {
+    return this.makeRequest('/users/income');
+  }
+
   async deactivateAccount() {
     return this.makeRequest('/users/profile', {
       method: 'DELETE',
