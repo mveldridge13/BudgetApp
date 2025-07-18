@@ -223,28 +223,33 @@ const HomeScreen = ({
       {/* ==============================================
           ONBOARDING OVERLAYS
           ============================================== */}
-      <BalanceCardSpotlight
-        visible={onboarding?.showBalanceCardSpotlight}
-        onNext={handleBalanceCardSpotlightNext}
-        onSkip={handleBalanceCardSpotlightSkip}
-        balanceCardLayout={onboarding?.balanceCardLayout}
-        incomeData={incomeData}
-      />
+      {onboarding?.showBalanceCardSpotlight && (
+        <BalanceCardSpotlight
+          visible={onboarding.showBalanceCardSpotlight}
+          onNext={handleBalanceCardSpotlightNext}
+          onSkip={handleBalanceCardSpotlightSkip}
+          balanceCardLayout={onboarding.balanceCardLayout}
+          incomeData={incomeData}
+        />
+      )}
 
-      <AddTransactionSpotlight
-        visible={onboarding?.showAddTransactionSpotlight}
-        onNext={handleAddTransactionSpotlightNext}
-        onSkip={handleAddTransactionSpotlightSkip}
-        floatingButtonLayout={onboarding?.floatingButtonLayout}
-      />
+      {onboarding?.showAddTransactionSpotlight && (
+        <AddTransactionSpotlight
+          visible={onboarding.showAddTransactionSpotlight}
+          onNext={handleAddTransactionSpotlightNext}
+          onSkip={handleAddTransactionSpotlightSkip}
+          floatingButtonLayout={onboarding.floatingButtonLayout}
+        />
+      )}
 
-      <TransactionSwipeSpotlight
-        visible={onboarding?.showTransactionSwipeSpotlight}
-        onNext={handleTransactionSwipeSpotlightNext}
-        onSkip={handleTransactionSwipeSpotlightSkip}
-        transactionLayout={onboarding?.transactionLayout}
-        currentStep={onboarding?.transactionSwipeStep}
-      />
+      {onboarding?.showTransactionSwipeSpotlight && (
+        <TransactionSwipeSpotlight
+          visible={onboarding.showTransactionSwipeSpotlight}
+          onNext={handleTransactionSwipeSpotlightNext}
+          onSkip={handleTransactionSwipeSpotlightSkip}
+          transactionLayout={onboarding.transactionLayout}
+        />
+      )}
     </View>
   );
 };

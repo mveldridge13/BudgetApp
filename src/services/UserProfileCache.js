@@ -13,12 +13,12 @@ class UserProfileCache {
       }
 
       const {profile, timestamp} = JSON.parse(cached);
-      
+
       // Return cached data regardless of age (stale data is better than no data)
       // But include metadata about freshness
       const age = Date.now() - timestamp;
       const isStale = age > CACHE_TTL;
-      
+
       return {
         profile,
         timestamp,
@@ -37,7 +37,7 @@ class UserProfileCache {
         profile,
         timestamp: Date.now(),
       };
-      
+
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
       console.log('UserProfileCache: Profile cached successfully');
       return true;

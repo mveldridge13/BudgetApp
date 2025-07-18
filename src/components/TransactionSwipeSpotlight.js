@@ -11,20 +11,19 @@ import {
 } from 'react-native';
 import {colors} from '../styles';
 
-// eslint-disable-next-line no-unused-vars
-const {width: screenWidth, height: screenHeight} = Dimensions.get('window');
+const {height: screenHeight} = Dimensions.get('window');
 
 const TransactionSwipeSpotlight = ({
   visible,
   onNext,
   onSkip,
   transactionLayout,
-  currentStep,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [showContent, setShowContent] = useState(false);
 
+  // Handle animations when visible changes
   useEffect(() => {
     if (visible) {
       setShowContent(true);
@@ -65,7 +64,22 @@ const TransactionSwipeSpotlight = ({
     }
   }, [visible, fadeAnim, pulseAnim]);
 
-  if (!visible || !showContent || !transactionLayout) {
+  const handleNext = () => {
+    setShowContent(false);
+    if (onNext) {
+      onNext();
+    }
+  };
+
+  const handleSkip = () => {
+    setShowContent(false);
+    if (onSkip) {
+      onSkip();
+    }
+  };
+
+  // Don't render if no layout data or not showing content
+  if (!showContent || !transactionLayout) {
     return null;
   }
 
@@ -81,22 +95,9 @@ const TransactionSwipeSpotlight = ({
   const useBottomPosition = instructionY > screenHeight - 200;
   const finalInstructionY = useBottomPosition ? cutoutY - 160 : instructionY;
 
-  const handleNext = () => {
-    setShowContent(false);
-    if (onNext) {
-      onNext();
-    }
-  };
-  const handleSkip = () => {
-    setShowContent(false);
-    if (onSkip) {
-      onSkip();
-    }
-  };
-
   return (
     <Modal
-      visible={visible}
+      visible={visible && showContent}
       transparent={true}
       animationType="none"
       statusBarTranslucent={true}>
