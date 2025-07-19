@@ -162,7 +162,6 @@ const HomeContainer = ({navigation}) => {
       const categoryId = transaction.categoryId;
       const subcategoryId = transaction.subcategoryId;
 
-
       // CONSISTENT LOGIC: Always return MAIN CATEGORY for metadata display
       // If we have a subcategoryId, find its parent category
       if (subcategoryId && Object.keys(categoryMap).length > 0) {
@@ -507,7 +506,10 @@ const HomeContainer = ({navigation}) => {
         try {
           await loadCategories();
         } catch (categoryError) {
-          console.error('Failed to reload categories after transaction save:', categoryError);
+          console.error(
+            'Failed to reload categories after transaction save:',
+            categoryError,
+          );
           // Don't fail the transaction save if category reload fails
         }
 
@@ -515,11 +517,7 @@ const HomeContainer = ({navigation}) => {
           success: true,
           isNewTransaction: !isEditing,
           transaction: savedTransaction,
-          shouldShowTransactionTutorial:
-            onboarding.shouldShowTransactionTutorial(
-              !isEditing,
-              transactions.length === 0,
-            ),
+          shouldShowTransactionTutorial: false, // Disable transaction tutorial triggering on save
         };
       } catch (error) {
         console.error('HomeContainer: Transaction save failed:', error);
@@ -986,10 +984,7 @@ const HomeContainer = ({navigation}) => {
       try {
         const result = await saveTransaction(transaction);
 
-        // Trigger onboarding tutorial if needed
-        if (result?.shouldShowTransactionTutorial) {
-          onboarding.triggerTransactionTutorial();
-        }
+        // Onboarding tutorial triggering disabled - handled by initial load only
 
         return result;
       } catch (error) {
@@ -1117,12 +1112,31 @@ const HomeContainer = ({navigation}) => {
     loadInitialData();
   }, []);
 
-  // Trigger onboarding checks when data changes
+  // Trigger onboarding checks only once when data is initially loaded and user hasn't completed all tours
   useEffect(() => {
-    if (!onboarding.loading && onboarding.onboardingStatus) {
-      onboarding.checkAndShowOnboarding(incomeData, transactions);
+    if (
+      !onboarding.loading &&
+      onboarding.onboardingStatus &&
+      incomeData &&
+      transactions
+    ) {
+      const {
+        hasSeenBalanceCardTour,
+        hasSeenAddTransactionTour,
+        hasSeenTransactionSwipeTour,
+      } = onboarding.onboardingStatus;
+
+      // Only trigger onboarding if user hasn't completed all tours yet
+      const hasCompletedAllTours =
+        hasSeenBalanceCardTour &&
+        hasSeenAddTransactionTour &&
+        hasSeenTransactionSwipeTour;
+
+      if (!hasCompletedAllTours) {
+        onboarding.checkAndShowOnboarding(incomeData, transactions);
+      }
     }
-  }, [incomeData, transactions, onboarding]);
+  }, [onboarding.loading, onboarding.onboardingStatus]);
 
   // App state monitoring for date changes
   useEffect(() => {
