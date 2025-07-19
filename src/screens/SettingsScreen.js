@@ -10,14 +10,12 @@ import {
   Switch,
   Alert,
   Share,
-  Linking,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
-import {Platform} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
 import BiometricAuth from '../services/BiometricAuth';
@@ -44,7 +42,9 @@ const SettingsScreen = ({navigation}) => {
   // Cache-first user profile loading
   const loadUserProfileWithCache = useCallback(async () => {
     try {
-      console.log('🔍 SETTINGS: Loading user profile with cache-first strategy');
+      console.log(
+        '🔍 SETTINGS: Loading user profile with cache-first strategy',
+      );
 
       // Step 1: Try to load from cache immediately
       const cached = await UserProfileCache.get();
@@ -65,14 +65,17 @@ const SettingsScreen = ({navigation}) => {
 
           if (freshProfile && isMountedRef.current) {
             // Only update UI if data actually changed
-            const hasChanged = !cached ||
+            const hasChanged =
+              !cached ||
               JSON.stringify(cached.profile) !== JSON.stringify(freshProfile);
 
             if (hasChanged) {
               console.log('🔍 SETTINGS: Profile data changed, updating UI');
               setUserProfile(freshProfile);
             } else {
-              console.log('🔍 SETTINGS: Profile data unchanged, keeping current UI');
+              console.log(
+                '🔍 SETTINGS: Profile data unchanged, keeping current UI',
+              );
             }
 
             // Always update cache with fresh data
@@ -80,7 +83,10 @@ const SettingsScreen = ({navigation}) => {
           }
         }
       } catch (error) {
-        console.error('🔍 SETTINGS: API fetch failed, using cached data:', error);
+        console.error(
+          '🔍 SETTINGS: API fetch failed, using cached data:',
+          error,
+        );
         // Graceful fallback - we already have cached data loaded
       }
     } catch (error) {
@@ -96,7 +102,10 @@ const SettingsScreen = ({navigation}) => {
           }
         }
       } catch (fallbackError) {
-        console.error('🔍 SETTINGS: All profile loading methods failed:', fallbackError);
+        console.error(
+          '🔍 SETTINGS: All profile loading methods failed:',
+          fallbackError,
+        );
       }
     }
   }, []);
@@ -259,32 +268,33 @@ const SettingsScreen = ({navigation}) => {
       if (key === 'biometricAuth') {
         try {
           const isSupported = await BiometricAuth.isBiometricSupported();
-          
+
           if (!isSupported) {
             Alert.alert(
               'Biometric Authentication Unavailable',
               'Your device does not support biometric authentication or it is not set up.',
-              [{text: 'OK'}]
+              [{text: 'OK'}],
             );
             return;
           }
 
           const newValue = !appSettings[key];
-          
+
           if (newValue) {
             // Enabling biometric auth - test it first
-            const authResult = await BiometricAuth.promptBiometricAuth('Enable biometric authentication');
-            
+            const authResult = await BiometricAuth.promptBiometricAuth(
+              'Enable biometric authentication',
+            );
+
             if (authResult.success) {
               await BiometricAuth.setBiometricEnabled(true);
               const newSettings = {...appSettings, [key]: true};
               saveAppSettings(newSettings);
-              
             } else {
               Alert.alert(
                 'Authentication Failed',
                 'Biometric authentication is required to enable this feature.',
-                [{text: 'OK'}]
+                [{text: 'OK'}],
               );
             }
           } else {
@@ -292,14 +302,13 @@ const SettingsScreen = ({navigation}) => {
             await BiometricAuth.setBiometricEnabled(false);
             const newSettings = {...appSettings, [key]: false};
             saveAppSettings(newSettings);
-            
           }
         } catch (error) {
           console.error('Error handling biometric toggle:', error);
           Alert.alert(
             'Error',
             'Failed to update biometric authentication setting. Please try again.',
-            [{text: 'OK'}]
+            [{text: 'OK'}],
           );
         }
       } else {
@@ -319,32 +328,41 @@ const SettingsScreen = ({navigation}) => {
 
   const handleCurrencySelection = useCallback(() => {
     const currencies = [
-      { code: 'AUD', name: 'Australian Dollar', symbol: '$' },
-      { code: 'USD', name: 'US Dollar', symbol: '$' },
-      { code: 'EUR', name: 'Euro', symbol: '€' },
-      { code: 'GBP', name: 'British Pound', symbol: '£' },
-      { code: 'CAD', name: 'Canadian Dollar', symbol: '$' },
-      { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
-      { code: 'NZD', name: 'New Zealand Dollar', symbol: '$' },
+      {code: 'AUD', name: 'Australian Dollar', symbol: '$'},
+      {code: 'USD', name: 'US Dollar', symbol: '$'},
+      {code: 'EUR', name: 'Euro', symbol: '€'},
+      {code: 'GBP', name: 'British Pound', symbol: '£'},
+      {code: 'CAD', name: 'Canadian Dollar', symbol: '$'},
+      {code: 'JPY', name: 'Japanese Yen', symbol: '¥'},
+      {code: 'NZD', name: 'New Zealand Dollar', symbol: '$'},
     ];
 
     const buttons = currencies.map(currency => ({
       text: `${currency.symbol} ${currency.code} - ${currency.name}`,
       onPress: () => {
-        const newSettings = { ...appSettings, currency: currency.code };
+        const newSettings = {...appSettings, currency: currency.code};
         saveAppSettings(newSettings);
       },
     }));
 
-    buttons.push({ text: 'Cancel', style: 'cancel' });
+    buttons.push({text: 'Cancel', style: 'cancel'});
 
     Alert.alert(
       'Select Currency',
       'Choose your preferred currency for transactions and balance display',
       buttons,
-      { cancelable: true }
+      {cancelable: true},
     );
   }, [appSettings, saveAppSettings]);
+
+  const handleAdditionalModule = useCallback(() => {
+    // TODO: Navigate to additional module screen or show modal
+    Alert.alert(
+      'Additional Module',
+      'Additional features and modules coming soon!',
+      [{text: 'OK'}]
+    );
+  }, []);
 
   const handleExportData = useCallback(async () => {
     try {
@@ -423,31 +441,6 @@ const SettingsScreen = ({navigation}) => {
       ],
     );
   }, [navigation]);
-
-  const handleContactSupport = useCallback(() => {
-    const email = 'support@budgetapp.com';
-    const subject = 'Budget App Support Request';
-    const body = `App Version: ${appVersion}\nDevice: ${
-      Platform.OS
-    }\nPro Status: ${isPro ? 'Enabled' : 'Disabled'}\n\nDescribe your issue:\n`;
-
-    Linking.openURL(`mailto:${email}?subject=${subject}&body=${body}`);
-  }, [appVersion, isPro]);
-
-  const handleRateApp = useCallback(() => {
-    Alert.alert(
-      'Rate App',
-      'Thank you for using our app! Please rate us on the App Store.',
-    );
-  }, []);
-
-  const handlePrivacyPolicy = useCallback(() => {
-    Linking.openURL('https://budgetapp.com/privacy');
-  }, []);
-
-  const handleTermsOfService = useCallback(() => {
-    Linking.openURL('https://budgetapp.com/terms');
-  }, []);
 
   const handleLogout = useCallback(() => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -536,7 +529,6 @@ const SettingsScreen = ({navigation}) => {
     </View>
   );
 
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -569,9 +561,7 @@ const SettingsScreen = ({navigation}) => {
                       : userProfile.name || userProfile.email || 'User'}
                   </Text>
                   {userProfile.email && (
-                    <Text style={styles.profileEmail}>
-                      {userProfile.email}
-                    </Text>
+                    <Text style={styles.profileEmail}>{userProfile.email}</Text>
                   )}
                   <Text style={styles.profileIncome}>
                     {formatIncomeDisplay(userProfile)}
@@ -603,39 +593,64 @@ const SettingsScreen = ({navigation}) => {
           <Text style={styles.sectionTitle}>Pro Features (Testing)</Text>
 
           <View style={styles.settingCard}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View
-                  style={[
-                    styles.settingIconContainer,
-                    styles.proIconContainer,
-                  ]}>
-                  <Icon name="star" size={18} color={colors.warning} />
-                </View>
-                <View style={styles.settingText}>
-                  <View style={styles.settingLabelRow}>
-                    <Text style={styles.settingLabel}>Pro Mode</Text>
-                    {isPro && <ProBadge />}
+            {isPro !== null ? (
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <View
+                    style={[
+                      styles.settingIconContainer,
+                      styles.proIconContainer,
+                    ]}>
+                    <Icon name="star" size={18} color={colors.warning} />
                   </View>
-                  <Text style={styles.settingDescription}>
-                    {isPro
-                      ? 'Advanced analytics and features enabled'
-                      : 'Enable to test Pro features and analytics'}
-                  </Text>
+                  <View style={styles.settingText}>
+                    <View style={styles.settingLabelRow}>
+                      <Text style={styles.settingLabel}>Pro Mode</Text>
+                      {isPro && <ProBadge />}
+                    </View>
+                    <Text style={styles.settingDescription}>
+                      {isPro
+                        ? 'Advanced analytics and features enabled'
+                        : 'Enable to test Pro features and analytics'}
+                    </Text>
+                  </View>
                 </View>
+                <Switch
+                  value={isPro || false}
+                  onValueChange={handleTogglePro}
+                  trackColor={{
+                    false: colors.border,
+                    true: colors.warning,
+                  }}
+                  thumbColor={isPro ? colors.textWhite : colors.textSecondary}
+                  ios_backgroundColor={colors.border}
+                />
               </View>
-              <Switch
-                value={isPro || false} // ✅ Prevent null/undefined issues
-                onValueChange={handleTogglePro}
-                disabled={isPro === null} // ✅ Disable until data loads
-                trackColor={{
-                  false: colors.border,
-                  true: colors.warning,
-                }}
-                thumbColor={isPro ? colors.textWhite : colors.textSecondary}
-                ios_backgroundColor={colors.border}
-              />
-            </View>
+            ) : (
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <View
+                    style={[
+                      styles.settingIconContainer,
+                      styles.skeletonIcon,
+                      styles.proIconContainer,
+                    ]}
+                  />
+                  <View style={styles.settingText}>
+                    <View
+                      style={[styles.skeletonText, styles.skeletonSettingLabel]}
+                    />
+                    <View
+                      style={[
+                        styles.skeletonText,
+                        styles.skeletonSettingDescription,
+                      ]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.skeletonSwitch} />
+              </View>
+            )}
           </View>
         </View>
 
@@ -644,96 +659,128 @@ const SettingsScreen = ({navigation}) => {
           <Text style={styles.sectionTitle}>App Settings</Text>
 
           <View style={styles.settingCard}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="bell" size={18} color={colors.primary} />
+            {appSettings && (
+              <>
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon name="bell" size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>Notifications</Text>
+                      <Text style={styles.settingDescription}>
+                        Receive reminders and updates
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={appSettings.notifications || false}
+                    onValueChange={() => handleToggleSetting('notifications')}
+                    trackColor={{
+                      false: colors.border,
+                      true: colors.primary,
+                    }}
+                    thumbColor={
+                      appSettings.notifications
+                        ? colors.textWhite
+                        : colors.textSecondary
+                    }
+                    ios_backgroundColor={colors.border}
+                  />
                 </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Notifications</Text>
-                  <Text style={styles.settingDescription}>
-                    Receive reminders and updates
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={appSettings?.notifications || false} // ✅ Prevent null/undefined issues
-                onValueChange={() => handleToggleSetting('notifications')}
-                disabled={appSettings === null} // ✅ Disable until data loads
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary,
-                }}
-                thumbColor={
-                  appSettings?.notifications
-                    ? colors.textWhite
-                    : colors.textSecondary
-                }
-                ios_backgroundColor={colors.border}
-              />
-            </View>
 
-            <View style={styles.settingDivider} />
+                <View style={styles.settingDivider} />
 
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="shield" size={18} color={colors.primary} />
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon name="shield" size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>
+                        Biometric Authentication
+                      </Text>
+                      <Text style={styles.settingDescription}>
+                        Use fingerprint or face unlock
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={appSettings.biometricAuth || false}
+                    onValueChange={() => handleToggleSetting('biometricAuth')}
+                    trackColor={{
+                      false: colors.border,
+                      true: colors.primary,
+                    }}
+                    thumbColor={
+                      appSettings.biometricAuth
+                        ? colors.textWhite
+                        : colors.textSecondary
+                    }
+                    ios_backgroundColor={colors.border}
+                  />
                 </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>
-                    Biometric Authentication
-                  </Text>
-                  <Text style={styles.settingDescription}>
-                    Use fingerprint or face unlock
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={appSettings?.biometricAuth || false} // ✅ Prevent null/undefined issues
-                onValueChange={() => handleToggleSetting('biometricAuth')}
-                disabled={appSettings === null} // ✅ Disable until data loads
-                trackColor={{
-                  false: colors.border,
-                  true: colors.primary,
-                }}
-                thumbColor={
-                  appSettings?.biometricAuth
-                    ? colors.textWhite
-                    : colors.textSecondary
-                }
-                ios_backgroundColor={colors.border}
-              />
-            </View>
 
-            <View style={styles.settingDivider} />
+                <View style={styles.settingDivider} />
 
-            <TouchableOpacity 
-              style={styles.settingRow}
-              onPress={() => handleCurrencySelection()}
-              disabled={appSettings === null}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="dollar-sign" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Currency</Text>
-                  <Text style={styles.settingDescription}>
-                    Default currency for transactions
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.settingMeta}>
-                <Text style={styles.currencyDisplay}>
-                  {appSettings?.currency || 'AUD'}
-                </Text>
-                <Icon
-                  name="chevron-right"
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </View>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={() => handleCurrencySelection()}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon
+                        name="dollar-sign"
+                        size={18}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>Currency</Text>
+                      <Text style={styles.settingDescription}>
+                        Default currency for transactions
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.settingMeta}>
+                    <Text style={styles.currencyDisplay}>
+                      {appSettings.currency || 'AUD'}
+                    </Text>
+                    <Icon
+                      name="chevron-right"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.settingDivider} />
+
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={() => handleAdditionalModule()}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon
+                        name="package"
+                        size={18}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>Additional Module</Text>
+                      <Text style={styles.settingDescription}>
+                        Access additional features and modules
+                      </Text>
+                    </View>
+                  </View>
+                  <Icon
+                    name="chevron-right"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -742,166 +789,157 @@ const SettingsScreen = ({navigation}) => {
           <Text style={styles.sectionTitle}>Data & Privacy</Text>
 
           <View style={styles.settingCard}>
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleExportData}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="download" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Export Data</Text>
-                  <Text style={styles.settingDescription}>
-                    Backup your transactions and goals
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.settingMeta}>
-                <Text style={styles.dataSize}>{formatDataSize(dataSize)}</Text>
-                <Icon
-                  name="chevron-right"
-                  size={18}
-                  color={colors.textSecondary}
-                />
-              </View>
-            </TouchableOpacity>
+            {dataSize !== undefined && lastBackup !== undefined ? (
+              <>
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={handleExportData}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon name="download" size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>Export Data</Text>
+                      <Text style={styles.settingDescription}>
+                        Backup your transactions and goals
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.settingMeta}>
+                    <Text style={styles.dataSize}>
+                      {formatDataSize(dataSize)}
+                    </Text>
+                    <Icon
+                      name="chevron-right"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  </View>
+                </TouchableOpacity>
 
-            <View style={styles.settingDivider} />
+                <View style={styles.settingDivider} />
 
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="cloud" size={18} color={colors.primary} />
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon name="cloud" size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text style={styles.settingLabel}>Last Backup</Text>
+                      <Text style={styles.settingDescription}>
+                        {lastBackup
+                          ? lastBackup.toLocaleDateString('en-AU', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : 'Never'}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Last Backup</Text>
-                  <Text style={styles.settingDescription}>
-                    {lastBackup
-                      ? lastBackup.toLocaleDateString('en-AU', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })
-                      : 'Never'}
-                  </Text>
-                </View>
-              </View>
-            </View>
 
-            <View style={styles.settingDivider} />
+                <View style={styles.settingDivider} />
 
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleClearData}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="trash-2" size={18} color={colors.danger} />
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  onPress={handleClearData}>
+                  <View style={styles.settingInfo}>
+                    <View style={styles.settingIconContainer}>
+                      <Icon name="trash-2" size={18} color={colors.danger} />
+                    </View>
+                    <View style={styles.settingText}>
+                      <Text
+                        style={[styles.settingLabel, {color: colors.danger}]}>
+                        Clear All Data
+                      </Text>
+                      <Text style={styles.settingDescription}>
+                        Permanently delete all app data
+                      </Text>
+                    </View>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.danger} />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Skeleton for Export Data */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View
+                    style={[styles.skeletonText, styles.skeletonDataSize]}
+                  />
                 </View>
-                <View style={styles.settingText}>
-                  <Text style={[styles.settingLabel, {color: colors.danger}]}>
-                    Clear All Data
-                  </Text>
-                  <Text style={styles.settingDescription}>
-                    Permanently delete all app data
-                  </Text>
-                </View>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.danger} />
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Support Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
+                <View style={styles.settingDivider} />
 
-          <View style={styles.settingCard}>
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleContactSupport}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="mail" size={18} color={colors.primary} />
+                {/* Skeleton for Last Backup */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Contact Support</Text>
-                  <Text style={styles.settingDescription}>
-                    Get help with the app
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
 
-            <View style={styles.settingDivider} />
+                <View style={styles.settingDivider} />
 
-            <TouchableOpacity style={styles.settingRow} onPress={handleRateApp}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="star" size={18} color={colors.primary} />
+                {/* Skeleton for Clear Data */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Rate App</Text>
-                  <Text style={styles.settingDescription}>
-                    Leave a review on the App Store
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Legal Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Legal</Text>
-
-          <View style={styles.settingCard}>
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handlePrivacyPolicy}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="shield" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Privacy Policy</Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.settingDivider} />
-
-            <TouchableOpacity
-              style={styles.settingRow}
-              onPress={handleTermsOfService}>
-              <View style={styles.settingInfo}>
-                <View style={styles.settingIconContainer}>
-                  <Icon name="file-text" size={18} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Terms of Service</Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-right"
-                size={18}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -1186,6 +1224,34 @@ const styles = StyleSheet.create({
   skeletonIncome: {
     height: 16,
     width: '40%',
+  },
+  skeletonIcon: {
+    backgroundColor: colors.textGray + '20',
+  },
+  skeletonSettingLabel: {
+    height: 16,
+    width: '70%',
+    marginBottom: 4,
+  },
+  skeletonSettingDescription: {
+    height: 14,
+    width: '90%',
+  },
+  skeletonSwitch: {
+    width: 50,
+    height: 30,
+    backgroundColor: colors.textGray + '20',
+    borderRadius: 15,
+  },
+  skeletonCurrency: {
+    height: 16,
+    width: 40,
+    borderRadius: 4,
+  },
+  skeletonDataSize: {
+    height: 16,
+    width: 50,
+    borderRadius: 4,
   },
 });
 
