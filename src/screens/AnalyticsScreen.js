@@ -674,21 +674,6 @@ const AnalyticsScreen = ({
                         ` with ${incomeAnalytics.insights.primaryIncomeSource} as your primary source`}
                     </Text>
                   </View>
-
-                  <View
-                    style={[
-                      styles.insightCard,
-                      {borderLeftColor: colors.warning || '#F59E0B'},
-                    ]}>
-                    <Text style={styles.insightText}>
-                      <Text style={styles.insightBold}>Diversification:</Text>{' '}
-                      Your income diversification score is{' '}
-                      {incomeAnalytics.insights.diversificationScore}%
-                      {incomeAnalytics.insights.diversificationScore >= 60
-                        ? ' - Well diversified!'
-                        : ' - Consider multiple income sources'}
-                    </Text>
-                  </View>
                 </>
               )}
 
