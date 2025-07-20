@@ -49,6 +49,9 @@ const AnalyticsScreen = ({
   // ✅ NEW: Bills analytics data
   billsAnalytics,
 
+  // ✅ NEW: Income analytics data
+  incomeAnalytics,
+
   // Event handlers
   onPeriodChange,
   onComparisonToggle,
@@ -469,19 +472,44 @@ const AnalyticsScreen = ({
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Total This Month</Text>
-                <Text style={styles.statValue}>$3,200.00</Text>
-                <Text style={styles.statChange}>+12% from last month</Text>
+                <Text style={styles.statValue}>
+                  ${incomeAnalytics?.totalIncomeThisMonth?.toFixed(2) || '0.00'}
+                </Text>
+                {incomeAnalytics?.monthChangePercentage !== undefined && (
+                  <Text
+                    style={[
+                      styles.statChange,
+                      {
+                        color:
+                          incomeAnalytics.monthChangePercentage >= 0
+                            ? colors.success || '#10B981'
+                            : colors.danger || '#EF4444',
+                      },
+                    ]}>
+                    {incomeAnalytics.monthChangePercentage >= 0 ? '+' : ''}
+                    {incomeAnalytics.monthChangePercentage.toFixed(1)}% from
+                    last month
+                  </Text>
+                )}
               </View>
 
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>This Pay Period</Text>
-                <Text style={styles.statValue}>$1,600.00</Text>
-                <Text style={styles.statSubtext}>Fortnightly</Text>
+                <Text style={styles.statValue}>
+                  $
+                  {incomeAnalytics?.totalIncomeThisPayPeriod?.toFixed(2) ||
+                    '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>
+                  {incomeAnalytics?.payPeriodInfo?.frequency || 'Unknown'}
+                </Text>
               </View>
 
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>This Week</Text>
-                <Text style={styles.statValue}>$800.00</Text>
+                <Text style={styles.statValue}>
+                  ${incomeAnalytics?.totalIncomeThisWeek?.toFixed(2) || '0.00'}
+                </Text>
                 <Text style={styles.statSubtext}>7 days</Text>
               </View>
             </View>
@@ -490,71 +518,45 @@ const AnalyticsScreen = ({
             <View style={styles.chartContainer}>
               <Text style={styles.chartTitle}>Income by Source</Text>
               <View style={styles.incomeSourceContainer}>
-                <View style={styles.incomeSourceItem}>
-                  <View style={styles.incomeSourceHeader}>
+                {incomeAnalytics?.incomeBySource?.length > 0 ? (
+                  incomeAnalytics.incomeBySource.map((source, index) => (
                     <View
-                      style={[
-                        styles.incomeSourceDot,
-                        {backgroundColor: colors.primary},
-                      ]}
-                    />
-                    <Text style={styles.incomeSourceLabel}>Salary</Text>
-                    <Text style={styles.incomeSourceAmount}>$2,800.00</Text>
+                      key={source.categoryId || index}
+                      style={styles.incomeSourceItem}>
+                      <View style={styles.incomeSourceHeader}>
+                        <View
+                          style={[
+                            styles.incomeSourceDot,
+                            {backgroundColor: source.color || colors.primary},
+                          ]}
+                        />
+                        <Text style={styles.incomeSourceLabel}>
+                          {source.categoryName}
+                        </Text>
+                        <Text style={styles.incomeSourceAmount}>
+                          ${source.totalAmount.toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.incomeSourceBar}>
+                        <View
+                          style={[
+                            styles.incomeSourceBarFill,
+                            {
+                              width: `${source.percentage}%`,
+                              backgroundColor: source.color || colors.primary,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.incomeSourceItem}>
+                    <Text style={styles.incomeSourceLabel}>
+                      No income sources found for this month
+                    </Text>
                   </View>
-                  <View style={styles.incomeSourceBar}>
-                    <View
-                      style={[
-                        styles.incomeSourceBarFill,
-                        // eslint-disable-next-line react-native/no-inline-styles
-                        {width: '87%', backgroundColor: colors.primary},
-                      ]}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.incomeSourceItem}>
-                  <View style={styles.incomeSourceHeader}>
-                    <View
-                      style={[
-                        styles.incomeSourceDot,
-                        {backgroundColor: colors.success},
-                      ]}
-                    />
-                    <Text style={styles.incomeSourceLabel}>Commission</Text>
-                    <Text style={styles.incomeSourceAmount}>$300.00</Text>
-                  </View>
-                  <View style={styles.incomeSourceBar}>
-                    <View
-                      style={[
-                        styles.incomeSourceBarFill,
-                        // eslint-disable-next-line react-native/no-inline-styles
-                        {width: '10%', backgroundColor: colors.success},
-                      ]}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.incomeSourceItem}>
-                  <View style={styles.incomeSourceHeader}>
-                    <View
-                      style={[
-                        styles.incomeSourceDot,
-                        {backgroundColor: colors.warning},
-                      ]}
-                    />
-                    <Text style={styles.incomeSourceLabel}>Side Hustle</Text>
-                    <Text style={styles.incomeSourceAmount}>$100.00</Text>
-                  </View>
-                  <View style={styles.incomeSourceBar}>
-                    <View
-                      style={[
-                        styles.incomeSourceBarFill,
-                        // eslint-disable-next-line react-native/no-inline-styles
-                        {width: '3%', backgroundColor: colors.warning},
-                      ]}
-                    />
-                  </View>
-                </View>
+                )}
               </View>
             </View>
 
@@ -564,13 +566,33 @@ const AnalyticsScreen = ({
               <View style={styles.incomeTypeContainer}>
                 <View style={styles.incomeTypeItem}>
                   <Text style={styles.incomeTypeLabel}>Recurring</Text>
-                  <Text style={styles.incomeTypeAmount}>$2,900.00</Text>
-                  <Text style={styles.incomeTypePercentage}>91%</Text>
+                  <Text style={styles.incomeTypeAmount}>
+                    $
+                    {incomeAnalytics?.incomeBreakdown?.recurring?.amount?.toFixed(
+                      2,
+                    ) || '0.00'}
+                  </Text>
+                  <Text style={styles.incomeTypePercentage}>
+                    {incomeAnalytics?.incomeBreakdown?.recurring?.percentage?.toFixed(
+                      0,
+                    ) || '0'}
+                    %
+                  </Text>
                 </View>
                 <View style={styles.incomeTypeItem}>
                   <Text style={styles.incomeTypeLabel}>Ad-hoc</Text>
-                  <Text style={styles.incomeTypeAmount}>$300.00</Text>
-                  <Text style={styles.incomeTypePercentage}>9%</Text>
+                  <Text style={styles.incomeTypeAmount}>
+                    $
+                    {incomeAnalytics?.incomeBreakdown?.adhoc?.amount?.toFixed(
+                      2,
+                    ) || '0.00'}
+                  </Text>
+                  <Text style={styles.incomeTypePercentage}>
+                    {incomeAnalytics?.incomeBreakdown?.adhoc?.percentage?.toFixed(
+                      0,
+                    ) || '0'}
+                    %
+                  </Text>
                 </View>
               </View>
             </View>
@@ -579,37 +601,33 @@ const AnalyticsScreen = ({
             <View style={styles.chartContainer}>
               <Text style={styles.chartTitle}>Recent Income Entries</Text>
               <View style={styles.incomeListContainer}>
-                <View style={styles.incomeListItem}>
-                  <View style={styles.incomeListLeft}>
-                    <Text style={styles.incomeListSource}>Salary</Text>
-                    <Text style={styles.incomeListDate}>July 15, 2024</Text>
+                {incomeAnalytics?.recentIncomeEntries?.length > 0 ? (
+                  incomeAnalytics.recentIncomeEntries.map((entry, index) => (
+                    <View key={entry.id || index} style={styles.incomeListItem}>
+                      <View style={styles.incomeListLeft}>
+                        <Text style={styles.incomeListSource}>
+                          {entry.categoryName || entry.description}
+                        </Text>
+                        <Text style={styles.incomeListDate}>
+                          {new Date(entry.date).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </Text>
+                      </View>
+                      <Text style={styles.incomeListAmount}>
+                        ${entry.amount.toFixed(2)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.incomeListItem}>
+                    <Text style={styles.incomeListSource}>
+                      No recent income entries found
+                    </Text>
                   </View>
-                  <Text style={styles.incomeListAmount}>$1,400.00</Text>
-                </View>
-
-                <View style={styles.incomeListItem}>
-                  <View style={styles.incomeListLeft}>
-                    <Text style={styles.incomeListSource}>Commission</Text>
-                    <Text style={styles.incomeListDate}>July 10, 2024</Text>
-                  </View>
-                  <Text style={styles.incomeListAmount}>$150.00</Text>
-                </View>
-
-                <View style={styles.incomeListItem}>
-                  <View style={styles.incomeListLeft}>
-                    <Text style={styles.incomeListSource}>Side Hustle</Text>
-                    <Text style={styles.incomeListDate}>July 8, 2024</Text>
-                  </View>
-                  <Text style={styles.incomeListAmount}>$100.00</Text>
-                </View>
-
-                <View style={styles.incomeListItem}>
-                  <View style={styles.incomeListLeft}>
-                    <Text style={styles.incomeListSource}>Salary</Text>
-                    <Text style={styles.incomeListDate}>July 1, 2024</Text>
-                  </View>
-                  <Text style={styles.incomeListAmount}>$1,400.00</Text>
-                </View>
+                )}
               </View>
             </View>
 
@@ -617,30 +635,77 @@ const AnalyticsScreen = ({
             <View style={styles.insightsContainer}>
               <Text style={styles.insightsTitle}>Income Insights</Text>
 
-              {/* Placeholder insights - these will be populated with real data */}
-              <View
-                style={[
-                  styles.insightCard,
-                  {borderLeftColor: colors.success || '#10B981'},
-                ]}>
-                <Text style={styles.insightText}>
-                  <Text style={styles.insightBold}>Steady income:</Text> Your
-                  income has been consistent over the past {selectedPeriod}{' '}
-                  period
-                </Text>
-              </View>
+              {/* Income Insights from backend */}
+              {incomeAnalytics?.insights && (
+                <>
+                  <View
+                    style={[
+                      styles.insightCard,
+                      {borderLeftColor: colors.success || '#10B981'},
+                    ]}>
+                    <Text style={styles.insightText}>
+                      <Text style={styles.insightBold}>
+                        Income consistency:
+                      </Text>{' '}
+                      Your income consistency score is{' '}
+                      {incomeAnalytics.insights.consistencyScore}%
+                      {incomeAnalytics.insights.consistencyScore >= 80
+                        ? ' - Excellent!'
+                        : incomeAnalytics.insights.consistencyScore >= 60
+                        ? ' - Good'
+                        : ' - Room for improvement'}
+                    </Text>
+                  </View>
 
-              <View
-                style={[
-                  styles.insightCard,
-                  {borderLeftColor: colors.primary || '#6366F1'},
-                ]}>
-                <Text style={styles.insightText}>
-                  <Text style={styles.insightBold}>Savings potential:</Text> You
-                  could save {statistics?.savingsPercentage || 0}% more by
-                  reducing discretionary spending
-                </Text>
-              </View>
+                  <View
+                    style={[
+                      styles.insightCard,
+                      {borderLeftColor: colors.primary || '#6366F1'},
+                    ]}>
+                    <Text style={styles.insightText}>
+                      <Text style={styles.insightBold}>Income trend:</Text> Your
+                      income is{' '}
+                      {incomeAnalytics.insights.growthTrend === 'growing'
+                        ? 'growing'
+                        : incomeAnalytics.insights.growthTrend === 'declining'
+                        ? 'declining'
+                        : 'stable'}
+                      {incomeAnalytics.insights.primaryIncomeSource &&
+                        ` with ${incomeAnalytics.insights.primaryIncomeSource} as your primary source`}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.insightCard,
+                      {borderLeftColor: colors.warning || '#F59E0B'},
+                    ]}>
+                    <Text style={styles.insightText}>
+                      <Text style={styles.insightBold}>Diversification:</Text>{' '}
+                      Your income diversification score is{' '}
+                      {incomeAnalytics.insights.diversificationScore}%
+                      {incomeAnalytics.insights.diversificationScore >= 60
+                        ? ' - Well diversified!'
+                        : ' - Consider multiple income sources'}
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {/* Fallback insights if no backend data */}
+              {!incomeAnalytics?.insights && (
+                <View
+                  style={[
+                    styles.insightCard,
+                    {borderLeftColor: colors.primary || '#6366F1'},
+                  ]}>
+                  <Text style={styles.insightText}>
+                    <Text style={styles.insightBold}>Get started:</Text> Add
+                    income transactions to see detailed insights about your
+                    income patterns and trends.
+                  </Text>
+                </View>
+              )}
             </View>
           </>
         )}
@@ -720,7 +785,6 @@ const AnalyticsScreen = ({
                 </Text>
               </View>
             </View>
-
 
             {/* Upcoming Bills (Next 7 Days) */}
             <View style={styles.chartContainer}>
@@ -1150,6 +1214,12 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.text || '#1F2937',
   },
+  statChange: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'System',
+    marginTop: 4,
+  },
   chartContainer: {
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 12,
@@ -1442,7 +1512,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary || '#6B7280',
   },
-
 
   // Bills list styles
   billsSubheading: {

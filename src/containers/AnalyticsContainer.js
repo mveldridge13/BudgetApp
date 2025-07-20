@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import TrendAPIService from '../services/TrendAPIService';
 import billsAnalyticsCache from '../services/BillsAnalyticsCache';
+import incomeAnalyticsCache from '../services/IncomeAnalyticsCache';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import {colors} from '../styles';
 
@@ -19,9 +20,10 @@ const AnalyticsContainer = () => {
   // Backend data - this is all we need
   const [analyticsData, setAnalyticsData] = useState(null);
   const [billsAnalytics, setBillsAnalytics] = useState(null);
+  const [incomeAnalytics, setIncomeAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Cache state for bills analytics
+  // Cache state for bills and income analytics
   const [isOnline, setIsOnline] = useState(true);
 
   // Refs for optimization
@@ -71,7 +73,7 @@ const AnalyticsContainer = () => {
 
       setIsOnline(isNowOnline);
 
-      // If coming back online and bills cache is stale, refresh
+      // If coming back online and caches are stale, refresh
       if (wasOffline && isNowOnline && isMountedRef.current) {
         billsAnalyticsCache.isFresh().then(isFresh => {
           if (!isFresh) {
@@ -79,11 +81,18 @@ const AnalyticsContainer = () => {
             loadBillsAnalytics(false); // Background refresh
           }
         });
+
+        incomeAnalyticsCache.isFresh().then(isFresh => {
+          if (!isFresh) {
+            console.log('💰 Back online, refreshing stale income cache');
+            loadIncomeAnalytics(false); // Background refresh
+          }
+        });
       }
     });
 
     return unsubscribe;
-  }, [isOnline, loadBillsAnalytics]);
+  }, [isOnline, loadBillsAnalytics, loadIncomeAnalytics]);
 
   // Get date range for selected period
   const getDateRange = useCallback(() => {
@@ -118,37 +127,43 @@ const AnalyticsContainer = () => {
   }, [selectedPeriod]);
 
   // Load bills analytics with cache-first approach
-  const loadBillsAnalytics = useCallback(async (forceRefresh = false) => {
-    try {
-      // 1. Load from cache immediately (instant UI)
-      const cached = await billsAnalyticsCache.get();
-      if (cached && cached.data && isMountedRef.current) {
-        console.log('📋 Loading bills analytics from cache', {
-          age: Math.round(cached.age / 1000 / 60),
-          isStale: cached.isStale,
-        });
+  const loadBillsAnalytics = useCallback(
+    async (forceRefresh = false) => {
+      try {
+        // 1. Load from cache immediately (instant UI)
+        const cached = await billsAnalyticsCache.get();
+        if (cached && cached.data && isMountedRef.current) {
+          console.log('📋 Loading bills analytics from cache', {
+            age: Math.round(cached.age / 1000 / 60),
+            isStale: cached.isStale,
+          });
 
-        setBillsAnalytics(cached.data);
+          setBillsAnalytics(cached.data);
 
-        // If data is fresh and not forcing refresh, we're done
-        if (!cached.isStale && !forceRefresh) {
-          return;
+          // If data is fresh and not forcing refresh, we're done
+          if (!cached.isStale && !forceRefresh) {
+            return;
+          }
+        }
+
+        // 2. Background fetch from backend (if stale or no cache)
+        if (
+          (cached?.isStale || !cached || forceRefresh) &&
+          isMountedRef.current
+        ) {
+          await loadBillsAnalyticsFromBackend();
+        }
+      } catch (err) {
+        console.error('Error in cache-first bills analytics loading:', err);
+
+        // If cache loading fails, try backend directly
+        if (isMountedRef.current) {
+          await loadBillsAnalyticsFromBackend();
         }
       }
-
-      // 2. Background fetch from backend (if stale or no cache)
-      if ((cached?.isStale || !cached || forceRefresh) && isMountedRef.current) {
-        await loadBillsAnalyticsFromBackend();
-      }
-    } catch (err) {
-      console.error('Error in cache-first bills analytics loading:', err);
-
-      // If cache loading fails, try backend directly
-      if (isMountedRef.current) {
-        await loadBillsAnalyticsFromBackend();
-      }
-    }
-  }, [loadBillsAnalyticsFromBackend]);
+    },
+    [loadBillsAnalyticsFromBackend],
+  );
 
   // Backend bills analytics loading with cache update
   const loadBillsAnalyticsFromBackend = useCallback(async () => {
@@ -180,7 +195,9 @@ const AnalyticsContainer = () => {
 
       // Fallback: if backend endpoint doesn't exist yet, calculate client-side temporarily
       if (err.message && err.message.includes('404')) {
-        console.warn('Bills analytics endpoint not implemented yet, falling back to client-side processing');
+        console.warn(
+          'Bills analytics endpoint not implemented yet, falling back to client-side processing',
+        );
         await loadBillsAnalyticsFallback();
       } else {
         // For other errors, keep cached data if available, otherwise show empty
@@ -349,6 +366,96 @@ const AnalyticsContainer = () => {
     }
   }, []);
 
+  // Load income analytics with cache-first approach (following same pattern as bills)
+  const loadIncomeAnalytics = useCallback(
+    async (forceRefresh = false) => {
+      try {
+        // 1. Load from cache immediately (instant UI)
+        const cached = await incomeAnalyticsCache.get();
+        if (cached && cached.data && isMountedRef.current) {
+          console.log('💰 Loading income analytics from cache', {
+            age: Math.round(cached.age / 1000 / 60),
+            isStale: cached.isStale,
+          });
+
+          setIncomeAnalytics(cached.data);
+
+          // If data is fresh and not forcing refresh, we're done
+          if (!cached.isStale && !forceRefresh) {
+            return;
+          }
+        }
+
+        // 2. Background fetch from backend (if stale or no cache)
+        if (
+          (cached?.isStale || !cached || forceRefresh) &&
+          isMountedRef.current
+        ) {
+          await loadIncomeAnalyticsFromBackend();
+        }
+      } catch (err) {
+        console.error('Error in cache-first income analytics loading:', err);
+
+        // If cache loading fails, try backend directly
+        if (isMountedRef.current) {
+          await loadIncomeAnalyticsFromBackend();
+        }
+      }
+    },
+    [loadIncomeAnalyticsFromBackend],
+  );
+
+  // Backend income analytics loading with cache update
+  const loadIncomeAnalyticsFromBackend = useCallback(async () => {
+    try {
+      // If offline, use cached data
+      if (!isOnline) {
+        console.log('💰 Offline - using cached income analytics');
+        const cached = await incomeAnalyticsCache.get();
+        if (cached && cached.data && isMountedRef.current) {
+          setIncomeAnalytics(cached.data);
+        }
+        return;
+      }
+
+      console.log('💰 Fetching income analytics from backend...');
+
+      // Try backend income analytics
+      const incomeResponse = await TrendAPIService.getIncomeAnalytics();
+
+      console.log('💰 Backend income analytics response:', {
+        responseType: typeof incomeResponse,
+        keys: incomeResponse ? Object.keys(incomeResponse) : 'null',
+        totalIncomeThisMonth: incomeResponse?.totalIncomeThisMonth,
+        incomeBySourceLength: incomeResponse?.incomeBySource?.length,
+        incomeBySourceSample: incomeResponse?.incomeBySource?.slice(0, 2),
+        hasError: incomeResponse?.error,
+        dataSource: incomeResponse?.dataSource,
+        hasTransactionData: incomeResponse?.hasTransactionData,
+        hasProfileData: incomeResponse?.hasProfileData,
+      });
+
+      if (isMountedRef.current && incomeResponse) {
+        setIncomeAnalytics(incomeResponse);
+
+        // Cache the response for future use
+        await incomeAnalyticsCache.set(incomeResponse);
+        console.log('💰 Income analytics cached successfully');
+      }
+    } catch (err) {
+      console.error('Error loading income analytics from backend:', err);
+
+      // For errors, keep cached data if available, otherwise show empty
+      const cached = await incomeAnalyticsCache.get();
+      if (cached && cached.data && isMountedRef.current) {
+        console.log('💰 Backend failed, using stale cache data');
+        setIncomeAnalytics(cached.data);
+      } else if (isMountedRef.current) {
+        setIncomeAnalytics(null);
+      }
+    }
+  }, [isOnline]);
+
   // Load analytics from backend - let backend do ALL the work
   const loadAnalyticsData = useCallback(
     async (force = false) => {
@@ -374,8 +481,9 @@ const AnalyticsContainer = () => {
           setAnalyticsData(analyticsResponse);
         }
 
-        // Also load bills analytics
+        // Also load bills and income analytics
         await loadBillsAnalytics();
+        await loadIncomeAnalytics();
       } catch (err) {
         console.error('Error loading analytics data:', err);
         if (isMountedRef.current) {
@@ -388,7 +496,7 @@ const AnalyticsContainer = () => {
         }
       }
     },
-    [getDateRange, loadBillsAnalytics],
+    [getDateRange, loadBillsAnalytics, loadIncomeAnalytics],
   );
 
   useEffect(() => {
@@ -651,11 +759,12 @@ const AnalyticsContainer = () => {
 
       setRefreshing(true);
       await loadAnalyticsData(true);
-      // Force refresh bills analytics cache
+      // Force refresh bills and income analytics caches
       await loadBillsAnalytics(true);
+      await loadIncomeAnalytics(true);
       setRefreshing(false);
     },
-    [loadAnalyticsData, loadBillsAnalytics, refreshing],
+    [loadAnalyticsData, loadBillsAnalytics, loadIncomeAnalytics, refreshing],
   );
 
   useEffect(() => {
@@ -666,15 +775,25 @@ const AnalyticsContainer = () => {
 
         if (lastActiveDate.current !== currentDateString) {
           lastActiveDate.current = currentDateString;
-          // Date changed - invalidate bills cache and force refresh
+          // Date changed - invalidate both caches and force refresh
           billsAnalyticsCache.invalidate();
+          incomeAnalyticsCache.invalidate();
           handleRefresh(true);
         } else {
-          // Same date - check if bills cache is stale and refresh in background
+          // Same date - check if caches are stale and refresh in background
           billsAnalyticsCache.isFresh().then(isFresh => {
             if (!isFresh && isMountedRef.current) {
               console.log('📋 App became active, refreshing stale bills cache');
               loadBillsAnalytics(false); // Background refresh, don't force
+            }
+          });
+
+          incomeAnalyticsCache.isFresh().then(isFresh => {
+            if (!isFresh && isMountedRef.current) {
+              console.log(
+                '💰 App became active, refreshing stale income cache',
+              );
+              loadIncomeAnalytics(false); // Background refresh, don't force
             }
           });
         }
@@ -686,18 +805,18 @@ const AnalyticsContainer = () => {
       handleAppStateChange,
     );
     return () => subscription?.remove();
-  }, [handleRefresh, loadBillsAnalytics]);
+  }, [handleRefresh, loadBillsAnalytics, loadIncomeAnalytics]);
 
   useFocusEffect(
     useCallback(() => {
       if (
         isMountedRef.current &&
         !isLoadingRef.current &&
-        (!analyticsData || !billsAnalytics)
+        (!analyticsData || !billsAnalytics || !incomeAnalytics)
       ) {
         loadAnalyticsData();
       }
-    }, [loadAnalyticsData, analyticsData, billsAnalytics]),
+    }, [loadAnalyticsData, analyticsData, billsAnalytics, incomeAnalytics]),
   );
 
   // ============================================================================
@@ -732,6 +851,9 @@ const AnalyticsContainer = () => {
 
     // ✅ NEW: Backend bills analytics data - direct pass-through
     billsAnalytics: billsAnalytics,
+
+    // ✅ NEW: Backend income analytics data - direct pass-through
+    incomeAnalytics: incomeAnalytics,
 
     // Event handlers
     onPeriodChange: handlePeriodChange,

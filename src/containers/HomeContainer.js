@@ -325,7 +325,9 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      const response = await TrendAPIService.getTransactions();
+      const response = await TrendAPIService.getTransactions({
+        limit: 1000 // Get all transactions for accurate balance calculations
+      });
       const backendTransactions = response?.transactions || [];
       const sortedTransactions = sortTransactionsByDate(backendTransactions);
 
