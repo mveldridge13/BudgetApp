@@ -49,7 +49,7 @@ class BillsAnalyticsCache {
         data,
         timestamp: Date.now(),
       };
-      
+
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
       console.log('📋 BillsAnalyticsCache: Data cached successfully', {
         timestamp: cacheData.timestamp,
@@ -109,7 +109,7 @@ class BillsAnalyticsCache {
           data,
           timestamp: 0, // Mark as stale but keep data
         };
-        
+
         await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
         console.log('📋 BillsAnalyticsCache: Cache invalidated');
         return true;
@@ -138,7 +138,7 @@ class BillsAnalyticsCache {
       }
 
       const size = JSON.stringify(cached.data).length;
-      
+
       return {
         exists: true,
         age: Math.round(cached.age / 1000 / 60), // minutes

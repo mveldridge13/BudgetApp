@@ -12,13 +12,13 @@ import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import 
 import AnalyticsContainer from '../containers/AnalyticsContainer'; // ✅ CHANGED: Import AnalyticsContainer instead of AnalyticsScreen
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ModulesScreen from '../screens/ModulesScreen';
 import BiometricWrapper from '../components/BiometricWrapper';
 
 // Import API services
 import AuthService from '../services/AuthService';
 import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
-import BiometricAuth from '../services/BiometricAuth';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -97,7 +97,6 @@ function MainTabs() {
 // Authentication Screen Wrapper
 function AuthScreen({navigation}) {
   const handleAuthSuccess = async () => {
-
     try {
       // NEW: Get user profile from backend instead of AsyncStorage
       const userProfile = await TrendAPIService.getUserProfile();
@@ -147,15 +146,14 @@ export default function AppNavigator() {
 
   const checkInitialRoute = async () => {
     try {
-
       // Initialize AuthService and check authentication first
       await AuthService.initialize();
-      
+
       // Initialize BiometricAuth service early
       // This will check if the app should be locked on startup
       console.log('🔐 AppNavigator: Initializing BiometricAuth service');
       // Note: BiometricAuth service auto-initializes, but we can ensure it's ready
-      
+
       const isAuthenticated = AuthService.isAuthenticated();
 
       if (!isAuthenticated) {
@@ -165,11 +163,13 @@ export default function AppNavigator() {
 
       // NEW: Get user profile from backend and cache it for immediate use by other screens
       const userProfile = await TrendAPIService.getUserProfile();
-      
+
       // Cache the profile so SettingsScreen and other screens can use it immediately
       if (userProfile) {
         await UserProfileCache.set(userProfile);
-        console.log('🔍 APP_NAVIGATOR: Cached user profile for immediate screen access');
+        console.log(
+          '🔍 APP_NAVIGATOR: Cached user profile for immediate screen access',
+        );
       }
 
       if (!userProfile.hasSeenWelcome) {
@@ -228,6 +228,13 @@ export default function AppNavigator() {
         component={MainTabs}
         options={{
           gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="Modules"
+        component={ModulesScreen}
+        options={{
+          gestureEnabled: true,
         }}
       />
     </Stack.Navigator>

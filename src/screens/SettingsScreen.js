@@ -356,13 +356,8 @@ const SettingsScreen = ({navigation}) => {
   }, [appSettings, saveAppSettings]);
 
   const handleAdditionalModule = useCallback(() => {
-    // TODO: Navigate to additional module screen or show modal
-    Alert.alert(
-      'Additional Module',
-      'Additional features and modules coming soon!',
-      [{text: 'OK'}]
-    );
-  }, []);
+    navigation.navigate('Modules');
+  }, [navigation]);
 
   const handleExportData = useCallback(async () => {
     try {
@@ -659,7 +654,7 @@ const SettingsScreen = ({navigation}) => {
           <Text style={styles.sectionTitle}>App Settings</Text>
 
           <View style={styles.settingCard}>
-            {appSettings && (
+            {appSettings ? (
               <>
                 <View style={styles.settingRow}>
                   <View style={styles.settingInfo}>
@@ -779,6 +774,110 @@ const SettingsScreen = ({navigation}) => {
                     color={colors.textSecondary}
                   />
                 </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Skeleton for Notifications setting */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.skeletonSwitch} />
+                </View>
+
+                <View style={styles.settingDivider} />
+
+                {/* Skeleton for Biometric Auth setting */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.skeletonSwitch} />
+                </View>
+
+                <View style={styles.settingDivider} />
+
+                {/* Skeleton for Currency setting */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.skeletonCurrency} />
+                </View>
+
+                <View style={styles.settingDivider} />
+
+                {/* Skeleton for Additional Module */}
+                <View style={styles.settingRow}>
+                  <View style={styles.settingInfo}>
+                    <View
+                      style={[styles.settingIconContainer, styles.skeletonIcon]}
+                    />
+                    <View style={styles.settingText}>
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingLabel,
+                        ]}
+                      />
+                      <View
+                        style={[
+                          styles.skeletonText,
+                          styles.skeletonSettingDescription,
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.skeletonText} />
+                </View>
               </>
             )}
           </View>

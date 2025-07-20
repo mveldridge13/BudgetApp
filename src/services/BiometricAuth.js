@@ -19,7 +19,7 @@ class BiometricAuthService {
     this.appStateSubscription = null;
     this.biometricsInstance = null;
     this.isInitialized = false;
-    
+
     // Initialize biometrics instance when available
     if (ReactNativeBiometrics) {
       this.biometricsInstance = new ReactNativeBiometrics({
@@ -46,16 +46,16 @@ class BiometricAuthService {
 
     try {
       console.log('🔐 BiometricAuth: Starting initialization...');
-      
+
       // Load cached state
       await this.loadCachedState();
-      
+
       // Set up app state monitoring
       this.setupAppStateMonitoring();
-      
+
       // Check if app should be locked on startup
       await this.checkAppStartupLockState();
-      
+
       this.isInitialized = true;
       console.log('🔐 BiometricAuth: Service initialized successfully');
     } catch (error) {
@@ -124,7 +124,7 @@ class BiometricAuthService {
 
       const now = Date.now();
       const timeSinceLastActive = now - this.lastActiveTime;
-      
+
       console.log('🔐 BiometricAuth: Checking lock state', {
         timeSinceLastActive: Math.round(timeSinceLastActive / 1000),
         lockTimeoutSeconds: Math.round(this.lockTimeout / 1000),
@@ -206,7 +206,7 @@ class BiometricAuthService {
   lockApp() {
     console.log('🔐 BiometricAuth: Locking app');
     this.isLocked = true;
-    
+
     // Emit lock event for UI to respond
     if (this.onLockStateChange) {
       this.onLockStateChange(true);
@@ -218,7 +218,7 @@ class BiometricAuthService {
     console.log('🔐 BiometricAuth: Unlocking app');
     this.isLocked = false;
     this.updateLastActiveTime();
-    
+
     // Emit unlock event for UI to respond
     if (this.onLockStateChange) {
       this.onLockStateChange(false);
@@ -233,7 +233,7 @@ class BiometricAuthService {
       }
 
       const {available, biometryType} = await this.biometricsInstance.isSensorAvailable();
-      
+
       console.log('🔐 BiometricAuth: Biometric support check', {
         available,
         biometryType,
@@ -279,14 +279,14 @@ class BiometricAuthService {
         BiometricAuthService.STORAGE_KEYS.BIOMETRIC_ENABLED,
         enabled.toString()
       );
-      
+
       console.log('🔐 BiometricAuth: Biometric authentication', enabled ? 'enabled' : 'disabled');
-      
+
       // If disabling, unlock the app
       if (!enabled && this.isLocked) {
         this.unlockApp();
       }
-      
+
       return true;
     } catch (error) {
       console.error('🔐 BiometricAuth: Error setting biometric enabled:', error);
@@ -353,10 +353,10 @@ class BiometricAuthService {
         BiometricAuthService.STORAGE_KEYS.LAST_ACTIVE_TIME,
         BiometricAuthService.STORAGE_KEYS.BIOMETRIC_SETUP_COMPLETE,
       ]);
-      
+
       this.isLocked = false;
       this.lastActiveTime = Date.now();
-      
+
       console.log('🔐 BiometricAuth: Authentication state reset');
     } catch (error) {
       console.error('🔐 BiometricAuth: Error resetting authentication state:', error);
