@@ -22,6 +22,8 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import {colors} from '../styles';
+import {formatCurrencySync} from '../utils/currencyHelper';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -40,6 +42,9 @@ const SpendingVelocityBreakdown = ({
   isDayTimePatternsLoading,
   hasPatternsData,
 }) => {
+  // Get currency setting from context
+  const {appSettings} = useAppSettings();
+  const currency = appSettings?.currency || 'AUD';
   // Animations
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -116,10 +121,10 @@ const SpendingVelocityBreakdown = ({
     }
   }, []);
 
-  // Format currency
+  // Format currency using centralized utility
   const formatCurrency = useCallback(amount => {
-    return `$${Math.abs(amount).toFixed(2)}`;
-  }, []);
+    return formatCurrencySync(Math.abs(amount), currency);
+  }, [currency]);
 
   // ✅ NEW: Render Day/Time Patterns Chart (similar to reference image style)
   const renderDayTimePatternsChart = () => {

@@ -20,6 +20,7 @@ import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
 import BiometricAuth from '../services/BiometricAuth';
 import {useAppSettings} from '../contexts/AppSettingsContext';
+import {formatCurrencySync} from '../utils/currencyHelper';
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
@@ -324,11 +325,8 @@ const SettingsScreen = ({navigation}) => {
 
   const formatCurrency = useCallback(
     amount => {
-      return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: appSettings?.currency || 'AUD', // ✅ Safe fallback
-        minimumFractionDigits: 0,
-      }).format(amount || 0);
+      const currency = appSettings?.currency || 'AUD';
+      return formatCurrencySync(amount, currency);
     },
     [appSettings?.currency],
   );

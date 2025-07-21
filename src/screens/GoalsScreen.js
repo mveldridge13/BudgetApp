@@ -18,9 +18,16 @@ import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
 import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
+import {formatCurrencySync} from '../utils/currencyHelper';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
 const GoalsScreen = () => {
   const insets = useSafeAreaInsets();
+
+  // Get currency setting from context
+  const {appSettings} = useAppSettings();
+  const currency = appSettings?.currency || 'AUD';
+
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [incomeData, setIncomeData] = useState(null);
@@ -70,7 +77,9 @@ const GoalsScreen = () => {
       try {
         // Load goals and income data in parallel
         const [, incomeResult] = await Promise.all([
-          loadGoalsRef.current ? loadGoalsRef.current(force) : Promise.resolve(), // Use ref to prevent dependency loop
+          loadGoalsRef.current
+            ? loadGoalsRef.current(force)
+            : Promise.resolve(), // Use ref to prevent dependency loop
           loadIncomeData(),
         ]);
 
@@ -272,7 +281,10 @@ const GoalsScreen = () => {
   const handleToggleBalanceDisplay = useCallback(
     async goalId => {
       try {
-        console.log('🎯 GoalsScreen: Toggling balance display for goal:', goalId);
+        console.log(
+          '🎯 GoalsScreen: Toggling balance display for goal:',
+          goalId,
+        );
         const result = await toggleGoalBalanceDisplay(goalId);
         console.log('🎯 GoalsScreen: Toggle result:', result);
 
@@ -300,7 +312,8 @@ const GoalsScreen = () => {
         console.warn('Error updating progress:', error);
         Alert.alert(
           'Payment Failed',
-          error.message || 'Unable to save payment. Please check your connection and try again.',
+          error.message ||
+            'Unable to save payment. Please check your connection and try again.',
           [
             {
               text: 'OK',
@@ -329,13 +342,12 @@ const GoalsScreen = () => {
     clearEditingGoal();
   }, [clearEditingGoal]);
 
-  const formatCurrency = useCallback(amount => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 0,
-    }).format(amount || 0);
-  }, []);
+  const formatCurrency = useCallback(
+    amount => {
+      return formatCurrencySync(amount, currency);
+    },
+    [currency],
+  );
 
   // Memoize expensive calculations
   const activeGoals = React.useMemo(() => {

@@ -2,6 +2,8 @@ import React, {useState, useRef} from 'react';
 import {View, Text, StyleSheet, Animated, PanResponder} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
+import {formatCurrencySync} from '../utils/currencyHelper';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
 const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
@@ -14,6 +16,9 @@ const TransactionCard = ({
   onSwipeStart,
   onSwipeEnd,
 }) => {
+  // Get currency setting from context
+  const {appSettings} = useAppSettings();
+  const currency = appSettings?.currency || 'AUD';
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
@@ -160,10 +165,7 @@ const TransactionCard = ({
 
   // ✅ PURE UI FORMATTING FUNCTIONS (no business logic)
   const formatCurrency = amount => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount || 0);
+    return formatCurrencySync(amount, currency);
   };
 
   const formatDate = date => {
