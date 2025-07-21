@@ -1,4 +1,3 @@
-/* eslint-disable react-native/no-inline-styles */
 import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
@@ -483,7 +482,8 @@ const AddTransactionModal = ({
                     <Text
                       style={[
                         styles.transactionTypeText,
-                        selectedTransactionType === 'EXPENSE' && styles.transactionTypeTextActive,
+                        selectedTransactionType === 'EXPENSE' &&
+                          styles.transactionTypeTextActive,
                       ]}>
                       Expense
                     </Text>
@@ -511,7 +511,8 @@ const AddTransactionModal = ({
                     <Text
                       style={[
                         styles.transactionTypeText,
-                        selectedTransactionType === 'INCOME' && styles.transactionTypeTextActive,
+                        selectedTransactionType === 'INCOME' &&
+                          styles.transactionTypeTextActive,
                       ]}>
                       Income
                     </Text>

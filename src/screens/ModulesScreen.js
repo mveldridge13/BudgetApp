@@ -1,5 +1,5 @@
 // screens/ModulesScreen.js
-import React, {useState, useCallback} from 'react';
+import React, {useCallback} from 'react';
 import {
   View,
   StyleSheet,
@@ -12,34 +12,24 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
 const ModulesScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
 
-  // Module states - these could be stored in AsyncStorage or user profile
-  const [payoutTrackerEnabled, setPayoutTrackerEnabled] = useState(false);
+  // Get module settings from context
+  const {moduleSettings, updateModuleSettings, isLoading} = useAppSettings();
+  const payoutTrackerEnabled = moduleSettings?.payoutTracker || false;
 
-  const handlePayoutTrackerToggle = useCallback(() => {
-    Alert.alert(
-      'Payout Tracker',
-      payoutTrackerEnabled
-        ? 'Are you sure you want to disable the Payout Tracker module?'
-        : 'Enable the Payout Tracker to monitor your income payments and track when you get paid.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: payoutTrackerEnabled ? 'Disable' : 'Enable',
-          onPress: () => {
-            setPayoutTrackerEnabled(!payoutTrackerEnabled);
-            // TODO: Save to user preferences/profile
-          },
-        },
-      ]
-    );
-  }, [payoutTrackerEnabled]);
+  const handlePayoutTrackerToggle = useCallback(async () => {
+    try {
+      const newValue = !payoutTrackerEnabled;
+      await updateModuleSettings({payoutTracker: newValue});
+    } catch (error) {
+      console.error('Error toggling Payout Tracker:', error);
+      Alert.alert('Error', 'Failed to update module setting. Please try again.');
+    }
+  }, [payoutTrackerEnabled, updateModuleSettings]);
 
   const moduleItems = [
     {
@@ -115,10 +105,11 @@ const ModulesScreen = ({navigation}) => {
                     onValueChange={module.onToggle}
                     trackColor={{
                       false: colors.border,
-                      true: colors.primary + '40',
+                      true: colors.primary,
                     }}
-                    thumbColor={module.enabled ? colors.primary : colors.surface}
-                    disabled={module.comingSoon && !module.enabled}
+                    thumbColor={module.enabled ? colors.textWhite : colors.textSecondary}
+                    ios_backgroundColor={colors.border}
+                    disabled={(module.comingSoon && !module.enabled) || isLoading}
                   />
                 </TouchableOpacity>
               </View>

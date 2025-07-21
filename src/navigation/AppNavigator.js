@@ -20,6 +20,9 @@ import AuthService from '../services/AuthService';
 import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
 
+// Import contexts
+import {AppSettingsProvider} from '../contexts/AppSettingsContext';
+
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -197,11 +200,12 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-      initialRouteName={initialRoute}>
+    <AppSettingsProvider>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+        }}
+        initialRouteName={initialRoute}>
       <Stack.Screen
         name="Auth"
         component={AuthScreen}
@@ -238,6 +242,7 @@ export default function AppNavigator() {
         }}
       />
     </Stack.Navigator>
+    </AppSettingsProvider>
   );
 }
 

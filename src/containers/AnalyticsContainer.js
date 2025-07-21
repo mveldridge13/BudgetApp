@@ -1,20 +1,22 @@
 import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {AppState, Alert, Dimensions} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import TrendAPIService from '../services/TrendAPIService';
 import billsAnalyticsCache from '../services/BillsAnalyticsCache';
 import incomeAnalyticsCache from '../services/IncomeAnalyticsCache';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 import {colors} from '../styles';
 
 const AnalyticsContainer = () => {
+  // Get Pro status from context
+  const {isPro} = useAppSettings();
+
   // UI state only
   const [selectedPeriod, setSelectedPeriod] = useState('daily');
   const [comparisonMode, setComparisonMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [isPro, setIsPro] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   // Backend data - this is all we need
@@ -31,32 +33,7 @@ const AnalyticsContainer = () => {
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
 
-  // Check Pro status
-  useEffect(() => {
-    const checkProStatus = async () => {
-      try {
-        const proStatus = await AsyncStorage.getItem('isPro');
-        setIsPro(proStatus === 'true');
-      } catch (err) {
-        console.error('Error checking Pro status:', err);
-      }
-    };
-    checkProStatus();
-  }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      const checkProStatus = async () => {
-        try {
-          const proStatus = await AsyncStorage.getItem('isPro');
-          setIsPro(proStatus === 'true');
-        } catch (err) {
-          console.error('Error checking Pro status:', err);
-        }
-      };
-      checkProStatus();
-    }, []),
-  );
 
   useEffect(() => {
     isMountedRef.current = true;

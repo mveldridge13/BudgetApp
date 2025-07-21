@@ -2,6 +2,7 @@ import React, {useState, useCallback, useEffect} from 'react';
 import {Alert} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import AddTransactionModal from '../components/AddTransactionModal';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
 const recurrenceOptions = [
   {id: 'none', name: 'Does not repeat'},
@@ -54,6 +55,10 @@ const AddTransactionContainer = ({
   // Other modals state
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMode, setCalendarMode] = useState('transaction'); // 'transaction' or 'dueDate'
+
+  // Get module settings from context
+  const {moduleSettings} = useAppSettings();
+  const payoutTrackerEnabled = moduleSettings?.payoutTracker || false;
 
   // Check if we're in edit mode
   const isEditMode = !!editingTransaction;
@@ -644,6 +649,8 @@ const AddTransactionContainer = ({
       getCategoryDisplayName={getCategoryDisplayName}
       recurrenceOptions={recurrenceOptions}
       paymentStatusOptions={paymentStatusOptions}
+      // Module settings
+      payoutTrackerEnabled={payoutTrackerEnabled}
     />
   );
 };

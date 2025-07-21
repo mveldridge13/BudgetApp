@@ -19,16 +19,21 @@ import {colors} from '../styles';
 import TrendAPIService from '../services/TrendAPIService';
 import UserProfileCache from '../services/UserProfileCache';
 import BiometricAuth from '../services/BiometricAuth';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
 const SettingsScreen = ({navigation}) => {
   const insets = useSafeAreaInsets();
 
-  // User settings state
-  const [userProfile, setUserProfile] = useState(null);
-  const [appSettings, setAppSettings] = useState(null); // ✅ Start with null to prevent flicker
-
-  // Pro feature state
-  const [isPro, setIsPro] = useState(null); // ✅ Start with null to prevent flicker
+  // Get settings from context
+  const {
+    appSettings,
+    userProfile,
+    isPro,
+    updateAppSettings,
+    updateProStatus,
+    refreshUserProfile,
+    toggleAppSetting,
+  } = useAppSettings();
 
   // App state tracking
   const [appVersion] = useState('1.0');
@@ -39,124 +44,8 @@ const SettingsScreen = ({navigation}) => {
   const isMountedRef = useRef(true);
   const isLoadingRef = useRef(false);
 
-  // Cache-first user profile loading
-  const loadUserProfileWithCache = useCallback(async () => {
-    try {
-      console.log(
-        '🔍 SETTINGS: Loading user profile with cache-first strategy',
-      );
-
-      // Step 1: Try to load from cache immediately
-      const cached = await UserProfileCache.get();
-      if (cached && cached.profile && isMountedRef.current) {
-        console.log('🔍 SETTINGS: Using cached profile data', {
-          age: Math.round(cached.age / 1000 / 60), // minutes
-          isStale: cached.isStale,
-        });
-        setUserProfile(cached.profile);
-      }
-
-      // Step 2: Fetch fresh data from API in background (if authenticated)
-      try {
-        // TrendAPIService should already be initialized by AppNavigator
-        if (TrendAPIService.isAuthenticated()) {
-          console.log('🔍 SETTINGS: Fetching fresh profile from API');
-          const freshProfile = await TrendAPIService.getUserProfile();
-
-          if (freshProfile && isMountedRef.current) {
-            // Only update UI if data actually changed
-            const hasChanged =
-              !cached ||
-              JSON.stringify(cached.profile) !== JSON.stringify(freshProfile);
-
-            if (hasChanged) {
-              console.log('🔍 SETTINGS: Profile data changed, updating UI');
-              setUserProfile(freshProfile);
-            } else {
-              console.log(
-                '🔍 SETTINGS: Profile data unchanged, keeping current UI',
-              );
-            }
-
-            // Always update cache with fresh data
-            await UserProfileCache.set(freshProfile);
-          }
-        }
-      } catch (error) {
-        console.error(
-          '🔍 SETTINGS: API fetch failed, using cached data:',
-          error,
-        );
-        // Graceful fallback - we already have cached data loaded
-      }
-    } catch (error) {
-      console.error('🔍 SETTINGS: Cache-first loading failed:', error);
-
-      // Final fallback: try direct API call
-      try {
-        if (TrendAPIService.isAuthenticated()) {
-          const profileResponse = await TrendAPIService.getUserProfile();
-          if (profileResponse && isMountedRef.current) {
-            setUserProfile(profileResponse);
-            await UserProfileCache.set(profileResponse);
-          }
-        }
-      } catch (fallbackError) {
-        console.error(
-          '🔍 SETTINGS: All profile loading methods failed:',
-          fallbackError,
-        );
-      }
-    }
-  }, []);
-
-  // Load cached data immediately (synchronous) to show UI instantly
-  const loadCachedData = useCallback(async () => {
-    try {
-      // Load only the cached user profile for immediate display
-      const cached = await UserProfileCache.get();
-      if (cached && cached.profile && isMountedRef.current) {
-        console.log('🔍 SETTINGS: Loaded cached profile for immediate display');
-        setUserProfile(cached.profile);
-      }
-
-      // Load app settings from AsyncStorage (fast)
-      const storedSettings = await AsyncStorage.getItem('appSettings');
-      if (isMountedRef.current) {
-        if (storedSettings) {
-          // Merge stored settings with defaults
-          const defaultSettings = {
-            notifications: true,
-            biometricAuth: false,
-            currency: 'AUD',
-            budgetPeriod: 'monthly',
-            dataBackup: true,
-          };
-          setAppSettings({...defaultSettings, ...JSON.parse(storedSettings)});
-        } else {
-          // Set defaults if no stored settings
-          setAppSettings({
-            notifications: true,
-            biometricAuth: false,
-            currency: 'AUD',
-            budgetPeriod: 'monthly',
-            dataBackup: true,
-          });
-        }
-      }
-
-      // Load pro status (fast)
-      const proStatus = await AsyncStorage.getItem('isPro');
-      if (isMountedRef.current) {
-        setIsPro(proStatus === 'true');
-      }
-    } catch (error) {
-      console.error('Error loading cached data:', error);
-    }
-  }, []);
-
-  // Load fresh/additional data in background
-  const loadSettingsData = useCallback(async () => {
+  // Load additional data (data size, backup info)
+  const loadAdditionalData = useCallback(async () => {
     if (isLoadingRef.current) {
       return;
     }
@@ -164,9 +53,6 @@ const SettingsScreen = ({navigation}) => {
     isLoadingRef.current = true;
 
     try {
-      // Load fresh user profile data (cache-first, background refresh)
-      await loadUserProfileWithCache();
-
       // Load additional data for data size calculation
       const [backupInfo, transactions, goals] = await Promise.all([
         AsyncStorage.getItem('lastBackup'),
@@ -195,52 +81,33 @@ const SettingsScreen = ({navigation}) => {
         isLoadingRef.current = false;
       }
     }
-  }, [loadUserProfileWithCache]);
+  }, []);
 
-  // Initial load - load cached data first, then fresh data
+  // Initial load - context handles settings, we just load additional data
   useEffect(() => {
     isMountedRef.current = true;
-
-    // Step 1: Load cached data immediately to show UI
-    loadCachedData();
-
-    // Step 2: Load fresh data in background
-    loadSettingsData();
+    loadAdditionalData();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [loadCachedData, loadSettingsData]);
+  }, [loadAdditionalData]);
 
-  // Reload on focus - load cached data first, then fresh data
+  // Reload on focus - refresh profile and additional data
   useFocusEffect(
     useCallback(() => {
       if (isMountedRef.current) {
-        // Load cached data first for immediate display
-        loadCachedData();
-        // Then load fresh data in background
-        loadSettingsData();
+        refreshUserProfile();
+        loadAdditionalData();
       }
-    }, [loadCachedData, loadSettingsData]),
+    }, [refreshUserProfile, loadAdditionalData]),
   );
-
-  // Save app settings
-  const saveAppSettings = useCallback(async newSettings => {
-    try {
-      await AsyncStorage.setItem('appSettings', JSON.stringify(newSettings));
-      setAppSettings(newSettings);
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      Alert.alert('Error', 'Failed to save settings. Please try again.');
-    }
-  }, []);
 
   // Toggle Pro status
   const handleTogglePro = useCallback(async () => {
     try {
       const newProStatus = !isPro;
-      await AsyncStorage.setItem('isPro', newProStatus.toString());
-      setIsPro(newProStatus);
+      await updateProStatus(newProStatus);
 
       Alert.alert(
         'Pro Status Updated',
@@ -253,7 +120,7 @@ const SettingsScreen = ({navigation}) => {
       console.error('Error toggling Pro status:', error);
       Alert.alert('Error', 'Failed to update Pro status. Please try again.');
     }
-  }, [isPro]);
+  }, [isPro, updateProStatus]);
 
   // Settings handlers
   const handleToggleSetting = useCallback(
@@ -288,8 +155,7 @@ const SettingsScreen = ({navigation}) => {
 
             if (authResult.success) {
               await BiometricAuth.setBiometricEnabled(true);
-              const newSettings = {...appSettings, [key]: true};
-              saveAppSettings(newSettings);
+              await updateAppSettings({[key]: true});
             } else {
               Alert.alert(
                 'Authentication Failed',
@@ -300,8 +166,7 @@ const SettingsScreen = ({navigation}) => {
           } else {
             // Disabling biometric auth
             await BiometricAuth.setBiometricEnabled(false);
-            const newSettings = {...appSettings, [key]: false};
-            saveAppSettings(newSettings);
+            await updateAppSettings({[key]: false});
           }
         } catch (error) {
           console.error('Error handling biometric toggle:', error);
@@ -312,12 +177,11 @@ const SettingsScreen = ({navigation}) => {
           );
         }
       } else {
-        // Normal setting toggle
-        const newSettings = {...appSettings, [key]: !appSettings[key]};
-        saveAppSettings(newSettings);
+        // Normal setting toggle using context
+        await toggleAppSetting(key);
       }
     },
-    [appSettings, saveAppSettings],
+    [appSettings, updateAppSettings, toggleAppSetting],
   );
 
   const handleEditProfile = useCallback(async () => {
@@ -340,8 +204,7 @@ const SettingsScreen = ({navigation}) => {
     const buttons = currencies.map(currency => ({
       text: `${currency.symbol} ${currency.code} - ${currency.name}`,
       onPress: () => {
-        const newSettings = {...appSettings, currency: currency.code};
-        saveAppSettings(newSettings);
+        updateAppSettings({currency: currency.code});
       },
     }));
 
@@ -353,7 +216,7 @@ const SettingsScreen = ({navigation}) => {
       buttons,
       {cancelable: true},
     );
-  }, [appSettings, saveAppSettings]);
+  }, [updateAppSettings]);
 
   const handleAdditionalModule = useCallback(() => {
     navigation.navigate('Modules');
@@ -755,11 +618,7 @@ const SettingsScreen = ({navigation}) => {
                   onPress={() => handleAdditionalModule()}>
                   <View style={styles.settingInfo}>
                     <View style={styles.settingIconContainer}>
-                      <Icon
-                        name="package"
-                        size={18}
-                        color={colors.primary}
-                      />
+                      <Icon name="package" size={18} color={colors.primary} />
                     </View>
                     <View style={styles.settingText}>
                       <Text style={styles.settingLabel}>Additional Module</Text>
