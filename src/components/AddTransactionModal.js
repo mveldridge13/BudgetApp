@@ -464,11 +464,9 @@ const AddTransactionModal = ({
                   <TouchableOpacity
                     style={[
                       styles.transactionTypeButton,
+                      styles.transactionTypeButtonExpense,
                       selectedTransactionType === 'EXPENSE' &&
-                        styles.transactionTypeButtonActive,
-                      selectedTransactionType === 'EXPENSE' && {
-                        backgroundColor: '#F443361A',
-                      },
+                        styles.transactionTypeButtonActiveExpense,
                     ]}
                     onPress={() => handleTransactionTypeSelect('EXPENSE')}
                     activeOpacity={0.7}>
@@ -477,7 +475,7 @@ const AddTransactionModal = ({
                       size={18}
                       color={
                         selectedTransactionType === 'EXPENSE'
-                          ? '#F44336'
+                          ? colors.textWhite || '#FFFFFF'
                           : colors.textSecondary
                       }
                       style={styles.transactionTypeIcon}
@@ -485,9 +483,7 @@ const AddTransactionModal = ({
                     <Text
                       style={[
                         styles.transactionTypeText,
-                        selectedTransactionType === 'EXPENSE' && {
-                          color: '#F44336',
-                        },
+                        selectedTransactionType === 'EXPENSE' && styles.transactionTypeTextActive,
                       ]}>
                       Expense
                     </Text>
@@ -496,11 +492,9 @@ const AddTransactionModal = ({
                   <TouchableOpacity
                     style={[
                       styles.transactionTypeButton,
+                      styles.transactionTypeButtonIncome,
                       selectedTransactionType === 'INCOME' &&
-                        styles.transactionTypeButtonActive,
-                      selectedTransactionType === 'INCOME' && {
-                        backgroundColor: '#4CAF501A',
-                      },
+                        styles.transactionTypeButtonActiveIncome,
                     ]}
                     onPress={() => handleTransactionTypeSelect('INCOME')}
                     activeOpacity={0.7}>
@@ -509,7 +503,7 @@ const AddTransactionModal = ({
                       size={18}
                       color={
                         selectedTransactionType === 'INCOME'
-                          ? '#4CAF50'
+                          ? colors.textWhite || '#FFFFFF'
                           : colors.textSecondary
                       }
                       style={styles.transactionTypeIcon}
@@ -517,9 +511,7 @@ const AddTransactionModal = ({
                     <Text
                       style={[
                         styles.transactionTypeText,
-                        selectedTransactionType === 'INCOME' && {
-                          color: '#4CAF50',
-                        },
+                        selectedTransactionType === 'INCOME' && styles.transactionTypeTextActive,
                       ]}>
                       Income
                     </Text>
@@ -944,39 +936,61 @@ const styles = StyleSheet.create({
   // Transaction Type Selector Styles
   transactionTypeContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: colors.background || '#F8FAFC',
+    paddingHorizontal: 4,
+    paddingTop: 2,
+    paddingBottom: 2,
+    marginBottom: 12,
   },
   transactionTypeButton: {
     flex: 1,
-    flexDirection: 'row',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    marginHorizontal: 1,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  transactionTypeButtonActive: {
-    backgroundColor: colors.background,
+  transactionTypeButtonExpense: {
+    borderBottomColor: '#F44336',
+  },
+  transactionTypeButtonIncome: {
+    borderBottomColor: '#4CAF50',
+  },
+  transactionTypeButtonActiveExpense: {
+    backgroundColor: '#F44336',
+    borderBottomWidth: 2,
+    borderBottomColor: '#F44336',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: {width: 0, height: -2},
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  transactionTypeButtonActiveIncome: {
+    backgroundColor: '#4CAF50',
+    borderBottomWidth: 2,
+    borderBottomColor: '#4CAF50',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   transactionTypeIcon: {
     marginRight: 8,
   },
   transactionTypeText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.textSecondary || '#6B7280',
+  },
+  transactionTypeTextActive: {
+    color: colors.textWhite || '#FFFFFF',
+    fontWeight: '600',
   },
   dateField: {
     flexDirection: 'row',
