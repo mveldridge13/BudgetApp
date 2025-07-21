@@ -955,15 +955,15 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   transactionTypeButtonExpense: {
-    borderBottomColor: '#F44336',
+    borderBottomColor: colors.primary || '#6366F1',
   },
   transactionTypeButtonIncome: {
-    borderBottomColor: '#4CAF50',
+    borderBottomColor: colors.primary || '#6366F1',
   },
   transactionTypeButtonActiveExpense: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
-    borderBottomColor: '#F44336',
+    borderBottomColor: colors.primary || '#6366F1',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -2},
     shadowOpacity: 0.1,
@@ -971,9 +971,9 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   transactionTypeButtonActiveIncome: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
-    borderBottomColor: '#4CAF50',
+    borderBottomColor: colors.primary || '#6366F1',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -2},
     shadowOpacity: 0.1,
