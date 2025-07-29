@@ -1202,18 +1202,25 @@ const HomeContainer = ({navigation}) => {
         if (!goal.id.startsWith('local_')) {
           // Only fetch for backend goals
           try {
-            const contributions = await TrendAPIService.getGoalContributions(
+            // Fetch all contributions (both MANUAL and WITHDRAWAL)
+            const allContributions = await TrendAPIService.getGoalContributions(
               goal.id,
-              {
-                type: 'MANUAL', // Filter for manual contributions (income payments)
-              },
+              // No type filter - get all contributions
             );
 
-            if (contributions && Array.isArray(contributions)) {
-              const incomeTotal = contributions.reduce(
-                (sum, contrib) => sum + (contrib.amount || 0),
-                0,
-              );
+            if (allContributions && Array.isArray(allContributions)) {
+              const incomeTotal = allContributions.reduce((sum, contrib) => {
+                if (contrib.type === 'MANUAL') {
+                  // MANUAL contributions subtract from income (money going to goals)
+                  return sum + (contrib.amount || 0);
+                } else if (contrib.type === 'WITHDRAWAL') {
+                  // WITHDRAWAL contributions add back to income (money coming back from goals)
+                  return sum - (contrib.amount || 0);
+                } else {
+                  // Other types (AUTOMATIC, TRANSACTION, INTEREST, WINDFALL) don't affect income
+                  return sum;
+                }
+              }, 0);
               totalPayments += incomeTotal;
             }
           } catch (error) {
@@ -1251,23 +1258,41 @@ const HomeContainer = ({navigation}) => {
 
   // Listen for goal income payments to reload income payment totals
   useEffect(() => {
-    const handleGoalIncomePayment = () => {
+    const handleGoalIncomePayment = (eventData) => {
       console.log(
         '🔍 HOME_CONTAINER: Goal income payment made, reloading income payments',
+        eventData,
       );
       loadTotalIncomePaymentsRef.current();
     };
 
-    if (typeof window !== 'undefined' && window.addEventListener) {
-      window.addEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
+    // Use React Native DeviceEventEmitter for cross-platform compatibility
+    let subscription;
+    try {
+      const {DeviceEventEmitter} = require('react-native');
+      subscription = DeviceEventEmitter.addListener(
+        'goalIncomePaymentMade',
+        handleGoalIncomePayment,
+      );
+      console.log('🔍 HOME_CONTAINER: Listening for goalIncomePaymentMade events');
+    } catch (e) {
+      console.warn('DeviceEventEmitter not available, trying web events:', e);
+      // Fallback to web browser events if available
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
+      }
+    }
 
-      return () => {
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      } else if (typeof window !== 'undefined' && window.removeEventListener) {
         window.removeEventListener(
           'goalIncomePaymentMade',
           handleGoalIncomePayment,
         );
-      };
-    }
+      }
+    };
   }, []); // Now safe to use empty dependency - handler uses ref
 
   // ==============================================

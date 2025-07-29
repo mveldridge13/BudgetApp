@@ -446,8 +446,8 @@ const useGoalData = checkNetworkConnectivity => {
         }
 
         const parsedAmount = Number(amount);
-        if (isNaN(parsedAmount) || parsedAmount <= 0) {
-          throw new Error('Amount must be a positive number');
+        if (isNaN(parsedAmount) || parsedAmount === 0) {
+          throw new Error('Amount must be a non-zero number');
         }
 
         const goalIndex = goals.findIndex(goal => goal.id === goalId);
@@ -455,13 +455,14 @@ const useGoalData = checkNetworkConnectivity => {
           throw new Error('Goal not found');
         }
 
-        // Prevent duplicate payments for income source
+        // Prevent duplicate payments for income source (both additions and withdrawals)
         if (paymentSource === 'income') {
-          const paymentKey = `${goalId}-${parsedAmount}`;
+          const transactionType = parsedAmount < 0 ? 'withdraw' : 'add';
+          const paymentKey = `${goalId}-${transactionType}-${Math.abs(parsedAmount)}`;
           const now = Date.now();
           const lastPayment = lastPaymentTime.current[paymentKey] || 0;
 
-          // Prevent payments within 3 seconds of each other for same goal/amount
+          // Prevent payments within 3 seconds of each other for same goal/amount/type
           if (now - lastPayment < 3000) {
             console.log('🔍 GOAL_DATA: Duplicate payment detected, ignoring');
             throw new Error('Please wait before making another payment');
@@ -504,11 +505,14 @@ const useGoalData = checkNetworkConnectivity => {
           let newCurrent = currentGoal.current || 0;
 
           if (currentGoal.type === 'debt') {
-            // For debt goals, reduce the current debt amount
-            newCurrent = Math.max(0, newCurrent - parsedAmount);
+            // For debt goals, reduce the current debt amount (amount should be positive for payments)
+            newCurrent = Math.max(0, newCurrent - Math.abs(parsedAmount));
           } else {
-            // For savings goals, increase the current amount
+            // For savings goals, add or subtract the amount
+            // Positive amounts = additions, negative amounts = withdrawals
             newCurrent += parsedAmount;
+            // Ensure we don't go below 0 for savings goals
+            newCurrent = Math.max(0, newCurrent);
           }
 
           console.log(
@@ -586,13 +590,14 @@ const useGoalData = checkNetworkConnectivity => {
           // Only create backend contribution for backend goals (not local goals)
           if (!goalId.startsWith('local_')) {
             try {
+              const isWithdrawal = parsedAmount < 0;
               const contributionData = {
-                amount: parsedAmount.toFixed(2), // Backend expects decimal string
+                amount: Math.abs(parsedAmount).toFixed(2), // Backend expects positive decimal string
                 currency: 'AUD',
-                description: `Income payment to ${
-                  updatedGoals.find(g => g.id === goalId)?.title || 'goal'
-                }`,
-                type: 'MANUAL', // Use MANUAL type for manual income payments
+                description: isWithdrawal
+                  ? `Income withdrawal from ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`
+                  : `Income payment to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`,
+                type: isWithdrawal ? 'WITHDRAWAL' : 'MANUAL', // Different types for withdrawals vs additions
                 date: updateTimestamp,
               };
 
@@ -649,21 +654,30 @@ const useGoalData = checkNetworkConnectivity => {
           }
 
           // Trigger balance card update event for both backend and local goals
-          if (typeof window !== 'undefined' && window.dispatchEvent) {
-            try {
-              // eslint-disable-next-line no-undef
-              const event = new CustomEvent('goalIncomePaymentMade', {
-                detail: {
-                  goalId: goalId,
-                  amount: parsedAmount,
-                },
-              });
-              window.dispatchEvent(event);
-            } catch (e) {
-              // CustomEvent not available, ignore
-              console.warn(
-                'CustomEvent not available for goal payment notification',
-              );
+          // Use React Native DeviceEventEmitter for cross-platform compatibility
+          try {
+            const {DeviceEventEmitter} = require('react-native');
+            DeviceEventEmitter.emit('goalIncomePaymentMade', {
+              goalId: goalId,
+              amount: parsedAmount,
+            });
+            console.log('🔍 GOAL_DATA: Emitted goalIncomePaymentMade event');
+          } catch (e) {
+            console.warn('DeviceEventEmitter not available:', e);
+            // Fallback: try web browser events if available
+            if (typeof window !== 'undefined' && window.dispatchEvent) {
+              try {
+                // eslint-disable-next-line no-undef
+                const event = new CustomEvent('goalIncomePaymentMade', {
+                  detail: {
+                    goalId: goalId,
+                    amount: parsedAmount,
+                  },
+                });
+                window.dispatchEvent(event);
+              } catch (webError) {
+                console.warn('Web events also not available:', webError);
+              }
             }
           }
         }
@@ -709,7 +723,8 @@ const useGoalData = checkNetworkConnectivity => {
       } finally {
         // Clean up processing payment state
         if (paymentSource === 'income') {
-          const paymentKey = `${goalId}-${Number(amount)}`;
+          const transactionType = Number(amount) < 0 ? 'withdraw' : 'add';
+          const paymentKey = `${goalId}-${transactionType}-${Math.abs(Number(amount))}`;
           setProcessingPayments(prev => {
             const newSet = new Set(prev);
             newSet.delete(paymentKey);

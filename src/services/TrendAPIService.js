@@ -2,8 +2,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.24:3001/api/v1', // Updated with your IP
-  timeout: 10000,
+  baseURL: 'http://192.168.1.33:3001/api/v1', // Updated with correct IP
+  timeout: 30000, // Increased timeout for mobile devices
 };
 
 class TrendAPIService {

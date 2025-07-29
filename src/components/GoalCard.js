@@ -30,6 +30,7 @@ const GoalCard = ({
   const [customAmount, setCustomAmount] = useState('');
   const [paymentSource, setPaymentSource] = useState('income');
   const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(() => goal?.showOnBalanceCard ?? false);
+  const [transactionType, setTransactionType] = useState('add'); // 'add' or 'withdraw'
 
   // FIXED: Add safe formatCurrency function
   const safeCurrency = amount => {
@@ -175,19 +176,34 @@ const GoalCard = ({
       return;
     }
 
+    // For withdrawals, check if amount exceeds current goal amount
+    if (transactionType === 'withdraw' && amount > safeGoal.current) {
+      Alert.alert(
+        'Invalid Amount',
+        `You can only withdraw up to ${safeCurrency(safeGoal.current)} from this goal.`,
+      );
+      return;
+    }
+
+    const isWithdrawal = transactionType === 'withdraw';
+    const actionText = isDebtGoal ? 'Pay' : (isWithdrawal ? 'Withdraw' : 'Add');
+    const prepositionText = isDebtGoal ? 'toward' : (isWithdrawal ? 'from' : 'to');
+    const sourceText = isWithdrawal ? 'back to Income' : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
+
     Alert.alert(
-      isDebtGoal ? 'Make Payment' : 'Add Contribution',
-      `${isDebtGoal ? 'Pay' : 'Add'} ${safeCurrency(amount)} ${
-        isDebtGoal ? 'toward' : 'to'
-      } ${safeGoal.title} from ${paymentSource === 'income' ? 'Income' : paymentSource}?`,
+      isDebtGoal ? 'Make Payment' : (isWithdrawal ? 'Withdraw Money' : 'Add Contribution'),
+      `${actionText} ${safeCurrency(amount)} ${prepositionText} ${safeGoal.title} ${sourceText}?`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
-          text: isDebtGoal ? 'Pay' : 'Add',
+          text: actionText,
           onPress: () => {
-            onUpdateProgress && onUpdateProgress(safeGoal.id, amount, paymentSource);
+            // For withdrawals, pass negative amount
+            const finalAmount = isWithdrawal ? -amount : amount;
+            onUpdateProgress && onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
             setCustomAmount('');
             setPaymentSource('income');
+            setTransactionType('add');
             setShowProgressUpdate(false);
           },
         },
@@ -199,6 +215,7 @@ const GoalCard = ({
   const handleCancelCustomAmount = () => {
     setCustomAmount('');
     setPaymentSource('income');
+    setTransactionType('add');
     setShowProgressUpdate(false);
   };
 
@@ -376,11 +393,63 @@ const GoalCard = ({
       {showProgressUpdate && !isCompleted && (
         <View style={styles.customAmountContainer}>
           <Text style={styles.customAmountTitle}>
-            {isDebtGoal ? 'Enter Payment Amount' : 'Enter Contribution Amount'}
+            {isDebtGoal ? 'Enter Payment Amount' :
+             (transactionType === 'withdraw' ? 'Enter Withdrawal Amount' : 'Enter Contribution Amount')}
           </Text>
 
-          <View style={styles.sourceSelectionContainer}>
-            <Text style={styles.sourceSelectionLabel}>Payment Source</Text>
+          {/* Transaction Type Selection for Savings Goals */}
+          {!isDebtGoal && (
+            <View style={styles.transactionTypeContainer}>
+              <Text style={styles.sourceSelectionLabel}>Transaction Type</Text>
+              <View style={styles.transactionTypeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.transactionTypeButton,
+                    transactionType === 'add' && styles.transactionTypeButtonActive,
+                  ]}
+                  onPress={() => setTransactionType('add')}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name="plus"
+                    size={16}
+                    color={transactionType === 'add' ? colors.textWhite : colors.primary}
+                  />
+                  <Text style={[
+                    styles.transactionTypeButtonText,
+                    transactionType === 'add' && styles.transactionTypeButtonTextActive,
+                  ]}>
+                    Add Money
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.transactionTypeButton,
+                    transactionType === 'withdraw' && styles.transactionTypeButtonActive,
+                  ]}
+                  onPress={() => setTransactionType('withdraw')}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name="minus"
+                    size={16}
+                    color={transactionType === 'withdraw' ? colors.textWhite : colors.danger}
+                  />
+                  <Text style={[
+                    styles.transactionTypeButtonText,
+                    transactionType === 'withdraw' && styles.transactionTypeButtonTextActive,
+                  ]}>
+                    Withdraw
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Payment Source Selection - only show for additions or debt payments */}
+          {(transactionType === 'add' || isDebtGoal) && (
+            <View style={styles.sourceSelectionContainer}>
+              <Text style={styles.sourceSelectionLabel}>
+                {transactionType === 'withdraw' ? 'Withdraw To' : 'Payment Source'}
+              </Text>
             <TouchableOpacity
               style={styles.sourceSelectionButton}
               onPress={() => {
@@ -413,7 +482,8 @@ const GoalCard = ({
               </Text>
               <Icon name="chevron-down" size={16} color={colors.textSecondary} />
             </TouchableOpacity>
-          </View>
+            </View>
+          )}
 
           <View style={styles.customAmountInputRow}>
             <TextInput
@@ -449,12 +519,32 @@ const GoalCard = ({
       {!isCompleted && !showProgressUpdate && (
         <View style={styles.actionButtonsContainer}>
           {safeGoal.type === 'savings' && (
-            <TouchableOpacity
-              style={[styles.primaryButton, {backgroundColor: goalColor}]}
-              onPress={() => setShowProgressUpdate(true)}
-              activeOpacity={0.8}>
-              <Text style={styles.primaryButtonText}>Add Money</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.primaryButton, {backgroundColor: goalColor}]}
+                onPress={() => {
+                  setTransactionType('add');
+                  setShowProgressUpdate(true);
+                }}
+                activeOpacity={0.8}>
+                <Icon name="plus" size={16} color={colors.textWhite} />
+                <Text style={styles.primaryButtonText}>Add Money</Text>
+              </TouchableOpacity>
+
+              {/* Only show withdraw if there's money in the goal */}
+              {safeGoal.current > 0 && (
+                <TouchableOpacity
+                  style={[styles.secondaryButton, {borderColor: colors.danger}]}
+                  onPress={() => {
+                    setTransactionType('withdraw');
+                    setShowProgressUpdate(true);
+                  }}
+                  activeOpacity={0.8}>
+                  <Icon name="minus" size={16} color={colors.danger} />
+                  <Text style={[styles.secondaryButtonText, {color: colors.danger}]}>Withdraw</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
           {safeGoal.type === 'debt' && (
@@ -787,16 +877,53 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
   },
+  // NEW: Transaction Type Styles
+  transactionTypeContainer: {
+    marginBottom: 16,
+  },
+  transactionTypeButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  transactionTypeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 8,
+  },
+  transactionTypeButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  transactionTypeButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.text,
+  },
+  transactionTypeButtonTextActive: {
+    color: colors.textWhite,
+  },
   actionButtonsContainer: {
     flexDirection: 'row',
     gap: 12,
   },
   primaryButton: {
     flex: 1,
+    flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   primaryButtonText: {
     fontSize: 14,
@@ -806,13 +933,16 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     flex: 1,
+    flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: 8,
   },
   secondaryButtonText: {
     fontSize: 14,
