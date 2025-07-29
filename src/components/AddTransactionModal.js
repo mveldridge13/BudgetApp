@@ -65,6 +65,9 @@ const AddTransactionModal = ({
   getCategoryDisplayName,
   recurrenceOptions,
   paymentStatusOptions,
+
+  // Module settings
+  payoutTrackerEnabled,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -301,7 +304,14 @@ const AddTransactionModal = ({
   };
 
   const getTransactionTypeDisplayName = () => {
-    return selectedTransactionType === 'INCOME' ? 'Income' : 'Expense';
+    switch (selectedTransactionType) {
+      case 'INCOME':
+        return 'Income';
+      case 'PAYOUT':
+        return 'Payout';
+      default:
+        return 'Expense';
+    }
   };
 
   const getCategoryFieldDisplayName = () => {
@@ -517,6 +527,37 @@ const AddTransactionModal = ({
                       Income
                     </Text>
                   </TouchableOpacity>
+
+                  {payoutTrackerEnabled && (
+                    <TouchableOpacity
+                      style={[
+                        styles.transactionTypeButton,
+                        styles.transactionTypeButtonPayout,
+                        selectedTransactionType === 'PAYOUT' &&
+                          styles.transactionTypeButtonActivePayout,
+                      ]}
+                      onPress={() => handleTransactionTypeSelect('PAYOUT')}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="card-outline"
+                        size={18}
+                        color={
+                          selectedTransactionType === 'PAYOUT'
+                            ? colors.textWhite || '#FFFFFF'
+                            : colors.textSecondary
+                        }
+                        style={styles.transactionTypeIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.transactionTypeText,
+                          selectedTransactionType === 'PAYOUT' &&
+                            styles.transactionTypeTextActive,
+                        ]}>
+                        Payout
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Date Field */}
@@ -535,159 +576,262 @@ const AddTransactionModal = ({
                   </Text>
                 </TouchableOpacity>
 
+                {/* Payout Tracker Fields */}
+                {selectedTransactionType === 'PAYOUT' && (
+                  <>
+                    {/* Event Field */}
+                    <TextInput
+                      style={styles.descriptionInput}
+                      value={description}
+                      onChangeText={onDescriptionChange}
+                      placeholder="Event"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+
+                    {/* Buy-in Field */}
+                    <View style={styles.smallInputContainer}>
+                      <Icon
+                        name="cash-outline"
+                        size={18}
+                        color={colors.textSecondary}
+                        style={styles.fieldIcon}
+                      />
+                      <TextInput
+                        style={styles.smallAmountInput}
+                        value={amount}
+                        onChangeText={onAmountChange}
+                        placeholder="Buy-in"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Winning Field */}
+                    <View style={styles.smallInputContainer}>
+                      <Text style={styles.smallCurrencySymbol}>$</Text>
+                      <TextInput
+                        style={styles.smallAmountInput}
+                        placeholder="Winning"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Accommodation Field */}
+                    <View style={styles.smallInputContainer}>
+                      <Icon
+                        name="bed-outline"
+                        size={18}
+                        color={colors.textSecondary}
+                        style={styles.fieldIcon}
+                      />
+                      <TextInput
+                        style={styles.smallAmountInput}
+                        placeholder="Accommodation"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Food Field */}
+                    <View style={styles.smallInputContainer}>
+                      <Icon
+                        name="fast-food-outline"
+                        size={18}
+                        color={colors.textSecondary}
+                        style={styles.fieldIcon}
+                      />
+                      <TextInput
+                        style={styles.smallAmountInput}
+                        placeholder="Food"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                      />
+                    </View>
+
+                    {/* Other Expenses Field */}
+                    <View style={styles.smallInputContainer}>
+                      <Icon
+                        name="card-outline"
+                        size={18}
+                        color={colors.textSecondary}
+                        style={styles.fieldIcon}
+                      />
+                      <TextInput
+                        style={styles.smallAmountInput}
+                        placeholder="Other Expenses"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </>
+                )}
+
                 {/* Amount Field */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.amountInput}
-                    value={amount}
-                    onChangeText={onAmountChange}
-                    placeholder="0.00"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                </View>
+                {selectedTransactionType !== 'PAYOUT' && (
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.amountInput}
+                      value={amount}
+                      onChangeText={onAmountChange}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                )}
 
                 {/* Description Field */}
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={description}
-                  onChangeText={onDescriptionChange}
-                  placeholder="Description (optional)"
-                  placeholderTextColor={colors.textSecondary}
-                />
+                {selectedTransactionType !== 'PAYOUT' && (
+                  <TextInput
+                    style={styles.descriptionInput}
+                    value={description}
+                    onChangeText={onDescriptionChange}
+                    placeholder="Description (optional)"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                )}
 
                 {/* Category Field */}
-                <TouchableOpacity
-                  style={styles.categoryField}
-                  onPress={showCategoryPicker}
-                  activeOpacity={0.7}>
-                  <View style={styles.categoryLeft}>
-                    {selectedCategory ? (
-                      <>
-                        <View
-                          style={getCategoryIconStyle(
-                            getCategoryById(selectedCategory)?.color,
-                          )}>
-                          <Icon
-                            name={getCategoryFieldIcon()}
-                            size={18}
-                            color={getCategoryById(selectedCategory)?.color}
-                          />
-                        </View>
-                        <Text style={styles.categoryText}>
-                          {getCategoryFieldDisplayName()}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <View style={styles.categoryIconPlaceholder}>
-                          <Icon
-                            name="albums-outline"
-                            size={18}
-                            color={colors.textSecondary}
-                          />
-                        </View>
-                        <Text style={styles.categoryPlaceholder}>Category</Text>
-                      </>
-                    )}
-                  </View>
-                  <Icon
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                {selectedTransactionType !== 'PAYOUT' && (
+                  <TouchableOpacity
+                    style={styles.categoryField}
+                    onPress={showCategoryPicker}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      {selectedCategory ? (
+                        <>
+                          <View
+                            style={getCategoryIconStyle(
+                              getCategoryById(selectedCategory)?.color,
+                            )}>
+                            <Icon
+                              name={getCategoryFieldIcon()}
+                              size={18}
+                              color={getCategoryById(selectedCategory)?.color}
+                            />
+                          </View>
+                          <Text style={styles.categoryText}>
+                            {getCategoryFieldDisplayName()}
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.categoryIconPlaceholder}>
+                            <Icon
+                              name="albums-outline"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </View>
+                          <Text style={styles.categoryPlaceholder}>Category</Text>
+                        </>
+                      )}
+                    </View>
+                    <Icon
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
 
                 {/* Recurrence Field */}
-                <TouchableOpacity
-                  style={styles.recurrenceField}
-                  onPress={showRecurrencePicker}
-                  activeOpacity={0.7}>
-                  <View style={styles.recurrenceLeft}>
+                {selectedTransactionType !== 'PAYOUT' && (
+                  <TouchableOpacity
+                    style={styles.recurrenceField}
+                    onPress={showRecurrencePicker}
+                    activeOpacity={0.7}>
+                    <View style={styles.recurrenceLeft}>
+                      <Icon
+                        name={getRecurrenceIcon()}
+                        size={18}
+                        color={getRecurrenceColor()}
+                        style={styles.recurrenceIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.recurrenceText,
+                          selectedRecurrence !== 'none' &&
+                            styles.recurrenceActiveText,
+                        ]}>
+                        {getRecurrenceById(selectedRecurrence)?.name}
+                      </Text>
+                    </View>
                     <Icon
-                      name={getRecurrenceIcon()}
-                      size={18}
-                      color={getRecurrenceColor()}
-                      style={styles.recurrenceIcon}
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
                     />
-                    <Text
-                      style={[
-                        styles.recurrenceText,
-                        selectedRecurrence !== 'none' &&
-                          styles.recurrenceActiveText,
-                      ]}>
-                      {getRecurrenceById(selectedRecurrence)?.name}
-                    </Text>
-                  </View>
-                  <Icon
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
 
                 {/* Due Date Field */}
-                <TouchableOpacity
-                  style={styles.dueDateField}
-                  onPress={() => onShowCalendar('dueDate')}
-                  activeOpacity={0.7}>
-                  <View style={styles.dueDateLeft}>
+                {selectedTransactionType !== 'PAYOUT' && (
+                  <TouchableOpacity
+                    style={styles.dueDateField}
+                    onPress={() => onShowCalendar('dueDate')}
+                    activeOpacity={0.7}>
+                    <View style={styles.dueDateLeft}>
+                      <Icon
+                        name="calendar-outline"
+                        size={18}
+                        color={
+                          selectedDueDate ? colors.primary : colors.textSecondary
+                        }
+                        style={styles.dueDateIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.dueDateText,
+                          selectedDueDate && styles.dueDateActiveText,
+                        ]}>
+                        {selectedDueDate
+                          ? selectedDueDate.toLocaleDateString('en-AU', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                            })
+                          : 'Due Date (Optional)'}
+                      </Text>
+                    </View>
                     <Icon
-                      name="calendar-outline"
-                      size={18}
-                      color={
-                        selectedDueDate ? colors.primary : colors.textSecondary
-                      }
-                      style={styles.dueDateIcon}
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
                     />
-                    <Text
-                      style={[
-                        styles.dueDateText,
-                        selectedDueDate && styles.dueDateActiveText,
-                      ]}>
-                      {selectedDueDate
-                        ? selectedDueDate.toLocaleDateString('en-AU', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                          })
-                        : 'Due Date (Optional)'}
-                    </Text>
-                  </View>
-                  <Icon
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
 
                 {/* Payment Status Field */}
-                <TouchableOpacity
-                  style={styles.paymentStatusField}
-                  onPress={() => setShowPaymentStatusModal(true)}
-                  activeOpacity={0.7}>
-                  <View style={styles.paymentStatusLeft}>
+                {selectedTransactionType !== 'PAYOUT' && (
+                  <TouchableOpacity
+                    style={styles.paymentStatusField}
+                    onPress={() => setShowPaymentStatusModal(true)}
+                    activeOpacity={0.7}>
+                    <View style={styles.paymentStatusLeft}>
+                      <Icon
+                        name={getPaymentStatusIcon()}
+                        size={18}
+                        color={getPaymentStatusColor()}
+                        style={styles.paymentStatusIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.paymentStatusText,
+                          selectedPaymentStatus && styles.paymentStatusActiveText,
+                        ]}>
+                        {getPaymentStatusDisplayName()}
+                      </Text>
+                    </View>
                     <Icon
-                      name={getPaymentStatusIcon()}
-                      size={18}
-                      color={getPaymentStatusColor()}
-                      style={styles.paymentStatusIcon}
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
                     />
-                    <Text
-                      style={[
-                        styles.paymentStatusText,
-                        selectedPaymentStatus && styles.paymentStatusActiveText,
-                      ]}>
-                      {getPaymentStatusDisplayName()}
-                    </Text>
-                  </View>
-                  <Icon
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             </View>
 
@@ -960,6 +1104,9 @@ const styles = StyleSheet.create({
   transactionTypeButtonIncome: {
     borderBottomColor: colors.primary || '#6366F1',
   },
+  transactionTypeButtonPayout: {
+    borderBottomColor: colors.primary || '#6366F1',
+  },
   transactionTypeButtonActiveExpense: {
     backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
@@ -971,6 +1118,16 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   transactionTypeButtonActiveIncome: {
+    backgroundColor: colors.primary || '#6366F1',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  transactionTypeButtonActivePayout: {
     backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary || '#6366F1',
@@ -1210,6 +1367,34 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  // Small Currency Input Styles (for Payout fields)
+  smallInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+  },
+  smallCurrencySymbol: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    marginRight: 8,
+  },
+  smallAmountInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  fieldIcon: {
+    marginRight: 8,
   },
 });
 
