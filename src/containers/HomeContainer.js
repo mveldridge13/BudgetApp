@@ -34,6 +34,8 @@ const HomeContainer = ({navigation}) => {
   );
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [currency, setCurrency] = useState('AUD');
+  const [backgroundSyncCount, setBackgroundSyncCount] = useState(0);
+  const [userActiveOperations, setUserActiveOperations] = useState(0);
 
   // ==============================================
   // HOOKS
@@ -325,6 +327,14 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
+      // 🎯 PREVENT HYDRATION CONFLICTS: Skip if user is actively making changes
+      if (userActiveOperations > 0) {
+        console.log(
+          '💳 Skipping transaction reload - user is actively editing',
+        );
+        return;
+      }
+
       const response = await TrendAPIService.getTransactions({
         limit: 1000, // Get all transactions for accurate balance calculations
       });
@@ -352,11 +362,17 @@ const HomeContainer = ({navigation}) => {
         [{text: 'OK'}],
       );
     }
-  }, []);
+  }, [userActiveOperations]);
 
   const loadCategories = useCallback(async () => {
     try {
       if (!AuthService.isAuthenticated()) {
+        return;
+      }
+
+      // 🎯 PREVENT HYDRATION CONFLICTS: Skip if user is actively making changes
+      if (userActiveOperations > 0) {
+        console.log('📂 Skipping category reload - user is actively editing');
         return;
       }
 
@@ -371,7 +387,7 @@ const HomeContainer = ({navigation}) => {
       console.error('📂 Error loading categories:', error);
       setCategories([]);
     }
-  }, [transformCategoriesForUI]);
+  }, [transformCategoriesForUI, userActiveOperations]);
 
   const loadGoals = useCallback(async () => {
     try {
@@ -388,29 +404,34 @@ const HomeContainer = ({navigation}) => {
     async transaction => {
       const isEditing = transaction.id && !transaction.id?.startsWith('temp_');
       let tempId = null;
+      let optimisticTransaction = null;
 
       try {
         if (!AuthService.isAuthenticated()) {
           throw new Error('User not authenticated');
         }
 
-        // Optimistic update
+        // 🎯 TRACK USER ACTIVITY: Prevent API hydration overwrites
+        setUserActiveOperations(prev => prev + 1);
+
+        // 🎯 CACHE-FIRST: Immediate optimistic update
         if (isEditing) {
-          startTransition(() => {
-            setTransactions(prev => {
-              const updated = sortTransactionsByDate(
-                prev.map(t =>
-                  t.id === transaction.id
-                    ? {...transaction, updatedAt: new Date().toISOString()}
-                    : t,
-                ),
-              );
-              return updated;
-            });
+          optimisticTransaction = {
+            ...transaction,
+            updatedAt: new Date().toISOString(),
+          };
+
+          setTransactions(prev => {
+            const updated = sortTransactionsByDate(
+              prev.map(t =>
+                t.id === transaction.id ? optimisticTransaction : t,
+              ),
+            );
+            return updated;
           });
         } else {
           tempId = `temp_${Date.now()}_${Math.random()}`;
-          const optimisticTransaction = {
+          optimisticTransaction = {
             ...transaction,
             id: tempId,
             createdAt: new Date().toISOString(),
@@ -426,7 +447,38 @@ const HomeContainer = ({navigation}) => {
           });
         }
 
-        // Prepare data for backend
+        setEditingTransaction(null);
+
+        // 🎯 NON-BLOCKING: Update spending goals in a transition to avoid blocking transaction UI
+        startTransition(() => {
+          (async () => {
+            try {
+              console.log(
+                '🔍 TRANSACTION: Updating spending goals with optimistic data',
+              );
+
+              if (isEditing) {
+                const originalTransaction = transactions.find(
+                  t => t.id === transaction.id,
+                );
+                await updateSpendingGoals(
+                  optimisticTransaction,
+                  originalTransaction,
+                );
+              } else {
+                await updateSpendingGoals(optimisticTransaction, null);
+              }
+            } catch (goalError) {
+              console.error(
+                '🔍 TRANSACTION: Failed to update spending goals:',
+                goalError,
+              );
+              // Don't fail the transaction save if goal update fails
+            }
+          })();
+        });
+
+        // 🎯 SERVER SYNC: Different approach for create vs edit
         const transactionData = {
           type: transaction.type || 'EXPENSE',
           amount: transaction.amount,
@@ -441,84 +493,87 @@ const HomeContainer = ({navigation}) => {
           status: transaction.status,
         };
 
-        // Send to backend
-        const savedTransaction = isEditing
-          ? await TrendAPIService.updateTransaction(
-              transaction.id,
+        if (isEditing) {
+          // 🎯 EDITS: Background sync (cache-first)
+          setTimeout(async () => {
+            try {
+              setBackgroundSyncCount(prev => prev + 1);
+              console.log('🔍 TRANSACTION: Background sync for edit');
+              const savedTransaction = await TrendAPIService.updateTransaction(
+                transaction.id,
+                transactionData,
+              );
+
+              // Only update UI if server data differs
+              setTransactions(prev => {
+                const current = prev.find(t => t.id === transaction.id);
+                if (
+                  !current ||
+                  current.amount !== savedTransaction.amount ||
+                  current.description !== savedTransaction.description ||
+                  current.categoryId !== savedTransaction.categoryId
+                ) {
+                  console.log(
+                    '🔍 TRANSACTION: Server data differs, updating UI',
+                  );
+                  return sortTransactionsByDate(
+                    prev.map(t =>
+                      t.id === transaction.id ? savedTransaction : t,
+                    ),
+                  );
+                }
+                return prev;
+              });
+            } catch (syncError) {
+              console.error(
+                '🔍 TRANSACTION: Background sync failed:',
+                syncError,
+              );
+            } finally {
+              setBackgroundSyncCount(prev => Math.max(0, prev - 1));
+            }
+          }, 0);
+        } else {
+          // 🎯 CREATION: Synchronous (like before - no flicker)
+          try {
+            console.log('🔍 TRANSACTION: Synchronous creation');
+            const savedTransaction = await TrendAPIService.createTransaction(
               transactionData,
-            )
-          : await TrendAPIService.createTransaction(transactionData);
-
-        // Reconcile with server response (synchronous for proper state update)
-        setTransactions(prev => {
-          const updated = prev.map(t => {
-            if (isEditing && t.id === transaction.id) {
-              return savedTransaction;
-            }
-            if (!isEditing && t.id === tempId) {
-              return savedTransaction;
-            }
-            return t;
-          });
-          const final = sortTransactionsByDate(updated);
-          return final;
-        });
-
-        setEditingTransaction(null);
-
-        // Update spending goals if this transaction affects any spending budgets
-        try {
-          console.log('🔍 TRANSACTION: Calling updateSpendingGoals with:', {
-            savedTransaction: savedTransaction?.id,
-            category: savedTransaction?.categoryId,
-            amount: savedTransaction?.amount,
-            isEditing,
-          });
-
-          if (isEditing) {
-            // For edits, find the original transaction from our current state
-            const originalTransaction = transactions.find(
-              t => t.id === transaction.id,
             );
-            console.log('🔍 TRANSACTION: Found original transaction:', {
-              originalId: originalTransaction?.id,
-              originalCategory: originalTransaction?.categoryId,
-              originalAmount: originalTransaction?.amount,
+
+            // Replace temp transaction with real server response
+            setTransactions(prev => {
+              const updated = prev.map(t =>
+                t.id === tempId ? savedTransaction : t,
+              );
+              return sortTransactionsByDate(updated);
             });
 
-            // Pass the new saved transaction and the original transaction
-            await updateSpendingGoals(savedTransaction, originalTransaction);
-          } else {
-            // For new transactions, just pass the new transaction
-            await updateSpendingGoals(savedTransaction, null);
+            optimisticTransaction = savedTransaction; // Update for return value
+          } catch (createError) {
+            console.error('🔍 TRANSACTION: Creation failed:', createError);
+            throw createError; // Let the catch block handle rollback
           }
-
-          console.log(
-            '🔍 TRANSACTION: updateSpendingGoals completed successfully',
-          );
-        } catch (goalError) {
-          console.error(
-            '🔍 TRANSACTION: Failed to update spending goals:',
-            goalError,
-          );
-          // Don't fail the entire transaction save if goal update fails
         }
 
-        // Reload categories to ensure category map is up to date with any new categories
-        try {
-          await loadCategories();
-        } catch (categoryError) {
-          console.error(
-            'Failed to reload categories after transaction save:',
-            categoryError,
-          );
-          // Don't fail the transaction save if category reload fails
-        }
+        // 🎯 BACKGROUND SYNC: Reload categories without blocking transaction UI
+        setTimeout(async () => {
+          try {
+            console.log('🔍 TRANSACTION: Background category reload');
+            await loadCategories();
+          } catch (categoryError) {
+            console.error(
+              'Failed to reload categories after transaction save:',
+              categoryError,
+            );
+            // Don't fail the transaction save if category reload fails
+          }
+        }, 100); // Small delay to ensure transaction UI has updated
 
         return {
           success: true,
           isNewTransaction: !isEditing,
-          transaction: savedTransaction,
+          transaction: optimisticTransaction,
           shouldShowTransactionTutorial: false, // Disable transaction tutorial triggering on save
         };
       } catch (error) {
@@ -536,6 +591,11 @@ const HomeContainer = ({navigation}) => {
         }
 
         throw error;
+      } finally {
+        // 🎯 CLEANUP: Always decrement user activity counter
+        setTimeout(() => {
+          setUserActiveOperations(prev => Math.max(0, prev - 1));
+        }, 1000); // Keep lock for 1 second after transaction completes
       }
     },
     [transactions, onboarding, loadTransactions],
@@ -815,17 +875,12 @@ const HomeContainer = ({navigation}) => {
     }
   }, [transactions, incomeData]);
 
-  // Create stable dependency for memoization - only changes when actual data changes
+  // Create stable dependency for memoization - only changes when calculation-relevant data changes
   const transactionsSignature = useMemo(() => {
-    return JSON.stringify(
-      transactions.map(t => ({
-        id: t.id,
-        amount: t.amount,
-        type: t.type,
-        date: t.date,
-        status: t.status,
-      })),
-    );
+    // Only include fields that actually affect calculations to reduce re-renders
+    return transactions
+      .map(t => `${t.id}-${t.amount}-${t.type}-${t.date}-${t.status || ''}`)
+      .join('|');
   }, [transactions]);
 
   const incomeSignature = useMemo(() => {
@@ -1258,7 +1313,7 @@ const HomeContainer = ({navigation}) => {
 
   // Listen for goal income payments to reload income payment totals
   useEffect(() => {
-    const handleGoalIncomePayment = (eventData) => {
+    const handleGoalIncomePayment = eventData => {
       console.log(
         '🔍 HOME_CONTAINER: Goal income payment made, reloading income payments',
         eventData,
@@ -1274,12 +1329,17 @@ const HomeContainer = ({navigation}) => {
         'goalIncomePaymentMade',
         handleGoalIncomePayment,
       );
-      console.log('🔍 HOME_CONTAINER: Listening for goalIncomePaymentMade events');
+      console.log(
+        '🔍 HOME_CONTAINER: Listening for goalIncomePaymentMade events',
+      );
     } catch (e) {
       console.warn('DeviceEventEmitter not available, trying web events:', e);
       // Fallback to web browser events if available
       if (typeof window !== 'undefined' && window.addEventListener) {
-        window.addEventListener('goalIncomePaymentMade', handleGoalIncomePayment);
+        window.addEventListener(
+          'goalIncomePaymentMade',
+          handleGoalIncomePayment,
+        );
       }
     }
 
@@ -1312,6 +1372,7 @@ const HomeContainer = ({navigation}) => {
       totalIncomePayments={totalIncomePayments}
       totalAdditionalIncome={totalAdditionalIncome}
       currency={currency}
+      isBackgroundSyncing={backgroundSyncCount > 0}
       onDateChange={setSelectedDate}
       onSaveTransaction={handleSaveTransaction}
       onDeleteTransaction={handleDeleteTransaction}
