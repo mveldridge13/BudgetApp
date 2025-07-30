@@ -36,7 +36,7 @@ const ModulesScreen = ({navigation}) => {
       id: 'poker-tracker',
       title: 'Poker Tracker',
       description: 'Track poker tournaments, cash games, and gambling performance',
-      icon: 'activity',
+      icon: 'award',
       enabled: pokerTrackerEnabled,
       onToggle: handlePokerTrackerToggle,
       comingSoon: false,

@@ -539,7 +539,7 @@ const AddTransactionModal = ({
                       onPress={() => handleTransactionTypeSelect('POKER')}
                       activeOpacity={0.7}>
                       <Icon
-                        name="card-outline"
+                        name="trophy-outline"
                         size={18}
                         color={
                           selectedTransactionType === 'POKER'
