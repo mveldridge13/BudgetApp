@@ -58,7 +58,7 @@ const AddTransactionContainer = ({
 
   // Get module settings from context
   const {moduleSettings} = useAppSettings();
-  const payoutTrackerEnabled = moduleSettings?.payoutTracker || false;
+  const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
 
   // Check if we're in edit mode
   const isEditMode = !!editingTransaction;
@@ -650,7 +650,7 @@ const AddTransactionContainer = ({
       recurrenceOptions={recurrenceOptions}
       paymentStatusOptions={paymentStatusOptions}
       // Module settings
-      payoutTrackerEnabled={payoutTrackerEnabled}
+      pokerTrackerEnabled={pokerTrackerEnabled}
     />
   );
 };

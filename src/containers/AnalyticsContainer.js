@@ -833,7 +833,7 @@ const AnalyticsContainer = () => {
     incomeAnalytics: incomeAnalytics,
 
     // Module settings
-    payoutTrackerEnabled: moduleSettings?.payoutTracker || false,
+    pokerTrackerEnabled: moduleSettings?.pokerTracker || false,
 
     // Event handlers
     onPeriodChange: handlePeriodChange,

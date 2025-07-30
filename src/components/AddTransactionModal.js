@@ -67,7 +67,7 @@ const AddTransactionModal = ({
   paymentStatusOptions,
 
   // Module settings
-  payoutTrackerEnabled,
+  pokerTrackerEnabled,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -307,8 +307,8 @@ const AddTransactionModal = ({
     switch (selectedTransactionType) {
       case 'INCOME':
         return 'Income';
-      case 'PAYOUT':
-        return 'Payout';
+      case 'POKER':
+        return 'Poker';
       default:
         return 'Expense';
     }
@@ -528,21 +528,21 @@ const AddTransactionModal = ({
                     </Text>
                   </TouchableOpacity>
 
-                  {payoutTrackerEnabled && (
+                  {pokerTrackerEnabled && (
                     <TouchableOpacity
                       style={[
                         styles.transactionTypeButton,
-                        styles.transactionTypeButtonPayout,
-                        selectedTransactionType === 'PAYOUT' &&
-                          styles.transactionTypeButtonActivePayout,
+                        styles.transactionTypeButtonPoker,
+                        selectedTransactionType === 'POKER' &&
+                          styles.transactionTypeButtonActivePoker,
                       ]}
-                      onPress={() => handleTransactionTypeSelect('PAYOUT')}
+                      onPress={() => handleTransactionTypeSelect('POKER')}
                       activeOpacity={0.7}>
                       <Icon
                         name="card-outline"
                         size={18}
                         color={
-                          selectedTransactionType === 'PAYOUT'
+                          selectedTransactionType === 'POKER'
                             ? colors.textWhite || '#FFFFFF'
                             : colors.textSecondary
                         }
@@ -551,10 +551,10 @@ const AddTransactionModal = ({
                       <Text
                         style={[
                           styles.transactionTypeText,
-                          selectedTransactionType === 'PAYOUT' &&
+                          selectedTransactionType === 'POKER' &&
                             styles.transactionTypeTextActive,
                         ]}>
-                        Payout
+                        Poker
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -576,8 +576,8 @@ const AddTransactionModal = ({
                   </Text>
                 </TouchableOpacity>
 
-                {/* Payout Tracker Fields */}
-                {selectedTransactionType === 'PAYOUT' && (
+                {/* Poker Tracker Fields */}
+                {selectedTransactionType === 'POKER' && (
                   <>
                     {/* Event Field */}
                     <TextInput
@@ -668,7 +668,7 @@ const AddTransactionModal = ({
                 )}
 
                 {/* Amount Field */}
-                {selectedTransactionType !== 'PAYOUT' && (
+                {selectedTransactionType !== 'POKER' && (
                   <View style={styles.inputContainer}>
                     <Text style={styles.currencySymbol}>$</Text>
                     <TextInput
@@ -683,7 +683,7 @@ const AddTransactionModal = ({
                 )}
 
                 {/* Description Field */}
-                {selectedTransactionType !== 'PAYOUT' && (
+                {selectedTransactionType !== 'POKER' && (
                   <TextInput
                     style={styles.descriptionInput}
                     value={description}
@@ -694,7 +694,7 @@ const AddTransactionModal = ({
                 )}
 
                 {/* Category Field */}
-                {selectedTransactionType !== 'PAYOUT' && (
+                {selectedTransactionType !== 'POKER' && (
                   <TouchableOpacity
                     style={styles.categoryField}
                     onPress={showCategoryPicker}
@@ -738,7 +738,7 @@ const AddTransactionModal = ({
                 )}
 
                 {/* Recurrence Field */}
-                {selectedTransactionType !== 'PAYOUT' && (
+                {selectedTransactionType !== 'POKER' && (
                   <TouchableOpacity
                     style={styles.recurrenceField}
                     onPress={showRecurrencePicker}
@@ -768,7 +768,7 @@ const AddTransactionModal = ({
                 )}
 
                 {/* Due Date Field */}
-                {selectedTransactionType !== 'PAYOUT' && (
+                {selectedTransactionType !== 'POKER' && (
                   <TouchableOpacity
                     style={styles.dueDateField}
                     onPress={() => onShowCalendar('dueDate')}
@@ -805,7 +805,7 @@ const AddTransactionModal = ({
                 )}
 
                 {/* Payment Status Field */}
-                {selectedTransactionType !== 'PAYOUT' && (
+                {selectedTransactionType !== 'POKER' && (
                   <TouchableOpacity
                     style={styles.paymentStatusField}
                     onPress={() => setShowPaymentStatusModal(true)}
@@ -1104,7 +1104,7 @@ const styles = StyleSheet.create({
   transactionTypeButtonIncome: {
     borderBottomColor: colors.primary || '#6366F1',
   },
-  transactionTypeButtonPayout: {
+  transactionTypeButtonPoker: {
     borderBottomColor: colors.primary || '#6366F1',
   },
   transactionTypeButtonActiveExpense: {
@@ -1127,7 +1127,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  transactionTypeButtonActivePayout: {
+  transactionTypeButtonActivePoker: {
     backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary || '#6366F1',
@@ -1368,7 +1368,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  // Small Currency Input Styles (for Payout fields)
+  // Small Currency Input Styles (for Poker fields)
   smallInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',

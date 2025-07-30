@@ -22,7 +22,7 @@ const defaultAppSettings = {
 };
 
 const defaultModuleSettings = {
-  payoutTracker: false,
+  pokerTracker: false,
 };
 
 export const AppSettingsProvider = ({children}) => {

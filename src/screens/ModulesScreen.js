@@ -19,26 +19,26 @@ const ModulesScreen = ({navigation}) => {
 
   // Get module settings from context
   const {moduleSettings, updateModuleSettings, isLoading} = useAppSettings();
-  const payoutTrackerEnabled = moduleSettings?.payoutTracker || false;
+  const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
 
-  const handlePayoutTrackerToggle = useCallback(async () => {
+  const handlePokerTrackerToggle = useCallback(async () => {
     try {
-      const newValue = !payoutTrackerEnabled;
-      await updateModuleSettings({payoutTracker: newValue});
+      const newValue = !pokerTrackerEnabled;
+      await updateModuleSettings({pokerTracker: newValue});
     } catch (error) {
-      console.error('Error toggling Payout Tracker:', error);
+      console.error('Error toggling Poker Tracker:', error);
       Alert.alert('Error', 'Failed to update module setting. Please try again.');
     }
-  }, [payoutTrackerEnabled, updateModuleSettings]);
+  }, [pokerTrackerEnabled, updateModuleSettings]);
 
   const moduleItems = [
     {
-      id: 'payout-tracker',
-      title: 'Payout Tracker',
-      description: 'Track income payments and monitor when you get paid',
-      icon: 'dollar-sign',
-      enabled: payoutTrackerEnabled,
-      onToggle: handlePayoutTrackerToggle,
+      id: 'poker-tracker',
+      title: 'Poker Tracker',
+      description: 'Track poker tournaments, cash games, and gambling performance',
+      icon: 'activity',
+      enabled: pokerTrackerEnabled,
+      onToggle: handlePokerTrackerToggle,
       comingSoon: false,
     },
     // Future modules can be added here

@@ -54,7 +54,7 @@ const AnalyticsScreen = ({
   incomeAnalytics,
 
   // Module settings
-  payoutTrackerEnabled,
+  pokerTrackerEnabled,
 
   // Event handlers
   onPeriodChange,
@@ -601,20 +601,20 @@ const AnalyticsScreen = ({
               </View>
             </View>
 
-            {/* Payout Insights */}
-            {payoutTrackerEnabled && (
+            {/* Poker Insights */}
+            {pokerTrackerEnabled && (
               <TouchableOpacity style={styles.chartContainer}>
-                <View style={styles.payoutTitleContainer}>
+                <View style={styles.pokerTitleContainer}>
                   <Icon
                     name="trophy-outline"
                     size={20}
                     color={colors.warning || '#F59E0B'}
-                    style={styles.payoutTitleIcon}
+                    style={styles.pokerTitleIcon}
                   />
-                  <Text style={[styles.chartTitle, styles.payoutTitle]}>Payout Insights</Text>
+                  <Text style={[styles.chartTitle, styles.pokerTitle]}>Poker Insights</Text>
                 </View>
-                <Text style={styles.payoutInsightText}>
-                  See how your payouts are performing — tap for insights
+                <Text style={styles.pokerInsightText}>
+                  See how your poker games are performing — tap for insights
                 </Text>
               </TouchableOpacity>
             )}
@@ -1607,23 +1607,23 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  // Payout Insights styles
-  payoutTitleContainer: {
+  // Poker Insights styles
+  pokerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  payoutTitleIcon: {
+  pokerTitleIcon: {
     marginRight: 8,
   },
-  payoutTitle: {
+  pokerTitle: {
     marginBottom: 0,
   },
-  payoutListContainer: {
+  pokerListContainer: {
     gap: 12,
     marginTop: 16,
   },
-  payoutListItem: {
+  pokerListItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1633,29 +1633,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.overlayLight || '#E5E7EB',
   },
-  payoutListLeft: {
+  pokerListLeft: {
     flex: 1,
   },
-  payoutListLabel: {
+  pokerListLabel: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textPrimary || '#1F2937',
     marginBottom: 4,
   },
-  payoutListSubtext: {
+  pokerListSubtext: {
     fontSize: 12,
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary || '#6B7280',
   },
-  payoutListValue: {
+  pokerListValue: {
     fontSize: 18,
     fontWeight: '600',
     fontFamily: 'System',
     color: colors.warning || '#F59E0B',
   },
-  payoutInsightText: {
+  pokerInsightText: {
     fontSize: 14,
     fontWeight: '400',
     fontFamily: 'System',
