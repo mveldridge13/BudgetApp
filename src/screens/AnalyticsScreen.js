@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {LineChart} from 'react-native-chart-kit';
+import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
 // ✅ FIXED: Import DiscretionaryContainer instead of DiscretionaryBreakdown
 import DiscretionaryContainer from '../containers/DiscretionaryContainer';
@@ -51,6 +52,9 @@ const AnalyticsScreen = ({
 
   // ✅ NEW: Income analytics data
   incomeAnalytics,
+
+  // Module settings
+  payoutTrackerEnabled,
 
   // Event handlers
   onPeriodChange,
@@ -596,6 +600,24 @@ const AnalyticsScreen = ({
                 </View>
               </View>
             </View>
+
+            {/* Payout Insights */}
+            {payoutTrackerEnabled && (
+              <TouchableOpacity style={styles.chartContainer}>
+                <View style={styles.payoutTitleContainer}>
+                  <Icon
+                    name="trophy-outline"
+                    size={20}
+                    color={colors.warning || '#F59E0B'}
+                    style={styles.payoutTitleIcon}
+                  />
+                  <Text style={[styles.chartTitle, styles.payoutTitle]}>Payout Insights</Text>
+                </View>
+                <Text style={styles.payoutInsightText}>
+                  See how your payouts are performing — tap for insights
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Recent Income Entries */}
             <View style={styles.chartContainer}>
@@ -1583,6 +1605,63 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'System',
     textTransform: 'uppercase',
+  },
+
+  // Payout Insights styles
+  payoutTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  payoutTitleIcon: {
+    marginRight: 8,
+  },
+  payoutTitle: {
+    marginBottom: 0,
+  },
+  payoutListContainer: {
+    gap: 12,
+    marginTop: 16,
+  },
+  payoutListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.overlayLight || '#E5E7EB',
+  },
+  payoutListLeft: {
+    flex: 1,
+  },
+  payoutListLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    marginBottom: 4,
+  },
+  payoutListSubtext: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+  payoutListValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.warning || '#F59E0B',
+  },
+  payoutInsightText: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    textAlign: 'center',
+    paddingVertical: 8,
   },
 
   // Placeholder styles

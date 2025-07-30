@@ -10,8 +10,8 @@ import {useAppSettings} from '../contexts/AppSettingsContext';
 import {colors} from '../styles';
 
 const AnalyticsContainer = () => {
-  // Get Pro status from context
-  const {isPro} = useAppSettings();
+  // Get Pro status and module settings from context
+  const {isPro, moduleSettings} = useAppSettings();
 
   // UI state only
   const [selectedPeriod, setSelectedPeriod] = useState('daily');
@@ -831,6 +831,9 @@ const AnalyticsContainer = () => {
 
     // ✅ NEW: Backend income analytics data - direct pass-through
     incomeAnalytics: incomeAnalytics,
+
+    // Module settings
+    payoutTrackerEnabled: moduleSettings?.payoutTracker || false,
 
     // Event handlers
     onPeriodChange: handlePeriodChange,
