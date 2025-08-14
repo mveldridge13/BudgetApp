@@ -294,10 +294,6 @@ const TournamentCard = ({
             </Text>
           </View>
         </View>
-        
-        <TouchableOpacity style={styles.editButton} onPress={onEdit}>
-          <Icon name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
