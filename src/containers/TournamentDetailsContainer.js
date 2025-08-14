@@ -4,6 +4,7 @@ import {Alert} from 'react-native';
 import TournamentDetailsScreen from '../screens/TournamentDetailsScreen';
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
+import AddTournamentContainer from './AddTournamentContainer';
 
 const TournamentDetailsContainer = ({navigation, route}) => {
   // ==============================================
@@ -17,6 +18,7 @@ const TournamentDetailsContainer = ({navigation, route}) => {
   const [tournament, setTournament] = useState(initialTournament);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showEditTournament, setShowEditTournament] = useState(false);
 
   // ==============================================
   // LOAD TOURNAMENT EVENTS
@@ -115,13 +117,20 @@ const TournamentDetailsContainer = ({navigation, route}) => {
 
   const handleEditTournament = useCallback(() => {
     console.log('🎲 TournamentDetails: Edit tournament pressed');
-    // Navigate back to home with edit tournament action
-    // We'll pass the tournament data back to trigger edit modal
-    navigation.navigate('Home', {
-      action: 'editTournament',
-      tournament: tournament,
-    });
-  }, [navigation, tournament]);
+    setShowEditTournament(true);
+  }, []);
+
+  const handleCloseEditTournament = useCallback(() => {
+    console.log('🎲 Closing edit tournament modal');
+    setShowEditTournament(false);
+  }, []);
+
+  const handleSaveTournament = useCallback(updatedTournament => {
+    console.log('🎲 Tournament updated:', updatedTournament);
+    // Update the local tournament state
+    setTournament(updatedTournament);
+    setShowEditTournament(false);
+  }, []);
 
   const handleAddEvent = useCallback(() => {
     console.log('🎲 TournamentDetails: Add event pressed');
@@ -202,19 +211,29 @@ const TournamentDetailsContainer = ({navigation, route}) => {
   // RENDER
   // ==============================================
   return (
-    <TournamentDetailsScreen
-      tournament={tournament}
-      events={events}
-      loading={loading}
-      onBack={handleBack}
-      onEditTournament={handleEditTournament}
-      onAddEvent={handleAddEvent}
-      onEventPress={handleEventPress}
-      onEventEdit={handleEventEdit}
-      onEventDelete={handleEventDelete}
-      onEventSwipeStart={handleEventSwipeStart}
-      onEventSwipeEnd={handleEventSwipeEnd}
-    />
+    <>
+      <TournamentDetailsScreen
+        tournament={tournament}
+        events={events}
+        loading={loading}
+        onBack={handleBack}
+        onEditTournament={handleEditTournament}
+        onAddEvent={handleAddEvent}
+        onEventPress={handleEventPress}
+        onEventEdit={handleEventEdit}
+        onEventDelete={handleEventDelete}
+        onEventSwipeStart={handleEventSwipeStart}
+        onEventSwipeEnd={handleEventSwipeEnd}
+      />
+
+      {/* Tournament Edit Modal */}
+      <AddTournamentContainer
+        visible={showEditTournament}
+        onClose={handleCloseEditTournament}
+        onSave={handleSaveTournament}
+        editingTournament={tournament}
+      />
+    </>
   );
 };
 
