@@ -16,6 +16,7 @@ import TransactionList from '../components/TransactionList';
 import BalanceCardSpotlight from '../components/BalanceCardSpotlight';
 import AddTransactionSpotlight from '../components/AddTransactionSpotlight';
 import TransactionSwipeSpotlight from '../components/TransactionSwipeSpotlight';
+import PokerSection from '../components/PokerSection';
 
 const HomeScreen = ({
   // ==============================================
@@ -34,6 +35,11 @@ const HomeScreen = ({
   totalAdditionalIncome = 0,
   currency = 'AUD',
 
+  // Tournament/Poker props
+  tournaments = [],
+  pokerSectionExpanded = false,
+  pokerTrackerEnabled = false,
+
   // ==============================================
   // EVENT HANDLER PROPS
   // ==============================================
@@ -46,6 +52,16 @@ const HomeScreen = ({
   onGoalsPress = () => {},
   onOnboardingComplete = () => {},
   onOnboardingSkip = () => {},
+
+  // Tournament event handlers
+  onTogglePokerSection = () => {},
+  onTournamentPress = () => {},
+  onTournamentEdit = () => {},
+  onTournamentDelete = () => {},
+  onTournamentSwipeStart = () => {},
+  onTournamentSwipeEnd = () => {},
+  onAddTournament = () => {},
+
   navigation,
 
   // ==============================================
@@ -54,7 +70,6 @@ const HomeScreen = ({
   onboarding,
 }) => {
   const insets = useSafeAreaInsets();
-
 
   // ==============================================
   // UI STATE (PURE UI ONLY)
@@ -85,8 +100,7 @@ const HomeScreen = ({
           setShowAddTransaction(false);
         } else {
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     },
     [onSaveTransaction],
   );
@@ -114,6 +128,16 @@ const HomeScreen = ({
   const handleSwipeEnd = useCallback(() => {
     setScrollEnabled(true);
   }, []);
+
+  const handleTournamentSwipeStart = useCallback(() => {
+    setScrollEnabled(false);
+    onTournamentSwipeStart();
+  }, [onTournamentSwipeStart]);
+
+  const handleTournamentSwipeEnd = useCallback(() => {
+    setScrollEnabled(true);
+    onTournamentSwipeEnd();
+  }, [onTournamentSwipeEnd]);
 
   // ==============================================
   // ONBOARDING HANDLERS (DELEGATED TO CONTAINER)
@@ -179,6 +203,21 @@ const HomeScreen = ({
         scrollEnabled={scrollEnabled}
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={false}>
+        {/* Poker/Tournament Section - Show if poker module is enabled */}
+        {pokerTrackerEnabled && (
+          <PokerSection
+            tournaments={tournaments}
+            isExpanded={pokerSectionExpanded}
+            onToggleExpanded={onTogglePokerSection}
+            onTournamentPress={onTournamentPress}
+            onTournamentEdit={onTournamentEdit}
+            onTournamentDelete={onTournamentDelete}
+            onSwipeStart={handleTournamentSwipeStart}
+            onSwipeEnd={handleTournamentSwipeEnd}
+            onAddTournament={onAddTournament}
+          />
+        )}
+
         <TransactionList
           transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
           selectedDate={selectedDate}

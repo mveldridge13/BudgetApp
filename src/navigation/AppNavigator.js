@@ -14,6 +14,7 @@ import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ModulesScreen from '../screens/ModulesScreen';
 import BiometricWrapper from '../components/BiometricWrapper';
+import TournamentDetailsContainer from '../containers/TournamentDetailsContainer';
 
 // Import API services
 import AuthService from '../services/AuthService';
@@ -237,6 +238,13 @@ export default function AppNavigator() {
       <Stack.Screen
         name="Modules"
         component={ModulesScreen}
+        options={{
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen
+        name="TournamentDetails"
+        component={TournamentDetailsContainer}
         options={{
           gestureEnabled: true,
         }}

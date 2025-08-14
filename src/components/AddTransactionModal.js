@@ -16,6 +16,7 @@ import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
 import PaymentStatusModal from './PaymentStatusModal';
 import RecurrenceModal from './RecurrenceModal';
+import AddTournamentContainer from '../containers/AddTournamentContainer';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -68,6 +69,12 @@ const AddTransactionModal = ({
 
   // Module settings
   pokerTrackerEnabled,
+
+  // Tournament props (simplified for container)
+  showTournamentModal,
+  onCreateTournamentPress,
+  onTournamentModalClose,
+  onTournamentSave,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -561,109 +568,34 @@ const AddTransactionModal = ({
                 </View>
 
                 {/* Date Field */}
-                <TouchableOpacity
-                  style={styles.dateField}
-                  onPress={onShowCalendar}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="calendar-outline"
-                    size={18}
-                    color="#007AFF"
-                    style={styles.dateIcon}
-                  />
-                  <Text style={styles.dateText}>
-                    {formatDate(selectedDate)}
-                  </Text>
-                </TouchableOpacity>
+                {selectedTransactionType !== 'POKER' && (
+                  <TouchableOpacity
+                    style={styles.dateField}
+                    onPress={onShowCalendar}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="calendar-outline"
+                      size={18}
+                      color="#007AFF"
+                      style={styles.dateIcon}
+                    />
+                    <Text style={styles.dateText}>
+                      {formatDate(selectedDate)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 {/* Poker Tracker Fields */}
                 {selectedTransactionType === 'POKER' && (
                   <>
-                    {/* Event Field */}
-                    <TextInput
-                      style={styles.descriptionInput}
-                      value={description}
-                      onChangeText={onDescriptionChange}
-                      placeholder="Event"
-                      placeholderTextColor={colors.textSecondary}
-                    />
-
-                    {/* Buy-in Field */}
-                    <View style={styles.smallInputContainer}>
-                      <Icon
-                        name="cash-outline"
-                        size={18}
-                        color={colors.textSecondary}
-                        style={styles.fieldIcon}
-                      />
-                      <TextInput
-                        style={styles.smallAmountInput}
-                        value={amount}
-                        onChangeText={onAmountChange}
-                        placeholder="Buy-in"
-                        placeholderTextColor={colors.textSecondary}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    {/* Winning Field */}
-                    <View style={styles.smallInputContainer}>
-                      <Text style={styles.smallCurrencySymbol}>$</Text>
-                      <TextInput
-                        style={styles.smallAmountInput}
-                        placeholder="Winning"
-                        placeholderTextColor={colors.textSecondary}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    {/* Accommodation Field */}
-                    <View style={styles.smallInputContainer}>
-                      <Icon
-                        name="bed-outline"
-                        size={18}
-                        color={colors.textSecondary}
-                        style={styles.fieldIcon}
-                      />
-                      <TextInput
-                        style={styles.smallAmountInput}
-                        placeholder="Accommodation"
-                        placeholderTextColor={colors.textSecondary}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    {/* Food Field */}
-                    <View style={styles.smallInputContainer}>
-                      <Icon
-                        name="fast-food-outline"
-                        size={18}
-                        color={colors.textSecondary}
-                        style={styles.fieldIcon}
-                      />
-                      <TextInput
-                        style={styles.smallAmountInput}
-                        placeholder="Food"
-                        placeholderTextColor={colors.textSecondary}
-                        keyboardType="numeric"
-                      />
-                    </View>
-
-                    {/* Other Expenses Field */}
-                    <View style={styles.smallInputContainer}>
-                      <Icon
-                        name="card-outline"
-                        size={18}
-                        color={colors.textSecondary}
-                        style={styles.fieldIcon}
-                      />
-                      <TextInput
-                        style={styles.smallAmountInput}
-                        placeholder="Other Expenses"
-                        placeholderTextColor={colors.textSecondary}
-                        keyboardType="numeric"
-                      />
-                    </View>
+                    <TouchableOpacity
+                      style={styles.createTournamentButton}
+                      onPress={onCreateTournamentPress}
+                      activeOpacity={0.7}>
+                      <Text style={styles.createTournamentText}>
+                        Create Tournament
+                      </Text>
+                    </TouchableOpacity>
                   </>
                 )}
 
@@ -725,7 +657,9 @@ const AddTransactionModal = ({
                               color={colors.textSecondary}
                             />
                           </View>
-                          <Text style={styles.categoryPlaceholder}>Category</Text>
+                          <Text style={styles.categoryPlaceholder}>
+                            Category
+                          </Text>
                         </>
                       )}
                     </View>
@@ -778,7 +712,9 @@ const AddTransactionModal = ({
                         name="calendar-outline"
                         size={18}
                         color={
-                          selectedDueDate ? colors.primary : colors.textSecondary
+                          selectedDueDate
+                            ? colors.primary
+                            : colors.textSecondary
                         }
                         style={styles.dueDateIcon}
                       />
@@ -820,7 +756,8 @@ const AddTransactionModal = ({
                       <Text
                         style={[
                           styles.paymentStatusText,
-                          selectedPaymentStatus && styles.paymentStatusActiveText,
+                          selectedPaymentStatus &&
+                            styles.paymentStatusActiveText,
                         ]}>
                         {getPaymentStatusDisplayName()}
                       </Text>
@@ -1000,6 +937,13 @@ const AddTransactionModal = ({
         selectedRecurrence={selectedRecurrence}
         onRecurrenceSelect={handleRecurrenceSelect}
         recurrenceOptions={recurrenceOptions}
+      />
+
+      {/* Tournament Modal */}
+      <AddTournamentContainer
+        visible={showTournamentModal}
+        onClose={onTournamentModalClose}
+        onSave={onTournamentSave}
       />
     </Modal>
   );
@@ -1395,6 +1339,24 @@ const styles = StyleSheet.create({
   },
   fieldIcon: {
     marginRight: 8,
+  },
+
+  // Create Tournament Button Styles
+  createTournamentButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 40,
+    marginBottom: 20,
+  },
+  createTournamentText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textWhite,
   },
 });
 

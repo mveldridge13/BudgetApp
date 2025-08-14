@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.33:3001/api/v1', // Updated with correct IP
+  baseURL: 'http://192.168.1.41:3001/api/v1', // Updated with correct IP
   timeout: 30000, // Increased timeout for mobile devices
 };
 
@@ -123,8 +123,33 @@ class TrendAPIService {
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error(`API Request failed: ${method} ${url}`, error);
-      throw error;
+      console.error(`🌐 API Request failed: ${method} ${url}`, {
+        errorMessage: error.message,
+        errorName: error.name,
+        stack: error.stack,
+        url: url,
+        method: method,
+        isNetworkError:
+          error.name === 'TypeError' && error.message.includes('fetch'),
+        isTimeoutError:
+          error.name === 'AbortError' || error.message.includes('timeout'),
+      });
+
+      // Enhance error message for better debugging
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(
+          `Network request failed - unable to connect to ${url}. Check server availability and network connection.`,
+        );
+      } else if (
+        error.name === 'AbortError' ||
+        error.message.includes('timeout')
+      ) {
+        throw new Error(
+          `Request timeout - server at ${url} did not respond within ${API_CONFIG.timeout}ms`,
+        );
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -134,6 +159,12 @@ class TrendAPIService {
 
   async login(email, password) {
     try {
+      console.log('🔐 Login attempt:', {
+        baseURL: this.baseURL,
+        email: email.trim(),
+        timestamp: new Date().toISOString(),
+      });
+
       const response = await this.makeRequest('/auth/login', {
         method: 'POST',
         body: {
@@ -141,6 +172,12 @@ class TrendAPIService {
           password: password,
         },
         requiresAuth: false,
+      });
+
+      console.log('🔐 Login response received:', {
+        hasResponse: !!response,
+        hasAccessToken: !!(response && response.access_token),
+        hasUser: !!(response && response.user),
       });
 
       if (response && response.access_token) {
@@ -151,14 +188,40 @@ class TrendAPIService {
           token: response.access_token,
         };
       } else {
-        console.error('Invalid response format:', response);
+        console.error('🔐 Invalid response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('Login request failed:', error.message);
+      console.error('🔐 Login request failed:', {
+        message: error.message,
+        name: error.name,
+        baseURL: this.baseURL,
+        isNetworkError:
+          error.message.includes('fetch') ||
+          error.message.includes('Network') ||
+          error.message.includes('timeout'),
+      });
+
+      // Provide more user-friendly error messages
+      let userMessage = error.message;
+      if (
+        error.message.includes('fetch') ||
+        error.message.includes('Network')
+      ) {
+        userMessage =
+          'Unable to connect to server. Please check your internet connection and try again.';
+      } else if (error.message.includes('timeout')) {
+        userMessage = 'Connection timeout. The server may be unavailable.';
+      } else if (
+        error.message.includes('401') ||
+        error.message.includes('Unauthorized')
+      ) {
+        userMessage = 'Invalid email or password.';
+      }
+
       return {
         success: false,
-        error: error.message,
+        error: userMessage,
       };
     }
   }
@@ -650,7 +713,12 @@ class TrendAPIService {
   }
 
   async addGoalContribution(goalId, contributionData) {
-    console.log('🔍 TREND_API: Adding goal contribution for goal', goalId, 'data:', contributionData);
+    console.log(
+      '🔍 TREND_API: Adding goal contribution for goal',
+      goalId,
+      'data:',
+      contributionData,
+    );
     const response = await this.makeRequest(`/goals/${goalId}/contributions`, {
       method: 'POST',
       body: contributionData,
@@ -808,6 +876,350 @@ class TrendAPIService {
     return this.makeRequest('/health/ping', {
       requiresAuth: false,
     });
+  }
+
+  // Test basic connectivity to server
+  async testConnection() {
+    try {
+      console.log('🔍 Testing connection to:', this.baseURL);
+      const startTime = Date.now();
+
+      const response = await this.makeRequest('/health', {
+        requiresAuth: false,
+      });
+
+      const duration = Date.now() - startTime;
+      console.log('🔍 Connection test successful:', {
+        duration: `${duration}ms`,
+        response: response,
+      });
+
+      return {
+        success: true,
+        duration,
+        response,
+      };
+    } catch (error) {
+      console.error('🔍 Connection test failed:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  // ============================================================================
+  // POKER TOURNAMENT METHODS
+  // ============================================================================
+
+  async createTournament(tournamentData) {
+    console.log('🎲 CREATE_TOURNAMENT: Starting with data:', tournamentData);
+
+    // Create a clean copy to avoid mutating the input
+    const cleanTournamentData = {...tournamentData};
+
+    // Map frontend field names to backend expected names
+    const mappedData = {
+      name: cleanTournamentData.name,
+      location: cleanTournamentData.location,
+      venue: cleanTournamentData.venue || null,
+      dateStart: cleanTournamentData.dateStart || cleanTournamentData.startDate,
+      dateEnd:
+        cleanTournamentData.dateEnd || cleanTournamentData.endDate || null,
+      accommodationCost: parseFloat(
+        cleanTournamentData.accommodationCost ||
+          cleanTournamentData.accommodation ||
+          0,
+      ),
+      foodBudget: parseFloat(
+        cleanTournamentData.foodBudget || cleanTournamentData.food || 0,
+      ),
+      otherExpenses: parseFloat(cleanTournamentData.otherExpenses || 0),
+      notes: cleanTournamentData.notes || null,
+    };
+
+    // Validate required fields
+    if (!mappedData.name || !mappedData.location || !mappedData.dateStart) {
+      throw new Error('Tournament name, location, and start date are required');
+    }
+
+    // Ensure dateStart is a valid Date object
+    if (!(mappedData.dateStart instanceof Date)) {
+      mappedData.dateStart = new Date(mappedData.dateStart);
+    }
+
+    // Ensure dateEnd is a valid Date object if provided
+    if (mappedData.dateEnd && !(mappedData.dateEnd instanceof Date)) {
+      mappedData.dateEnd = new Date(mappedData.dateEnd);
+    }
+
+    // Validate date range
+    if (mappedData.dateEnd && mappedData.dateEnd < mappedData.dateStart) {
+      throw new Error('End date cannot be before start date');
+    }
+
+    console.log('🎲 CREATE_TOURNAMENT: Mapped data:', mappedData);
+
+    try {
+      const response = await this.makeRequest('/poker/tournaments', {
+        method: 'POST',
+        body: mappedData,
+      });
+
+      console.log('🎲 CREATE_TOURNAMENT: API response received:', response);
+
+      // Handle different possible response formats
+      if (response?.tournament) {
+        return response.tournament;
+      } else if (response?.data) {
+        return response.data;
+      } else if (response && typeof response === 'object' && response.id) {
+        return response;
+      } else {
+        console.warn('Unexpected create tournament response format:', response);
+        return response;
+      }
+    } catch (error) {
+      console.error('CreateTournament API error:', error.message);
+      throw error;
+    }
+  }
+
+  async getTournaments(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/poker/tournaments?${queryString}`
+      : '/poker/tournaments';
+    return this.makeRequest(endpoint);
+  }
+
+  async getTournamentById(id) {
+    const response = await this.makeRequest(`/poker/tournaments/${id}`);
+
+    if (response?.tournament) {
+      return response.tournament;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn('Unexpected getTournamentById response format:', response);
+      return response;
+    }
+  }
+
+  async updateTournament(id, tournamentData) {
+    const cleanTournamentData = {...tournamentData};
+
+    // Map frontend field names to backend expected names
+    const mappedData = {};
+
+    if (cleanTournamentData.name !== undefined) {
+      mappedData.name = cleanTournamentData.name;
+    }
+    if (cleanTournamentData.location !== undefined) {
+      mappedData.location = cleanTournamentData.location;
+    }
+    if (cleanTournamentData.venue !== undefined) {
+      mappedData.venue = cleanTournamentData.venue;
+    }
+    if (cleanTournamentData.dateStart || cleanTournamentData.startDate) {
+      mappedData.dateStart =
+        cleanTournamentData.dateStart || cleanTournamentData.startDate;
+    }
+    if (cleanTournamentData.dateEnd || cleanTournamentData.endDate) {
+      mappedData.dateEnd =
+        cleanTournamentData.dateEnd || cleanTournamentData.endDate;
+    }
+    if (
+      cleanTournamentData.accommodationCost !== undefined ||
+      cleanTournamentData.accommodation !== undefined
+    ) {
+      mappedData.accommodationCost = parseFloat(
+        cleanTournamentData.accommodationCost ||
+          cleanTournamentData.accommodation ||
+          0,
+      );
+    }
+    if (
+      cleanTournamentData.foodBudget !== undefined ||
+      cleanTournamentData.food !== undefined
+    ) {
+      mappedData.foodBudget = parseFloat(
+        cleanTournamentData.foodBudget || cleanTournamentData.food || 0,
+      );
+    }
+    if (cleanTournamentData.otherExpenses !== undefined) {
+      mappedData.otherExpenses = parseFloat(
+        cleanTournamentData.otherExpenses || 0,
+      );
+    }
+    if (cleanTournamentData.notes !== undefined) {
+      mappedData.notes = cleanTournamentData.notes;
+    }
+
+    const response = await this.makeRequest(`/poker/tournaments/${id}`, {
+      method: 'PUT',
+      body: mappedData,
+    });
+
+    if (response?.tournament) {
+      return response.tournament;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn('Unexpected updateTournament response format:', response);
+      return response || {id, ...mappedData};
+    }
+  }
+
+  async deleteTournament(id) {
+    return this.makeRequest(`/poker/tournaments/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getTournamentEvents(tournamentId) {
+    try {
+      const result = await this.makeRequest(`/poker/tournaments/${tournamentId}/events`);
+      return result;
+    } catch (error) {
+      // Handle 404 errors gracefully - the backend endpoint may not exist yet
+      if (error.message.includes('404') ||
+          error.message.includes('Not Found') ||
+          error.message.includes('Cannot GET')) {
+        console.log('🎲 Tournament events endpoint not available yet, returning empty array');
+        return [];
+      }
+      // Re-throw other errors
+      throw error;
+    }
+  }
+
+  async createTournamentEvent(tournamentId, eventData) {
+    console.log('🎲 CREATE_EVENT: Starting with data:', eventData);
+
+    const cleanEventData = {...eventData};
+
+    // Ensure eventDate is a valid Date object
+    if (!(cleanEventData.eventDate instanceof Date)) {
+      cleanEventData.eventDate = new Date(cleanEventData.eventDate);
+    }
+
+    // Convert numeric fields
+    cleanEventData.buyIn = parseFloat(cleanEventData.buyIn || 0);
+    cleanEventData.winnings = parseFloat(cleanEventData.winnings || 0);
+
+    if (cleanEventData.fieldSize) {
+      cleanEventData.fieldSize = parseInt(cleanEventData.fieldSize, 10);
+    }
+    if (cleanEventData.finishPosition) {
+      cleanEventData.finishPosition = parseInt(
+        cleanEventData.finishPosition,
+        10,
+      );
+    }
+
+    try {
+      const response = await this.makeRequest(
+        `/poker/tournaments/${tournamentId}/events`,
+        {
+          method: 'POST',
+          body: cleanEventData,
+        },
+      );
+
+      console.log('🎲 CREATE_EVENT: API response received:', response);
+
+      if (response?.event) {
+        return response.event;
+      } else if (response?.data) {
+        return response.data;
+      } else if (response && typeof response === 'object' && response.id) {
+        return response;
+      } else {
+        console.warn('Unexpected create event response format:', response);
+        return response;
+      }
+    } catch (error) {
+      console.error('CreateTournamentEvent API error:', error.message);
+      throw error;
+    }
+  }
+
+  async updateTournamentEvent(eventId, eventData) {
+    const cleanEventData = {...eventData};
+
+    // Convert dates if provided
+    if (
+      cleanEventData.eventDate &&
+      !(cleanEventData.eventDate instanceof Date)
+    ) {
+      cleanEventData.eventDate = new Date(cleanEventData.eventDate);
+    }
+
+    // Convert numeric fields if provided
+    if (cleanEventData.buyIn !== undefined) {
+      cleanEventData.buyIn = parseFloat(cleanEventData.buyIn || 0);
+    }
+    if (cleanEventData.winnings !== undefined) {
+      cleanEventData.winnings = parseFloat(cleanEventData.winnings || 0);
+    }
+    if (cleanEventData.fieldSize !== undefined) {
+      cleanEventData.fieldSize = parseInt(cleanEventData.fieldSize, 10);
+    }
+    if (cleanEventData.finishPosition !== undefined) {
+      cleanEventData.finishPosition = parseInt(
+        cleanEventData.finishPosition,
+        10,
+      );
+    }
+
+    const response = await this.makeRequest(
+      `/poker/tournaments/events/${eventId}`,
+      {
+        method: 'PUT',
+        body: cleanEventData,
+      },
+    );
+
+    if (response?.event) {
+      return response.event;
+    } else if (response?.data) {
+      return response.data;
+    } else if (response && typeof response === 'object' && response.id) {
+      return response;
+    } else {
+      console.warn(
+        'Unexpected updateTournamentEvent response format:',
+        response,
+      );
+      return response || {id: eventId, ...cleanEventData};
+    }
+  }
+
+  async deleteTournamentEvent(eventId) {
+    return this.makeRequest(`/poker/tournaments/events/${eventId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getPokerAnalytics(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/poker/analytics?${queryString}`
+      : '/poker/analytics';
+    return this.makeRequest(endpoint);
+  }
+
+  async getTournamentAnalytics(tournamentId, filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/poker/tournaments/${tournamentId}/analytics?${queryString}`
+      : `/poker/tournaments/${tournamentId}/analytics`;
+    return this.makeRequest(endpoint);
   }
 
   // ============================================================================

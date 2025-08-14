@@ -56,6 +56,18 @@ const AddTransactionContainer = ({
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMode, setCalendarMode] = useState('transaction'); // 'transaction' or 'dueDate'
 
+  // Tournament modal state
+  const [showTournamentModal, setShowTournamentModal] = useState(false);
+  const [tournamentName, setTournamentName] = useState('');
+  const [tournamentLocation, setTournamentLocation] = useState('');
+  const [tournamentStartDate, setTournamentStartDate] = useState(null);
+  const [tournamentEndDate, setTournamentEndDate] = useState(null);
+  const [tournamentAccommodation, setTournamentAccommodation] = useState('');
+  const [tournamentFood, setTournamentFood] = useState('');
+  const [tournamentOtherExpenses, setTournamentOtherExpenses] = useState('');
+  const [tournamentCalendarMode, setTournamentCalendarMode] = useState(null);
+  const [showTournamentCalendar, setShowTournamentCalendar] = useState(false);
+
   // Get module settings from context
   const {moduleSettings} = useAppSettings();
   const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
@@ -240,6 +252,18 @@ const AddTransactionContainer = ({
     setSelectedPaymentStatus(null);
     setCurrentSubcategoryData(null);
     setHasManualDescription(false);
+
+    // Reset tournament form
+    setTournamentName('');
+    setTournamentLocation('');
+    setTournamentStartDate(null);
+    setTournamentEndDate(null);
+    setTournamentAccommodation('');
+    setTournamentFood('');
+    setTournamentOtherExpenses('');
+    setShowTournamentModal(false);
+    setShowTournamentCalendar(false);
+    setTournamentCalendarMode(null);
   }, []);
 
   const populateFormForEdit = useCallback(() => {
@@ -464,6 +488,129 @@ const AddTransactionContainer = ({
   );
 
   // ==============================================
+  // TOURNAMENT EVENT HANDLERS
+  // ==============================================
+
+  const handleCreateTournamentPress = useCallback(() => {
+    setShowTournamentModal(true);
+  }, []);
+
+  const handleTournamentModalClose = useCallback(() => {
+    setShowTournamentModal(false);
+  }, []);
+
+  const handleTournamentSave = useCallback(async () => {
+    try {
+      // Validate required fields
+      if (!tournamentName || !tournamentLocation || !tournamentStartDate) {
+        Alert.alert(
+          'Error',
+          'Please fill in tournament name, location, and start date',
+        );
+        return;
+      }
+
+      const tournamentData = {
+        name: tournamentName,
+        location: tournamentLocation,
+        dateStart: tournamentStartDate,
+        dateEnd: tournamentEndDate,
+        accommodation: tournamentAccommodation,
+        food: tournamentFood,
+        otherExpenses: tournamentOtherExpenses,
+      };
+
+      console.log('Creating tournament:', tournamentData);
+
+      // Call the API to create tournament
+      const createdTournament = await TrendAPIService.createTournament(
+        tournamentData,
+      );
+
+      console.log('Tournament created successfully:', createdTournament);
+
+      // Reset tournament form and close modal
+      setTournamentName('');
+      setTournamentLocation('');
+      setTournamentStartDate(null);
+      setTournamentEndDate(null);
+      setTournamentAccommodation('');
+      setTournamentFood('');
+      setTournamentOtherExpenses('');
+      setShowTournamentModal(false);
+
+      // Show success feedback
+      Alert.alert('Success', 'Tournament created successfully!');
+    } catch (error) {
+      console.error('Error creating tournament:', error);
+
+      // Show specific error message if available
+      const errorMessage =
+        error.message || 'Failed to create tournament. Please try again.';
+      Alert.alert('Error', errorMessage);
+    }
+  }, [
+    tournamentName,
+    tournamentLocation,
+    tournamentStartDate,
+    tournamentEndDate,
+    tournamentAccommodation,
+    tournamentFood,
+    tournamentOtherExpenses,
+  ]);
+
+  const handleTournamentCalendarShow = useCallback(mode => {
+    setTournamentCalendarMode(mode);
+    setShowTournamentCalendar(true);
+  }, []);
+
+  const handleTournamentCalendarHide = useCallback(() => {
+    setShowTournamentCalendar(false);
+    setTournamentCalendarMode(null);
+  }, []);
+
+  const handleTournamentDateChange = useCallback(
+    date => {
+      if (tournamentCalendarMode === 'start') {
+        setTournamentStartDate(date);
+      } else if (tournamentCalendarMode === 'end') {
+        setTournamentEndDate(date);
+      }
+      handleTournamentCalendarHide();
+    },
+    [tournamentCalendarMode, handleTournamentCalendarHide],
+  );
+
+  // Tournament form field handlers
+  const handleTournamentNameChange = useCallback(text => {
+    setTournamentName(text);
+  }, []);
+
+  const handleTournamentLocationChange = useCallback(text => {
+    setTournamentLocation(text);
+  }, []);
+
+  const handleTournamentAccommodationChange = useCallback(text => {
+    setTournamentAccommodation(text);
+  }, []);
+
+  const handleTournamentFoodChange = useCallback(text => {
+    setTournamentFood(text);
+  }, []);
+
+  const handleTournamentOtherExpensesChange = useCallback(text => {
+    setTournamentOtherExpenses(text);
+  }, []);
+
+  const handleTournamentStartDateChange = useCallback(date => {
+    setTournamentStartDate(date);
+  }, []);
+
+  const handleTournamentEndDateChange = useCallback(date => {
+    setTournamentEndDate(date);
+  }, []);
+
+  // ==============================================
   // AUTO-DESCRIPTION LOGIC
   // ==============================================
 
@@ -651,6 +798,31 @@ const AddTransactionContainer = ({
       paymentStatusOptions={paymentStatusOptions}
       // Module settings
       pokerTrackerEnabled={pokerTrackerEnabled}
+      // Tournament props
+      showTournamentModal={showTournamentModal}
+      tournamentName={tournamentName}
+      tournamentLocation={tournamentLocation}
+      tournamentStartDate={tournamentStartDate}
+      tournamentEndDate={tournamentEndDate}
+      tournamentAccommodation={tournamentAccommodation}
+      tournamentFood={tournamentFood}
+      tournamentOtherExpenses={tournamentOtherExpenses}
+      showTournamentCalendar={showTournamentCalendar}
+      tournamentCalendarMode={tournamentCalendarMode}
+      // Tournament handlers
+      onCreateTournamentPress={handleCreateTournamentPress}
+      onTournamentModalClose={handleTournamentModalClose}
+      onTournamentSave={handleTournamentSave}
+      onTournamentCalendarShow={handleTournamentCalendarShow}
+      onTournamentCalendarHide={handleTournamentCalendarHide}
+      onTournamentDateChange={handleTournamentDateChange}
+      onTournamentNameChange={handleTournamentNameChange}
+      onTournamentLocationChange={handleTournamentLocationChange}
+      onTournamentStartDateChange={handleTournamentStartDateChange}
+      onTournamentEndDateChange={handleTournamentEndDateChange}
+      onTournamentAccommodationChange={handleTournamentAccommodationChange}
+      onTournamentFoodChange={handleTournamentFoodChange}
+      onTournamentOtherExpensesChange={handleTournamentOtherExpensesChange}
     />
   );
 };

@@ -17,6 +17,9 @@ import AuthService from '../services/AuthService';
 import HomeScreen from '../screens/HomeScreen';
 import useOnboarding from '../hooks/useOnboarding';
 import useGoals from '../hooks/useGoals';
+import TournamentCache from '../services/TournamentCache';
+import {useAppSettings} from '../contexts/AppSettingsContext';
+import AddTournamentContainer from './AddTournamentContainer';
 
 const HomeContainer = ({navigation}) => {
   // ==============================================
@@ -37,11 +40,21 @@ const HomeContainer = ({navigation}) => {
   const [backgroundSyncCount, setBackgroundSyncCount] = useState(0);
   const [userActiveOperations, setUserActiveOperations] = useState(0);
 
+  // Poker/Tournament state
+  const [tournaments, setTournaments] = useState([]);
+  const [pokerSectionExpanded, setPokerSectionExpanded] = useState(false);
+  const [showAddTournament, setShowAddTournament] = useState(false);
+  const [editingTournament, setEditingTournament] = useState(null);
+
   // ==============================================
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
   const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
+  const {moduleSettings} = useAppSettings();
+
+  // Get poker module setting
+  const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
 
   // Debug: Log goals state changes
   useEffect(() => {
@@ -396,6 +409,90 @@ const HomeContainer = ({navigation}) => {
       console.error('HomeContainer: Error loading goals:', error);
     }
   }, [loadGoalsFromHook]);
+
+  const loadTournaments = useCallback(async () => {
+    try {
+      if (!AuthService.isAuthenticated()) {
+        console.log('🎲 loadTournaments: User not authenticated');
+        return;
+      }
+
+      if (!pokerTrackerEnabled) {
+        console.log(
+          '🎲 loadTournaments: Poker module disabled, clearing tournaments',
+        );
+        setTournaments([]);
+        return;
+      }
+
+      console.log('🎲 loadTournaments START - Platform:', Platform.OS);
+
+      // 🔄 CACHE-FIRST: Load from cache immediately
+      const cached = await TournamentCache.get();
+      if (cached && cached.data) {
+        console.log('🎲 Using cached tournaments:', {
+          count: cached.data.length,
+          age: Math.round(cached.age / 1000 / 60),
+          isStale: cached.isStale,
+        });
+        setTournaments(cached.data);
+
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          return;
+        }
+      }
+
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      try {
+        const tournamentsResponse = await TrendAPIService.getTournaments();
+        console.log(
+          '🎲 Tournaments received from backend:',
+          tournamentsResponse?.length || 0,
+        );
+
+        // Debug: Log detailed tournament data structure
+        if (tournamentsResponse && tournamentsResponse.length > 0) {
+          console.log('🎲 First tournament detailed structure from API:', {
+            fullTournament: tournamentsResponse[0],
+            accommodationCost: tournamentsResponse[0]?.accommodationCost,
+            foodBudget: tournamentsResponse[0]?.foodBudget,
+            otherExpenses: tournamentsResponse[0]?.otherExpenses,
+          });
+        }
+
+        if (tournamentsResponse && Array.isArray(tournamentsResponse)) {
+          console.log('🎲 Setting tournaments from API and updating cache');
+
+          // Update state
+          setTournaments(tournamentsResponse);
+
+          // Update cache in background
+          TournamentCache.set(tournamentsResponse);
+        } else {
+          console.warn('🎲 Invalid tournaments response:', tournamentsResponse);
+
+          // If API fails but we have cached data, keep using cached data
+          if (!cached) {
+            setTournaments([]);
+          }
+        }
+      } catch (apiError) {
+        console.error(
+          '🎲 API request failed, using cached data if available:',
+          apiError,
+        );
+
+        // If API fails and we don't have cached data, set empty array
+        if (!cached) {
+          setTournaments([]);
+        }
+      }
+    } catch (error) {
+      console.error('🎲 HomeContainer: Error loading tournaments:', error);
+      setTournaments([]);
+    }
+  }, [pokerTrackerEnabled]);
 
   // ==============================================
   // TRANSACTION OPERATIONS
@@ -1115,6 +1212,241 @@ const HomeContainer = ({navigation}) => {
   }, [navigation]);
 
   // ==============================================
+  // POKER/TOURNAMENT EVENT HANDLERS
+  // ==============================================
+
+  const handleTogglePokerSection = useCallback(() => {
+    setPokerSectionExpanded(prev => !prev);
+  }, []);
+
+  const handleTournamentPress = useCallback(
+    tournament => {
+      console.log('🎲 Tournament pressed:', tournament.name);
+      // Navigate to tournament details screen
+      navigation.navigate('TournamentDetails', {
+        tournament: tournament,
+        tournamentId: tournament.id,
+      });
+    },
+    [navigation],
+  );
+
+  const handleTournamentEdit = useCallback(
+    tournament => {
+      console.log('🎲 Tournament edit:', tournament.name);
+
+      // Find the latest version of this tournament from current state
+      const latestTournament =
+        tournaments.find(t => t.id === tournament.id) || tournament;
+      console.log('🎲 Setting editing tournament with latest data:', {
+        originalTournament: tournament,
+        latestTournament: latestTournament,
+        foodBudgetOriginal: tournament.foodBudget,
+        foodBudgetLatest: latestTournament.foodBudget,
+      });
+
+      setEditingTournament(latestTournament);
+      setShowAddTournament(true);
+    },
+    [tournaments],
+  );
+
+  const handleTournamentDelete = useCallback(
+    async tournamentId => {
+      try {
+        console.log('🎲 Deleting tournament:', tournamentId);
+
+        if (!AuthService.isAuthenticated()) {
+          Alert.alert('Error', 'You must be logged in to delete a tournament.');
+          return;
+        }
+
+        // 🔄 CACHE-FIRST: Remove from cache immediately for instant UI feedback
+        await TournamentCache.removeTournament(tournamentId);
+
+        // Update local state immediately
+        setTournaments(prev => prev.filter(t => t.id !== tournamentId));
+
+        // 🌐 BACKGROUND SYNC: Delete from server (only if not a temporary ID)
+        if (!tournamentId.toString().startsWith('temp_')) {
+          try {
+            await TrendAPIService.deleteTournament(tournamentId);
+            console.log('🎲 Tournament deleted from server:', tournamentId);
+          } catch (syncError) {
+            console.error(
+              '🎲 Failed to delete tournament from server:',
+              syncError,
+            );
+
+            // Revert changes on server failure - reload tournaments to restore from cache/server
+            await loadTournaments();
+
+            Alert.alert(
+              'Sync Error',
+              'Tournament was deleted locally but failed to sync to server. Please try again when online.',
+              [{text: 'OK'}],
+            );
+            return; // Exit early on server failure
+          }
+        } else {
+          console.log(
+            '🎲 Skipping server delete for temporary tournament:',
+            tournamentId,
+          );
+        }
+      } catch (error) {
+        console.error('🎲 Error deleting tournament:', error);
+        Alert.alert('Error', 'Failed to delete tournament. Please try again.', [
+          {text: 'OK'},
+        ]);
+      }
+    },
+    [loadTournaments],
+  );
+
+  const handleAddTournament = useCallback(() => {
+    console.log('🎲 Add tournament pressed - opening modal');
+    setEditingTournament(null); // Clear any existing editing tournament
+    setShowAddTournament(true);
+  }, []);
+
+  const handleTournamentSwipeStart = useCallback(() => {
+    // Scroll disabling is handled in HomeScreen
+    console.log('🎲 Tournament swipe started');
+  }, []);
+
+  const handleTournamentSwipeEnd = useCallback(() => {
+    // Scroll disabling is handled in HomeScreen
+    console.log('🎲 Tournament swipe ended');
+  }, []);
+
+  const handleCloseAddTournament = useCallback(() => {
+    console.log('🎲 Closing add tournament modal');
+    setShowAddTournament(false);
+    setEditingTournament(null);
+  }, []);
+
+  const handleSaveTournament = useCallback(
+    async (tournament, isSynced = false) => {
+      try {
+        console.log('🎲 Tournament saved:', {tournament, isSynced});
+
+        if (isSynced) {
+          console.log(
+            '🎲 Tournament synced to server, updating state immediately with server data:',
+            {
+              tournamentId: tournament.id,
+              serverFoodBudget: tournament.foodBudget,
+              serverAccommodationCost: tournament.accommodationCost,
+              serverOtherExpenses: tournament.otherExpenses,
+            },
+          );
+
+          // Immediately update local state with server data
+          setTournaments(prevTournaments => {
+            const existingIndex = prevTournaments.findIndex(
+              t => t.id === tournament.id,
+            );
+            if (existingIndex >= 0) {
+              const updated = [...prevTournaments];
+              console.log(
+                '🎲 Server sync - updating tournament at index:',
+                existingIndex,
+                {
+                  oldFoodBudget: prevTournaments[existingIndex].foodBudget,
+                  newServerFoodBudget: tournament.foodBudget,
+                },
+              );
+              updated[existingIndex] = tournament;
+              return updated;
+            } else {
+              console.log('🎲 Server sync - adding new tournament');
+              return [...prevTournaments, tournament];
+            }
+          });
+
+          // Update cache in background for consistency
+          await TournamentCache.upsertTournament(tournament);
+        } else {
+          // Optimistic update - immediately update local state
+          console.log(
+            '🎲 Optimistic tournament update, refreshing local state with:',
+            {
+              tournamentId: tournament.id,
+              newFoodBudget: tournament.foodBudget,
+              newAccommodationCost: tournament.accommodationCost,
+              newOtherExpenses: tournament.otherExpenses,
+            },
+          );
+          setTournaments(prevTournaments => {
+            const existingIndex = prevTournaments.findIndex(
+              t => t.id === tournament.id,
+            );
+            if (existingIndex >= 0) {
+              // Update existing tournament
+              const updated = [...prevTournaments];
+              console.log('🎲 Updating tournament at index:', existingIndex, {
+                oldFoodBudget: prevTournaments[existingIndex].foodBudget,
+                newFoodBudget: tournament.foodBudget,
+              });
+              updated[existingIndex] = tournament;
+              return updated;
+            } else {
+              // Add new tournament
+              console.log('🎲 Adding new tournament to state');
+              return [...prevTournaments, tournament];
+            }
+          });
+        }
+
+        // Expand poker section to show the new tournament
+        setPokerSectionExpanded(true);
+      } catch (error) {
+        console.error('🎲 Error handling tournament save:', error);
+      }
+    },
+    [loadTournaments],
+  );
+
+  const reloadTournaments = useCallback(async () => {
+    try {
+      console.log('🎲 Reloading tournaments and invalidating cache...');
+
+      // Invalidate cache to force fresh data
+      await TournamentCache.invalidate();
+
+      // Load tournaments (will fetch from API since cache is now stale)
+      await loadTournaments();
+    } catch (error) {
+      console.error('Failed to reload tournaments:', error);
+    }
+  }, [loadTournaments]);
+
+  // Expose debug functions globally for debugging
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.reloadTournaments = reloadTournaments;
+      window.debugShowAddTransactionSpotlight =
+        onboarding.debugShowAddTransactionSpotlight;
+      window.debugResetOnboarding = onboarding.debugResetOnboarding;
+      console.log(
+        '🎲 Exposed debug functions: window.reloadTournaments(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
+      );
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete window.reloadTournaments;
+        delete window.debugShowAddTransactionSpotlight;
+        delete window.debugResetOnboarding;
+      }
+    };
+  }, [
+    reloadTournaments,
+    onboarding.debugShowAddTransactionSpotlight,
+    onboarding.debugResetOnboarding,
+  ]);
+
+  // ==============================================
   // CALCULATED VALUES WITH CATEGORY RESOLUTION (STABLE MEMOIZED TO PREVENT FLICKER)
   // ==============================================
   const transactionsWithCategories = useMemo(
@@ -1157,6 +1489,7 @@ const HomeContainer = ({navigation}) => {
           loadTransactions(),
           loadCategories(),
           loadGoals(),
+          loadTournaments(),
           loadCurrencySetting(),
         ]);
       } catch (error) {
@@ -1183,6 +1516,20 @@ const HomeContainer = ({navigation}) => {
         hasSeenTransactionSwipeTour,
       } = onboarding.onboardingStatus;
 
+      // Debug onboarding status before checking
+      console.log('🎯 HomeContainer: Onboarding debug:', {
+        onboardingLoading: onboarding.loading,
+        onboardingStatus: onboarding.onboardingStatus,
+        hasIncomeData: !!incomeData,
+        transactionCount: transactions?.length || 0,
+        tutorialInProgress: onboarding.tutorialInProgress,
+        showAddTransactionSpotlight: onboarding.showAddTransactionSpotlight,
+        showBalanceCardSpotlight: onboarding.showBalanceCardSpotlight,
+        hasSeenBalanceCardTour,
+        hasSeenAddTransactionTour,
+        hasSeenTransactionSwipeTour,
+      });
+
       // Only trigger onboarding if user hasn't completed all tours yet
       const hasCompletedAllTours =
         hasSeenBalanceCardTour &&
@@ -1193,7 +1540,12 @@ const HomeContainer = ({navigation}) => {
         onboarding.checkAndShowOnboarding(incomeData, transactions);
       }
     }
-  }, [onboarding.loading, onboarding.onboardingStatus]);
+  }, [
+    onboarding.loading,
+    onboarding.onboardingStatus,
+    incomeData,
+    transactions,
+  ]);
 
   // App state monitoring for date changes
   useEffect(() => {
@@ -1355,36 +1707,79 @@ const HomeContainer = ({navigation}) => {
     };
   }, []); // Now safe to use empty dependency - handler uses ref
 
+  // Debug: Log tournaments state
+  useEffect(() => {
+    console.log('🎲 HomeContainer: Tournaments state changed:', {
+      tournamentsCount: tournaments.length,
+      tournaments: tournaments,
+      pokerTrackerEnabled: pokerTrackerEnabled,
+    });
+  }, [tournaments, pokerTrackerEnabled]);
+
+  // Reload tournaments when poker module is enabled/disabled
+  useEffect(() => {
+    if (moduleSettings !== undefined) {
+      // Wait for module settings to load
+      console.log(
+        '🎲 HomeContainer: Poker module setting changed:',
+        pokerTrackerEnabled,
+      );
+      loadTournaments();
+    }
+  }, [pokerTrackerEnabled, loadTournaments, moduleSettings]);
+
   // ==============================================
   // RENDER
   // ==============================================
   return (
-    <HomeScreen
-      incomeData={incomeData}
-      userProfile={userProfile}
-      transactions={transactionsWithCategories}
-      categories={categories}
-      goals={goals}
-      editingTransaction={editingTransaction}
-      loading={loading || onboarding.loading}
-      selectedDate={selectedDate}
-      totalExpenses={totalExpenses}
-      totalIncomePayments={totalIncomePayments}
-      totalAdditionalIncome={totalAdditionalIncome}
-      currency={currency}
-      isBackgroundSyncing={backgroundSyncCount > 0}
-      onDateChange={setSelectedDate}
-      onSaveTransaction={handleSaveTransaction}
-      onDeleteTransaction={handleDeleteTransaction}
-      onEditTransaction={handleEditTransaction}
-      onClearEditingTransaction={() => setEditingTransaction(null)}
-      onEditIncome={handleEditIncome}
-      onGoalsPress={handleGoalsPress}
-      onOnboardingComplete={handleOnboardingComplete}
-      onOnboardingSkip={handleOnboardingSkip}
-      navigation={navigation}
-      onboarding={onboarding}
-    />
+    <>
+      <HomeScreen
+        incomeData={incomeData}
+        userProfile={userProfile}
+        transactions={transactionsWithCategories}
+        categories={categories}
+        goals={goals}
+        editingTransaction={editingTransaction}
+        loading={loading || onboarding.loading}
+        selectedDate={selectedDate}
+        totalExpenses={totalExpenses}
+        totalIncomePayments={totalIncomePayments}
+        totalAdditionalIncome={totalAdditionalIncome}
+        currency={currency}
+        isBackgroundSyncing={backgroundSyncCount > 0}
+        // Tournament/Poker props
+        tournaments={tournaments}
+        pokerSectionExpanded={pokerSectionExpanded}
+        pokerTrackerEnabled={pokerTrackerEnabled}
+        onDateChange={setSelectedDate}
+        onSaveTransaction={handleSaveTransaction}
+        onDeleteTransaction={handleDeleteTransaction}
+        onEditTransaction={handleEditTransaction}
+        onClearEditingTransaction={() => setEditingTransaction(null)}
+        onEditIncome={handleEditIncome}
+        onGoalsPress={handleGoalsPress}
+        onOnboardingComplete={handleOnboardingComplete}
+        onOnboardingSkip={handleOnboardingSkip}
+        // Tournament event handlers
+        onTogglePokerSection={handleTogglePokerSection}
+        onTournamentPress={handleTournamentPress}
+        onTournamentEdit={handleTournamentEdit}
+        onTournamentDelete={handleTournamentDelete}
+        onTournamentSwipeStart={handleTournamentSwipeStart}
+        onTournamentSwipeEnd={handleTournamentSwipeEnd}
+        onAddTournament={handleAddTournament}
+        navigation={navigation}
+        onboarding={onboarding}
+      />
+
+      {/* Tournament Creation/Edit Modal */}
+      <AddTournamentContainer
+        visible={showAddTournament}
+        onClose={handleCloseAddTournament}
+        onSave={handleSaveTournament}
+        editingTournament={editingTournament}
+      />
+    </>
   );
 };
 
