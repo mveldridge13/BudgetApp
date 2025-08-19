@@ -18,6 +18,7 @@ import HomeScreen from '../screens/HomeScreen';
 import useOnboarding from '../hooks/useOnboarding';
 import useGoals from '../hooks/useGoals';
 import TournamentCache from '../services/TournamentCache';
+import CategoryCache from '../services/CategoryCache';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import AddTournamentContainer from './AddTournamentContainer';
 
@@ -389,13 +390,63 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      const response = await TrendAPIService.getCategories();
+      console.log('📂 loadCategories START - Platform:', Platform.OS);
 
-      const backendCategories = response?.categories || [];
+      // 🔄 CACHE-FIRST: Load from cache immediately
+      const cached = await CategoryCache.get();
+      if (cached && cached.data) {
+        console.log('📂 Using cached categories:', {
+          count: cached.data.length,
+          age: Math.round(cached.age / 1000 / 60),
+          isStale: cached.isStale,
+        });
+        const transformedCategories = transformCategoriesForUI(cached.data);
+        setCategories(transformedCategories);
 
-      const transformedCategories = transformCategoriesForUI(backendCategories);
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          return;
+        }
+      }
 
-      setCategories(transformedCategories);
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      try {
+        const response = await TrendAPIService.getCategories();
+        const backendCategories = response?.categories || [];
+
+        console.log(
+          '📂 Categories received from backend:',
+          backendCategories?.length || 0,
+        );
+
+        if (backendCategories && Array.isArray(backendCategories)) {
+          console.log('📂 Setting categories from API and updating cache');
+
+          // Update cache in background
+          CategoryCache.set(backendCategories);
+
+          // Update state with transformed categories
+          const transformedCategories = transformCategoriesForUI(backendCategories);
+          setCategories(transformedCategories);
+        } else {
+          console.warn('📂 Invalid categories response:', backendCategories);
+
+          // If API fails but we have cached data, keep using cached data
+          if (!cached) {
+            setCategories([]);
+          }
+        }
+      } catch (apiError) {
+        console.error(
+          '📂 API request failed, using cached data if available:',
+          apiError,
+        );
+
+        // If API fails and we don't have cached data, set empty array
+        if (!cached) {
+          setCategories([]);
+        }
+      }
     } catch (error) {
       console.error('📂 Error loading categories:', error);
       setCategories([]);
@@ -516,6 +567,8 @@ const HomeContainer = ({navigation}) => {
           optimisticTransaction = {
             ...transaction,
             updatedAt: new Date().toISOString(),
+            // Pre-resolve category data to prevent flicker
+            categoryData: resolveCategoryForTransaction(transaction, categoryMap),
           };
 
           setTransactions(prev => {
@@ -533,6 +586,8 @@ const HomeContainer = ({navigation}) => {
             id: tempId,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
+            // Pre-resolve category data to prevent flicker
+            categoryData: resolveCategoryForTransaction(transaction, categoryMap),
           };
 
           setTransactions(prev => {
@@ -589,6 +644,7 @@ const HomeContainer = ({navigation}) => {
             : null,
           status: transaction.status,
         };
+
 
         if (isEditing) {
           // 🎯 EDITS: Background sync (cache-first)
@@ -1422,26 +1478,44 @@ const HomeContainer = ({navigation}) => {
     }
   }, [loadTournaments]);
 
+  // Function to reload categories and invalidate cache
+  const reloadCategories = useCallback(async () => {
+    try {
+      console.log('📂 Reloading categories and invalidating cache...');
+
+      // Invalidate cache to force fresh data
+      await CategoryCache.invalidate();
+
+      // Load categories (will fetch from API since cache is now stale)
+      await loadCategories();
+    } catch (error) {
+      console.error('Failed to reload categories:', error);
+    }
+  }, [loadCategories]);
+
   // Expose debug functions globally for debugging
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.reloadTournaments = reloadTournaments;
+      window.reloadCategories = reloadCategories;
       window.debugShowAddTransactionSpotlight =
         onboarding.debugShowAddTransactionSpotlight;
       window.debugResetOnboarding = onboarding.debugResetOnboarding;
       console.log(
-        '🎲 Exposed debug functions: window.reloadTournaments(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
+        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
       );
     }
     return () => {
       if (typeof window !== 'undefined') {
         delete window.reloadTournaments;
+        delete window.reloadCategories;
         delete window.debugShowAddTransactionSpotlight;
         delete window.debugResetOnboarding;
       }
     };
   }, [
     reloadTournaments,
+    reloadCategories,
     onboarding.debugShowAddTransactionSpotlight,
     onboarding.debugResetOnboarding,
   ]);
@@ -1449,10 +1523,23 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   // CALCULATED VALUES WITH CATEGORY RESOLUTION (STABLE MEMOIZED TO PREVENT FLICKER)
   // ==============================================
-  const transactionsWithCategories = useMemo(
-    () => processTransactionsWithCategories(transactions),
-    [transactionsSignature, processTransactionsWithCategories],
-  );
+  const transactionsWithCategories = useMemo(() => {
+    // Don't render transactions until categories are loaded to prevent flicker
+    if (loading || categories.length === 0) {
+      return [];
+    }
+
+    // If transactions already have categoryData, use them as-is to prevent re-processing
+    const hasResolvedCategories = transactions.some(t => t.categoryData);
+    if (hasResolvedCategories) {
+      return transactions.map(transaction => ({
+        ...transaction,
+        categoryData: transaction.categoryData || resolveCategoryForTransaction(transaction, categoryMap),
+      }));
+    }
+
+    return processTransactionsWithCategories(transactions);
+  }, [loading, transactions, categories, processTransactionsWithCategories, categoryMap]);
 
   // Debug what we're passing to the Balance Card (commented out to reduce noise)
   /*
@@ -1484,18 +1571,25 @@ const HomeContainer = ({navigation}) => {
           return;
         }
 
+        // Load categories first to ensure categoryMap is available for transaction processing
+        await loadCategories();
+
+        // Then load everything else in parallel
         await Promise.all([
           loadUserProfile(),
           loadTransactions(),
-          loadCategories(),
           loadGoals(),
           loadTournaments(),
           loadCurrencySetting(),
         ]);
+
       } catch (error) {
         console.error('HomeContainer: Error in loadInitialData:', error);
       } finally {
-        setLoading(false);
+        // Delay setting loading to false to ensure smooth transition
+        setTimeout(() => {
+          setLoading(false);
+        }, 100);
       }
     };
 

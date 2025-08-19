@@ -1,6 +1,7 @@
 import React, {useState, useCallback, useEffect} from 'react';
-import {Alert} from 'react-native';
+import {Alert, Platform} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
+import CategoryCache from '../services/CategoryCache';
 import AddTransactionModal from '../components/AddTransactionModal';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 
@@ -207,30 +208,75 @@ const AddTransactionContainer = ({
       setIsLoading(true);
       setErrorState(null);
 
-      const response = await TrendAPIService.getCategories();
-      const backendCategories = response?.categories || [];
+      console.log('📂 AddTransactionContainer: loadCategories START - Platform:', Platform.OS);
 
-      setAllCategories(backendCategories);
+      // 🔄 CACHE-FIRST: Load from cache immediately
+      const cached = await CategoryCache.get();
+      if (cached && cached.data) {
+        console.log('📂 AddTransactionContainer: Using cached categories:', {
+          count: cached.data.length,
+          age: Math.round(cached.age / 1000 / 60),
+          isStale: cached.isStale,
+        });
+        setAllCategories(cached.data);
+        setIsLoading(false);
 
-      // Don't filter here - let the useEffect handle filtering
-      // This prevents circular dependency issues
-    } catch (apiError) {
-      console.error(
-        'AddTransactionContainer: Error loading categories:',
-        apiError,
-      );
-      setErrorState(apiError.message);
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          return;
+        }
+      }
 
-      Alert.alert(
-        'Connection Issue',
-        'Unable to load categories. Please check your connection and try again.',
-        [
-          {text: 'Retry', onPress: () => loadCategories()},
-          {text: 'Cancel', style: 'cancel'},
-        ],
-      );
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      try {
+        const response = await TrendAPIService.getCategories();
+        const backendCategories = response?.categories || [];
 
-      setCategories([]);
+        console.log(
+          '📂 AddTransactionContainer: Categories received from backend:',
+          backendCategories?.length || 0,
+        );
+
+        if (backendCategories && Array.isArray(backendCategories)) {
+          console.log('📂 AddTransactionContainer: Setting categories from API and updating cache');
+
+          // Update cache in background
+          CategoryCache.set(backendCategories);
+
+          // Update state
+          setAllCategories(backendCategories);
+        } else {
+          console.warn('📂 AddTransactionContainer: Invalid categories response:', backendCategories);
+
+          // If API fails but we have cached data, keep using cached data
+          if (!cached) {
+            setAllCategories([]);
+          }
+        }
+      } catch (apiError) {
+        console.error(
+          '📂 AddTransactionContainer: API request failed, using cached data if available:',
+          apiError,
+        );
+
+        // If API fails and we don't have cached data, show error
+        if (!cached) {
+          setErrorState(apiError.message);
+          Alert.alert(
+            'Connection Issue',
+            'Unable to load categories. Please check your connection and try again.',
+            [
+              {text: 'Retry', onPress: () => loadCategories()},
+              {text: 'Cancel', style: 'cancel'},
+            ],
+          );
+          setAllCategories([]);
+        }
+      }
+    } catch (error) {
+      console.error('📂 AddTransactionContainer: Error loading categories:', error);
+      setErrorState(error.message);
+      setAllCategories([]);
     } finally {
       setIsLoading(false);
     }

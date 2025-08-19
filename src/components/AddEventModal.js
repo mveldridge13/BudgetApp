@@ -19,33 +19,33 @@ import CalendarModal from './CalendarModal';
 
 const {width: screenWidth} = Dimensions.get('window');
 
-const AddTournamentCardModal = ({
+const AddEventModal = ({
   visible,
   onClose,
   onSave,
   isEditMode = false,
 
   // Form data
-  tournamentName,
-  location,
-  startDate,
-  endDate,
-  accommodation,
-  food,
-  otherExpenses,
+  eventName,
+  eventType,
+  buyIn,
+  startingStack,
+  blindStructure,
+  eventDate,
+  start,
+  lateRego,
 
   // Calendar state
   showCalendar,
-  calendarMode,
 
   // Event handlers
-  onTournamentNameChange,
-  onLocationChange,
-  onStartDateChange,
-  onEndDateChange,
-  onAccommodationChange,
-  onFoodChange,
-  onOtherExpensesChange,
+  onEventNameChange,
+  onEventTypeChange,
+  onBuyInChange,
+  onStartingStackChange,
+  onBlindStructureChange,
+  onStartChange,
+  onLateRegoChange,
   onShowCalendar,
   onHideCalendar,
   onDateChange,
@@ -172,21 +172,23 @@ const AddTournamentCardModal = ({
             <TouchableOpacity onPress={handleClose} style={styles.cancelButton}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>{isEditMode ? 'Edit Tournament' : 'Create Tournament'}</Text>
+            <Text style={styles.modalTitle}>
+              {isEditMode ? 'Edit Event' : 'Add Event'}
+            </Text>
             <TouchableOpacity
               onPress={handleSave}
               style={[
                 styles.saveButton,
-                !tournamentName && styles.saveButtonDisabled,
+                !eventName && styles.saveButtonDisabled,
               ]}
-              disabled={!tournamentName}
+              disabled={!eventName}
               activeOpacity={0.7}>
               <Text
                 style={[
                   styles.saveText,
-                  !tournamentName && styles.saveTextDisabled,
+                  !eventName && styles.saveTextDisabled,
                 ]}>
-{isEditMode ? 'Update' : 'Save'}
+                {isEditMode ? 'Update' : 'Save'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -200,101 +202,90 @@ const AddTournamentCardModal = ({
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
-            {/* Tournament Name Field */}
+            {/* Event Details Section */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Event Details</Text>
+            </View>
+
+            {/* Event Name Field */}
             <TextInput
               style={styles.nameInput}
-              value={tournamentName}
-              onChangeText={onTournamentNameChange}
-              placeholder="Tournament Name"
+              value={eventName}
+              onChangeText={onEventNameChange}
+              placeholder="Event Name"
               placeholderTextColor={colors.textSecondary}
+              autoCapitalize="words"
             />
 
-            {/* Location Field */}
+            {/* Event Type Field */}
             <TextInput
-              style={styles.locationInput}
-              value={location}
-              onChangeText={onLocationChange}
-              placeholder="Location"
+              style={styles.typeInput}
+              value={eventType}
+              onChangeText={onEventTypeChange}
+              placeholder="Event Type (e.g., No-Limit Hold'em)"
               placeholderTextColor={colors.textSecondary}
+              autoCapitalize="words"
             />
 
-            {/* Start Date Field */}
+            {/* Event Date Field */}
             <TouchableOpacity
               style={styles.dateField}
-              onPress={() => onShowCalendar('start')}
+              onPress={onShowCalendar}
               activeOpacity={0.7}>
               <Icon
                 name="calendar-outline"
                 size={18}
-                color={startDate ? colors.primary : colors.textSecondary}
+                color={eventDate ? colors.primary : colors.textSecondary}
                 style={styles.dateIcon}
               />
               <Text
-                style={[styles.dateText, startDate && styles.dateTextActive]}>
-                {startDate ? formatDate(startDate) : 'Start Date'}
+                style={[styles.dateText, eventDate && styles.dateTextActive]}>
+                {eventDate ? formatDate(eventDate) : 'Event Date'}
               </Text>
             </TouchableOpacity>
 
-            {/* End Date Field */}
-            <TouchableOpacity
-              style={styles.dateField}
-              onPress={() => onShowCalendar('end')}
-              activeOpacity={0.7}>
+            {/* Start Time Field */}
+            <View style={styles.timeInputContainer}>
               <Icon
-                name="calendar-outline"
+                name="time-outline"
                 size={18}
-                color={endDate ? colors.primary : colors.textSecondary}
-                style={styles.dateIcon}
+                color={colors.textSecondary}
+                style={styles.timeIcon}
               />
-              <Text style={[styles.dateText, endDate && styles.dateTextActive]}>
-                {endDate ? formatDate(endDate) : 'End Date (Optional)'}
-              </Text>
-            </TouchableOpacity>
+              <TextInput
+                style={styles.timeInput}
+                value={start}
+                onChangeText={onStartChange}
+                placeholder="Start (e.g., 2:00 PM)"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+              />
+            </View>
 
-            {/* Shared Expenses Section */}
+            {/* Late Rego Field */}
+            <View style={styles.timeInputContainer}>
+              <Icon
+                name="timer-outline"
+                size={18}
+                color={colors.textSecondary}
+                style={styles.timeIcon}
+              />
+              <TextInput
+                style={styles.timeInput}
+                value={lateRego}
+                onChangeText={onLateRegoChange}
+                placeholder="Late Rego (e.g., 4:00 PM)"
+                placeholderTextColor={colors.textSecondary}
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Buy-in Structure Section */}
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Shared Expenses</Text>
+              <Text style={styles.sectionTitle}>Buy-in Structure</Text>
             </View>
 
-            {/* Accommodation Field */}
-            <View style={styles.expenseInputContainer}>
-              <Icon
-                name="bed-outline"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.expenseIcon}
-              />
-              <Text style={styles.currencySymbol}>$</Text>
-              <TextInput
-                style={styles.expenseInput}
-                value={accommodation}
-                onChangeText={onAccommodationChange}
-                placeholder="Accommodation"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-              />
-            </View>
-
-            {/* Food Field */}
-            <View style={styles.expenseInputContainer}>
-              <Icon
-                name="fast-food-outline"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.expenseIcon}
-              />
-              <Text style={styles.currencySymbol}>$</Text>
-              <TextInput
-                style={styles.expenseInput}
-                value={food}
-                onChangeText={onFoodChange}
-                placeholder="Food Budget"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-              />
-            </View>
-
-            {/* Other Expenses Field */}
+            {/* Initial Buy-In Field */}
             <View style={styles.expenseInputContainer}>
               <Icon
                 name="card-outline"
@@ -305,13 +296,41 @@ const AddTournamentCardModal = ({
               <Text style={styles.currencySymbol}>$</Text>
               <TextInput
                 style={styles.expenseInput}
-                value={otherExpenses}
-                onChangeText={onOtherExpensesChange}
-                placeholder="Other Expenses"
+                value={buyIn}
+                onChangeText={onBuyInChange}
+                placeholder="Initial Buy-In"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="numeric"
               />
             </View>
+
+            {/* Starting Stack Field */}
+            <View style={styles.stackInputContainer}>
+              <Icon
+                name="layers-outline"
+                size={18}
+                color={colors.textSecondary}
+                style={styles.stackIcon}
+              />
+              <TextInput
+                style={styles.stackInput}
+                value={startingStack}
+                onChangeText={onStartingStackChange}
+                placeholder="Starting Stack (chips)"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Blind Structure Field */}
+            <TextInput
+              style={styles.blindStructureInput}
+              value={blindStructure}
+              onChangeText={onBlindStructureChange}
+              placeholder="Blind Structure (e.g., 20min levels)"
+              placeholderTextColor={colors.textSecondary}
+              autoCapitalize="words"
+            />
             </ScrollView>
           </KeyboardAvoidingView>
         </Animated.View>
@@ -321,11 +340,7 @@ const AddTournamentCardModal = ({
       <CalendarModal
         visible={showCalendar}
         onClose={onHideCalendar}
-        selectedDate={
-          calendarMode === 'start'
-            ? startDate || new Date()
-            : endDate || new Date()
-        }
+        selectedDate={eventDate || new Date()}
         onDateChange={onDateChange}
       />
     </Modal>
@@ -399,6 +414,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
+  sectionHeader: {
+    marginBottom: 16,
+    marginTop: 10,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+  },
   nameInput: {
     fontSize: 16,
     fontWeight: '400',
@@ -410,7 +435,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 20,
   },
-  locationInput: {
+  typeInput: {
     fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',
@@ -442,15 +467,25 @@ const styles = StyleSheet.create({
   dateTextActive: {
     color: colors.textPrimary,
   },
-  sectionHeader: {
-    marginBottom: 16,
-    marginTop: 10,
+  timeInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
   },
-  sectionTitle: {
+  timeIcon: {
+    marginRight: 12,
+  },
+  timeInput: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textPrimary,
+    padding: 0,
   },
   expenseInputContainer: {
     flexDirection: 'row',
@@ -479,6 +514,37 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     padding: 0,
   },
+  stackInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+  },
+  stackIcon: {
+    marginRight: 12,
+  },
+  stackInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  blindStructureInput: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
 });
 
-export default AddTournamentCardModal;
+export default AddEventModal;

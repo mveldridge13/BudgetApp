@@ -5,6 +5,7 @@ import TournamentDetailsScreen from '../screens/TournamentDetailsScreen';
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
 import AddTournamentContainer from './AddTournamentContainer';
+import AddEventContainer from './AddEventContainer';
 
 const TournamentDetailsContainer = ({navigation, route}) => {
   // ==============================================
@@ -19,6 +20,7 @@ const TournamentDetailsContainer = ({navigation, route}) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showEditTournament, setShowEditTournament] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
 
   // ==============================================
   // LOAD TOURNAMENT EVENTS
@@ -134,22 +136,27 @@ const TournamentDetailsContainer = ({navigation, route}) => {
 
   const handleAddEvent = useCallback(() => {
     console.log('🎲 TournamentDetails: Add event pressed');
-    // TODO: Navigate to AddEventScreen or show AddEventModal
-    Alert.alert(
-      'Coming Soon',
-      'Add event functionality will be implemented next.',
-    );
+    setShowAddEvent(true);
   }, []);
+
+  const handleCloseAddEvent = useCallback(() => {
+    console.log('🎲 Closing add event modal');
+    setShowAddEvent(false);
+  }, []);
+
+  const handleSaveEvent = useCallback(
+    async savedEvent => {
+      console.log('🎲 Event saved:', savedEvent);
+      // Reload events to show the new event
+      await loadTournamentEvents();
+      setShowAddEvent(false);
+    },
+    [loadTournamentEvents],
+  );
 
   const handleEventPress = useCallback(event => {
     console.log('🎲 TournamentDetails: Event pressed:', event.eventName);
     // TODO: Navigate to event details or show event modal
-    Alert.alert(
-      'Event Details',
-      `${event.eventName}\nBuy-in: $${event.buyIn}\nWinnings: $${
-        event.winnings || 0
-      }`,
-    );
   }, []);
 
   const handleEventEdit = useCallback(event => {
@@ -197,6 +204,46 @@ const TournamentDetailsContainer = ({navigation, route}) => {
     [loadTournamentEvents],
   );
 
+  const handleEventRebuy = useCallback(
+    async event => {
+      console.log('🎲 TournamentDetails: Rebuy event:', event.eventName);
+
+      Alert.alert('Add Re-Buy', `Add a re-buy to ${event.eventName}?`, [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Add Re-Buy',
+          onPress: async () => {
+            try {
+              // For now, we'll add a standard rebuy amount equal to the original buy-in
+              const rebuyAmount = event.buyIn || 0;
+              const currentRebuyCount = event.rebuyCount || 0;
+              const currentRebuyAmount = event.rebuyAmount || 0;
+
+              const updatedEventData = {
+                ...event,
+                rebuyCount: currentRebuyCount + 1,
+                rebuyAmount: currentRebuyAmount + rebuyAmount,
+              };
+
+              await TrendAPIService.updateTournamentEvent(
+                event.id,
+                updatedEventData,
+              );
+
+              // Reload events after rebuy
+              await loadTournamentEvents();
+              Alert.alert('Success', 'Re-buy added successfully!');
+            } catch (error) {
+              console.error('🎲 TournamentDetails: Error adding rebuy:', error);
+              Alert.alert('Error', 'Failed to add re-buy. Please try again.');
+            }
+          },
+        },
+      ]);
+    },
+    [loadTournamentEvents],
+  );
+
   const handleEventSwipeStart = useCallback(() => {
     console.log('🎲 TournamentDetails: Event swipe started');
     // TODO: Disable scroll if needed
@@ -222,6 +269,7 @@ const TournamentDetailsContainer = ({navigation, route}) => {
         onEventPress={handleEventPress}
         onEventEdit={handleEventEdit}
         onEventDelete={handleEventDelete}
+        onEventRebuy={handleEventRebuy}
         onEventSwipeStart={handleEventSwipeStart}
         onEventSwipeEnd={handleEventSwipeEnd}
       />
@@ -232,6 +280,14 @@ const TournamentDetailsContainer = ({navigation, route}) => {
         onClose={handleCloseEditTournament}
         onSave={handleSaveTournament}
         editingTournament={tournament}
+      />
+
+      {/* Add Event Modal */}
+      <AddEventContainer
+        visible={showAddEvent}
+        onClose={handleCloseAddEvent}
+        onSave={handleSaveEvent}
+        tournamentId={tournamentId}
       />
     </>
   );

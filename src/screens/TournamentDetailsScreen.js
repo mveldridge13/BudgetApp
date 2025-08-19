@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../styles';
+import EventCard from '../components/EventCard';
 
 const TournamentDetailsScreen = ({
   // ==============================================
@@ -28,6 +29,7 @@ const TournamentDetailsScreen = ({
   onEventPress = () => {},
   onEventEdit = () => {},
   onEventDelete = () => {},
+  onEventRebuy = () => {},
   onEventSwipeStart = () => {},
   onEventSwipeEnd = () => {},
 }) => {
@@ -201,50 +203,16 @@ const TournamentDetailsScreen = ({
           ) : (
             <View style={styles.eventsList}>
               {events.map((event, index) => (
-                <View key={event.id || index} style={styles.eventCard}>
-                  <TouchableOpacity
-                    style={styles.eventContent}
-                    onPress={() => onEventPress(event)}
-                    activeOpacity={0.7}>
-                    <View style={styles.eventHeader}>
-                      <Text style={styles.eventName}>{event.eventName}</Text>
-                      {event.eventNumber && (
-                        <Text style={styles.eventNumber}>
-                          #{event.eventNumber}
-                        </Text>
-                      )}
-                    </View>
-
-                    <View style={styles.eventDetails}>
-                      <View style={styles.eventDetailRow}>
-                        <Text style={styles.eventLabel}>Buy-in:</Text>
-                        <Text style={styles.eventValue}>
-                          ${event.buyIn || 0}
-                        </Text>
-                      </View>
-                      {event.winnings > 0 && (
-                        <View style={styles.eventDetailRow}>
-                          <Text style={styles.eventLabel}>Winnings:</Text>
-                          <Text
-                            style={[
-                              styles.eventValue,
-                              {color: colors.success},
-                            ]}>
-                            ${event.winnings}
-                          </Text>
-                        </View>
-                      )}
-                      {event.finishPosition && (
-                        <View style={styles.eventDetailRow}>
-                          <Text style={styles.eventLabel}>Finish:</Text>
-                          <Text style={styles.eventValue}>
-                            #{event.finishPosition}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
+                <EventCard
+                  key={event.id || index}
+                  event={event}
+                  onPress={() => onEventPress(event)}
+                  onEdit={() => onEventEdit(event)}
+                  onDelete={() => onEventDelete(event.id)}
+                  onRebuy={() => onEventRebuy(event)}
+                  onSwipeStart={onEventSwipeStart}
+                  onSwipeEnd={onEventSwipeEnd}
+                />
               ))}
             </View>
           )}
@@ -411,54 +379,6 @@ const styles = StyleSheet.create({
   },
   eventsList: {
     // No specific styles needed
-  },
-  eventCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  eventContent: {
-    padding: 16,
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  eventName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  eventNumber: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    backgroundColor: colors.border,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  eventDetails: {
-    // No specific styles needed
-  },
-  eventDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  eventLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  eventValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
   },
   errorContainer: {
     flex: 1,

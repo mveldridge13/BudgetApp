@@ -97,7 +97,10 @@ const HomeScreen = ({
         const result = await onSaveTransaction(transaction);
 
         if (result?.success) {
-          setShowAddTransaction(false);
+          // Small delay to allow transaction state to propagate before closing modal
+          setTimeout(() => {
+            setShowAddTransaction(false);
+          }, 50);
         } else {
         }
       } catch (error) {}
@@ -218,16 +221,22 @@ const HomeScreen = ({
           />
         )}
 
-        <TransactionList
-          transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
-          selectedDate={selectedDate}
-          onDeleteTransaction={onDeleteTransaction}
-          onEditTransaction={handleEditTransaction}
-          onSwipeStart={handleSwipeStart}
-          onSwipeEnd={handleSwipeEnd}
-          transactionRef={onboarding?.transactionRef}
-          onTransactionLayout={() => {}} // Handled by onboarding hook
-        />
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading transactions...</Text>
+          </View>
+        ) : (
+          <TransactionList
+            transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
+            selectedDate={selectedDate}
+            onDeleteTransaction={onDeleteTransaction}
+            onEditTransaction={handleEditTransaction}
+            onSwipeStart={handleSwipeStart}
+            onSwipeEnd={handleSwipeEnd}
+            transactionRef={onboarding?.transactionRef}
+            onTransactionLayout={() => {}} // Handled by onboarding hook
+          />
+        )}
       </ScrollView>
 
       {/* ==============================================
@@ -338,6 +347,16 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite,
     lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
 });
 
