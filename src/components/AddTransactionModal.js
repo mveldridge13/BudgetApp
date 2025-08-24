@@ -230,6 +230,10 @@ const AddTransactionModal = ({
     setShowRecurrenceModal(true);
   };
 
+  const showPaymentStatusPicker = () => {
+    setShowPaymentStatusModal(true);
+  };
+
   const hideCategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -273,8 +277,15 @@ const AddTransactionModal = ({
   };
 
   const handleRecurrenceSelect = recurrenceId => {
+    // Don't update state immediately - let the modal handle the animation
     onRecurrenceSelect(recurrenceId);
-    setShowRecurrenceModal(false);
+    // Don't call setShowRecurrenceModal(false) here - let the modal's onClose handle it
+  };
+
+  const handlePaymentStatusSelect = status => {
+    // Don't update state immediately - let the modal handle the animation
+    onPaymentStatusChange(status);
+    // Don't call setShowPaymentStatusModal(false) here - let the modal's onClose handle it
   };
 
   const handleTransactionTypeSelect = type => {
@@ -744,7 +755,7 @@ const AddTransactionModal = ({
                 {selectedTransactionType !== 'POKER' && (
                   <TouchableOpacity
                     style={styles.paymentStatusField}
-                    onPress={() => setShowPaymentStatusModal(true)}
+                    onPress={showPaymentStatusPicker}
                     activeOpacity={0.7}>
                     <View style={styles.paymentStatusLeft}>
                       <Icon
@@ -926,7 +937,7 @@ const AddTransactionModal = ({
         visible={showPaymentStatusModal}
         onClose={() => setShowPaymentStatusModal(false)}
         selectedPaymentStatus={selectedPaymentStatus}
-        onPaymentStatusSelect={onPaymentStatusChange}
+        onPaymentStatusSelect={handlePaymentStatusSelect}
         paymentStatusOptions={paymentStatusOptions}
       />
 

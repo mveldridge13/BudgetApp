@@ -25,7 +25,7 @@ const PaymentStatusModal = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  // Animation values
+  // Animation values - matching PaymentStatusModal exactly
   const slideAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -35,7 +35,7 @@ const PaymentStatusModal = ({
       slideAnim.setValue(screenWidth);
       fadeAnim.setValue(0);
 
-      // Slide in from right with fade
+      // Slide in from right with fade - parallel animation restored
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
@@ -56,7 +56,7 @@ const PaymentStatusModal = ({
   }, [visible, slideAnim, fadeAnim]);
 
   const handleClose = () => {
-    // Slide out to right with fade
+    // Slide out to right with fade - parallel animation restored
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: screenWidth,
@@ -74,34 +74,22 @@ const PaymentStatusModal = ({
   };
 
   const handlePaymentStatusSelect = status => {
-    onPaymentStatusSelect(status);
-    handleClose(); // Use animated close
-  };
-
-  const getPaymentStatusIcon = status => {
-    switch (status) {
-      case 'UPCOMING':
-        return 'time-outline';
-      case 'PAID':
-        return 'checkmark-circle-outline';
-      case 'OVERDUE':
-        return 'warning-outline';
-      default:
-        return 'time-outline';
-    }
-  };
-
-  const getPaymentStatusColor = status => {
-    switch (status) {
-      case 'UPCOMING':
-        return '#007AFF';
-      case 'PAID':
-        return '#4CAF50';
-      case 'OVERDUE':
-        return '#F44336';
-      default:
-        return colors.textSecondary;
-    }
+    // Slide out to right with fade - parallel animation restored
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: screenWidth,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onPaymentStatusSelect(status);
+      onClose();
+    });
   };
 
   if (!visible) {
@@ -133,11 +121,9 @@ const PaymentStatusModal = ({
             {/* Status bar spacer to prevent header color bleeding */}
             <View style={[styles.statusBarSpacer, {height: insets.top}]} />
 
-            {/* Header */}
+            {/* Header - PaymentStatusModal design with back button */}
             <View style={styles.header}>
-              <TouchableOpacity
-                onPress={handleClose}
-                style={styles.backButton}>
+              <TouchableOpacity onPress={handleClose} style={styles.backButton}>
                 <Icon name="chevron-back" size={24} color={colors.textWhite} />
               </TouchableOpacity>
               <Text style={styles.title}>Payment Status</Text>
@@ -152,20 +138,14 @@ const PaymentStatusModal = ({
                 <TouchableOpacity
                   key={option.id}
                   style={[
-                    styles.statusOption,
+                    styles.option,
                     selectedPaymentStatus === option.id &&
                       styles.selectedOption,
                   ]}
                   onPress={() => handlePaymentStatusSelect(option.id)}
                   activeOpacity={0.7}>
-                  <View style={styles.statusLeft}>
-                    <Icon
-                      name={getPaymentStatusIcon(option.id)}
-                      size={18}
-                      color={getPaymentStatusColor(option.id)}
-                      style={styles.statusIcon}
-                    />
-                    <Text style={styles.statusName}>{option.name}</Text>
+                  <View style={styles.optionLeft}>
+                    <Text style={styles.optionText}>{option.name}</Text>
                   </View>
                   {selectedPaymentStatus === option.id && (
                     <Icon name="checkmark" size={20} color={colors.primary} />
@@ -223,7 +203,7 @@ const styles = StyleSheet.create({
     padding: 20,
     flex: 1,
   },
-  statusOption: {
+  option: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -235,14 +215,11 @@ const styles = StyleSheet.create({
   selectedOption: {
     backgroundColor: colors.overlayLight,
   },
-  statusLeft: {
+  optionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  statusIcon: {
-    marginRight: 12,
-  },
-  statusName: {
+  optionText: {
     fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',

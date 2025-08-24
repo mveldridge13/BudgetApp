@@ -15,9 +15,9 @@ const recurrenceOptions = [
 ];
 
 const paymentStatusOptions = [
-  {id: 'UPCOMING', name: 'Upcoming'},
-  {id: 'PAID', name: 'Paid'},
-  {id: 'OVERDUE', name: 'Overdue'},
+  {id: 'UPCOMING', name: 'Upcoming', icon: 'time-outline', color: '#007AFF'},
+  {id: 'PAID', name: 'Paid', icon: 'checkmark-circle-outline', color: '#4CAF50'},
+  {id: 'OVERDUE', name: 'Overdue', icon: 'warning-outline', color: '#F44336'},
 ];
 
 const AddTransactionContainer = ({

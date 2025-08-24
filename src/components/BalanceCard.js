@@ -37,40 +37,6 @@ const BalanceCard = ({
     return `${month} ${day}`;
   };
 
-  // Format the next pay date for display
-  const formatNextPayDate = () => {
-    if (!incomeData?.nextPayDate) {
-      return '';
-    }
-
-    let nextPayDate;
-
-    // Handle both ISO string format and DD/MM/YYYY format
-    if (incomeData.nextPayDate.includes('T')) {
-      // ISO string format from CalendarModal
-      nextPayDate = new Date(incomeData.nextPayDate);
-    } else {
-      // Legacy DD/MM/YYYY format
-      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-      nextPayDate = new Date(
-        2000 + parseInt(yearStr, 10),
-        parseInt(monthStr, 10) - 1,
-        parseInt(dayStr, 10),
-      );
-    }
-
-    // Validate the date
-    if (isNaN(nextPayDate.getTime())) {
-      return incomeData.nextPayDate; // Fallback to original string
-    }
-
-    // Format as DD/MM/YYYY for display
-    return nextPayDate.toLocaleDateString('en-AU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
 
   // Filter goals that should be shown on balance card
   const balanceCardGoals = goals.filter(goal => goal.showOnBalanceCard);
@@ -171,7 +137,7 @@ const BalanceCard = ({
           activeOpacity={0.7}>
           <Text style={styles.currentMonth}>{getCurrentDate()}</Text>
           <Text style={styles.frequencyDisplay}>
-            Paid {incomeData.frequency} • Next: {formatNextPayDate()}
+            Paid {incomeData.frequency}
           </Text>
         </TouchableOpacity>
       )}
