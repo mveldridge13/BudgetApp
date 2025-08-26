@@ -21,6 +21,10 @@ const TournamentDetailsContainer = ({navigation, route}) => {
   const [loading, setLoading] = useState(true);
   const [showEditTournament, setShowEditTournament] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
+  const [showEditEvent, setShowEditEvent] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [showCloseEvent, setShowCloseEvent] = useState(false);
+  const [closingEvent, setClosingEvent] = useState(null);
 
   // ==============================================
   // LOAD TOURNAMENT EVENTS
@@ -32,7 +36,7 @@ const TournamentDetailsContainer = ({navigation, route}) => {
           '🎲 TournamentDetails: Not authenticated or missing tournament ID',
         );
         setLoading(false);
-        return;
+        return [];
       }
 
       console.log(
@@ -55,8 +59,10 @@ const TournamentDetailsContainer = ({navigation, route}) => {
           (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
         );
         setEvents(sortedEvents);
+        return sortedEvents;
       } else {
         setEvents([]);
+        return [];
       }
     } catch (error) {
       console.error('🎲 TournamentDetails: Error loading events:', error);
@@ -66,6 +72,7 @@ const TournamentDetailsContainer = ({navigation, route}) => {
         'Failed to load tournament events. Please try again.',
         [{text: 'OK'}],
       );
+      return [];
     } finally {
       setLoading(false);
     }
@@ -144,14 +151,161 @@ const TournamentDetailsContainer = ({navigation, route}) => {
     setShowAddEvent(false);
   }, []);
 
-  const handleSaveEvent = useCallback(
-    async savedEvent => {
-      console.log('🎲 Event saved:', savedEvent);
-      // Reload events to show the new event
-      await loadTournamentEvents();
-      setShowAddEvent(false);
+  const handleCloseEditEvent = useCallback(() => {
+    console.log('🎲 Closing edit event modal');
+    setShowEditEvent(false);
+    setEditingEvent(null);
+  }, []);
+
+  const handleSaveEvent = useCallback(async (savedEvent, isSynced, error) => {
+    console.log('🎲 Event saved:', {savedEvent, isSynced, error});
+
+    if (error) {
+      // Handle sync error - could implement retry logic here
+      console.error('🎲 Event sync failed:', error);
+      return;
+    }
+
+    if (!isSynced) {
+      // 🎯 OPTIMISTIC UPDATE: Add event to local state immediately
+      const optimisticEvent = savedEvent;
+      setEvents(prev => {
+        // Sort events by date (most recent first)
+        const updated = [optimisticEvent, ...prev].sort(
+          (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
+        );
+        return updated;
+      });
+    } else {
+      // 🔄 SERVER SYNC COMPLETE: Update with real server data
+      setEvents(prev => {
+        const updated = prev.map(event =>
+          event.id === savedEvent.id || event.id?.startsWith('temp_')
+            ? savedEvent
+            : event,
+        );
+        return updated.sort(
+          (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
+        );
+      });
+    }
+
+    setShowAddEvent(false);
+  }, []);
+
+  const handleSaveEditEvent = useCallback(
+    async (savedEvent, isSynced, error) => {
+      console.log('🎲 Event updated:', {savedEvent, isSynced, error});
+
+      if (error) {
+        console.error('🎲 Event edit sync failed:', error);
+        return;
+      }
+
+      if (!isSynced) {
+        // 🎯 OPTIMISTIC UPDATE: Update event in local state immediately
+        setEvents(prev => {
+          const updated = prev.map(event =>
+            event.id === savedEvent.id ? savedEvent : event,
+          );
+          return updated.sort(
+            (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
+          );
+        });
+      } else {
+        // 🔄 SERVER SYNC COMPLETE: Update with real server data
+        console.log(
+          '🎲 TournamentDetails: SERVER SYNC - Updating events array with server data',
+        );
+        console.log(
+          '🎲 TournamentDetails: Server savedEvent gameType:',
+          savedEvent.gameType,
+        );
+        setEvents(prev => {
+          console.log('🎲 TournamentDetails: Events before server update:');
+          prev.forEach(e => console.log('  -', e.eventName, 'gameType:', e.gameType));
+          console.log('🎲 TournamentDetails: Server savedEvent to replace:', {
+            id: savedEvent.id,
+            name: savedEvent.eventName,
+            gameType: savedEvent.gameType,
+          });
+          const updated = prev.map(event => {
+            if (event.id === savedEvent.id) {
+              console.log('🎲 TournamentDetails: Replacing event:', {
+                oldGameType: event.gameType,
+                newGameType: savedEvent.gameType,
+              });
+              return savedEvent;
+            }
+            return event;
+          });
+          console.log(
+            '🎲 TournamentDetails: Events after server update:',
+            updated.map(e => ({
+              id: e.id,
+              name: e.eventName,
+              gameType: e.gameType,
+            })),
+          );
+          return updated.sort(
+            (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
+          );
+        });
+      }
+
+      setShowEditEvent(false);
+      setEditingEvent(null);
     },
-    [loadTournamentEvents],
+    [],
+  );
+
+  const handleEventClose = useCallback(event => {
+    console.log('🎲 TournamentDetails: Close event:', event.eventName);
+    setClosingEvent(event);
+    setShowCloseEvent(true);
+  }, []);
+
+  const handleCloseCloseEvent = useCallback(() => {
+    console.log('🎲 Closing close event modal');
+    setShowCloseEvent(false);
+    setClosingEvent(null);
+  }, []);
+
+  const handleSaveCloseEvent = useCallback(
+    async (savedEvent, isSynced, error) => {
+      console.log('🎲 Event closed out:', {savedEvent, isSynced, error});
+
+      if (error) {
+        console.error('🎲 Event close sync failed:', error);
+        return;
+      }
+
+      if (!isSynced) {
+        // 🎯 OPTIMISTIC UPDATE: Update event in local state immediately
+        setEvents(prev => {
+          const updated = prev.map(event =>
+            event.id === savedEvent.id ? savedEvent : event,
+          );
+          return updated.sort(
+            (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
+          );
+        });
+      } else {
+        // 🔄 SERVER SYNC COMPLETE: Update with real server data
+        setEvents(prev => {
+          const updated = prev.map(event =>
+            event.id === savedEvent.id ? savedEvent : event,
+          );
+          return updated.sort(
+            (a, b) => new Date(b.eventDate) - new Date(a.eventDate),
+          );
+        });
+      }
+
+      setShowCloseEvent(false);
+      setClosingEvent(null);
+    },
+    [],
   );
 
   const handleEventPress = useCallback(event => {
@@ -159,14 +313,32 @@ const TournamentDetailsContainer = ({navigation, route}) => {
     // TODO: Navigate to event details or show event modal
   }, []);
 
-  const handleEventEdit = useCallback(event => {
-    console.log('🎲 TournamentDetails: Edit event:', event.eventName);
-    // TODO: Show edit event modal
-    Alert.alert(
-      'Coming Soon',
-      'Edit event functionality will be implemented next.',
-    );
-  }, []);
+  const handleEventEdit = useCallback(
+    async event => {
+      console.log('🎲 TournamentDetails: Edit event:', event.eventName);
+      console.log(
+        '🎲 TournamentDetails: Original event gameType:',
+        event.gameType,
+      );
+
+      // Reload events from server to ensure we have the most up-to-date data
+      console.log(
+        '🎲 TournamentDetails: Reloading events from server before edit...',
+      );
+      const freshEvents = await loadTournamentEvents();
+
+      // Find the refreshed event data from the fresh server response
+      const refreshedEvent = freshEvents.find(e => e.id === event.id) || event;
+      console.log(
+        '🎲 TournamentDetails: Using refreshed event gameType:',
+        refreshedEvent.gameType,
+      );
+
+      setEditingEvent(refreshedEvent);
+      setShowEditEvent(true);
+    },
+    [loadTournamentEvents],
+  );
 
   const handleEventDelete = useCallback(
     async eventId => {
@@ -216,13 +388,13 @@ const TournamentDetailsContainer = ({navigation, route}) => {
             try {
               // For now, we'll add a standard rebuy amount equal to the original buy-in
               const rebuyAmount = event.buyIn || 0;
-              const currentRebuyCount = event.rebuyCount || 0;
-              const currentRebuyAmount = event.rebuyAmount || 0;
+              const currentReBuys = event.reBuys || 0;
+              const currentReBuyAmount = event.reBuyAmount || 0;
 
               const updatedEventData = {
                 ...event,
-                rebuyCount: currentRebuyCount + 1,
-                rebuyAmount: currentRebuyAmount + rebuyAmount,
+                reBuys: currentReBuys + 1,
+                reBuyAmount: currentReBuyAmount + rebuyAmount,
               };
 
               await TrendAPIService.updateTournamentEvent(
@@ -270,6 +442,7 @@ const TournamentDetailsContainer = ({navigation, route}) => {
         onEventEdit={handleEventEdit}
         onEventDelete={handleEventDelete}
         onEventRebuy={handleEventRebuy}
+        onEventClose={handleEventClose}
         onEventSwipeStart={handleEventSwipeStart}
         onEventSwipeEnd={handleEventSwipeEnd}
       />
@@ -288,6 +461,25 @@ const TournamentDetailsContainer = ({navigation, route}) => {
         onClose={handleCloseAddEvent}
         onSave={handleSaveEvent}
         tournamentId={tournamentId}
+      />
+
+      {/* Edit Event Modal */}
+      <AddEventContainer
+        visible={showEditEvent}
+        onClose={handleCloseEditEvent}
+        onSave={handleSaveEditEvent}
+        tournamentId={tournamentId}
+        editingEvent={editingEvent}
+      />
+
+      {/* Close Event Modal */}
+      <AddEventContainer
+        visible={showCloseEvent}
+        onClose={handleCloseCloseEvent}
+        onSave={handleSaveCloseEvent}
+        tournamentId={tournamentId}
+        editingEvent={closingEvent}
+        isCloseOutMode={true}
       />
     </>
   );

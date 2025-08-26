@@ -1083,14 +1083,20 @@ class TrendAPIService {
 
   async getTournamentEvents(tournamentId) {
     try {
-      const result = await this.makeRequest(`/poker/tournaments/${tournamentId}/events`);
+      const result = await this.makeRequest(
+        `/poker/tournaments/${tournamentId}/events`,
+      );
       return result;
     } catch (error) {
       // Handle 404 errors gracefully - the backend endpoint may not exist yet
-      if (error.message.includes('404') ||
-          error.message.includes('Not Found') ||
-          error.message.includes('Cannot GET')) {
-        console.log('🎲 Tournament events endpoint not available yet, returning empty array');
+      if (
+        error.message.includes('404') ||
+        error.message.includes('Not Found') ||
+        error.message.includes('Cannot GET')
+      ) {
+        console.log(
+          '🎲 Tournament events endpoint not available yet, returning empty array',
+        );
         return [];
       }
       // Re-throw other errors
@@ -1100,6 +1106,12 @@ class TrendAPIService {
 
   async createTournamentEvent(tournamentId, eventData) {
     console.log('🎲 CREATE_EVENT: Starting with data:', eventData);
+    console.log(
+      '🎲 CREATE_EVENT: startingStack value:',
+      eventData.startingStack,
+      'type:',
+      typeof eventData.startingStack,
+    );
 
     const cleanEventData = {...eventData};
 
@@ -1111,7 +1123,13 @@ class TrendAPIService {
     // Convert numeric fields
     cleanEventData.buyIn = parseFloat(cleanEventData.buyIn || 0);
     cleanEventData.winnings = parseFloat(cleanEventData.winnings || 0);
+    cleanEventData.startingStack =
+      parseInt(cleanEventData.startingStack, 10) || 0;
 
+    console.log(
+      '🎲 CREATE_EVENT: After processing startingStack:',
+      cleanEventData.startingStack,
+    );
     if (cleanEventData.fieldSize) {
       cleanEventData.fieldSize = parseInt(cleanEventData.fieldSize, 10);
     }
@@ -1150,6 +1168,14 @@ class TrendAPIService {
   }
 
   async updateTournamentEvent(eventId, eventData) {
+    console.log('🎲 UPDATE_EVENT: Starting with data:', eventData);
+    console.log('🎲 UPDATE_EVENT: gameType value:', eventData.gameType);
+    console.log(
+      '🎲 UPDATE_EVENT: startingStack value:',
+      eventData.startingStack,
+      'type:',
+      typeof eventData.startingStack,
+    );
     const cleanEventData = {...eventData};
 
     // Convert dates if provided
@@ -1167,6 +1193,14 @@ class TrendAPIService {
     if (cleanEventData.winnings !== undefined) {
       cleanEventData.winnings = parseFloat(cleanEventData.winnings || 0);
     }
+    if (cleanEventData.startingStack !== undefined) {
+      cleanEventData.startingStack =
+        parseInt(cleanEventData.startingStack, 10) || 0;
+      console.log(
+        '🎲 UPDATE_EVENT: After processing startingStack:',
+        cleanEventData.startingStack,
+      );
+    }
     if (cleanEventData.fieldSize !== undefined) {
       cleanEventData.fieldSize = parseInt(cleanEventData.fieldSize, 10);
     }
@@ -1177,6 +1211,8 @@ class TrendAPIService {
       );
     }
 
+    console.log('🎲 UPDATE_EVENT: Sending to server:', cleanEventData);
+
     const response = await this.makeRequest(
       `/poker/tournaments/events/${eventId}`,
       {
@@ -1184,6 +1220,8 @@ class TrendAPIService {
         body: cleanEventData,
       },
     );
+
+    console.log('🎲 UPDATE_EVENT: Server response:', response);
 
     if (response?.event) {
       return response.event;

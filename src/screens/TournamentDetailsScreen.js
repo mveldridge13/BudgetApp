@@ -30,6 +30,7 @@ const TournamentDetailsScreen = ({
   onEventEdit = () => {},
   onEventDelete = () => {},
   onEventRebuy = () => {},
+  onEventClose = () => {},
   onEventSwipeStart = () => {},
   onEventSwipeEnd = () => {},
 }) => {
@@ -210,6 +211,7 @@ const TournamentDetailsScreen = ({
                   onEdit={() => onEventEdit(event)}
                   onDelete={() => onEventDelete(event.id)}
                   onRebuy={() => onEventRebuy(event)}
+                  onClose={() => onEventClose(event)}
                   onSwipeStart={onEventSwipeStart}
                   onSwipeEnd={onEventSwipeEnd}
                 />

@@ -11,18 +11,24 @@ const AddEventContainer = ({
   onSave, // Called when event is successfully created/updated
   tournamentId, // Required for creating events
   editingEvent = null, // Event to edit (null for create mode)
+  isCloseOutMode = false, // True when closing out an event (only results editable)
 }) => {
   // ==============================================
   // FORM STATE
   // ==============================================
   const [eventName, setEventName] = useState('');
-  const [eventType, setEventType] = useState('');
+  const [eventNumber, setEventNumber] = useState('');
+  const [gameType, setGameType] = useState('');
   const [buyIn, setBuyIn] = useState('');
   const [startingStack, setStartingStack] = useState('');
   const [blindStructure, setBlindStructure] = useState('');
   const [eventDate, setEventDate] = useState(null);
   const [start, setStart] = useState('');
   const [lateRego, setLateRego] = useState('');
+
+  // Event Results fields (only for close-out mode)
+  const [finishPosition, setFinishPosition] = useState('');
+  const [prize, setPrize] = useState('');
 
   // Calendar state
   const [showCalendar, setShowCalendar] = useState(false);
@@ -36,9 +42,14 @@ const AddEventContainer = ({
         '🎲 AddEventContainer: Initializing form with editing event:',
         editingEvent,
       );
+      console.log(
+        '🎲 AddEventContainer: editingEvent.gameType value:',
+        editingEvent.gameType,
+      );
 
       setEventName(editingEvent.eventName || '');
-      setEventType(editingEvent.eventType || '');
+      setEventNumber(editingEvent.eventNumber || '');
+      setGameType(editingEvent.gameType || '');
       setBuyIn(editingEvent.buyIn?.toString() || '');
       setStartingStack(editingEvent.startingStack?.toString() || '');
       setBlindStructure(editingEvent.blindStructure || '');
@@ -47,17 +58,29 @@ const AddEventContainer = ({
       );
       setStart(editingEvent.start || '');
       setLateRego(editingEvent.lateRego || '');
+
+      // Results fields
+      setFinishPosition(editingEvent.finishPosition?.toString() || '');
+      setPrize(editingEvent.winnings?.toString() || ''); // Using winnings as prize
+
+      console.log(
+        '🎲 AddEventContainer: After setting gameType state:',
+        editingEvent.gameType,
+      );
     } else if (visible && !editingEvent) {
       console.log('🎲 AddEventContainer: Resetting form for create mode');
       // Reset form for create mode
       setEventName('');
-      setEventType('');
+      setEventNumber('');
+      setGameType('');
       setBuyIn('');
       setStartingStack('');
       setBlindStructure('');
       setEventDate(null);
       setStart('');
       setLateRego('');
+      setFinishPosition('');
+      setPrize('');
     }
   }, [editingEvent, visible]);
 
@@ -68,8 +91,14 @@ const AddEventContainer = ({
     setEventName(value);
   }, []);
 
-  const handleEventTypeChange = useCallback(value => {
-    setEventType(value);
+  const handleEventNumberChange = useCallback(value => {
+    setEventNumber(value);
+  }, []);
+
+  const handleGameTypeChange = useCallback(value => {
+    console.log('🎲 AddEventContainer: handleGameTypeChange called with:', value);
+    setGameType(value);
+    console.log('🎲 AddEventContainer: gameType state should now be:', value);
   }, []);
 
   const handleBuyInChange = useCallback(value => {
@@ -90,6 +119,14 @@ const AddEventContainer = ({
 
   const handleLateRegoChange = useCallback(value => {
     setLateRego(value);
+  }, []);
+
+  const handleFinishPositionChange = useCallback(value => {
+    setFinishPosition(value);
+  }, []);
+
+  const handlePrizeChange = useCallback(value => {
+    setPrize(value);
   }, []);
 
   // ==============================================
@@ -133,8 +170,22 @@ const AddEventContainer = ({
       return false;
     }
 
+    // Results field validation (only when provided)
+    if (finishPosition && isNaN(parseInt(finishPosition, 10))) {
+      Alert.alert(
+        'Validation Error',
+        'Finish position must be a valid number.',
+      );
+      return false;
+    }
+
+    if (prize && isNaN(parseFloat(prize))) {
+      Alert.alert('Validation Error', 'Prize must be a valid number.');
+      return false;
+    }
+
     return true;
-  }, [eventName, tournamentId, buyIn, startingStack]);
+  }, [eventName, tournamentId, buyIn, startingStack, finishPosition, prize]);
 
   // ==============================================
   // BUSINESS LOGIC - SAVE EVENT
@@ -160,6 +211,7 @@ const AddEventContainer = ({
         `🎲 AddEventContainer: ${isEditMode ? 'Updating' : 'Creating'} event:`,
         {
           eventName,
+          eventNumber,
           buyIn: parseFloat(buyIn) || 0,
           startingStack: parseInt(startingStack, 10) || 0,
           blindStructure: blindStructure,
@@ -167,10 +219,11 @@ const AddEventContainer = ({
         },
       );
 
-      // Prepare event data for API
+      // Prepare event data for optimistic update
       const eventData = {
         eventName: eventName.trim(),
-        eventType: eventType.trim(),
+        eventNumber: eventNumber.trim() || null,
+        gameType: gameType.trim(),
         buyIn: parseFloat(buyIn) || 0,
         startingStack: parseInt(startingStack, 10) || 0,
         blindStructure: blindStructure.trim(),
@@ -179,18 +232,52 @@ const AddEventContainer = ({
           : new Date().toISOString(),
         start: start.trim(),
         lateRego: lateRego.trim(),
+        // Results fields (mapped to backend schema)
+        finishPosition: finishPosition ? parseInt(finishPosition, 10) : null,
+        winnings: parseFloat(prize) || 0, // Prize maps to winnings field
+        // Mark event as closed when closing out (regardless of results entered)
+        isClosed: isCloseOutMode,
       };
 
       console.log(
-        '🎲 AddEventContainer: Prepared event data for API:',
+        '🎲 AddEventContainer: Prepared event data for optimistic update:',
         eventData,
       );
+
+      // 🎯 CACHE-FIRST: Immediate optimistic update
+      let optimisticEvent = null;
+      if (isEditMode) {
+        // Update existing event optimistically
+        optimisticEvent = {
+          ...editingEvent,
+          ...eventData,
+          updatedAt: new Date().toISOString(),
+        };
+      } else {
+        // Create new event optimistically
+        const tempId = `temp_${Date.now()}_${Math.random()}`;
+        optimisticEvent = {
+          ...eventData,
+          id: tempId,
+          tournamentId: tournamentId,
+          userId: 'current_user', // Will be set properly by backend
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          reBuys: 0,
+          reBuyAmount: 0,
+        };
+      }
 
       // Reset form and close modal immediately for better UX
       resetForm();
       onClose();
 
-      // Create/Update event on server
+      // Notify parent with optimistic data first
+      if (onSave) {
+        onSave(optimisticEvent, false); // false indicates optimistic update
+      }
+
+      // 🔄 BACKGROUND SYNC: Update server in background
       try {
         const savedEvent = isEditMode
           ? await TrendAPIService.updateTournamentEvent(
@@ -205,15 +292,16 @@ const AddEventContainer = ({
         console.log(
           `🎲 AddEventContainer: Event ${
             isEditMode ? 'updated' : 'created'
-          } successfully:`,
+          } successfully on server:`,
           savedEvent,
         );
 
-        // Notify parent of successful save
+        // Notify parent with real server data
         if (onSave) {
-          onSave(savedEvent);
+          onSave(savedEvent, true); // true indicates server sync complete
         }
 
+        // Show success message
         Alert.alert(
           'Success',
           `Event ${isEditMode ? 'updated' : 'created'} successfully!`,
@@ -221,29 +309,36 @@ const AddEventContainer = ({
       } catch (syncError) {
         console.error('🎲 AddEventContainer: Server sync failed:', syncError);
 
+        // Notify parent about sync failure so they can handle rollback
+        if (onSave) {
+          onSave(null, 'error', syncError); // Pass error info
+        }
+
         Alert.alert(
-          'Error',
-          `Failed to ${
-            isEditMode ? 'update' : 'create'
-          } event. Please try again.`,
+          'Sync Error',
+          'Event saved locally but failed to sync to server. It will be retried automatically.',
           [{text: 'OK'}],
         );
       }
     } catch (error) {
-      console.error('🎲 AddEventContainer: Error creating event:', error);
-      Alert.alert('Error', 'Failed to create event. Please try again.', [
+      console.error('🎲 AddEventContainer: Error in handleSave:', error);
+      Alert.alert('Error', 'Failed to save event. Please try again.', [
         {text: 'OK'},
       ]);
     }
   }, [
     eventName,
-    eventType,
+    eventNumber,
+    gameType,
     buyIn,
     startingStack,
     blindStructure,
     eventDate,
     start,
     lateRego,
+    finishPosition,
+    prize,
+    isCloseOutMode,
     tournamentId,
     editingEvent,
     onSave,
@@ -264,13 +359,16 @@ const AddEventContainer = ({
   // ==============================================
   const resetForm = () => {
     setEventName('');
-    setEventType('');
+    setEventNumber('');
+    setGameType('');
     setBuyIn('');
     setStartingStack('');
     setBlindStructure('');
     setEventDate(null);
     setStart('');
     setLateRego('');
+    setFinishPosition('');
+    setPrize('');
     setShowCalendar(false);
   };
 
@@ -287,23 +385,30 @@ const AddEventContainer = ({
       isEditMode={isEditMode}
       // Form data
       eventName={eventName}
-      eventType={eventType}
+      eventNumber={eventNumber}
+      gameType={gameType}
       buyIn={buyIn}
       startingStack={startingStack}
       blindStructure={blindStructure}
       eventDate={eventDate}
       start={start}
       lateRego={lateRego}
+      finishPosition={finishPosition}
+      prize={prize}
+      isCloseOutMode={isCloseOutMode}
       // Calendar state
       showCalendar={showCalendar}
       // Event handlers
       onEventNameChange={handleEventNameChange}
-      onEventTypeChange={handleEventTypeChange}
+      onEventNumberChange={handleEventNumberChange}
+      onGameTypeChange={handleGameTypeChange}
       onBuyInChange={handleBuyInChange}
       onStartingStackChange={handleStartingStackChange}
       onBlindStructureChange={handleBlindStructureChange}
       onStartChange={handleStartChange}
       onLateRegoChange={handleLateRegoChange}
+      onFinishPositionChange={handleFinishPositionChange}
+      onPrizeChange={handlePrizeChange}
       onShowCalendar={handleShowCalendar}
       onHideCalendar={handleHideCalendar}
       onDateChange={handleDateChange}

@@ -19,33 +19,50 @@ import CalendarModal from './CalendarModal';
 
 const {width: screenWidth} = Dimensions.get('window');
 
+const EVENT_TYPES = [
+  { value: 'NO_LIMIT_HOLDEM', label: 'No-Limit Hold\'em' },
+  { value: 'SATELLITE', label: 'Satellite' },
+  { value: 'FREEZEOUT', label: 'Freezeout' },
+  { value: 'BOUNTY', label: 'Bounty' },
+  { value: 'TURBO', label: 'Turbo' },
+  { value: 'DEEPSTACK', label: 'Deepstack' },
+  { value: 'TEAM_EVENT', label: 'Team Event' },
+];
+
 const AddEventModal = ({
   visible,
   onClose,
   onSave,
   isEditMode = false,
+  isCloseOutMode = false,
 
   // Form data
   eventName,
-  eventType,
+  eventNumber,
+  gameType,
   buyIn,
   startingStack,
   blindStructure,
   eventDate,
   start,
   lateRego,
+  finishPosition,
+  prize,
 
   // Calendar state
   showCalendar,
 
   // Event handlers
   onEventNameChange,
-  onEventTypeChange,
+  onEventNumberChange,
+  onGameTypeChange,
   onBuyInChange,
   onStartingStackChange,
   onBlindStructureChange,
   onStartChange,
   onLateRegoChange,
+  onFinishPositionChange,
+  onPrizeChange,
   onShowCalendar,
   onHideCalendar,
   onDateChange,
@@ -53,6 +70,7 @@ const AddEventModal = ({
   const insets = useSafeAreaInsets();
 
   // Animation values
+  const slideAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -63,6 +81,7 @@ const AddEventModal = ({
   useEffect(() => {
     if (visible) {
       // Reset animations to starting positions
+      slideAnim.setValue(0);
       modalAnim.setValue(screenWidth);
       fadeAnim.setValue(0);
 
@@ -81,47 +100,122 @@ const AddEventModal = ({
       ]).start();
     } else {
       // Reset positions when modal is closed
+      slideAnim.setValue(0);
       modalAnim.setValue(screenWidth);
       fadeAnim.setValue(0);
     }
-  }, [visible, modalAnim, fadeAnim]);
+  }, [visible, slideAnim, modalAnim, fadeAnim]);
 
   // ==============================================
   // UI EVENT HANDLERS
   // ==============================================
 
   const handleSave = () => {
-    Animated.parallel([
-      Animated.timing(modalAnim, {
-        toValue: screenWidth,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
+    const currentValue = slideAnim._value;
+
+    if (currentValue === 0) {
+      Animated.parallel([
+        Animated.timing(modalAnim, {
+          toValue: screenWidth,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        onSave();
+      });
+    } else {
+      Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onSave();
-    });
+      }).start(() => {
+        Animated.parallel([
+          Animated.timing(modalAnim, {
+            toValue: screenWidth,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          onSave();
+        });
+      });
+    }
   };
 
   const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(modalAnim, {
-        toValue: screenWidth,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
+    const currentValue = slideAnim._value;
+
+    if (currentValue === 0) {
+      Animated.parallel([
+        Animated.timing(modalAnim, {
+          toValue: screenWidth,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        onClose();
+      });
+    } else {
+      Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
+      }).start(() => {
+        Animated.parallel([
+          Animated.timing(modalAnim, {
+            toValue: screenWidth,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          onClose();
+        });
+      });
+    }
+  };
+
+  // Navigation functions
+  const showEventTypePicker = () => {
+    Animated.timing(slideAnim, {
+      toValue: -screenWidth,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const hideEventTypePicker = () => {
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleEventTypeSelect = (type) => {
+    console.log('🎲 AddEventModal: handleEventTypeSelect called with:', type);
+    onGameTypeChange(type);
+    console.log('🎲 AddEventModal: Called onGameTypeChange, hiding picker');
+    hideEventTypePicker();
   };
 
   // ==============================================
@@ -167,13 +261,27 @@ const AddEventModal = ({
               transform: [{translateX: modalAnim}],
             },
           ]}>
-          {/* Header */}
-          <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+          {/* Container for all views */}
+          <Animated.View
+            style={[
+              styles.viewContainer,
+              {
+                transform: [{translateX: slideAnim}],
+              },
+            ]}>
+            {/* Event Form View */}
+            <View style={styles.view}>
+              {/* Header */}
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
             <TouchableOpacity onPress={handleClose} style={styles.cancelButton}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
-              {isEditMode ? 'Edit Event' : 'Add Event'}
+              {isCloseOutMode
+                ? 'Close Event'
+                : isEditMode
+                ? 'Edit Event'
+                : 'Add Event'}
             </Text>
             <TouchableOpacity
               onPress={handleSave}
@@ -188,151 +296,294 @@ const AddEventModal = ({
                   styles.saveText,
                   !eventName && styles.saveTextDisabled,
                 ]}>
-                {isEditMode ? 'Update' : 'Save'}
+                {isCloseOutMode ? 'Close' : isEditMode ? 'Update' : 'Save'}
               </Text>
             </TouchableOpacity>
-          </View>
+              </View>
 
-          <KeyboardAvoidingView
-            style={styles.keyboardAvoidingView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+              <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
             <ScrollView
               style={styles.formContainer}
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
-            {/* Event Details Section */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Event Details</Text>
-            </View>
+              {!isCloseOutMode && (
+                <>
+                  {/* Event Details Section */}
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Event Details</Text>
+                  </View>
 
-            {/* Event Name Field */}
-            <TextInput
-              style={styles.nameInput}
-              value={eventName}
-              onChangeText={onEventNameChange}
-              placeholder="Event Name"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-            />
+                  {/* Event Name Field */}
+                  <TextInput
+                    style={styles.nameInput}
+                    value={eventName}
+                    onChangeText={onEventNameChange}
+                    placeholder="Event Name"
+                    placeholderTextColor={colors.textSecondary}
+                    autoCapitalize="words"
+                  />
 
-            {/* Event Type Field */}
-            <TextInput
-              style={styles.typeInput}
-              value={eventType}
-              onChangeText={onEventTypeChange}
-              placeholder="Event Type (e.g., No-Limit Hold'em)"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-            />
+                  {/* Event Number Field */}
+                  <TextInput
+                    style={styles.numberInput}
+                    value={eventNumber}
+                    onChangeText={onEventNumberChange}
+                    placeholder="Event Number (optional)"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
 
-            {/* Event Date Field */}
-            <TouchableOpacity
-              style={styles.dateField}
-              onPress={onShowCalendar}
-              activeOpacity={0.7}>
-              <Icon
-                name="calendar-outline"
-                size={18}
-                color={eventDate ? colors.primary : colors.textSecondary}
-                style={styles.dateIcon}
-              />
-              <Text
-                style={[styles.dateText, eventDate && styles.dateTextActive]}>
-                {eventDate ? formatDate(eventDate) : 'Event Date'}
-              </Text>
-            </TouchableOpacity>
+                  {/* Game Type Field */}
+                  <TouchableOpacity
+                    style={styles.typePickerField}
+                    onPress={showEventTypePicker}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="list-outline"
+                      size={18}
+                      color={gameType ? colors.primary : colors.textSecondary}
+                      style={styles.typeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.typePickerText,
+                        gameType && styles.typePickerTextActive,
+                      ]}>
+                      {(() => {
+                        console.log('🎲 AddEventModal: Current gameType for display:', gameType);
+                        const foundType = EVENT_TYPES.find(type => type.value === gameType);
+                        console.log('🎲 AddEventModal: Found type:', foundType);
+                        return foundType?.label || 'Game Type';
+                      })()}
+                    </Text>
+                    <Icon
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
 
-            {/* Start Time Field */}
-            <View style={styles.timeInputContainer}>
-              <Icon
-                name="time-outline"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.timeIcon}
-              />
-              <TextInput
-                style={styles.timeInput}
-                value={start}
-                onChangeText={onStartChange}
-                placeholder="Start (e.g., 2:00 PM)"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-              />
-            </View>
+                  {/* Event Date Field */}
+                  <TouchableOpacity
+                    style={styles.dateField}
+                    onPress={onShowCalendar}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="calendar-outline"
+                      size={18}
+                      color={eventDate ? colors.primary : colors.textSecondary}
+                      style={styles.dateIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.dateText,
+                        eventDate && styles.dateTextActive,
+                      ]}>
+                      {eventDate ? formatDate(eventDate) : 'Event Date'}
+                    </Text>
+                  </TouchableOpacity>
 
-            {/* Late Rego Field */}
-            <View style={styles.timeInputContainer}>
-              <Icon
-                name="timer-outline"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.timeIcon}
-              />
-              <TextInput
-                style={styles.timeInput}
-                value={lateRego}
-                onChangeText={onLateRegoChange}
-                placeholder="Late Rego (e.g., 4:00 PM)"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-              />
-            </View>
+                  {/* Start Time Field */}
+                  <View style={styles.timeInputContainer}>
+                    <Icon
+                      name="time-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.timeIcon}
+                    />
+                    <TextInput
+                      style={styles.timeInput}
+                      value={start}
+                      onChangeText={onStartChange}
+                      placeholder="Start (e.g., 2:00 PM)"
+                      placeholderTextColor={colors.textSecondary}
+                      autoCapitalize="none"
+                    />
+                  </View>
 
-            {/* Buy-in Structure Section */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Buy-in Structure</Text>
-            </View>
+                  {/* Late Rego Field */}
+                  <View style={styles.timeInputContainer}>
+                    <Icon
+                      name="timer-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.timeIcon}
+                    />
+                    <TextInput
+                      style={styles.timeInput}
+                      value={lateRego}
+                      onChangeText={onLateRegoChange}
+                      placeholder="Late Rego (e.g., 4:00 PM)"
+                      placeholderTextColor={colors.textSecondary}
+                      autoCapitalize="none"
+                    />
+                  </View>
 
-            {/* Initial Buy-In Field */}
-            <View style={styles.expenseInputContainer}>
-              <Icon
-                name="card-outline"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.expenseIcon}
-              />
-              <Text style={styles.currencySymbol}>$</Text>
-              <TextInput
-                style={styles.expenseInput}
-                value={buyIn}
-                onChangeText={onBuyInChange}
-                placeholder="Initial Buy-In"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-              />
-            </View>
+                  {/* Buy-in Structure Section */}
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Buy-in Structure</Text>
+                  </View>
 
-            {/* Starting Stack Field */}
-            <View style={styles.stackInputContainer}>
-              <Icon
-                name="layers-outline"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.stackIcon}
-              />
-              <TextInput
-                style={styles.stackInput}
-                value={startingStack}
-                onChangeText={onStartingStackChange}
-                placeholder="Starting Stack (chips)"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-              />
-            </View>
+                  {/* Initial Buy-In Field */}
+                  <View style={styles.expenseInputContainer}>
+                    <Icon
+                      name="card-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.expenseIcon}
+                    />
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.expenseInput}
+                      value={buyIn}
+                      onChangeText={onBuyInChange}
+                      placeholder="Initial Buy-In"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                    />
+                  </View>
 
-            {/* Blind Structure Field */}
-            <TextInput
-              style={styles.blindStructureInput}
-              value={blindStructure}
-              onChangeText={onBlindStructureChange}
-              placeholder="Blind Structure (e.g., 20min levels)"
-              placeholderTextColor={colors.textSecondary}
-              autoCapitalize="words"
-            />
+                  {/* Starting Stack Field */}
+                  <View style={styles.stackInputContainer}>
+                    <Icon
+                      name="layers-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.stackIcon}
+                    />
+                    <TextInput
+                      style={styles.stackInput}
+                      value={startingStack}
+                      onChangeText={onStartingStackChange}
+                      placeholder="Starting Stack (chips)"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  {/* Blind Structure Field */}
+                  <TextInput
+                    style={styles.blindStructureInput}
+                    value={blindStructure}
+                    onChangeText={onBlindStructureChange}
+                    placeholder="Blind Structure (e.g., 20min levels)"
+                    placeholderTextColor={colors.textSecondary}
+                    autoCapitalize="words"
+                  />
+                </>
+              )}
+
+              {/* Event Results Section - Only shown in close-out mode */}
+              {isCloseOutMode && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Event Results</Text>
+                  </View>
+
+                  {/* Final Position Field */}
+                  <View style={styles.stackInputContainer}>
+                    <Icon
+                      name="trophy-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.stackIcon}
+                    />
+                    <TextInput
+                      style={styles.stackInput}
+                      value={finishPosition}
+                      onChangeText={onFinishPositionChange}
+                      placeholder="Final Position"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  {/* Prize Field */}
+                  <View style={styles.expenseInputContainer}>
+                    <Icon
+                      name="cash-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={styles.expenseIcon}
+                    />
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.expenseInput}
+                      value={prize}
+                      onChangeText={onPrizeChange}
+                      placeholder="Prize"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </>
+              )}
+
+              {/* Read-only Event Info for Close-out Mode */}
+              {isCloseOutMode && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>
+                      Event Information (Read-only)
+                    </Text>
+                  </View>
+
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>Event Name:</Text>
+                    <Text style={styles.readOnlyValue}>{eventName}</Text>
+                  </View>
+
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyLabel}>Buy-in:</Text>
+                    <Text style={styles.readOnlyValue}>${buyIn}</Text>
+                  </View>
+                </>
+              )}
             </ScrollView>
-          </KeyboardAvoidingView>
+              </KeyboardAvoidingView>
+            </View>
+
+            {/* Event Type Picker View */}
+            <View style={styles.view}>
+              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+                <TouchableOpacity
+                  onPress={hideEventTypePicker}
+                  style={styles.cancelButton}>
+                  <Icon
+                    name="chevron-back"
+                    size={24}
+                    color={colors.textWhite}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Select Game Type</Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.formContainer}
+                showsVerticalScrollIndicator={false}>
+                {EVENT_TYPES.map((type, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.eventTypeOption,
+                      gameType === type.value && styles.selectedOption,
+                    ]}
+                    onPress={() => handleEventTypeSelect(type.value)}
+                    activeOpacity={0.7}>
+                    <Text style={styles.eventTypeName}>{type.label}</Text>
+                    {gameType === type.value && (
+                      <Icon name="checkmark" size={20} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Animated.View>
         </Animated.View>
       </Animated.View>
 
@@ -343,6 +594,7 @@ const AddEventModal = ({
         selectedDate={eventDate || new Date()}
         onDateChange={onDateChange}
       />
+
     </Modal>
   );
 };
@@ -356,6 +608,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     overflow: 'hidden',
+  },
+  viewContainer: {
+    flexDirection: 'row',
+    width: screenWidth * 2, // 2 views: Event Form, Event Type Picker
+    height: '100%',
+  },
+  view: {
+    width: screenWidth,
+    height: '100%',
   },
   modalHeader: {
     backgroundColor: colors.warning,
@@ -425,6 +686,17 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   nameInput: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  numberInput: {
     fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',
@@ -544,6 +816,69 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
     marginBottom: 20,
+  },
+  readOnlyField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight + '50',
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  readOnlyLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  readOnlyValue: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  placeholder: {
+    width: 32,
+  },
+  typePickerField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  typeIcon: {
+    marginRight: 12,
+  },
+  typePickerText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  typePickerTextActive: {
+    color: colors.textPrimary,
+  },
+  eventTypeOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  selectedOption: {
+    backgroundColor: colors.overlayLight,
+  },
+  eventTypeName: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
   },
 });
 

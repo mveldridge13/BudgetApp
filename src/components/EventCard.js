@@ -13,15 +13,52 @@ import {colors} from '../styles';
 const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
 
+// Helper function to format stack numbers
+const formatStack = (stack) => {
+  if (!stack) {
+    return '';
+  }
+
+  const num = parseInt(stack, 10);
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(num % 1000000 === 0 ? 0 : 1)}M`;
+  } else if (num >= 1000) {
+    return `${(num / 1000).toFixed(num % 1000 === 0 ? 0 : 1)}k`;
+  } else {
+    return num.toString();
+  }
+};
+
+// Helper function to format game type for display
+const formatGameType = (gameType) => {
+  if (!gameType) {
+    return '';
+  }
+
+  const gameTypeMap = {
+    'NO_LIMIT_HOLDEM': 'No-Limit Hold\'em',
+    'SATELLITE': 'Satellite',
+    'FREEZEOUT': 'Freezeout',
+    'BOUNTY': 'Bounty',
+    'TURBO': 'Turbo',
+    'DEEPSTACK': 'Deepstack',
+    'TEAM_EVENT': 'Team Event',
+  };
+
+  return gameTypeMap[gameType] || gameType;
+};
+
 const EventCard = ({
   event,
   onPress = () => {},
   onEdit = () => {},
   onDelete = () => {},
   onRebuy = () => {},
+  onClose = () => {},
   onSwipeStart = () => {},
   onSwipeEnd = () => {},
 }) => {
+  console.log('🎲 EventCard: Rendering with event gameType:', event.gameType, 'for event:', event.eventName);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
@@ -223,49 +260,88 @@ const EventCard = ({
                     <Text style={styles.eventNumber}>#{event.eventNumber}</Text>
                   )}
                 </View>
-                <TouchableOpacity
-                  style={styles.rebuyButton}
-                  onPress={() => onRebuy(event)}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="add-circle-outline"
-                    size={20}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.rebuyButtonText}>Re-Buy</Text>
-                </TouchableOpacity>
+                {!event.isClosed && (
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={styles.rebuyButton}
+                      onPress={() => onRebuy(event)}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="add-circle-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.rebuyButtonText}>Re-Buy</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.closeButton}
+                      onPress={() => onClose(event)}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="checkmark-circle-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.closeButtonText}>Close Out</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
               <View style={styles.eventDetails}>
+                {event.gameType && (
+                  <View style={styles.eventDetailRow}>
+                    <Text style={styles.eventLabel}>Game Type:</Text>
+                    <Text style={styles.eventValue}>
+                      {formatGameType(event.gameType)}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.eventDetailRow}>
                   <Text style={styles.eventLabel}>Buy-in:</Text>
                   <Text style={styles.eventValue}>${event.buyIn || 0}</Text>
                 </View>
+                {event.startingStack > 0 && (
+                  <View style={styles.eventDetailRow}>
+                    <Text style={styles.eventLabel}>Starting Stack:</Text>
+                    <Text style={styles.eventValue}>
+                      {formatStack(event.startingStack)}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.eventDetailRow}>
                   <Text style={styles.eventLabel}>
-                    Re-Buy ({event.rebuyCount || 0}):
+                    Re-Buy ({event.reBuys || 0}):
                   </Text>
                   <Text style={styles.eventValue}>
-                    ${event.rebuyAmount || 0}
+                    ${event.reBuyAmount || 0}
                   </Text>
                 </View>
-                {event.winnings > 0 && (
-                  <View style={styles.eventDetailRow}>
-                    <Text style={styles.eventLabel}>Winnings:</Text>
-                    <Text style={[styles.eventValue, {color: colors.success}]}>
-                      ${event.winnings}
-                    </Text>
-                  </View>
-                )}
-                {event.finishPosition && (
-                  <View style={styles.eventDetailRow}>
-                    <Text style={styles.eventLabel}>Finish:</Text>
-                    <Text style={styles.eventValue}>
-                      #{event.finishPosition}
-                    </Text>
-                  </View>
-                )}
               </View>
+
+              {/* Event Results Banner */}
+              {(event.finishPosition || event.winnings > 0) && (
+                <View style={styles.resultsBanner}>
+                  <View style={styles.resultsContent}>
+                    {event.finishPosition && (
+                      <View style={styles.resultItem}>
+                        <Icon name="trophy" size={16} color={colors.textWhite} />
+                        <Text style={styles.resultText}>
+                          Final Position: #{event.finishPosition}
+                        </Text>
+                      </View>
+                    )}
+                    {event.winnings > 0 && (
+                      <View style={styles.resultItem}>
+                        <Icon name="cash" size={16} color={colors.textWhite} />
+                        <Text style={styles.resultText}>
+                          Prize: ${event.winnings}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -374,6 +450,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginLeft: 8,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   rebuyButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -381,12 +462,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 6,
-    marginLeft: 8,
   },
   rebuyButtonText: {
     fontSize: 12,
     fontWeight: '500',
     color: colors.primary,
+    marginLeft: 4,
+  },
+  closeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  closeButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.primary,
+    marginLeft: 4,
+  },
+  closedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.error + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flex: 1,
+  },
+  closedButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.error,
     marginLeft: 4,
   },
   eventDetails: {
@@ -406,6 +516,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: colors.textPrimary,
+  },
+  resultsBanner: {
+    backgroundColor: colors.success,
+    marginTop: 12,
+    marginHorizontal: -16,
+    marginBottom: -16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  resultsContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  resultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  resultText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textWhite,
+    marginLeft: 6,
   },
 });
 
