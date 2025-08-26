@@ -913,7 +913,6 @@ class TrendAPIService {
   // ============================================================================
 
   async createTournament(tournamentData) {
-    console.log('🎲 CREATE_TOURNAMENT: Starting with data:', tournamentData);
 
     // Create a clean copy to avoid mutating the input
     const cleanTournamentData = {...tournamentData};
@@ -958,7 +957,6 @@ class TrendAPIService {
       throw new Error('End date cannot be before start date');
     }
 
-    console.log('🎲 CREATE_TOURNAMENT: Mapped data:', mappedData);
 
     try {
       const response = await this.makeRequest('/poker/tournaments', {
@@ -966,7 +964,6 @@ class TrendAPIService {
         body: mappedData,
       });
 
-      console.log('🎲 CREATE_TOURNAMENT: API response received:', response);
 
       // Handle different possible response formats
       if (response?.tournament) {
@@ -1105,7 +1102,6 @@ class TrendAPIService {
   }
 
   async createTournamentEvent(tournamentId, eventData) {
-    console.log('🎲 CREATE_EVENT: Starting with data:', eventData);
     console.log(
       '🎲 CREATE_EVENT: startingStack value:',
       eventData.startingStack,
@@ -1149,7 +1145,6 @@ class TrendAPIService {
         },
       );
 
-      console.log('🎲 CREATE_EVENT: API response received:', response);
 
       if (response?.event) {
         return response.event;
@@ -1168,8 +1163,6 @@ class TrendAPIService {
   }
 
   async updateTournamentEvent(eventId, eventData) {
-    console.log('🎲 UPDATE_EVENT: Starting with data:', eventData);
-    console.log('🎲 UPDATE_EVENT: gameType value:', eventData.gameType);
     console.log(
       '🎲 UPDATE_EVENT: startingStack value:',
       eventData.startingStack,
@@ -1211,7 +1204,6 @@ class TrendAPIService {
       );
     }
 
-    console.log('🎲 UPDATE_EVENT: Sending to server:', cleanEventData);
 
     const response = await this.makeRequest(
       `/poker/tournaments/events/${eventId}`,
@@ -1221,7 +1213,6 @@ class TrendAPIService {
       },
     );
 
-    console.log('🎲 UPDATE_EVENT: Server response:', response);
 
     if (response?.event) {
       return response.event;

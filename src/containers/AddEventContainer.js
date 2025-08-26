@@ -38,14 +38,6 @@ const AddEventContainer = ({
   // ==============================================
   useEffect(() => {
     if (editingEvent && visible) {
-      console.log(
-        '🎲 AddEventContainer: Initializing form with editing event:',
-        editingEvent,
-      );
-      console.log(
-        '🎲 AddEventContainer: editingEvent.gameType value:',
-        editingEvent.gameType,
-      );
 
       setEventName(editingEvent.eventName || '');
       setEventNumber(editingEvent.eventNumber || '');
@@ -63,12 +55,7 @@ const AddEventContainer = ({
       setFinishPosition(editingEvent.finishPosition?.toString() || '');
       setPrize(editingEvent.winnings?.toString() || ''); // Using winnings as prize
 
-      console.log(
-        '🎲 AddEventContainer: After setting gameType state:',
-        editingEvent.gameType,
-      );
     } else if (visible && !editingEvent) {
-      console.log('🎲 AddEventContainer: Resetting form for create mode');
       // Reset form for create mode
       setEventName('');
       setEventNumber('');
@@ -96,9 +83,7 @@ const AddEventContainer = ({
   }, []);
 
   const handleGameTypeChange = useCallback(value => {
-    console.log('🎲 AddEventContainer: handleGameTypeChange called with:', value);
     setGameType(value);
-    console.log('🎲 AddEventContainer: gameType state should now be:', value);
   }, []);
 
   const handleBuyInChange = useCallback(value => {
@@ -207,17 +192,6 @@ const AddEventContainer = ({
       }
 
       const isEditMode = !!editingEvent;
-      console.log(
-        `🎲 AddEventContainer: ${isEditMode ? 'Updating' : 'Creating'} event:`,
-        {
-          eventName,
-          eventNumber,
-          buyIn: parseFloat(buyIn) || 0,
-          startingStack: parseInt(startingStack, 10) || 0,
-          blindStructure: blindStructure,
-          eventDate: eventDate?.toISOString(),
-        },
-      );
 
       // Prepare event data for optimistic update
       const eventData = {
@@ -239,10 +213,6 @@ const AddEventContainer = ({
         isClosed: isCloseOutMode,
       };
 
-      console.log(
-        '🎲 AddEventContainer: Prepared event data for optimistic update:',
-        eventData,
-      );
 
       // 🎯 CACHE-FIRST: Immediate optimistic update
       let optimisticEvent = null;
@@ -289,12 +259,6 @@ const AddEventContainer = ({
               eventData,
             );
 
-        console.log(
-          `🎲 AddEventContainer: Event ${
-            isEditMode ? 'updated' : 'created'
-          } successfully on server:`,
-          savedEvent,
-        );
 
         // Notify parent with real server data
         if (onSave) {
@@ -307,7 +271,7 @@ const AddEventContainer = ({
           `Event ${isEditMode ? 'updated' : 'created'} successfully!`,
         );
       } catch (syncError) {
-        console.error('🎲 AddEventContainer: Server sync failed:', syncError);
+        console.error('Server sync failed:', syncError);
 
         // Notify parent about sync failure so they can handle rollback
         if (onSave) {
@@ -321,7 +285,7 @@ const AddEventContainer = ({
         );
       }
     } catch (error) {
-      console.error('🎲 AddEventContainer: Error in handleSave:', error);
+      console.error('Error in handleSave:', error);
       Alert.alert('Error', 'Failed to save event. Please try again.', [
         {text: 'OK'},
       ]);

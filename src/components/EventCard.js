@@ -58,7 +58,6 @@ const EventCard = ({
   onSwipeStart = () => {},
   onSwipeEnd = () => {},
 }) => {
-  console.log('🎲 EventCard: Rendering with event gameType:', event.gameType, 'for event:', event.eventName);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
