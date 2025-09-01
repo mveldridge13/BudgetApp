@@ -51,8 +51,20 @@ const AddEventContainer = ({
       setStart(editingEvent.start || '');
       setLateRego(editingEvent.lateRego || '');
 
-      // Results fields
-      setFinishPosition(editingEvent.finishPosition?.toString() || '');
+      // Results fields - combine finishPosition and fieldSize for display
+      const formatPositionDisplay = (position, fieldSize) => {
+        if (position && fieldSize) {
+          return `${position}/${fieldSize}`;
+        }
+        return position?.toString() || '';
+      };
+
+      setFinishPosition(
+        formatPositionDisplay(
+          editingEvent.finishPosition,
+          editingEvent.fieldSize,
+        ),
+      );
       setPrize(editingEvent.winnings?.toString() || ''); // Using winnings as prize
 
     } else if (visible && !editingEvent) {
@@ -156,12 +168,39 @@ const AddEventContainer = ({
     }
 
     // Results field validation (only when provided)
-    if (finishPosition && isNaN(parseInt(finishPosition, 10))) {
-      Alert.alert(
-        'Validation Error',
-        'Finish position must be a valid number.',
-      );
-      return false;
+    if (finishPosition) {
+      const parsePositionInput = input => {
+        if (input.includes('/')) {
+          const [position, fieldSize] = input.split('/');
+          const pos = parseInt(position.trim(), 10);
+          const field = parseInt(fieldSize.trim(), 10);
+          return {
+            position: isNaN(pos) ? null : pos,
+            fieldSize: isNaN(field) ? null : field,
+            valid:
+              !isNaN(pos) &&
+              !isNaN(field) &&
+              pos > 0 &&
+              field > 0 &&
+              pos <= field,
+          };
+        }
+        const pos = parseInt(input.trim(), 10);
+        return {
+          position: isNaN(pos) ? null : pos,
+          fieldSize: null,
+          valid: !isNaN(pos) && pos > 0,
+        };
+      };
+
+      const parsed = parsePositionInput(finishPosition);
+      if (!parsed.valid) {
+        Alert.alert(
+          'Validation Error',
+          'Finish position must be a valid number or format like "9/119". Position must be less than or equal to field size.',
+        );
+        return false;
+      }
     }
 
     if (prize && isNaN(parseFloat(prize))) {
@@ -193,6 +232,27 @@ const AddEventContainer = ({
 
       const isEditMode = !!editingEvent;
 
+      // Parse finish position input to separate position and field size
+      const parsePositionInput = input => {
+        if (!input) {
+          return {position: null, fieldSize: null};
+        }
+
+        if (input.includes('/')) {
+          const [position, fieldSize] = input.split('/');
+          return {
+            position: parseInt(position.trim(), 10) || null,
+            fieldSize: parseInt(fieldSize.trim(), 10) || null,
+          };
+        }
+        return {
+          position: parseInt(input.trim(), 10) || null,
+          fieldSize: null,
+        };
+      };
+
+      const positionData = parsePositionInput(finishPosition);
+
       // Prepare event data for optimistic update
       const eventData = {
         eventName: eventName.trim(),
@@ -207,7 +267,8 @@ const AddEventContainer = ({
         start: start.trim(),
         lateRego: lateRego.trim(),
         // Results fields (mapped to backend schema)
-        finishPosition: finishPosition ? parseInt(finishPosition, 10) : null,
+        finishPosition: positionData.position,
+        fieldSize: positionData.fieldSize,
         winnings: parseFloat(prize) || 0, // Prize maps to winnings field
         // Mark event as closed when closing out (regardless of results entered)
         isClosed: isCloseOutMode,
