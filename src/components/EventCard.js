@@ -14,7 +14,7 @@ const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
 
 // Helper function to format stack numbers
-const formatStack = (stack) => {
+const formatStack = stack => {
   if (!stack) {
     return '';
   }
@@ -30,19 +30,19 @@ const formatStack = (stack) => {
 };
 
 // Helper function to format game type for display
-const formatGameType = (gameType) => {
+const formatGameType = gameType => {
   if (!gameType) {
     return '';
   }
 
   const gameTypeMap = {
-    'NO_LIMIT_HOLDEM': 'No-Limit Hold\'em',
-    'SATELLITE': 'Satellite',
-    'FREEZEOUT': 'Freezeout',
-    'BOUNTY': 'Bounty',
-    'TURBO': 'Turbo',
-    'DEEPSTACK': 'Deepstack',
-    'TEAM_EVENT': 'Team Event',
+    NO_LIMIT_HOLDEM: "No-Limit Hold'em",
+    SATELLITE: 'Satellite',
+    FREEZEOUT: 'Freezeout',
+    BOUNTY: 'Bounty',
+    TURBO: 'Turbo',
+    DEEPSTACK: 'Deepstack',
+    TEAM_EVENT: 'Team Event',
   };
 
   return gameTypeMap[gameType] || gameType;
@@ -58,6 +58,10 @@ const EventCard = ({
   onSwipeStart = () => {},
   onSwipeEnd = () => {},
 }) => {
+  // Dynamic banner style
+  const bannerStyle = {
+    backgroundColor: event.winnings > 0 ? '#52C788' : '#FF6B85',
+  };
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
@@ -320,13 +324,17 @@ const EventCard = ({
 
               {/* Event Results Banner */}
               {(event.finishPosition || event.winnings > 0) && (
-                <View style={styles.resultsBanner}>
+                <View style={[styles.resultsBanner, bannerStyle]}>
                   <View style={styles.resultsContent}>
                     {event.finishPosition && (
                       <View style={styles.resultItem}>
-                        <Icon name="trophy" size={16} color={colors.textWhite} />
+                        <Icon
+                          name="trophy"
+                          size={16}
+                          color={colors.textWhite}
+                        />
                         <Text style={styles.resultText}>
-                          Final Position: #{event.finishPosition}
+                          Final Position: #{event.finishPosition}{event.fieldSize ? `/${event.fieldSize}` : ''}
                         </Text>
                       </View>
                     )}

@@ -496,9 +496,9 @@ const AddEventModal = ({
                       style={styles.stackInput}
                       value={finishPosition}
                       onChangeText={onFinishPositionChange}
-                      placeholder="Final Position"
+                      placeholder="Final Position (e.g., 9/119)"
                       placeholderTextColor={colors.textSecondary}
-                      keyboardType="numeric"
+                      keyboardType="default"
                     />
                   </View>
 
