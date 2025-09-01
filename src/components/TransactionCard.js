@@ -1,57 +1,24 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, {useState, useRef} from 'react';
 import {View, Text, StyleSheet, Animated, PanResponder} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
-import categoryService from '../services/categoryService';
+import {formatCurrencySync} from '../utils/currencyHelper';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
-// Default fallback categories (in case service fails)
-const defaultCategories = [
-  {
-    id: 'food',
-    name: 'Food & Dining',
-    icon: 'restaurant-outline',
-    color: '#FF6B6B',
-  },
-  {id: 'transport', name: 'Transport', icon: 'car-outline', color: '#4ECDC4'},
-  {id: 'shopping', name: 'Shopping', icon: 'bag-outline', color: '#45B7D1'},
-  {
-    id: 'entertainment',
-    name: 'Entertainment',
-    icon: 'film-outline',
-    color: '#96CEB4',
-  },
-  {
-    id: 'bills',
-    name: 'Bills & Utilities',
-    icon: 'flash-outline',
-    color: '#FECA57',
-  },
-  {
-    id: 'health',
-    name: 'Health & Fitness',
-    icon: 'fitness-outline',
-    color: '#FF9FF3',
-  },
-  {
-    id: 'other',
-    name: 'Other',
-    icon: 'document-text-outline',
-    color: '#95A5A6',
-  },
-];
-
-const SWIPE_THRESHOLD = 120; // Positive for right swipe, negative for left swipe
+const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
 
 const TransactionCard = ({
   transaction,
+  categoryData, // ✅ PRE-RESOLVED category data from container
   onDelete,
   onEdit,
   onSwipeStart,
   onSwipeEnd,
 }) => {
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Get currency setting from context
+  const {appSettings} = useAppSettings();
+  const currency = appSettings?.currency || 'AUD';
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Animation values
@@ -60,22 +27,6 @@ const TransactionCard = ({
   const editOpacity = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
-
-  const loadCategories = useCallback(async () => {
-    try {
-      const loadedCategories = await categoryService.getCategories();
-      setCategories(loadedCategories);
-    } catch (error) {
-      // Fallback to default categories if service fails
-      setCategories(defaultCategories);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadCategories();
-  }, [loadCategories]);
 
   const resetPosition = () => {
     Animated.parallel([
@@ -101,12 +52,11 @@ const TransactionCard = ({
   const performDelete = () => {
     setIsDeleting(true);
 
-    // Call onDelete immediately
     if (onDelete) {
       onDelete(transaction.id);
     }
 
-    // Animate card out (just for visual effect)
+    // Animate card out
     Animated.parallel([
       Animated.timing(cardOpacity, {
         toValue: 0,
@@ -132,12 +82,9 @@ const TransactionCard = ({
   };
 
   const performEdit = () => {
-    // Call onEdit callback
     if (onEdit) {
       onEdit(transaction);
     }
-
-    // Reset position after edit action
     resetPosition();
   };
 
@@ -153,7 +100,6 @@ const TransactionCard = ({
         return isHorizontal && hasMinMovement;
       },
       onPanResponderGrant: (evt, gestureState) => {
-        // Disable parent ScrollView
         if (onSwipeStart) {
           onSwipeStart();
         }
@@ -169,7 +115,6 @@ const TransactionCard = ({
         const newTranslateX = gestureState.dx;
         translateX.setValue(newTranslateX);
 
-        // Calculate opacity for delete (left swipe) and edit (right swipe)
         if (newTranslateX < 0) {
           // Left swipe - delete
           const progress = Math.min(
@@ -189,7 +134,6 @@ const TransactionCard = ({
         const swipeDistance = gestureState.dx;
         const swipeVelocity = gestureState.vx;
 
-        // Re-enable parent ScrollView
         if (onSwipeEnd) {
           onSwipeEnd();
         }
@@ -202,18 +146,14 @@ const TransactionCard = ({
         }).start();
 
         if (swipeDistance < -SWIPE_THRESHOLD || swipeVelocity < -0.5) {
-          // Left swipe threshold reached - delete
           performDelete();
         } else if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
-          // Right swipe threshold reached - edit
           performEdit();
         } else {
-          // Not enough swipe - reset position
           resetPosition();
         }
       },
       onPanResponderTerminate: () => {
-        // Re-enable parent ScrollView if gesture is terminated
         if (onSwipeEnd) {
           onSwipeEnd();
         }
@@ -223,32 +163,9 @@ const TransactionCard = ({
     }),
   ).current;
 
-  const getCategoryData = () => {
-    if (isLoading) {
-      return defaultCategories[defaultCategories.length - 1];
-    }
-
-    const categoryData = categories.find(
-      cat => cat.id === transaction.category,
-    );
-
-    if (categoryData) {
-      return categoryData;
-    }
-
-    return (
-      categories.find(cat => cat.id === 'other') ||
-      defaultCategories[defaultCategories.length - 1]
-    );
-  };
-
-  const categoryData = getCategoryData();
-
+  // ✅ PURE UI FORMATTING FUNCTIONS (no business logic)
   const formatCurrency = amount => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount || 0);
+    return formatCurrencySync(amount, currency);
   };
 
   const formatDate = date => {
@@ -269,6 +186,28 @@ const TransactionCard = ({
     }
   };
 
+  const formatDueDate = dueDate => {
+    if (!dueDate) {
+      return null;
+    }
+
+    const dueDateObj = new Date(dueDate);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (dueDateObj.toDateString() === today.toDateString()) {
+      return 'Due today';
+    } else if (dueDateObj.toDateString() === tomorrow.toDateString()) {
+      return 'Due tomorrow';
+    } else {
+      return `Due ${dueDateObj.toLocaleDateString('en-AU', {
+        day: 'numeric',
+        month: 'short',
+      })}`;
+    }
+  };
+
   const getRecurrenceText = recurrence => {
     switch (recurrence) {
       case 'monthly':
@@ -286,13 +225,42 @@ const TransactionCard = ({
     }
   };
 
+  const getPaymentStatusText = status => {
+    switch (status) {
+      case 'UPCOMING':
+        return 'Upcoming';
+      case 'PAID':
+        return 'Paid';
+      case 'OVERDUE':
+        return 'Overdue';
+      default:
+        return null;
+    }
+  };
+
+  const getPaymentStatusColor = status => {
+    switch (status) {
+      case 'UPCOMING':
+        return '#007AFF';
+      case 'PAID':
+        return '#4CAF50';
+      case 'OVERDUE':
+        return '#F44336';
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+
+  // ✅ PURE UI DISPLAY LOGIC (uses pre-resolved categoryData)
   const getMetadataText = () => {
     const recurrenceText = getRecurrenceText(transaction.recurrence);
+    const categoryName = categoryData?.name || 'Other';
 
     if (recurrenceText) {
-      return `${categoryData.name} • ${recurrenceText}`;
+      return `${categoryName} • ${recurrenceText}`;
     } else {
-      return `${categoryData.name} • ${formatDate(transaction.date)}`;
+      return `${categoryName} • ${formatDate(transaction.date)}`;
     }
   };
 
@@ -304,6 +272,24 @@ const TransactionCard = ({
     return `rgba(${r}, ${g}, ${b}, 0.15)`;
   };
 
+  const getAmountDisplay = () => {
+    const formattedAmount = formatCurrency(transaction.amount);
+
+    if (transaction.type === 'INCOME') {
+      return `+${formattedAmount}`;
+    } else {
+      return `-${formattedAmount}`;
+    }
+  };
+
+  const getAmountColor = () => {
+    if (transaction.type === 'INCOME') {
+      return '#4CAF50';
+    } else {
+      return '#FF4757';
+    }
+  };
+
   const isRecurring =
     transaction.recurrence && transaction.recurrence !== 'none';
 
@@ -311,10 +297,17 @@ const TransactionCard = ({
     return null;
   }
 
+  // ✅ SAFE FALLBACK if categoryData is not provided
+  const safeCategory = categoryData || {
+    name: 'Other',
+    icon: 'document-text-outline',
+    color: '#95A5A6',
+  };
+
   return (
     <View style={styles.outerContainer}>
       <View style={styles.cardContainer}>
-        {/* Edit Background - positioned on the left side */}
+        {/* Edit Background */}
         <Animated.View
           style={[
             styles.editBackground,
@@ -328,7 +321,7 @@ const TransactionCard = ({
           </View>
         </Animated.View>
 
-        {/* Delete Background - positioned on the right side */}
+        {/* Delete Background */}
         <Animated.View
           style={[
             styles.deleteBackground,
@@ -360,14 +353,14 @@ const TransactionCard = ({
                   styles.iconCircle,
                   {
                     backgroundColor: getLightBackgroundColor(
-                      categoryData.color,
+                      safeCategory.color,
                     ),
                   },
                 ]}>
                 <Icon
-                  name={categoryData.icon}
+                  name={safeCategory.icon}
                   size={20}
-                  color={categoryData.color}
+                  color={safeCategory.color}
                 />
               </View>
             </View>
@@ -388,10 +381,18 @@ const TransactionCard = ({
                 )}
               </View>
               <Text style={styles.metadata}>{getMetadataText()}</Text>
+              {transaction.dueDate && (
+                <Text style={styles.dueDate}>{formatDueDate(transaction.dueDate)}</Text>
+              )}
+              {transaction.status && (
+                <Text style={[styles.paymentStatus, {color: getPaymentStatusColor(transaction.status)}]}>
+                  {getPaymentStatusText(transaction.status)}
+                </Text>
+              )}
             </View>
 
-            <Text style={styles.amount}>
-              -{formatCurrency(transaction.amount)}
+            <Text style={[styles.amount, {color: getAmountColor()}]}>
+              {getAmountDisplay()}
             </Text>
           </View>
         </Animated.View>
@@ -435,7 +436,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#52C788', // Lighter green background for edit
+    backgroundColor: '#52C788',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -462,7 +463,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FF6B85', // Lighter red background for delete
+    backgroundColor: '#FF6B85',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,11 +521,25 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     letterSpacing: -0.1,
   },
+  dueDate: {
+    fontSize: 11,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: '#FF6B35',
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
+  paymentStatus: {
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: 'System',
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
   amount: {
     fontSize: 16,
     fontWeight: '300',
     fontFamily: 'System',
-    color: '#FF4757',
     letterSpacing: -0.2,
   },
 });

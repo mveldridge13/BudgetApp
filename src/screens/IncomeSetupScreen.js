@@ -1,4 +1,5 @@
-import React, {useState, useEffect} from 'react';
+// screens/IncomeSetupScreen.js - PURE UI COMPONENT
+import React, {useState} from 'react';
 import {
   View,
   Text,
@@ -6,21 +7,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Alert,
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CalendarModal from '../components/CalendarModal';
 
-const frequencies = [
-  {id: 'weekly', label: 'Weekly', days: 7},
-  {id: 'fortnightly', label: 'Fortnightly', days: 14},
-  {id: 'monthly', label: 'Monthly', days: 30},
-];
-
-// Move FrequencyButton outside the main component
 const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
   <TouchableOpacity
     style={[
@@ -38,7 +30,6 @@ const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
   </TouchableOpacity>
 );
 
-// Format date for display
 const formatDateForDisplay = date => {
   if (!date) {
     return '';
@@ -50,95 +41,59 @@ const formatDateForDisplay = date => {
   });
 };
 
-const IncomeSetupScreen = ({navigation, route}) => {
-  const [income, setIncome] = useState('');
-  const [selectedFrequency, setSelectedFrequency] = useState('');
-  const [nextPayDate, setNextPayDate] = useState(new Date());
+const IncomeSetupScreen = ({
+  // ==============================================
+  // DATA PROPS (from IncomeSetupContainer)
+  // ==============================================
+  income = '',
+  selectedFrequency = '',
+  nextPayDate = new Date(),
+  hasSelectedDate = false,
+  loading = false,
+  isEditMode = false,
+  frequencies = [
+    {id: 'weekly', label: 'Weekly', days: 7},
+    {id: 'fortnightly', label: 'Fortnightly', days: 14},
+    {id: 'monthly', label: 'Monthly', days: 30},
+  ], // Default frequencies if not provided
+
+  // ==============================================
+  // EVENT HANDLER PROPS (from IncomeSetupContainer)
+  // ==============================================
+  onIncomeChange = () => {},
+  onFrequencySelect = () => {},
+  onDateChange = () => {},
+  onSave = () => {},
+  onCancel = () => {},
+}) => {
+  // ==============================================
+  // UI-ONLY STATE (No Business Logic)
+  // ==============================================
+
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [hasSelectedDate, setHasSelectedDate] = useState(false);
 
-  // Check if we're in edit mode
-  const isEditMode = route?.params?.editMode || false;
-
-  // Load existing data if in edit mode
-  useEffect(() => {
-    const loadExistingData = async () => {
-      if (isEditMode) {
-        try {
-          const existingData = await AsyncStorage.getItem('userSetup');
-          if (existingData) {
-            const parsedData = JSON.parse(existingData);
-            setIncome(parsedData.income?.toString() || '');
-            setSelectedFrequency(parsedData.frequency || '');
-
-            // Parse the stored date
-            if (parsedData.nextPayDate) {
-              const storedDate = new Date(parsedData.nextPayDate);
-              if (!isNaN(storedDate.getTime())) {
-                setNextPayDate(storedDate);
-                setHasSelectedDate(true);
-              }
-            }
-          }
-        } catch (error) {
-          console.log('Error loading existing data:', error);
-        }
-      }
-    };
-
-    loadExistingData();
-  }, [isEditMode]);
-
-  const handleDateChange = selectedDate => {
-    setNextPayDate(selectedDate);
-    setHasSelectedDate(true);
-  };
+  // ==============================================
+  // UI EVENT HANDLERS (Pure UI Logic Only)
+  // ==============================================
 
   const handleCalendarClose = () => {
     setShowDatePicker(false);
   };
 
-  const handleSave = async () => {
-    if (!income || !selectedFrequency || !hasSelectedDate) {
-      Alert.alert(
-        'Missing Information',
-        'Please fill in all fields to continue.',
-      );
-      return;
-    }
+  const handleDateSelect = selectedDate => {
+    onDateChange(selectedDate);
+    setShowDatePicker(false);
+  };
 
-    try {
-      const setupData = {
-        income: parseFloat(income),
-        frequency: selectedFrequency,
-        nextPayDate: nextPayDate.toISOString(),
-        setupComplete: true,
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      };
-
-      console.log('Saving setup data:', setupData);
-      await AsyncStorage.setItem('userSetup', JSON.stringify(setupData));
-
-      if (isEditMode) {
-        navigation.goBack();
-      } else {
-        navigation.replace('MainTabs');
-      }
-    } catch (error) {
-      console.log('Save error:', error);
-      Alert.alert(
-        'Error',
-        'Failed to save your information. Please try again.',
-      );
+  const openDatePicker = () => {
+    if (!loading) {
+      setShowDatePicker(true);
     }
   };
 
-  const handleCancel = () => {
-    if (isEditMode) {
-      navigation.goBack();
-    }
-  };
+  // ==============================================
+  // RENDER UI (Pure UI Component)
+  // ==============================================
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -164,13 +119,14 @@ const IncomeSetupScreen = ({navigation, route}) => {
                 <TextInput
                   style={styles.incomeInput}
                   value={income}
-                  onChangeText={setIncome}
+                  onChangeText={onIncomeChange}
                   keyboardType="number-pad"
                   placeholder="0"
                   placeholderTextColor="#A0A0A0"
                   autoCorrect={false}
                   spellCheck={false}
                   textContentType="none"
+                  editable={!loading}
                 />
               </View>
             </View>
@@ -184,18 +140,22 @@ const IncomeSetupScreen = ({navigation, route}) => {
                     key={frequency.id}
                     frequency={frequency}
                     selectedFrequency={selectedFrequency}
-                    onSelect={setSelectedFrequency}
+                    onSelect={onFrequencySelect}
                   />
                 ))}
               </View>
             </View>
 
-            {/* Next Pay Date - Calendar Picker */}
+            {/* Next Pay Date */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Next Pay Date</Text>
               <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowDatePicker(true)}>
+                style={[
+                  styles.datePickerButton,
+                  loading && styles.disabledButton,
+                ]}
+                onPress={openDatePicker}
+                disabled={loading}>
                 <Text
                   style={[
                     styles.datePickerText,
@@ -219,21 +179,31 @@ const IncomeSetupScreen = ({navigation, route}) => {
           </View>
 
           <View style={styles.buttonContainer}>
-            {/* Cancel Button - only show in edit mode */}
+            {/* Cancel Button - only in edit mode */}
             {isEditMode && (
               <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={handleCancel}>
+                style={[styles.cancelButton, loading && styles.disabledButton]}
+                onPress={onCancel}
+                disabled={loading}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             )}
 
             {/* Save Button */}
             <TouchableOpacity
-              style={[styles.saveButton, isEditMode && styles.editSaveButton]}
-              onPress={handleSave}>
+              style={[
+                styles.saveButton,
+                isEditMode && styles.editSaveButton,
+                loading && styles.disabledSaveButton,
+              ]}
+              onPress={onSave}
+              disabled={loading}>
               <Text style={styles.saveButtonText}>
-                {isEditMode ? 'Save Changes' : 'Get Started'}
+                {loading
+                  ? 'Saving...'
+                  : isEditMode
+                  ? 'Save Changes'
+                  : 'Get Started'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -241,9 +211,9 @@ const IncomeSetupScreen = ({navigation, route}) => {
 
         {/* Calendar Modal */}
         <CalendarModal
-          visible={showDatePicker}
+          visible={showDatePicker && !loading}
           selectedDate={nextPayDate}
-          onDateChange={handleDateChange}
+          onDateChange={handleDateSelect}
           onClose={handleCalendarClose}
         />
       </SafeAreaView>
@@ -419,6 +389,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  disabledSaveButton: {
+    opacity: 0.6,
+    backgroundColor: '#A78BFA',
   },
 });
 

@@ -1,14 +1,18 @@
 /* eslint-disable react-native/no-inline-styles */
-// components/BalanceCard.js (Fixed date handling)
-import React from 'react';
+// components/BalanceCard.js (Improved goal readability with larger fonts and better spacing)
+import React, {useMemo} from 'react';
 import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+import {formatCurrencySync} from '../utils/currencyHelper';
+import {getExpenseBreakdownSync} from '../utils/expenseBreakdownCalculator';
 
 const BalanceCard = ({
   incomeData,
   loading,
   totalExpenses,
+  totalIncomePayments = 0,
+  totalAdditionalIncome = 0,
   onEditIncome,
   onCalendarPress,
   selectedDate,
@@ -16,127 +20,43 @@ const BalanceCard = ({
   // New goal-related props
   goals = [],
   onGoalsPress,
+  // Currency setting
+  currency = 'AUD',
+  // Transactions for expense breakdown
+  transactions = [],
 }) => {
   const formatCurrency = amount => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount || 0);
+    return formatCurrencySync(amount, currency);
   };
 
-  const getCurrentMonth = () => {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return months[selectedDate.getMonth()];
-  };
-
-  const calculatePayPeriod = () => {
-    if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-      return null;
-    }
-
-    let nextPayDate;
-
-    // Handle both ISO string format (from CalendarModal) and DD/MM/YYYY format (legacy)
-    if (incomeData.nextPayDate.includes('T')) {
-      // ISO string format from CalendarModal
-      nextPayDate = new Date(incomeData.nextPayDate);
-    } else {
-      // Legacy DD/MM/YYYY format
-      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-      nextPayDate = new Date(
-        2000 + parseInt(yearStr, 10),
-        parseInt(monthStr, 10) - 1,
-        parseInt(dayStr, 10),
-      );
-    }
-
-    // Validate the date
-    if (isNaN(nextPayDate.getTime())) {
-      return null;
-    }
-
-    const frequencyDays = {
-      weekly: 7,
-      fortnightly: 14,
-      monthly: 30,
-    };
-
-    const days = frequencyDays[incomeData.frequency] || 30;
-
-    let periodStart;
-    if (incomeData.frequency === 'monthly') {
-      periodStart = new Date(nextPayDate);
-      periodStart.setMonth(periodStart.getMonth() - 1);
-    } else {
-      periodStart = new Date(nextPayDate);
-      periodStart.setDate(periodStart.getDate() - days);
-    }
-
-    const periodEnd = new Date(nextPayDate);
-    periodEnd.setDate(periodEnd.getDate() - 1);
-
-    const formatDate = dateToFormat => {
-      const dayNum = dateToFormat.getDate();
-      const monthName = dateToFormat.toLocaleDateString('en-AU', {
-        month: 'short',
-      });
-      const yearNum = dateToFormat.getFullYear().toString().slice(-2);
-      return `${dayNum} ${monthName} ${yearNum}`;
-    };
-
-    return `${formatDate(periodStart)} - ${formatDate(periodEnd)}`;
-  };
-
-  // Format the next pay date for display
-  const formatNextPayDate = () => {
-    if (!incomeData?.nextPayDate) {
-      return '';
-    }
-
-    let nextPayDate;
-
-    // Handle both ISO string format and DD/MM/YYYY format
-    if (incomeData.nextPayDate.includes('T')) {
-      // ISO string format from CalendarModal
-      nextPayDate = new Date(incomeData.nextPayDate);
-    } else {
-      // Legacy DD/MM/YYYY format
-      const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-      nextPayDate = new Date(
-        2000 + parseInt(yearStr, 10),
-        parseInt(monthStr, 10) - 1,
-        parseInt(dayStr, 10),
-      );
-    }
-
-    // Validate the date
-    if (isNaN(nextPayDate.getTime())) {
-      return incomeData.nextPayDate; // Fallback to original string
-    }
-
-    // Format as DD/MM/YYYY for display
-    return nextPayDate.toLocaleDateString('en-AU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+  const getCurrentDate = () => {
+    const day = selectedDate.getDate();
+    const month = selectedDate.toLocaleDateString('en-AU', {
+      month: 'short',
     });
+    return `${month} ${day}`;
   };
+
 
   // Filter goals that should be shown on balance card
   const balanceCardGoals = goals.filter(goal => goal.showOnBalanceCard);
+
+  // Calculate active goals count (exclude completed goals)
+  const activeGoalsCount = goals.filter(goal => {
+    // Check if explicitly marked as completed
+    if (goal.completed === true) {
+      return false;
+    }
+
+    // Check if goal is functionally complete based on progress
+    if (goal.type === 'debt') {
+      // For debt goals, complete when current amount reaches 0 or below
+      return goal.current > 0;
+    } else {
+      // For savings/spending goals, complete when current >= target
+      return goal.current < goal.target;
+    }
+  }).length;
 
   // Calculate total goal contributions
   const totalGoalContributions = balanceCardGoals.reduce(
@@ -144,10 +64,28 @@ const BalanceCard = ({
     0,
   );
 
+  // Calculate total local income payments for goals not synced to backend
+  const localIncomePayments = goals.reduce((sum, goal) => {
+    // Only count local goals' income payments (backend payments are in totalIncomePayments prop)
+    if (goal.id.startsWith('local_')) {
+      return sum + (goal.totalIncomePayments || 0);
+    }
+    return sum;
+  }, 0);
+
+  // Calculate expense breakdown with memoization
+  const expenseBreakdown = useMemo(() => {
+    return getExpenseBreakdownSync(transactions);
+  }, [transactions]);
+
   // Calculate values
   const incomeAmount = incomeData?.income || 0;
   const leftToSpend = incomeAmount - totalExpenses;
-  const adjustedLeftToSpend = leftToSpend - totalGoalContributions;
+  const adjustedLeftToSpend =
+    leftToSpend -
+    totalGoalContributions -
+    totalIncomePayments -
+    localIncomePayments;
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
 
@@ -197,12 +135,9 @@ const BalanceCard = ({
           style={styles.periodInfo}
           onPress={onCalendarPress}
           activeOpacity={0.7}>
-          <Text style={styles.currentMonth}>{getCurrentMonth()}</Text>
-          {calculatePayPeriod() && (
-            <Text style={styles.payPeriod}>{calculatePayPeriod()}</Text>
-          )}
+          <Text style={styles.currentMonth}>{getCurrentDate()}</Text>
           <Text style={styles.frequencyDisplay}>
-            Paid {incomeData.frequency} • Next: {formatNextPayDate()}
+            Paid {incomeData.frequency}
           </Text>
         </TouchableOpacity>
       )}
@@ -224,6 +159,31 @@ const BalanceCard = ({
             <Text style={styles.balanceAmount}>
               {formatCurrency(totalExpenses)}
             </Text>
+
+            {/* Expense Breakdown */}
+            {!loading &&
+              expenseBreakdown &&
+              (expenseBreakdown.committed > 0 ||
+                expenseBreakdown.discretionary > 0) && (
+                <View style={styles.expenseBreakdown}>
+                  <View style={styles.expenseBreakdownRow}>
+                    <Text style={styles.expenseBreakdownLabel}>
+                      └─ Committed:
+                    </Text>
+                    <Text style={styles.expenseBreakdownAmount}>
+                      {formatCurrency(expenseBreakdown.committed)}
+                    </Text>
+                  </View>
+                  <View style={styles.expenseBreakdownRow}>
+                    <Text style={styles.expenseBreakdownLabel}>
+                      └─ Discretionary:
+                    </Text>
+                    <Text style={styles.expenseBreakdownAmount}>
+                      {formatCurrency(expenseBreakdown.discretionary)}
+                    </Text>
+                  </View>
+                </View>
+              )}
           </View>
         </View>
 
@@ -232,8 +192,10 @@ const BalanceCard = ({
           <View style={styles.goalsSection}>
             <View style={styles.goalsSectionHeader}>
               <View style={styles.goalsTitleContainer}>
-                <Icon name="target" size={14} color={colors.textWhite} />
-                <Text style={styles.goalsTitle}>Active Goals</Text>
+                <Icon name="target" size={16} color={colors.textWhite} />
+                <Text style={styles.goalsTitle}>
+                  Active Goals ({activeGoalsCount})
+                </Text>
               </View>
               <Text style={styles.goalsCount}>
                 {balanceCardGoals.length} showing
@@ -317,13 +279,13 @@ const BalanceCard = ({
                 isOverBudget && styles.overBudgetText,
                 isCloseToLimit && styles.warningText,
               ]}>
-              {loading ? '$0.00' : formatCurrency(leftToSpend)}
+              {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
             </Text>
-            {totalGoalContributions > 0 && (
+            {totalAdditionalIncome > 0 && (
               <View style={styles.adjustedAmountContainer}>
-                <Text style={styles.adjustedLabel}>After goals:</Text>
+                <Text style={styles.adjustedLabel}>Additional income:</Text>
                 <Text style={styles.adjustedAmount}>
-                  {formatCurrency(adjustedLeftToSpend)}
+                  +{formatCurrency(totalAdditionalIncome)}
                 </Text>
               </View>
             )}
@@ -376,47 +338,6 @@ const BalanceCard = ({
             </Text>
           )}
 
-          {/* Goal completion projection */}
-          {balanceCardGoals.length > 0 && (
-            <View style={styles.goalProjection}>
-              <View style={styles.projectionRow}>
-                <View style={styles.projectionInfo}>
-                  <Icon name="trending-up" size={12} color={colors.textWhite} />
-                  <Text style={styles.projectionLabel}>
-                    {balanceCardGoals.length === 1
-                      ? 'Goal progress:'
-                      : 'Next completion:'}
-                  </Text>
-                </View>
-                <View style={styles.projectionTarget}>
-                  <Text style={styles.projectionTitle}>
-                    {balanceCardGoals[0]?.title || 'No goals'}
-                  </Text>
-                  <Text style={styles.projectionTime}>
-                    {balanceCardGoals[0]?.type === 'debt'
-                      ? '~6 months'
-                      : '~8 months'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* No goals message */}
-          {balanceCardGoals.length === 0 && (
-            <View style={styles.noGoalsMessage}>
-              <View style={styles.noGoalsRow}>
-                <View style={styles.noGoalsInfo}>
-                  <Icon name="target" size={12} color={colors.textWhite} />
-                  <Text style={styles.noGoalsLabel}>
-                    No goals on balance card
-                  </Text>
-                </View>
-                <Text style={styles.noGoalsHelp}>Enable in Goals screen</Text>
-              </View>
-            </View>
-          )}
-
           <View style={styles.bottomPadding} />
         </View>
 
@@ -434,33 +355,28 @@ const BalanceCard = ({
         </TouchableOpacity>
       </View>
 
-      {/* Quick Goal Actions */}
+      {/* Quick Goal Actions - Simplified to only show View Goals button */}
       {balanceCardGoals.length > 0 ? (
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={onGoalsPress}
-            activeOpacity={0.7}>
-            <Icon name="target" size={16} color={colors.textWhite} />
-            <Text style={styles.actionButtonText}>
-              View Goals ({balanceCardGoals.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={onCalendarPress}
-            activeOpacity={0.7}>
-            <Icon name="calendar" size={16} color={colors.textWhite} />
-            <Text style={styles.actionButtonText}>Adjust Budget</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.viewGoalsButton}
+          onPress={onGoalsPress}
+          activeOpacity={0.7}>
+          <Icon name="target" size={16} color={colors.textWhite} />
+          <Text style={styles.viewGoalsButtonText}>
+            View Goals ({activeGoalsCount})
+          </Text>
+        </TouchableOpacity>
       ) : (
         <TouchableOpacity
           style={styles.setupGoalsButton}
           onPress={onGoalsPress}
           activeOpacity={0.7}>
           <Icon name="target" size={16} color={colors.textWhite} />
-          <Text style={styles.setupGoalsButtonText}>Set Up Goals</Text>
+          <Text style={styles.setupGoalsButtonText}>
+            {activeGoalsCount > 0
+              ? `Active Goals (${activeGoalsCount})`
+              : 'Set Up Goals'}
+          </Text>
         </TouchableOpacity>
       )}
     </View>
@@ -512,7 +428,7 @@ const styles = StyleSheet.create({
   balanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 15,
   },
   balanceItem: {
@@ -538,6 +454,32 @@ const styles = StyleSheet.create({
     color: colors.textWhite,
     letterSpacing: -0.2,
   },
+  expenseBreakdown: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.overlayLight,
+  },
+  expenseBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  expenseBreakdownLabel: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+  },
+  expenseBreakdownAmount: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+  },
   totalIncome: {
     fontSize: 24,
     fontWeight: '300',
@@ -547,7 +489,7 @@ const styles = StyleSheet.create({
   },
   goalsSection: {
     marginBottom: 20,
-    paddingTop: 16,
+    paddingTop: 18,
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
@@ -555,73 +497,74 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   goalsTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   goalsTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
   },
   goalsCount: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '300',
     fontFamily: 'System',
     color: colors.textWhite,
     opacity: 0.7,
   },
   goalsList: {
-    gap: 8,
+    gap: 12,
   },
   goalItem: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   goalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   goalTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flex: 1,
   },
   goalTitle: {
-    fontSize: 11,
-    fontWeight: '400',
+    fontSize: 13,
+    fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
-    opacity: 0.9,
+    opacity: 0.95,
   },
   goalTypeBadge: {
     backgroundColor: colors.dangerLight,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   goalTypeBadgeText: {
-    fontSize: 8,
-    fontWeight: '500',
+    fontSize: 9,
+    fontWeight: '600',
     fontFamily: 'System',
     color: colors.danger,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   goalAmount: {
-    fontSize: 11,
-    fontWeight: '300',
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textWhite,
-    opacity: 0.8,
+    opacity: 0.85,
   },
   goalProgressContainer: {
-    height: 3,
+    height: 4,
     backgroundColor: colors.overlayLight,
     borderRadius: 2,
     overflow: 'hidden',
@@ -634,32 +577,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
   contributionsLabel: {
-    fontSize: 11,
-    fontWeight: '300',
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textWhite,
     opacity: 0.8,
   },
   contributionsAmount: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
   },
   moreGoalsText: {
-    fontSize: 10,
-    fontWeight: '300',
+    fontSize: 11,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textWhite,
     opacity: 0.6,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 10,
   },
   leftToSpendSection: {
     paddingTop: 15,
@@ -749,75 +692,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  goalProjection: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  projectionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  projectionInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  projectionLabel: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.8,
-  },
-  projectionTarget: {
-    alignItems: 'flex-end',
-  },
-  projectionTitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.textWhite,
-  },
-  projectionTime: {
-    fontSize: 10,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.7,
-  },
-  noGoalsMessage: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  noGoalsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  noGoalsInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  noGoalsLabel: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.8,
-  },
-  noGoalsHelp: {
-    fontSize: 10,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.7,
-  },
+
   editIcon: {
     position: 'absolute',
     bottom: 8,
@@ -834,13 +709,7 @@ const styles = StyleSheet.create({
   bottomPadding: {
     height: 32,
   },
-  quickActions: {
-    flexDirection: 'row',
-    marginTop: 16,
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
+  viewGoalsButton: {
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
     paddingVertical: 12,
@@ -849,10 +718,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: colors.overlayDark,
   },
-  actionButtonText: {
+  viewGoalsButtonText: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'System',

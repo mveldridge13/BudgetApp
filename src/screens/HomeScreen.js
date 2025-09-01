@@ -1,387 +1,204 @@
-/* eslint-disable no-unused-vars */
-/* eslint-disable react-hooks/exhaustive-deps */
-// screens/HomeScreen.js (Fixed with proper useEffect dependencies)
-import React, {useState, useEffect, useRef, useCallback} from 'react';
+// screens/HomeScreen.js
+import React, {useState, useCallback} from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Text,
-  AppState,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {colors} from '../styles';
 import CalendarModal from '../components/CalendarModal';
-import AddTransactionModal from '../components/AddTransactionModal';
+import AddTransactionContainer from '../containers/AddTransactionContainer';
 import BalanceCard from '../components/BalanceCard';
 import TransactionList from '../components/TransactionList';
 import BalanceCardSpotlight from '../components/BalanceCardSpotlight';
 import AddTransactionSpotlight from '../components/AddTransactionSpotlight';
 import TransactionSwipeSpotlight from '../components/TransactionSwipeSpotlight';
-import useTransactions from '../hooks/useTransactions';
-import useGoals from '../hooks/useGoals';
+import PokerSection from '../components/PokerSection';
 
-const HomeScreen = ({navigation}) => {
+const HomeScreen = ({
+  // ==============================================
+  // DATA PROPS
+  // ==============================================
+  incomeData = null,
+  userProfile = null,
+  transactions = [], // ✅ Now contains pre-resolved categoryData
+  categories = [], // ✅ Still needed for AddTransactionContainer
+  goals = [],
+  editingTransaction = null,
+  loading = false,
+  selectedDate = new Date(),
+  totalExpenses = 0,
+  totalIncomePayments = 0,
+  totalAdditionalIncome = 0,
+  currency = 'AUD',
+
+  // Tournament/Poker props
+  tournaments = [],
+  pokerSectionExpanded = false,
+  pokerTrackerEnabled = false,
+
+  // ==============================================
+  // EVENT HANDLER PROPS
+  // ==============================================
+  onDateChange = () => {},
+  onSaveTransaction = () => {},
+  onDeleteTransaction = () => {},
+  onEditTransaction = () => {},
+  onClearEditingTransaction = () => {},
+  onEditIncome = () => {},
+  onGoalsPress = () => {},
+  onOnboardingComplete = () => {},
+  onOnboardingSkip = () => {},
+
+  // Tournament event handlers
+  onTogglePokerSection = () => {},
+  onTournamentPress = () => {},
+  onTournamentEdit = () => {},
+  onTournamentDelete = () => {},
+  onTournamentSwipeStart = () => {},
+  onTournamentSwipeEnd = () => {},
+  onAddTournament = () => {},
+
+  navigation,
+
+  // ==============================================
+  // ONBOARDING PROPS
+  // ==============================================
+  onboarding,
+}) => {
   const insets = useSafeAreaInsets();
 
-  // Core UI state
-  const [incomeData, setIncomeData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // ==============================================
+  // UI STATE (PURE UI ONLY)
+  // ==============================================
   const [showCalendar, setShowCalendar] = useState(false);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
-  // Date detection state
-  const [lastActiveDate, setLastActiveDate] = useState(
-    new Date().toDateString(),
-  );
+  // ==============================================
+  // UI EVENT HANDLERS (PURE UI ONLY)
+  // ==============================================
+  const handleAddTransaction = useCallback(() => {
+    onClearEditingTransaction();
+    setShowAddTransaction(true);
+  }, [onClearEditingTransaction]);
 
-  // Onboarding state
-  const [showBalanceCardSpotlight, setShowBalanceCardSpotlight] =
-    useState(false);
-  const [balanceCardLayout, setBalanceCardLayout] = useState(null);
-  const [showAddTransactionSpotlight, setShowAddTransactionSpotlight] =
-    useState(false);
-  const [floatingButtonLayout, setFloatingButtonLayout] = useState(null);
-  const [showTransactionSwipeSpotlight, setShowTransactionSwipeSpotlight] =
-    useState(false);
-  const [transactionSwipeStep, setTransactionSwipeStep] = useState(0);
-  const [transactionLayout, setTransactionLayout] = useState(null);
+  const handleCloseAddTransaction = useCallback(() => {
+    setShowAddTransaction(false);
+    onClearEditingTransaction();
+  }, [onClearEditingTransaction]);
 
-  // Refs
-  const balanceCardRef = useRef(null);
-  const floatingButtonRef = useRef(null);
-  const transactionRef = useRef(null);
-
-  // Custom hook for transaction management
-  const {
-    transactions,
-    editingTransaction,
-    loadTransactions,
-    saveTransaction,
-    deleteTransaction,
-    prepareEditTransaction,
-    clearEditingTransaction,
-    calculateTotalExpenses,
-  } = useTransactions();
-
-  // Custom hook for goals management
-  const {
-    goals,
-    loadGoals,
-    updateSpendingGoals,
-    getBalanceCardGoals,
-    calculateTotalGoalContributions,
-  } = useGoals();
-
-  // FIXED: Initial data loading on component mount
-  useEffect(() => {
-    loadIncomeData();
-    loadTransactions();
-  }, []); // Empty dependency array - only run on mount
-
-  // Load goals on component mount
-  useEffect(() => {
-    loadGoals();
-  }, []); // Empty dependency array - only run on mount
-
-  // Update spending goals when transactions change
-  useEffect(() => {
-    if (transactions.length > 0) {
-      const lastTransaction = transactions[transactions.length - 1];
-      updateSpendingGoals(lastTransaction);
-    }
-  }, [transactions, updateSpendingGoals]);
-
-  // Initialize last active date on component mount
-  useEffect(() => {
-    setLastActiveDate(new Date().toDateString());
-  }, []);
-
-  // Monitor app state changes for date detection
-  useEffect(() => {
-    const handleAppStateChange = nextAppState => {
-      if (nextAppState === 'active') {
-        const now = new Date();
-        const currentDateString = now.toDateString();
-
-        // Check if the date has changed since last time app was active
-        if (lastActiveDate !== currentDateString) {
-          // Update the last active date
-          setLastActiveDate(currentDateString);
-
-          // If user was viewing "today" (previous day), update to new today
-          const selectedDateString = selectedDate.toDateString();
-          if (selectedDateString === lastActiveDate) {
-            setSelectedDate(new Date());
-          }
-
-          // Reload all data
-          loadIncomeData();
-          loadTransactions();
-          loadGoals();
-        } else {
-          // Same date, but still reload data in case of changes
-          loadIncomeData();
-          loadTransactions();
-          loadGoals();
-        }
-      }
-    };
-
-    const subscription = AppState.addEventListener(
-      'change',
-      handleAppStateChange,
-    );
-    return () => subscription?.remove();
-  }, [lastActiveDate, selectedDate]); // FIXED: Removed function dependencies
-
-  // Check onboarding status
-  useEffect(() => {
-    checkOnboardingStatus();
-  }, []); // FIXED: Empty dependency array
-
-  // Reload income data when screen comes into focus (after editing)
-  useFocusEffect(
-    React.useCallback(() => {
-      loadIncomeData();
-      loadGoals();
-    }, []), // FIXED: Empty dependency array
-  );
-
-  const loadIncomeData = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('userSetup');
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        setIncomeData(parsedData);
-      }
-    } catch (error) {
-      // Handle error silently
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkOnboardingStatus = useCallback(async () => {
-    try {
-      const hasSeenBalanceCardTour = await AsyncStorage.getItem(
-        'hasSeenBalanceCardTour',
-      );
-      const hasSeenAddTransactionTour = await AsyncStorage.getItem(
-        'hasSeenAddTransactionTour',
-      );
-      const hasCompletedSetup = await AsyncStorage.getItem('userSetup');
-
-      // Show balance card spotlight if they've completed setup but haven't seen it
-      if (hasCompletedSetup && !hasSeenBalanceCardTour) {
-        setTimeout(() => {
-          measureBalanceCard();
-        }, 500);
-      }
-      // Show add transaction spotlight if they've seen balance card but not add transaction
-      else if (hasSeenBalanceCardTour && !hasSeenAddTransactionTour) {
-        setTimeout(() => {
-          measureFloatingButton();
-        }, 500);
-      }
-    } catch (error) {
-      console.error('Error checking onboarding status:', error);
-    }
-  }, []); // FIXED: Empty dependency array
-
-  const measureBalanceCard = useCallback(() => {
-    if (balanceCardRef.current) {
-      balanceCardRef.current.measure((x, y, width, height, pageX, pageY) => {
-        setBalanceCardLayout({x: pageX, y: pageY, width, height});
-        setShowBalanceCardSpotlight(true);
-      });
-    }
-  }, []);
-
-  const measureFloatingButton = useCallback(() => {
-    if (floatingButtonRef.current) {
-      floatingButtonRef.current.measure((x, y, width, height, pageX, pageY) => {
-        setFloatingButtonLayout({x: pageX, y: pageY, width, height});
-        setShowAddTransactionSpotlight(true);
-      });
-    }
-  }, []);
-
-  const measureFirstTransaction = useCallback(() => {
-    const checkAndShowTutorial = async () => {
+  const handleSaveTransaction = useCallback(
+    async transaction => {
       try {
-        const hasSeenTransactionSwipeTour = await AsyncStorage.getItem(
-          'hasSeenTransactionSwipeTour',
-        );
+        const result = await onSaveTransaction(transaction);
 
-        if (hasSeenTransactionSwipeTour) {
-          return;
+        if (result?.success) {
+          // Small delay to allow transaction state to propagate before closing modal
+          setTimeout(() => {
+            setShowAddTransaction(false);
+          }, 50);
+        } else {
         }
+      } catch (error) {}
+    },
+    [onSaveTransaction],
+  );
 
-        if (transactionRef.current && transactions.length > 0) {
-          transactionRef.current.measure(
-            (x, y, width, height, pageX, pageY) => {
-              setTransactionLayout({x: pageX, y: pageY, width, height});
-              setTransactionSwipeStep(0);
-              setShowTransactionSwipeSpotlight(true);
-            },
-          );
+  const handleEditTransaction = useCallback(
+    async transaction => {
+      try {
+        const currentTransaction = await onEditTransaction(transaction.id);
+        if (currentTransaction) {
+          setShowAddTransaction(true);
+        } else {
         }
       } catch (error) {
-        console.error('Error checking tutorial status:', error);
+        console.error('🏠 HomeScreen: Error in edit transaction:', error);
+        // Error handling is done in container
       }
-    };
+    },
+    [onEditTransaction],
+  );
 
-    checkAndShowTutorial();
-  }, [transactions.length]);
+  const handleSwipeStart = useCallback(() => {
+    setScrollEnabled(false);
+  }, []);
 
-  const handleAddTransaction = () => {
-    clearEditingTransaction(); // Ensure we're in add mode, not edit mode
-    setShowAddTransaction(true);
-  };
+  const handleSwipeEnd = useCallback(() => {
+    setScrollEnabled(true);
+  }, []);
 
-  const handleEditIncome = () => {
-    navigation.navigate('IncomeSetup', {editMode: true});
-  };
+  const handleTournamentSwipeStart = useCallback(() => {
+    setScrollEnabled(false);
+    onTournamentSwipeStart();
+  }, [onTournamentSwipeStart]);
 
-  const handleGoalsPress = () => {
-    navigation.navigate('Goals');
-  };
+  const handleTournamentSwipeEnd = useCallback(() => {
+    setScrollEnabled(true);
+    onTournamentSwipeEnd();
+  }, [onTournamentSwipeEnd]);
 
-  const handleSaveTransaction = async transaction => {
-    try {
-      const result = await saveTransaction(transaction);
+  // ==============================================
+  // ONBOARDING HANDLERS (DELEGATED TO CONTAINER)
+  // ==============================================
+  const handleBalanceCardSpotlightNext = useCallback(async () => {
+    await onOnboardingComplete('BalanceCard');
+  }, [onOnboardingComplete]);
 
-      // Check tutorial status ONLY for new transactions
-      if (result.isNewTransaction) {
-        const hasSeenTransactionSwipeTour = await AsyncStorage.getItem(
-          'hasSeenTransactionSwipeTour',
-        );
+  const handleBalanceCardSpotlightSkip = useCallback(async () => {
+    await onOnboardingSkip('BalanceCard');
+  }, [onOnboardingSkip]);
 
-        // ONLY show tutorial if they haven't seen it AND this is their first transaction
-        if (
-          !hasSeenTransactionSwipeTour &&
-          result.updatedTransactions.length === 1
-        ) {
-          setTimeout(() => {
-            measureFirstTransaction();
-          }, 1000);
-        }
-      }
-    } catch (error) {
-      // Error already handled in hook
-    }
-  };
+  const handleAddTransactionSpotlightNext = useCallback(async () => {
+    await onOnboardingComplete('AddTransaction');
+    handleAddTransaction();
+  }, [onOnboardingComplete, handleAddTransaction]);
 
-  const handleDeleteTransaction = async transactionId => {
-    try {
-      await deleteTransaction(transactionId);
-    } catch (error) {
-      // Error already handled in hook
-    }
-  };
+  const handleAddTransactionSpotlightSkip = useCallback(async () => {
+    await onOnboardingSkip('AddTransaction');
+  }, [onOnboardingSkip]);
 
-  const handleEditTransaction = async transaction => {
-    try {
-      const currentTransaction = await prepareEditTransaction(transaction);
-      if (currentTransaction) {
-        setShowAddTransaction(true);
-      }
-    } catch (error) {
-      // Error already handled in hook
-    }
-  };
+  const handleTransactionSwipeSpotlightNext = useCallback(async () => {
+    await onOnboardingComplete('TransactionSwipe');
+  }, [onOnboardingComplete]);
 
-  const handleCloseAddTransaction = () => {
-    setShowAddTransaction(false);
-    clearEditingTransaction();
-  };
+  const handleTransactionSwipeSpotlightSkip = useCallback(async () => {
+    await onOnboardingSkip('TransactionSwipe');
+  }, [onOnboardingSkip]);
 
-  const handleSwipeStart = () => setScrollEnabled(false);
-  const handleSwipeEnd = () => setScrollEnabled(true);
-
-  // Onboarding handlers
-  const handleBalanceCardSpotlightNext = async () => {
-    try {
-      await AsyncStorage.setItem('hasSeenBalanceCardTour', 'true');
-      setShowBalanceCardSpotlight(false);
-      setTimeout(() => measureFloatingButton(), 300);
-    } catch (error) {
-      console.error('Error saving balance card tour status:', error);
-    }
-  };
-
-  const handleBalanceCardSpotlightSkip = async () => {
-    try {
-      await AsyncStorage.setItem('hasSeenBalanceCardTour', 'true');
-      setShowBalanceCardSpotlight(false);
-    } catch (error) {
-      console.error('Error saving balance card tour status:', error);
-    }
-  };
-
-  const handleAddTransactionSpotlightNext = async () => {
-    try {
-      await AsyncStorage.setItem('hasSeenAddTransactionTour', 'true');
-      setShowAddTransactionSpotlight(false);
-      handleAddTransaction();
-    } catch (error) {
-      console.error('Error saving add transaction tour status:', error);
-    }
-  };
-
-  const handleAddTransactionSpotlightSkip = async () => {
-    try {
-      await AsyncStorage.setItem('hasSeenAddTransactionTour', 'true');
-      setShowAddTransactionSpotlight(false);
-    } catch (error) {
-      console.error('Error saving add transaction tour status:', error);
-    }
-  };
-
-  const handleTransactionSwipeSpotlightNext = async () => {
-    try {
-      await AsyncStorage.setItem('hasSeenTransactionSwipeTour', 'true');
-      setShowTransactionSwipeSpotlight(false);
-      setTransactionSwipeStep(0);
-    } catch (error) {
-      console.error('Error saving transaction swipe tour status:', error);
-    }
-  };
-
-  const handleTransactionSwipeSpotlightSkip = async () => {
-    try {
-      await AsyncStorage.setItem('hasSeenTransactionSwipeTour', 'true');
-      setShowTransactionSwipeSpotlight(false);
-      setTransactionSwipeStep(0);
-    } catch (error) {
-      console.error('Error saving transaction swipe tour status:', error);
-    }
-  };
-
+  // ==============================================
+  // RENDER
+  // ==============================================
   return (
     <View style={styles.container}>
-      {/* Purple Gradient Header */}
+      {/* ==============================================
+          HEADER SECTION
+          ============================================== */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
         <BalanceCard
           incomeData={incomeData}
           loading={loading}
-          totalExpenses={calculateTotalExpenses(selectedDate, incomeData)}
+          totalExpenses={totalExpenses}
+          totalIncomePayments={totalIncomePayments}
+          totalAdditionalIncome={totalAdditionalIncome}
           onCalendarPress={() => setShowCalendar(true)}
-          onEditIncome={handleEditIncome}
+          onEditIncome={onEditIncome}
           selectedDate={selectedDate}
-          balanceCardRef={balanceCardRef}
-          goals={getBalanceCardGoals()}
-          onGoalsPress={handleGoalsPress}
+          balanceCardRef={onboarding?.balanceCardRef}
+          goals={goals}
+          onGoalsPress={onGoalsPress}
+          currency={currency}
+          transactions={transactions}
         />
       </View>
 
-      {/* Content Area - Transaction Lists */}
+      {/* ==============================================
+          CONTENT SECTION
+          ============================================== */}
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
@@ -389,69 +206,105 @@ const HomeScreen = ({navigation}) => {
         scrollEnabled={scrollEnabled}
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={false}>
-        <TransactionList
-          transactions={transactions}
-          selectedDate={selectedDate}
-          onDeleteTransaction={handleDeleteTransaction}
-          onEditTransaction={handleEditTransaction}
-          onSwipeStart={handleSwipeStart}
-          onSwipeEnd={handleSwipeEnd}
-          transactionRef={transactionRef}
-          onTransactionLayout={measureFirstTransaction}
-        />
+        {/* Poker/Tournament Section - Show if poker module is enabled */}
+        {pokerTrackerEnabled && (
+          <PokerSection
+            tournaments={tournaments}
+            isExpanded={pokerSectionExpanded}
+            onToggleExpanded={onTogglePokerSection}
+            onTournamentPress={onTournamentPress}
+            onTournamentEdit={onTournamentEdit}
+            onTournamentDelete={onTournamentDelete}
+            onSwipeStart={handleTournamentSwipeStart}
+            onSwipeEnd={handleTournamentSwipeEnd}
+            onAddTournament={onAddTournament}
+          />
+        )}
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading transactions...</Text>
+          </View>
+        ) : (
+          <TransactionList
+            transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
+            selectedDate={selectedDate}
+            onDeleteTransaction={onDeleteTransaction}
+            onEditTransaction={handleEditTransaction}
+            onSwipeStart={handleSwipeStart}
+            onSwipeEnd={handleSwipeEnd}
+            transactionRef={onboarding?.transactionRef}
+            onTransactionLayout={() => {}} // Handled by onboarding hook
+          />
+        )}
       </ScrollView>
 
-      {/* Floating Add Button */}
+      {/* ==============================================
+          FLOATING ACTION BUTTON
+          ============================================== */}
       <TouchableOpacity
-        ref={floatingButtonRef}
+        ref={onboarding?.floatingButtonRef}
         style={[styles.floatingButton, {bottom: insets.bottom + 30}]}
         onPress={handleAddTransaction}
         activeOpacity={0.8}>
         <Text style={styles.floatingButtonIcon}>+</Text>
       </TouchableOpacity>
 
-      {/* Modals */}
+      {/* ==============================================
+          MODALS
+          ============================================== */}
       <CalendarModal
         visible={showCalendar}
         onClose={() => setShowCalendar(false)}
         selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
+        onDateChange={onDateChange}
       />
 
-      <AddTransactionModal
+      <AddTransactionContainer
         visible={showAddTransaction}
         onClose={handleCloseAddTransaction}
         onSave={handleSaveTransaction}
         editingTransaction={editingTransaction}
+        navigation={navigation}
       />
 
-      {/* Onboarding Overlays */}
-      <BalanceCardSpotlight
-        visible={showBalanceCardSpotlight}
-        onNext={handleBalanceCardSpotlightNext}
-        onSkip={handleBalanceCardSpotlightSkip}
-        balanceCardLayout={balanceCardLayout}
-        incomeData={incomeData}
-      />
+      {/* ==============================================
+          ONBOARDING OVERLAYS
+          ============================================== */}
+      {onboarding?.showBalanceCardSpotlight && (
+        <BalanceCardSpotlight
+          visible={onboarding.showBalanceCardSpotlight}
+          onNext={handleBalanceCardSpotlightNext}
+          onSkip={handleBalanceCardSpotlightSkip}
+          balanceCardLayout={onboarding.balanceCardLayout}
+          incomeData={incomeData}
+        />
+      )}
 
-      <AddTransactionSpotlight
-        visible={showAddTransactionSpotlight}
-        onNext={handleAddTransactionSpotlightNext}
-        onSkip={handleAddTransactionSpotlightSkip}
-        floatingButtonLayout={floatingButtonLayout}
-      />
+      {onboarding?.showAddTransactionSpotlight && (
+        <AddTransactionSpotlight
+          visible={onboarding.showAddTransactionSpotlight}
+          onNext={handleAddTransactionSpotlightNext}
+          onSkip={handleAddTransactionSpotlightSkip}
+          floatingButtonLayout={onboarding.floatingButtonLayout}
+        />
+      )}
 
-      <TransactionSwipeSpotlight
-        visible={showTransactionSwipeSpotlight}
-        onNext={handleTransactionSwipeSpotlightNext}
-        onSkip={handleTransactionSwipeSpotlightSkip}
-        transactionLayout={transactionLayout}
-        currentStep={transactionSwipeStep}
-      />
+      {onboarding?.showTransactionSwipeSpotlight && (
+        <TransactionSwipeSpotlight
+          visible={onboarding.showTransactionSwipeSpotlight}
+          onNext={handleTransactionSwipeSpotlightNext}
+          onSkip={handleTransactionSwipeSpotlightSkip}
+          transactionLayout={onboarding.transactionLayout}
+        />
+      )}
     </View>
   );
 };
 
+// ==============================================
+// STYLES
+// ==============================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -494,6 +347,16 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite,
     lineHeight: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
 });
 

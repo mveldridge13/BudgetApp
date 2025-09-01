@@ -24,6 +24,7 @@ const BalanceCardSpotlight = ({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [showContent, setShowContent] = useState(false);
 
+  // Handle animations when visible changes
   useEffect(() => {
     if (visible) {
       setShowContent(true);
@@ -64,7 +65,22 @@ const BalanceCardSpotlight = ({
     }
   }, [visible, fadeAnim, pulseAnim]);
 
-  if (!visible || !showContent || !balanceCardLayout) {
+  const handleNext = () => {
+    setShowContent(false);
+    if (onNext) {
+      onNext();
+    }
+  };
+
+  const handleSkip = () => {
+    setShowContent(false);
+    if (onSkip) {
+      onSkip();
+    }
+  };
+
+  // Don't render if no layout data or not showing content
+  if (!showContent || !balanceCardLayout) {
     return null;
   }
 
@@ -114,7 +130,7 @@ const BalanceCardSpotlight = ({
 
   return (
     <Modal
-      visible={visible}
+      visible={visible && showContent}
       transparent={true}
       animationType="none"
       statusBarTranslucent={true}>
@@ -206,11 +222,11 @@ const BalanceCardSpotlight = ({
             </Text>
 
             <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
+              <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
                 <Text style={styles.skipButtonText}>Skip</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.nextButton} onPress={onNext}>
+              <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
                 <Text style={styles.nextButtonText}>Got it!</Text>
               </TouchableOpacity>
             </View>

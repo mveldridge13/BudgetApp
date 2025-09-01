@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   AppState,
+  Alert,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
@@ -15,13 +16,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
-import useTransactions from '../hooks/useTransactions';
 import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
-import GoalSuggestionsCard from '../components/GoalSuggestionsCard';
+import {formatCurrencySync} from '../utils/currencyHelper';
+import {useAppSettings} from '../contexts/AppSettingsContext';
 
-const GoalsScreen = ({navigation}) => {
+const GoalsScreen = () => {
   const insets = useSafeAreaInsets();
+
+  // Get currency setting from context
+  const {appSettings} = useAppSettings();
+  const currency = appSettings?.currency || 'AUD';
+
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [incomeData, setIncomeData] = useState(null);
@@ -32,6 +38,7 @@ const GoalsScreen = ({navigation}) => {
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
   const hasLoadedOnce = useRef(false); // Track if we've loaded at least once
+  const lastUpdateTime = useRef(0); // Track when we last updated goals
 
   // Hooks
   const {
@@ -47,11 +54,16 @@ const GoalsScreen = ({navigation}) => {
     getBalanceCardGoals,
     getGoalProgress,
     isGoalOverdue,
-    getSmartSuggestions,
     completeGoal,
+    // eslint-disable-next-line no-unused-vars
+    updateCounter,
   } = useGoals();
 
-  const {transactions} = useTransactions();
+  // Use ref to store loadGoals to prevent dependency loops
+  const loadGoalsRef = useRef();
+  useEffect(() => {
+    loadGoalsRef.current = loadGoals;
+  });
 
   // Consolidated data loading function
   const loadAllData = useCallback(
@@ -65,7 +77,9 @@ const GoalsScreen = ({navigation}) => {
       try {
         // Load goals and income data in parallel
         const [, incomeResult] = await Promise.all([
-          loadGoals(force), // Pass force parameter to loadGoals
+          loadGoalsRef.current
+            ? loadGoalsRef.current(force)
+            : Promise.resolve(), // Use ref to prevent dependency loop
           loadIncomeData(),
         ]);
 
@@ -82,7 +96,7 @@ const GoalsScreen = ({navigation}) => {
         }
       }
     },
-    [loadGoals, loadIncomeData],
+    [loadIncomeData], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
   );
 
   const loadIncomeData = useCallback(async () => {
@@ -135,12 +149,40 @@ const GoalsScreen = ({navigation}) => {
     useCallback(() => {
       // Remove the delay - load immediately but silently
       if (isMountedRef.current && !isLoadingRef.current) {
-        // Only reload if goals are empty - no loading state shown
-        if (goals.length === 0 || !incomeData) {
+        // Don't reload if we just updated goals (within 10 seconds)
+        const timeSinceUpdate = Date.now() - lastUpdateTime.current;
+        if (timeSinceUpdate < 10000) {
+          console.log(
+            '🔍 GOALS_SCREEN: Skipping reload - recent update within',
+            timeSinceUpdate,
+            'ms',
+          );
+          return;
+        }
+
+        // Only reload if goals are empty OR if we've never loaded before
+        const currentGoalsLength = goals.length;
+        if (
+          !hasLoadedOnce.current ||
+          (currentGoalsLength === 0 && !incomeData)
+        ) {
+          console.log(
+            '🔍 GOALS_SCREEN: Loading data (hasLoadedOnce:',
+            hasLoadedOnce.current,
+            'goals.length:',
+            currentGoalsLength,
+            ')',
+          );
           loadAllData();
+        } else {
+          console.log(
+            '🔍 GOALS_SCREEN: Skipping reload - already loaded with',
+            currentGoalsLength,
+            'goals',
+          );
         }
       }
-    }, [loadAllData, goals.length, incomeData]),
+    }, [loadAllData, incomeData, goals.length]),
   );
 
   // Pull-to-refresh handler
@@ -162,7 +204,7 @@ const GoalsScreen = ({navigation}) => {
   const handleEditGoal = useCallback(
     async goal => {
       try {
-        await prepareEditGoal(goal);
+        await prepareEditGoal(goal.id);
         setShowAddGoal(true);
       } catch (error) {
         console.warn('Error preparing edit goal:', error);
@@ -174,19 +216,47 @@ const GoalsScreen = ({navigation}) => {
   const handleSaveGoal = useCallback(
     async goalData => {
       try {
+        console.log('🔍 GOALS_SCREEN: Saving goal with data:', {
+          title: goalData.title,
+          type: goalData.type,
+          category: goalData.category,
+          target: goalData.target,
+        });
+
         const result = await saveGoal(goalData);
 
         if (result && result.success) {
+          console.log('🔍 GOALS_SCREEN: Goal saved successfully:', {
+            id: result.goal?.id,
+            type: result.goal?.type,
+            category: result.goal?.category,
+          });
+
           setShowAddGoal(false);
           clearEditingGoal();
-          return {success: true};
+          // Reload goals to show the new goal
+          console.log('🔍 GOALS_SCREEN: Reloading goals after save...');
+          try {
+            if (loadGoalsRef.current) {
+              await loadGoalsRef.current(true);
+              console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
+            }
+          } catch (reloadError) {
+            console.error(
+              '🔍 GOALS_SCREEN: Failed to reload goals:',
+              reloadError,
+            );
+          }
+          return {success: true, goal: result.goal};
         } else {
+          console.error('🔍 GOALS_SCREEN: Goal save failed:', result?.error);
           return {
             success: false,
             error: result?.error || 'Failed to save goal. Please try again.',
           };
         }
       } catch (error) {
+        console.error('🔍 GOALS_SCREEN: Goal save error:', error);
         return {
           success: false,
           error:
@@ -194,7 +264,7 @@ const GoalsScreen = ({navigation}) => {
         };
       }
     },
-    [saveGoal, clearEditingGoal],
+    [saveGoal, clearEditingGoal], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
   );
 
   const handleDeleteGoal = useCallback(
@@ -211,20 +281,46 @@ const GoalsScreen = ({navigation}) => {
   const handleToggleBalanceDisplay = useCallback(
     async goalId => {
       try {
-        await toggleGoalBalanceDisplay(goalId);
+        console.log(
+          '🎯 GoalsScreen: Toggling balance display for goal:',
+          goalId,
+        );
+        const result = await toggleGoalBalanceDisplay(goalId);
+        console.log('🎯 GoalsScreen: Toggle result:', result);
+
+        // Log the updated goals state
+        const updatedGoal = goals.find(g => g.id === goalId);
+        console.log('🎯 GoalsScreen: Updated goal state:', {
+          id: updatedGoal?.id,
+          title: updatedGoal?.title,
+          showOnBalanceCard: updatedGoal?.showOnBalanceCard,
+        });
       } catch (error) {
         console.warn('Error toggling balance display:', error);
       }
     },
-    [toggleGoalBalanceDisplay],
+    [toggleGoalBalanceDisplay, goals],
   );
 
   const handleUpdateProgress = useCallback(
-    async (goalId, amount) => {
+    async (goalId, amount, paymentSource = 'income') => {
       try {
-        await updateGoalProgress(goalId, amount);
+        await updateGoalProgress(goalId, amount, paymentSource);
+        lastUpdateTime.current = Date.now(); // Mark when we updated
+        console.log('🔍 GOALS_SCREEN: Goal progress updated successfully');
       } catch (error) {
         console.warn('Error updating progress:', error);
+        Alert.alert(
+          'Payment Failed',
+          error.message ||
+            'Unable to save payment. Please check your connection and try again.',
+          [
+            {
+              text: 'OK',
+              style: 'default',
+            },
+          ],
+        );
       }
     },
     [updateGoalProgress],
@@ -246,19 +342,17 @@ const GoalsScreen = ({navigation}) => {
     clearEditingGoal();
   }, [clearEditingGoal]);
 
-  const formatCurrency = useCallback(amount => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 0,
-    }).format(amount || 0);
-  }, []);
+  const formatCurrency = useCallback(
+    amount => {
+      return formatCurrencySync(amount, currency);
+    },
+    [currency],
+  );
 
   // Memoize expensive calculations
-  const activeGoals = React.useMemo(
-    () => goals.filter(goal => goal.isActive !== false),
-    [goals],
-  );
+  const activeGoals = React.useMemo(() => {
+    return goals.filter(goal => goal.isActive !== false);
+  }, [goals]);
 
   const completedGoals = React.useMemo(
     () => goals.filter(goal => goal.isActive === false),
@@ -278,40 +372,76 @@ const GoalsScreen = ({navigation}) => {
     [activeGoals],
   );
 
-  const smartSuggestions = React.useMemo(
-    () => getSmartSuggestions(transactions, incomeData),
-    [getSmartSuggestions, transactions, incomeData],
-  );
+  // Group goals by type for organized display
+  const groupedActiveGoals = React.useMemo(() => {
+    const grouped = {
+      spending: [],
+      debt: [],
+      savings: [],
+    };
 
-  // Memoize rendered goal lists to prevent unnecessary re-renders
-  const renderedActiveGoals = React.useMemo(
-    () =>
-      activeGoals.map(goal => (
-        <GoalCard
-          key={goal.id}
-          goal={goal}
-          onEdit={handleEditGoal}
-          onDelete={handleDeleteGoal}
-          onToggleBalanceDisplay={handleToggleBalanceDisplay}
-          onUpdateProgress={handleUpdateProgress}
-          onComplete={handleCompleteGoal}
-          getGoalProgress={getGoalProgress}
-          isOverdue={isGoalOverdue(goal)}
-          formatCurrency={formatCurrency}
-        />
-      )),
-    [
-      activeGoals,
-      handleEditGoal,
-      handleDeleteGoal,
-      handleToggleBalanceDisplay,
-      handleUpdateProgress,
-      handleCompleteGoal,
-      getGoalProgress,
-      isGoalOverdue,
-      formatCurrency,
-    ],
-  );
+    activeGoals.forEach(goal => {
+      if (goal.type === 'spending') {
+        grouped.spending.push(goal);
+      } else if (goal.type === 'debt') {
+        grouped.debt.push(goal);
+      } else if (goal.type === 'savings') {
+        grouped.savings.push(goal);
+      }
+    });
+
+    return grouped;
+  }, [activeGoals]);
+
+  // Render goal cards for a specific type
+  const renderGoalsByType = (typeGoals, type) => {
+    if (typeGoals.length === 0) {
+      return null;
+    }
+
+    const typeLabels = {
+      spending: 'Spending Budgets',
+      debt: 'Debt Payments',
+      savings: 'Savings Goals',
+    };
+
+    const typeIcons = {
+      spending: 'shopping-cart',
+      debt: 'credit-card',
+      savings: 'dollar-sign',
+    };
+
+    return (
+      <View style={styles.goalTypeSection}>
+        <View style={styles.sectionHeader}>
+          <Icon
+            name={typeIcons[type]}
+            size={16}
+            color={colors.primary}
+            style={styles.sectionIcon}
+          />
+          <Text style={styles.sectionTypeTitle}>{typeLabels[type]}</Text>
+          <View style={styles.goalCount}>
+            <Text style={styles.goalCountText}>{typeGoals.length}</Text>
+          </View>
+        </View>
+        {typeGoals.map(goal => (
+          <GoalCard
+            key={goal.id}
+            goal={goal}
+            onEdit={handleEditGoal}
+            onDelete={handleDeleteGoal}
+            onToggleBalanceDisplay={handleToggleBalanceDisplay}
+            onUpdateProgress={handleUpdateProgress}
+            onComplete={handleCompleteGoal}
+            getGoalProgress={getGoalProgress}
+            isOverdue={isGoalOverdue(goal)}
+            formatCurrency={formatCurrency}
+          />
+        ))}
+      </View>
+    );
+  };
 
   const renderedCompletedGoals = React.useMemo(
     () =>
@@ -326,17 +456,6 @@ const GoalsScreen = ({navigation}) => {
       )),
     [completedGoals, getGoalProgress, formatCurrency],
   );
-
-  // Show loading only on initial load, not on subsequent refreshes
-  // Never show loading screen during navigation - always show content structure
-  if (false) {
-    // Completely disable loading screen
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loadingText}>Loading goals...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -419,20 +538,12 @@ const GoalsScreen = ({navigation}) => {
         }>
         {activeTab === 'active' && (
           <>
-            {/* Smart Suggestions */}
-            {smartSuggestions.length > 0 && (
-              <GoalSuggestionsCard
-                suggestions={smartSuggestions}
-                onCreateGoal={handleAddGoal}
-                formatCurrency={formatCurrency}
-              />
-            )}
-
-            {/* Active Goals */}
+            {/* Active Goals - Grouped by Type */}
             {activeGoals.length > 0 ? (
               <View style={styles.goalsSection}>
-                <Text style={styles.sectionTitle}>Active Goals</Text>
-                {renderedActiveGoals}
+                {renderGoalsByType(groupedActiveGoals.spending, 'spending')}
+                {renderGoalsByType(groupedActiveGoals.debt, 'debt')}
+                {renderGoalsByType(groupedActiveGoals.savings, 'savings')}
               </View>
             ) : (
               <View style={styles.emptyState}>
@@ -633,6 +744,40 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  goalTypeSection: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  sectionIcon: {
+    marginRight: 8,
+  },
+  sectionTypeTitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.text,
+    flex: 1,
+  },
+  goalCount: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goalCountText: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.primary,
   },
   addGoalButton: {
     backgroundColor: colors.surface,

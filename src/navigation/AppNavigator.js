@@ -2,16 +2,27 @@ import React, {useState, useEffect} from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createStackNavigator} from '@react-navigation/stack';
 import {View, Text, ActivityIndicator, StyleSheet} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from 'react-native-vector-icons/Feather';
 
 // Import your components
+import AuthContainer from '../screens/AuthContainer';
 import WelcomeFlow from '../components/WelcomeFlow';
-import IncomeSetupScreen from '../screens/IncomeSetupScreen';
-import HomeScreen from '../screens/HomeScreen'; // <- IMPORT YOUR REAL HOMESCREEN
-import AnalyticsScreen from '../screens/AnalyticsScreen';
+import IncomeSetupContainer from '../containers/IncomeSetupContainer'; // ✅ FIXED: Import IncomeSetupContainer
+import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import HomeContainer instead of HomeScreen
+import AnalyticsContainer from '../containers/AnalyticsContainer'; // ✅ CHANGED: Import AnalyticsContainer instead of AnalyticsScreen
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ModulesScreen from '../screens/ModulesScreen';
+import BiometricWrapper from '../components/BiometricWrapper';
+import TournamentDetailsContainer from '../containers/TournamentDetailsContainer';
+
+// Import API services
+import AuthService from '../services/AuthService';
+import TrendAPIService from '../services/TrendAPIService';
+import UserProfileCache from '../services/UserProfileCache';
+
+// Import contexts
+import {AppSettingsProvider} from '../contexts/AppSettingsContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,68 +44,94 @@ const SettingsIcon = ({color, size}) => (
   <Feather name="menu" size={size} color={color} />
 );
 
-// REMOVED THE TEMPORARY SCREEN COMPONENTS - NOW USING REAL IMPORTS
-
 // Main Tab Navigator
 function MainTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#8B5CF6',
-        tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle: {
-          backgroundColor: 'white',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          paddingBottom: 20,
-          paddingTop: 10,
-          height: 90,
-        },
-        tabBarLabelStyle: {
-          paddingBottom: 5,
-        },
-      }}>
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen} // <- NOW USING YOUR REAL HOMESCREEN
-        options={{
-          tabBarIcon: HomeIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Analytics"
-        component={AnalyticsScreen}
-        options={{
-          tabBarIcon: AnalyticsIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Goals"
-        component={GoalsScreen}
-        options={{
-          tabBarIcon: GoalsIcon,
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{
-          tabBarIcon: SettingsIcon,
-        }}
-      />
-    </Tab.Navigator>
+    <BiometricWrapper>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#8B5CF6',
+          tabBarInactiveTintColor: '#9CA3AF',
+          tabBarStyle: {
+            backgroundColor: 'white',
+            borderTopWidth: 1,
+            borderTopColor: '#E5E7EB',
+            paddingBottom: 20,
+            paddingTop: 10,
+            height: 90,
+          },
+          tabBarLabelStyle: {
+            paddingBottom: 5,
+          },
+        }}>
+        <Tab.Screen
+          name="Home"
+          component={HomeContainer} // ✅ CHANGED: Use HomeContainer instead of HomeScreen
+          options={{
+            tabBarIcon: HomeIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Analytics"
+          component={AnalyticsContainer} // ✅ CHANGED: Use AnalyticsContainer instead of AnalyticsScreen
+          options={{
+            tabBarIcon: AnalyticsIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Goals"
+          component={GoalsScreen}
+          options={{
+            tabBarIcon: GoalsIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            tabBarIcon: SettingsIcon,
+          }}
+        />
+      </Tab.Navigator>
+    </BiometricWrapper>
   );
+}
+
+// Authentication Screen Wrapper
+function AuthScreen({navigation}) {
+  const handleAuthSuccess = async () => {
+    try {
+      // NEW: Get user profile from backend instead of AsyncStorage
+      const userProfile = await TrendAPIService.getUserProfile();
+
+      if (!userProfile.hasSeenWelcome) {
+        navigation.navigate('Welcome');
+      } else if (!userProfile.setupComplete || !userProfile.income) {
+        navigation.navigate('IncomeSetup');
+      } else {
+        navigation.navigate('MainTabs');
+      }
+    } catch (error) {
+      console.error('Error checking user setup after auth:', error);
+      // Fallback to welcome flow if API fails
+      navigation.navigate('Welcome');
+    }
+  };
+
+  return <AuthContainer onAuthSuccess={handleAuthSuccess} />;
 }
 
 // Welcome Screen Wrapper
 function WelcomeScreen({navigation}) {
   const handleWelcomeComplete = async () => {
     try {
-      await AsyncStorage.setItem('hasSeenWelcome', 'true');
+      // NEW: Update backend instead of AsyncStorage
+      await TrendAPIService.updateUserProfile({hasSeenWelcome: true});
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     } catch (error) {
       console.error('Error saving welcome status:', error);
+      // Continue to income setup even if API fails
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     }
   };
@@ -113,34 +150,42 @@ export default function AppNavigator() {
 
   const checkInitialRoute = async () => {
     try {
-      console.log('Checking initial route...');
-      const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
-      const setupData = await AsyncStorage.getItem('userSetup');
+      // Initialize AuthService and check authentication first
+      await AuthService.initialize();
 
-      console.log('hasSeenWelcome:', hasSeenWelcome);
-      console.log('setupData:', setupData);
+      // Initialize BiometricAuth service early
+      // This will check if the app should be locked on startup
+      console.log('🔐 AppNavigator: Initializing BiometricAuth service');
+      // Note: BiometricAuth service auto-initializes, but we can ensure it's ready
 
-      if (!hasSeenWelcome) {
-        console.log('New user detected - showing welcome');
+      const isAuthenticated = AuthService.isAuthenticated();
+
+      if (!isAuthenticated) {
+        setInitialRoute('Auth');
+        return;
+      }
+
+      // NEW: Get user profile from backend and cache it for immediate use by other screens
+      const userProfile = await TrendAPIService.getUserProfile();
+
+      // Cache the profile so SettingsScreen and other screens can use it immediately
+      if (userProfile) {
+        await UserProfileCache.set(userProfile);
+        console.log(
+          '🔍 APP_NAVIGATOR: Cached user profile for immediate screen access',
+        );
+      }
+
+      if (!userProfile.hasSeenWelcome) {
         setInitialRoute('Welcome');
-      } else if (!setupData) {
-        console.log('User needs income setup');
+      } else if (!userProfile.setupComplete || !userProfile.income) {
         setInitialRoute('IncomeSetup');
       } else {
-        const parsedData = JSON.parse(setupData);
-        const isComplete =
-          parsedData.setupComplete === true && parsedData.income;
-        if (isComplete) {
-          console.log('Setup complete - showing main app');
-          setInitialRoute('MainTabs');
-        } else {
-          console.log('Setup incomplete - showing income setup');
-          setInitialRoute('IncomeSetup');
-        }
+        setInitialRoute('MainTabs');
       }
     } catch (error) {
-      console.log('Error checking initial route:', error);
-      setInitialRoute('Welcome');
+      // If there's an error, default to auth flow
+      setInitialRoute('Auth');
     } finally {
       setIsLoading(false);
     }
@@ -156,11 +201,19 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-      initialRouteName={initialRoute}>
+    <AppSettingsProvider>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+        }}
+        initialRouteName={initialRoute}>
+      <Stack.Screen
+        name="Auth"
+        component={AuthScreen}
+        options={{
+          gestureEnabled: false,
+        }}
+      />
       <Stack.Screen
         name="Welcome"
         component={WelcomeScreen}
@@ -170,7 +223,7 @@ export default function AppNavigator() {
       />
       <Stack.Screen
         name="IncomeSetup"
-        component={IncomeSetupScreen}
+        component={IncomeSetupContainer} // ✅ FIXED: Use IncomeSetupContainer instead of IncomeSetupScreen
         options={{
           gestureEnabled: false,
         }}
@@ -182,7 +235,22 @@ export default function AppNavigator() {
           gestureEnabled: false,
         }}
       />
+      <Stack.Screen
+        name="Modules"
+        component={ModulesScreen}
+        options={{
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen
+        name="TournamentDetails"
+        component={TournamentDetailsContainer}
+        options={{
+          gestureEnabled: true,
+        }}
+      />
     </Stack.Navigator>
+    </AppSettingsProvider>
   );
 }
 

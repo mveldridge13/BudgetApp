@@ -14,7 +14,6 @@ import {
   Platform,
   Animated,
   Dimensions,
-  Switch,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -33,7 +32,7 @@ const GOAL_TYPES = [
     id: 'spending',
     label: 'Spending Budget',
     icon: 'credit-card',
-    description: 'Set monthly spending limits',
+    description: 'Track spending in categories',
   },
   {
     id: 'debt',
@@ -79,7 +78,6 @@ const AddGoalModal = ({
     category: 'Other',
     priority: 'medium',
     autoContribute: '',
-    isMonthly: false,
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -135,7 +133,6 @@ const AddGoalModal = ({
           category: editingGoal.category || 'Other',
           priority: editingGoal.priority || 'medium',
           autoContribute: editingGoal.autoContribute?.toString() || '',
-          isMonthly: editingGoal.isMonthly || false,
         });
       } else {
         // Creating new goal - reset form
@@ -149,7 +146,6 @@ const AddGoalModal = ({
           category: 'Other',
           priority: 'medium',
           autoContribute: '',
-          isMonthly: false,
         });
       }
       setErrors({});
@@ -239,6 +235,7 @@ const AddGoalModal = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // FIXED handleSave function
   const handleSave = async () => {
     if (!validateForm()) {
       return;
@@ -247,24 +244,87 @@ const AddGoalModal = ({
     try {
       setSaving(true);
 
+      // Add debugging to see what form data we have
+      console.log('🔍 MODAL - Raw form data:', formData);
+
+      // Helper function to safely parse numbers - FIXED to preserve decimals
+      const parseNumberSafely = (value, fallback = 0) => {
+        console.log('🔍 PARSE: Input value:', value, 'type:', typeof value);
+        if (value === null || value === undefined || value === '') {
+          console.log('🔍 PARSE: Empty value, returning fallback:', fallback);
+          return fallback;
+        }
+
+        const cleanValue = String(value)
+          .replace(/[^0-9.-]/g, '')
+          .trim();
+        const parsed = parseFloat(cleanValue);
+        const result =
+          isNaN(parsed) || parsed < 0
+            ? fallback
+            : Math.round(parsed * 100) / 100;
+
+        console.log(
+          '🔍 PARSE: Cleaned value:',
+          cleanValue,
+          'parsed:',
+          parsed,
+          'result:',
+          result,
+        );
+        return result;
+      };
+
+      // Create goal data with proper validation
       const goalData = {
         title: formData.title.trim(),
         type: formData.type,
-        target: formData.type === 'debt' ? 0 : parseFloat(formData.target),
-        current: parseFloat(formData.current),
-        originalAmount:
-          formData.type === 'debt'
-            ? parseFloat(formData.originalAmount)
-            : undefined,
-        deadline: formData.deadline,
         category: formData.category,
         priority: formData.priority,
-        autoContribute: formData.autoContribute
-          ? parseFloat(formData.autoContribute)
-          : 0,
-        isMonthly: formData.isMonthly,
+        deadline: formData.deadline,
+        current: parseNumberSafely(formData.current, 0),
         isActive: true,
       };
+
+      // Handle different goal types properly
+      if (formData.type === 'debt') {
+        // For debt goals, use originalAmount as the target amount
+        goalData.originalAmount = parseNumberSafely(formData.originalAmount, 0);
+        goalData.target = goalData.originalAmount; // Backend expects targetAmount
+        console.log('🔍 MODAL - Debt goal processed:');
+        console.log(
+          '🔍 MODAL - originalAmount:',
+          goalData.originalAmount,
+          typeof goalData.originalAmount,
+        );
+        console.log(
+          '🔍 MODAL - target:',
+          goalData.target,
+          typeof goalData.target,
+        );
+      } else {
+        // For savings/spending goals, use target
+        goalData.target = parseNumberSafely(formData.target, 0);
+        console.log('🔍 MODAL - Non-debt goal processed:');
+        console.log(
+          '🔍 MODAL - target:',
+          goalData.target,
+          typeof goalData.target,
+        );
+      }
+
+      // Add auto contribution if specified
+      if (formData.autoContribute) {
+        goalData.autoContribute = parseNumberSafely(formData.autoContribute, 0);
+      }
+
+      console.log('🔍 MODAL - Processed goal data:', goalData);
+      console.log(
+        '🔍 MODAL - Target amount:',
+        goalData.target,
+        'Type:',
+        typeof goalData.target,
+      );
 
       let result;
       try {
@@ -286,6 +346,7 @@ const AddGoalModal = ({
         Alert.alert('Error', errorMessage);
       }
     } catch (error) {
+      console.error('❌ MODAL - Error in handleSave:', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setSaving(false);
@@ -709,36 +770,6 @@ const AddGoalModal = ({
                 )}
               </View>
 
-              {/* Monthly Budget Toggle (for spending goals) */}
-              {formData.type === 'spending' && (
-                <View style={styles.section}>
-                  <View style={styles.toggleRow}>
-                    <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Monthly Budget</Text>
-                      <Text style={styles.toggleDescription}>
-                        Resets every month vs. one-time limit
-                      </Text>
-                    </View>
-                    <Switch
-                      value={formData.isMonthly}
-                      onValueChange={value =>
-                        updateFormData('isMonthly', value)
-                      }
-                      trackColor={{
-                        false: colors.border,
-                        true: colors.primary,
-                      }}
-                      thumbColor={
-                        formData.isMonthly
-                          ? colors.textWhite
-                          : colors.textSecondary
-                      }
-                      ios_backgroundColor={colors.border}
-                    />
-                  </View>
-                </View>
-              )}
-
               {/* Goal Summary */}
               <View style={styles.summarySection}>
                 <Text style={styles.summaryTitle}>Goal Summary</Text>
@@ -1110,32 +1141,6 @@ const styles = StyleSheet.create({
   },
   priorityLabelActive: {
     fontWeight: '600',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-  },
-  toggleInfo: {
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  toggleDescription: {
-    fontSize: 12,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textSecondary,
   },
   summarySection: {
     marginTop: 8,

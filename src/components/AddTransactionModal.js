@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   ScrollView,
-  Alert,
   Animated,
   Dimensions,
 } from 'react-native';
@@ -15,115 +14,85 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
-import categoryService from '../services/categoryService';
+import PaymentStatusModal from './PaymentStatusModal';
+import RecurrenceModal from './RecurrenceModal';
+import AddTournamentContainer from '../containers/AddTournamentContainer';
 
 const {width: screenWidth} = Dimensions.get('window');
 
-// Generate truly unique IDs to prevent deletion issues
-const generateUniqueId = () => {
-  // Combine timestamp with random string to ensure uniqueness
-  const timestamp = Date.now();
-  const randomPart = Math.random().toString(36).substr(2, 9);
-  return `${timestamp}_${randomPart}`;
-};
-
-// Category creation constants
-const categoryColors = [
-  '#FF6B6B',
-  '#4ECDC4',
-  '#45B7D1',
-  '#96CEB4',
-  '#FECA57',
-  '#FF9FF3',
-  '#A8A8A8',
-  '#FF8C42',
-  '#6C5CE7',
-  '#FD79A8',
-  '#FDCB6E',
-  '#E17055',
-  '#74B9FF',
-  '#00B894',
-  '#E84393',
-  '#0984E3',
-];
-
-const categoryIcons = [
-  'restaurant-outline',
-  'car-outline',
-  'bag-outline',
-  'film-outline',
-  'flash-outline',
-  'fitness-outline',
-  'document-text-outline',
-  'home-outline',
-  'airplane-outline',
-  'medkit-outline',
-  'school-outline',
-  'cafe-outline',
-  'gift-outline',
-  'game-controller-outline',
-  'musical-notes-outline',
-  'book-outline',
-  'bicycle-outline',
-  'camera-outline',
-  'card-outline',
-  'desktop-outline',
-  'hardware-chip-outline',
-  'heart-outline',
-  'library-outline',
-  'map-outline',
-];
-
 const AddTransactionModal = ({
+  // Data props
   visible,
   onClose,
   onSave,
-  editingTransaction,
+  isEditMode,
+
+  // Form data
+  amount,
+  description,
+  selectedCategory,
+  selectedSubcategory,
+  selectedDate,
+  selectedRecurrence,
+  selectedDueDate,
+  selectedTransactionType,
+  selectedPaymentStatus,
+
+  // Categories data
+  categories,
+  isLoading,
+  errorState,
+  currentSubcategoryData,
+
+  // Calendar state
+  showCalendar,
+
+  // Event handler props
+  onAmountChange,
+  onDescriptionChange,
+  onCategorySelect,
+  onSubcategorySelect,
+  onRecurrenceSelect,
+  onDueDateChange,
+  onDateChange,
+  onShowCalendar,
+  onHideCalendar,
+  onTransactionTypeChange,
+  onPaymentStatusChange,
+
+  // Helper functions
+  getCategoryById,
+  getRecurrenceById,
+  getCategoryDisplayName,
+  recurrenceOptions,
+  paymentStatusOptions,
+
+  // Module settings
+  pokerTrackerEnabled,
+
+  // Tournament props (simplified for container)
+  showTournamentModal,
+  onCreateTournamentPress,
+  onTournamentModalClose,
+  onTournamentSave,
 }) => {
-  // Safe area insets
   const insets = useSafeAreaInsets();
 
-  // Transaction data
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedRecurrence, setSelectedRecurrence] = useState('none');
-
-  // Use useRef for animation values to prevent recreation on renders
+  // Animation values
   const slideAnim = useRef(new Animated.Value(0)).current;
   const modalAnim = useRef(new Animated.Value(screenWidth)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Other modals
-  const [showCalendar, setShowCalendar] = useState(false);
+  // Modal states
+  const [showPaymentStatusModal, setShowPaymentStatusModal] = useState(false);
+  const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
 
-  // Data
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Add Category form data
-  const [categoryName, setCategoryName] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState('');
-  const [selectedColor, setSelectedColor] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const recurrenceOptions = [
-    {id: 'none', name: 'Does not repeat'},
-    {id: 'weekly', name: 'Weekly'},
-    {id: 'fortnightly', name: 'Fortnightly'},
-    {id: 'monthly', name: 'Monthly'},
-    {id: 'sixmonths', name: 'Every six months'},
-    {id: 'yearly', name: 'Yearly'},
-  ];
-
-  // Check if we're in edit mode
-  const isEditMode = !!editingTransaction;
+  // ==============================================
+  // ANIMATION HANDLING
+  // ==============================================
 
   useEffect(() => {
     if (visible) {
-      loadCategories();
-
       // Reset animations to starting positions
       slideAnim.setValue(0);
       modalAnim.setValue(screenWidth);
@@ -150,84 +119,17 @@ const AddTransactionModal = ({
     }
   }, [visible, slideAnim, modalAnim, fadeAnim]);
 
-  // Effect to populate form when editing
-  useEffect(() => {
-    if (editingTransaction && visible) {
-      // Pre-populate all fields with existing transaction data
-      setAmount(editingTransaction.amount.toString());
-      setDescription(editingTransaction.description || '');
-      setSelectedCategory(editingTransaction.category);
-      setSelectedDate(new Date(editingTransaction.date));
-      setSelectedRecurrence(editingTransaction.recurrence || 'none');
-    } else if (!editingTransaction && visible) {
-      // Reset form for new transaction
-      setAmount('');
-      setDescription('');
-      setSelectedCategory(null);
-      setSelectedDate(new Date());
-      setSelectedRecurrence('none');
-    }
-  }, [editingTransaction, visible]);
-
-  const loadCategories = async () => {
-    setIsLoading(true);
-    try {
-      const loadedCategories = await categoryService.getCategories();
-      setCategories(loadedCategories);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const resetForm = () => {
-    setAmount('');
-    setDescription('');
-    setSelectedCategory(null);
-    setSelectedDate(new Date());
-    setSelectedRecurrence('none');
-    slideAnim.setValue(0);
-    modalAnim.setValue(screenWidth);
-    fadeAnim.setValue(0);
-    // Reset add category form
-    setCategoryName('');
-    setSelectedIcon('');
-    setSelectedColor('');
-    setIsSaving(false);
-  };
+  // ==============================================
+  // UI EVENT HANDLERS
+  // ==============================================
 
   const handleSave = () => {
-    if (!amount || !selectedCategory) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    const transaction = {
-      id: isEditMode ? editingTransaction.id : generateUniqueId(), // Preserve ID when editing
-      amount: parseFloat(amount),
-      description:
-        description || categories.find(c => c.id === selectedCategory)?.name,
-      category: selectedCategory,
-      date: selectedDate,
-      recurrence: selectedRecurrence,
-      createdAt: isEditMode ? editingTransaction.createdAt : new Date(), // Preserve original creation time
-      updatedAt: isEditMode ? new Date() : undefined, // Add update timestamp when editing
-    };
-
-    console.log(
-      isEditMode ? 'Updating transaction:' : 'Creating transaction:',
-      transaction.id,
-    );
-
-    // Get current slide position to determine which view we're in
     const currentValue = slideAnim._value;
 
     if (currentValue === 0) {
-      // Already in transaction view, animate modal out then save and close
       Animated.parallel([
         Animated.timing(modalAnim, {
-          toValue: screenWidth, // Slide out to right
+          toValue: screenWidth,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -237,12 +139,9 @@ const AddTransactionModal = ({
           useNativeDriver: true,
         }),
       ]).start(() => {
-        onSave(transaction);
-        resetForm();
-        onClose();
+        onSave();
       });
     } else {
-      // Animate back to transaction view first, then animate modal out
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
@@ -260,23 +159,20 @@ const AddTransactionModal = ({
             useNativeDriver: true,
           }),
         ]).start(() => {
-          onSave(transaction);
-          resetForm();
-          onClose();
+          onSave();
         });
       });
     }
   };
 
   const handleClose = () => {
-    // Get current slide position to determine which view we're in
     const currentValue = slideAnim._value;
 
     if (currentValue === 0) {
       // Already in transaction view, animate modal out then close
       Animated.parallel([
         Animated.timing(modalAnim, {
-          toValue: screenWidth, // Slide out to right
+          toValue: screenWidth,
           duration: 300,
           useNativeDriver: true,
         }),
@@ -286,7 +182,6 @@ const AddTransactionModal = ({
           useNativeDriver: true,
         }),
       ]).start(() => {
-        resetForm();
         onClose();
       });
     } else {
@@ -308,7 +203,6 @@ const AddTransactionModal = ({
             useNativeDriver: true,
           }),
         ]).start(() => {
-          resetForm();
           onClose();
         });
       });
@@ -324,7 +218,7 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const showRecurrencePicker = () => {
+  const showSubcategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth * 2,
       duration: 300,
@@ -332,12 +226,12 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const showAddCategoryForm = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 3,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+  const showRecurrencePicker = () => {
+    setShowRecurrenceModal(true);
+  };
+
+  const showPaymentStatusPicker = () => {
+    setShowPaymentStatusModal(true);
   };
 
   const hideCategoryPicker = () => {
@@ -348,15 +242,7 @@ const AddTransactionModal = ({
     }).start();
   };
 
-  const hideRecurrencePicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const hideAddCategoryForm = () => {
+  const hideSubcategoryPicker = () => {
     Animated.timing(slideAnim, {
       toValue: -screenWidth,
       duration: 300,
@@ -365,73 +251,58 @@ const AddTransactionModal = ({
   };
 
   const handleCategorySelect = categoryId => {
-    setSelectedCategory(categoryId);
-    loadCategories();
-    hideCategoryPicker();
+    const category = getCategoryById(categoryId);
+
+    if (
+      category &&
+      category.hasSubcategories &&
+      category.subcategories?.length > 0
+    ) {
+      onCategorySelect(categoryId);
+      showSubcategoryPicker(category);
+    } else {
+      onCategorySelect(categoryId);
+      hideCategoryPicker();
+    }
+  };
+
+  const handleSubcategorySelect = subcategoryId => {
+    onSubcategorySelect(subcategoryId);
+    // Go back to transaction view
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleRecurrenceSelect = recurrenceId => {
-    setSelectedRecurrence(recurrenceId);
-    hideRecurrencePicker();
+    // Don't update state immediately - let the modal handle the animation
+    onRecurrenceSelect(recurrenceId);
+    // Don't call setShowRecurrenceModal(false) here - let the modal's onClose handle it
   };
 
-  const openAddCategoryForm = () => {
-    // Reset form
-    setCategoryName('');
-    setSelectedIcon('');
-    setSelectedColor('');
-    showAddCategoryForm();
+  const handlePaymentStatusSelect = status => {
+    // Don't update state immediately - let the modal handle the animation
+    onPaymentStatusChange(status);
+    // Don't call setShowPaymentStatusModal(false) here - let the modal's onClose handle it
   };
 
-  const handleSaveCategory = async () => {
-    // Validate form
-    const categoryData = {
-      name: categoryName.trim(),
-      icon: selectedIcon,
-      color: selectedColor,
+  const handleTransactionTypeSelect = type => {
+    onTransactionTypeChange(type);
+  };
+
+  // ==============================================
+  // HELPER FUNCTIONS
+  // ==============================================
+
+  const getCategoryIconStyle = color => {
+    return {
+      ...styles.categoryIconContainer,
+      backgroundColor: `${color}26`,
     };
-
-    const validation = categoryService.validateCategory(categoryData);
-    if (!validation.isValid) {
-      Alert.alert('Validation Error', validation.errors.join('\n'));
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const result = await categoryService.addCategory(categoryData);
-
-      if (result.success) {
-        // Add to categories list and select it
-        setCategories(prevCategories => [...prevCategories, result.category]);
-        setSelectedCategory(result.category.id);
-
-        // Reset form
-        setCategoryName('');
-        setSelectedIcon('');
-        setSelectedColor('');
-
-        // Go back to transaction view
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
-
-        Alert.alert('Success', 'Category created successfully!');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to create category');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
-      console.error('Error creating category:', error);
-    } finally {
-      setIsSaving(false);
-    }
   };
 
-  // Helper functions
   const formatDate = date => {
     return date.toLocaleDateString('en-AU', {
       day: 'numeric',
@@ -439,9 +310,6 @@ const AddTransactionModal = ({
       year: 'numeric',
     });
   };
-
-  const getCategoryById = id => categories.find(cat => cat.id === id);
-  const getRecurrenceById = id => recurrenceOptions.find(opt => opt.id === id);
 
   const getRecurrenceIcon = () => {
     return selectedRecurrence !== 'none' ? 'repeat' : 'repeat-outline';
@@ -453,7 +321,107 @@ const AddTransactionModal = ({
       : colors.textSecondary;
   };
 
-  // Don't render if not visible to avoid layout issues
+  const getTransactionTypeDisplayName = () => {
+    switch (selectedTransactionType) {
+      case 'INCOME':
+        return 'Income';
+      case 'POKER':
+        return 'Poker';
+      default:
+        return 'Expense';
+    }
+  };
+
+  const getCategoryFieldDisplayName = () => {
+    if (!selectedCategory) {
+      return null;
+    }
+
+    const mainCategory = getCategoryById(selectedCategory);
+    if (!mainCategory) {
+      return null;
+    }
+
+    // Always show the main category name in the category field
+    return mainCategory.name;
+  };
+
+  const getCategoryFieldIcon = () => {
+    if (!selectedCategory) {
+      return null;
+    }
+
+    const mainCategory = getCategoryById(selectedCategory);
+    if (!mainCategory) {
+      return null;
+    }
+
+    // If subcategory is selected, show subcategory icon, otherwise show main category icon
+    if (selectedSubcategory) {
+      const subcategory = mainCategory.subcategories?.find(
+        sub => sub.id === selectedSubcategory,
+      );
+      return subcategory?.icon || mainCategory.icon;
+    }
+
+    return mainCategory.icon;
+  };
+
+  const getPaymentStatusDisplayName = () => {
+    if (!selectedPaymentStatus) {
+      return 'Payment Status (Optional)';
+    }
+
+    switch (selectedPaymentStatus) {
+      case 'UPCOMING':
+        return 'Upcoming';
+      case 'PAID':
+        return 'Paid';
+      case 'OVERDUE':
+        return 'Overdue';
+      default:
+        return 'Payment Status (Optional)';
+    }
+  };
+
+  const getPaymentStatusIcon = (status = selectedPaymentStatus) => {
+    if (!status) {
+      return 'time-outline';
+    }
+
+    switch (status) {
+      case 'UPCOMING':
+        return 'time-outline';
+      case 'PAID':
+        return 'checkmark-circle-outline';
+      case 'OVERDUE':
+        return 'warning-outline';
+      default:
+        return 'time-outline';
+    }
+  };
+
+  const getPaymentStatusColor = (status = selectedPaymentStatus) => {
+    if (!status) {
+      return colors.textSecondary;
+    }
+
+    switch (status) {
+      case 'UPCOMING':
+        return '#007AFF';
+      case 'PAID':
+        return '#4CAF50';
+      case 'OVERDUE':
+        return '#F44336';
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+  // ==============================================
+  // RENDER
+  // ==============================================
+
   if (!visible) {
     return null;
   }
@@ -495,7 +463,9 @@ const AddTransactionModal = ({
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>
-                  {isEditMode ? 'Edit Expense' : 'Add Expense'}
+                  {isEditMode
+                    ? `Edit ${getTransactionTypeDisplayName()}`
+                    : 'Add Transaction'}
                 </Text>
                 <TouchableOpacity
                   onPress={handleSave}
@@ -516,119 +486,300 @@ const AddTransactionModal = ({
               </View>
 
               <ScrollView style={styles.formContainer}>
-                {/* Date Field */}
-                <TouchableOpacity
-                  style={styles.dateField}
-                  onPress={() => setShowCalendar(true)}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="calendar-outline"
-                    size={18}
-                    color="#007AFF"
-                    style={styles.dateIcon}
-                  />
-                  <Text style={styles.dateText}>
-                    {formatDate(selectedDate)}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Amount Field */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.amountInput}
-                    value={amount}
-                    onChangeText={setAmount}
-                    placeholder="0.00"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    autoFocus={!isEditMode} // Only auto-focus for new transactions
-                  />
-                </View>
-
-                {/* Description Field */}
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Description (optional)"
-                  placeholderTextColor={colors.textSecondary}
-                />
-
-                {/* Category Field */}
-                <TouchableOpacity
-                  style={styles.categoryField}
-                  onPress={showCategoryPicker}
-                  activeOpacity={0.7}>
-                  <View style={styles.categoryLeft}>
-                    {selectedCategory ? (
-                      <>
-                        <View
-                          style={[
-                            styles.categoryIconContainer,
-                            {
-                              backgroundColor: `${
-                                getCategoryById(selectedCategory)?.color
-                              }26`,
-                            },
-                          ]}>
-                          <Icon
-                            name={getCategoryById(selectedCategory)?.icon}
-                            size={18}
-                            color={getCategoryById(selectedCategory)?.color}
-                          />
-                        </View>
-                        <Text style={styles.categoryText}>
-                          {getCategoryById(selectedCategory)?.name}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <View style={styles.categoryIconPlaceholder}>
-                          <Icon
-                            name="albums-outline"
-                            size={18}
-                            color={colors.textSecondary}
-                          />
-                        </View>
-                        <Text style={styles.categoryPlaceholder}>Category</Text>
-                      </>
-                    )}
-                  </View>
-                  <Icon
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-
-                {/* Recurrence Field */}
-                <TouchableOpacity
-                  style={styles.recurrenceField}
-                  onPress={showRecurrencePicker}
-                  activeOpacity={0.7}>
-                  <View style={styles.recurrenceLeft}>
+                {/* Transaction Type Selector */}
+                <View style={styles.transactionTypeContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.transactionTypeButton,
+                      styles.transactionTypeButtonExpense,
+                      selectedTransactionType === 'EXPENSE' &&
+                        styles.transactionTypeButtonActiveExpense,
+                    ]}
+                    onPress={() => handleTransactionTypeSelect('EXPENSE')}
+                    activeOpacity={0.7}>
                     <Icon
-                      name={getRecurrenceIcon()}
+                      name="trending-down"
                       size={18}
-                      color={getRecurrenceColor()}
-                      style={styles.recurrenceIcon}
+                      color={
+                        selectedTransactionType === 'EXPENSE'
+                          ? colors.textWhite || '#FFFFFF'
+                          : colors.textSecondary
+                      }
+                      style={styles.transactionTypeIcon}
                     />
                     <Text
                       style={[
-                        styles.recurrenceText,
-                        selectedRecurrence !== 'none' &&
-                          styles.recurrenceActiveText,
+                        styles.transactionTypeText,
+                        selectedTransactionType === 'EXPENSE' &&
+                          styles.transactionTypeTextActive,
                       ]}>
-                      {getRecurrenceById(selectedRecurrence)?.name}
+                      Expense
                     </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.transactionTypeButton,
+                      styles.transactionTypeButtonIncome,
+                      selectedTransactionType === 'INCOME' &&
+                        styles.transactionTypeButtonActiveIncome,
+                    ]}
+                    onPress={() => handleTransactionTypeSelect('INCOME')}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="trending-up"
+                      size={18}
+                      color={
+                        selectedTransactionType === 'INCOME'
+                          ? colors.textWhite || '#FFFFFF'
+                          : colors.textSecondary
+                      }
+                      style={styles.transactionTypeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        selectedTransactionType === 'INCOME' &&
+                          styles.transactionTypeTextActive,
+                      ]}>
+                      Income
+                    </Text>
+                  </TouchableOpacity>
+
+                  {pokerTrackerEnabled && (
+                    <TouchableOpacity
+                      style={[
+                        styles.transactionTypeButton,
+                        styles.transactionTypeButtonPoker,
+                        selectedTransactionType === 'POKER' &&
+                          styles.transactionTypeButtonActivePoker,
+                      ]}
+                      onPress={() => handleTransactionTypeSelect('POKER')}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="trophy-outline"
+                        size={18}
+                        color={
+                          selectedTransactionType === 'POKER'
+                            ? colors.textWhite || '#FFFFFF'
+                            : colors.textSecondary
+                        }
+                        style={styles.transactionTypeIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.transactionTypeText,
+                          selectedTransactionType === 'POKER' &&
+                            styles.transactionTypeTextActive,
+                        ]}>
+                        Poker
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Date Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <TouchableOpacity
+                    style={styles.dateField}
+                    onPress={onShowCalendar}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="calendar-outline"
+                      size={18}
+                      color="#007AFF"
+                      style={styles.dateIcon}
+                    />
+                    <Text style={styles.dateText}>
+                      {formatDate(selectedDate)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Poker Tracker Fields */}
+                {selectedTransactionType === 'POKER' && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.createTournamentButton}
+                      onPress={onCreateTournamentPress}
+                      activeOpacity={0.7}>
+                      <Text style={styles.createTournamentText}>
+                        Create Tournament
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Amount Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.amountInput}
+                      value={amount}
+                      onChangeText={onAmountChange}
+                      placeholder="0.00"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                    />
                   </View>
-                  <Icon
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textSecondary}
+                )}
+
+                {/* Description Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <TextInput
+                    style={styles.descriptionInput}
+                    value={description}
+                    onChangeText={onDescriptionChange}
+                    placeholder="Description (optional)"
+                    placeholderTextColor={colors.textSecondary}
                   />
-                </TouchableOpacity>
+                )}
+
+                {/* Category Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <TouchableOpacity
+                    style={styles.categoryField}
+                    onPress={showCategoryPicker}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      {selectedCategory ? (
+                        <>
+                          <View
+                            style={getCategoryIconStyle(
+                              getCategoryById(selectedCategory)?.color,
+                            )}>
+                            <Icon
+                              name={getCategoryFieldIcon()}
+                              size={18}
+                              color={getCategoryById(selectedCategory)?.color}
+                            />
+                          </View>
+                          <Text style={styles.categoryText}>
+                            {getCategoryFieldDisplayName()}
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.categoryIconPlaceholder}>
+                            <Icon
+                              name="albums-outline"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </View>
+                          <Text style={styles.categoryPlaceholder}>
+                            Category
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                    <Icon
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {/* Recurrence Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <TouchableOpacity
+                    style={styles.recurrenceField}
+                    onPress={showRecurrencePicker}
+                    activeOpacity={0.7}>
+                    <View style={styles.recurrenceLeft}>
+                      <Icon
+                        name={getRecurrenceIcon()}
+                        size={18}
+                        color={getRecurrenceColor()}
+                        style={styles.recurrenceIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.recurrenceText,
+                          selectedRecurrence !== 'none' &&
+                            styles.recurrenceActiveText,
+                        ]}>
+                        {getRecurrenceById(selectedRecurrence)?.name}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {/* Due Date Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <TouchableOpacity
+                    style={styles.dueDateField}
+                    onPress={() => onShowCalendar('dueDate')}
+                    activeOpacity={0.7}>
+                    <View style={styles.dueDateLeft}>
+                      <Icon
+                        name="calendar-outline"
+                        size={18}
+                        color={
+                          selectedDueDate
+                            ? colors.primary
+                            : colors.textSecondary
+                        }
+                        style={styles.dueDateIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.dueDateText,
+                          selectedDueDate && styles.dueDateActiveText,
+                        ]}>
+                        {selectedDueDate
+                          ? selectedDueDate.toLocaleDateString('en-AU', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                            })
+                          : 'Due Date (Optional)'}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {/* Payment Status Field */}
+                {selectedTransactionType !== 'POKER' && (
+                  <TouchableOpacity
+                    style={styles.paymentStatusField}
+                    onPress={showPaymentStatusPicker}
+                    activeOpacity={0.7}>
+                    <View style={styles.paymentStatusLeft}>
+                      <Icon
+                        name={getPaymentStatusIcon()}
+                        size={18}
+                        color={getPaymentStatusColor()}
+                        style={styles.paymentStatusIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.paymentStatusText,
+                          selectedPaymentStatus &&
+                            styles.paymentStatusActiveText,
+                        ]}>
+                        {getPaymentStatusDisplayName()}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             </View>
 
@@ -670,11 +821,7 @@ const AddTransactionModal = ({
                         onPress={() => handleCategorySelect(category.id)}
                         activeOpacity={0.7}>
                         <View style={styles.categoryLeft}>
-                          <View
-                            style={[
-                              styles.categoryIconContainer,
-                              {backgroundColor: `${category.color}26`},
-                            ]}>
+                          <View style={getCategoryIconStyle(category.color)}>
                             <Icon
                               name={category.icon}
                               size={20}
@@ -690,34 +837,35 @@ const AddTransactionModal = ({
                             )}
                           </View>
                         </View>
-                        {selectedCategory === category.id && (
-                          <Icon
-                            name="checkmark"
-                            size={20}
-                            color={colors.primary}
-                          />
-                        )}
+                        <View style={styles.categoryRight}>
+                          {selectedCategory === category.id &&
+                            !category.hasSubcategories && (
+                              <Icon
+                                name="checkmark"
+                                size={20}
+                                color={colors.primary}
+                              />
+                            )}
+                          {category.hasSubcategories && (
+                            <Icon
+                              name="chevron-forward"
+                              size={20}
+                              color={colors.textSecondary}
+                            />
+                          )}
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </>
                 )}
-
-                {/* Add Category Button */}
-                <TouchableOpacity
-                  style={styles.addCategoryButton}
-                  onPress={openAddCategoryForm}
-                  activeOpacity={0.7}>
-                  <Icon name="add" size={20} color={colors.primary} />
-                  <Text style={styles.addCategoryText}>Add Category</Text>
-                </TouchableOpacity>
               </ScrollView>
             </View>
 
-            {/* Recurrence Picker View */}
+            {/* Subcategory Picker View */}
             <View style={styles.view}>
               <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
                 <TouchableOpacity
-                  onPress={hideRecurrencePicker}
+                  onPress={hideSubcategoryPicker}
                   style={styles.cancelButton}>
                   <Icon
                     name="chevron-back"
@@ -725,167 +873,51 @@ const AddTransactionModal = ({
                     color={colors.textWhite}
                   />
                 </TouchableOpacity>
-                <Text style={styles.modalTitle}>Repeat</Text>
+                <Text style={styles.modalTitle}>
+                  {currentSubcategoryData?.name || 'Select Subcategory'}
+                </Text>
                 <View style={styles.placeholder} />
               </View>
 
               <ScrollView
                 style={styles.formContainer}
                 showsVerticalScrollIndicator={false}>
-                {recurrenceOptions.map(option => (
+                {/* Subcategories */}
+                {currentSubcategoryData?.subcategories?.map(subcategory => (
                   <TouchableOpacity
-                    key={option.id}
+                    key={subcategory.id}
                     style={[
                       styles.categoryOption,
-                      selectedRecurrence === option.id && styles.selectedOption,
+                      selectedSubcategory === subcategory.id &&
+                        styles.selectedOption,
                     ]}
-                    onPress={() => handleRecurrenceSelect(option.id)}
+                    onPress={() => handleSubcategorySelect(subcategory.id)}
                     activeOpacity={0.7}>
                     <View style={styles.categoryLeft}>
-                      <Text style={styles.categoryName}>{option.name}</Text>
+                      <View
+                        style={getCategoryIconStyle(
+                          currentSubcategoryData.color,
+                        )}>
+                        <Icon
+                          name={subcategory.icon}
+                          size={20}
+                          color={currentSubcategoryData.color}
+                        />
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.categoryName}>
+                          {subcategory.name}
+                        </Text>
+                        {subcategory.isCustom && (
+                          <Text style={styles.customLabel}>Custom</Text>
+                        )}
+                      </View>
                     </View>
-                    {selectedRecurrence === option.id && (
+                    {selectedSubcategory === subcategory.id && (
                       <Icon name="checkmark" size={20} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
-            </View>
-
-            {/* Add Category Form View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hideAddCategoryForm}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Add Category</Text>
-                <TouchableOpacity
-                  onPress={handleSaveCategory}
-                  style={[
-                    styles.saveButton,
-                    (!categoryName.trim() || !selectedIcon || !selectedColor) &&
-                      styles.saveButtonDisabled,
-                  ]}
-                  disabled={
-                    !categoryName.trim() ||
-                    !selectedIcon ||
-                    !selectedColor ||
-                    isSaving
-                  }>
-                  {isSaving ? (
-                    <Text style={styles.saveText}>Saving...</Text>
-                  ) : (
-                    <Text
-                      style={[
-                        styles.saveText,
-                        (!categoryName.trim() ||
-                          !selectedIcon ||
-                          !selectedColor) &&
-                          styles.saveTextDisabled,
-                      ]}>
-                      Save
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {/* Category Name Input */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Category Name</Text>
-                  <TextInput
-                    style={styles.nameInput}
-                    value={categoryName}
-                    onChangeText={setCategoryName}
-                    placeholder="Enter category name"
-                    placeholderTextColor={colors.textSecondary}
-                    maxLength={30}
-                    autoFocus={true}
-                  />
-                  <Text style={styles.characterCount}>
-                    {categoryName.length}/30
-                  </Text>
-                </View>
-
-                {/* Icon Selection */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Choose Icon</Text>
-                  <View style={styles.iconGrid}>
-                    {categoryIcons.map((icon, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.iconOption,
-                          selectedIcon === icon && styles.selectedIconOption,
-                        ]}
-                        onPress={() => setSelectedIcon(icon)}
-                        activeOpacity={0.7}>
-                        <Icon
-                          name={icon}
-                          size={24}
-                          color={
-                            selectedIcon === icon
-                              ? colors.primary
-                              : colors.textSecondary
-                          }
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Color Selection */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Choose Color</Text>
-                  <View style={styles.colorGrid}>
-                    {categoryColors.map((color, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.colorOption,
-                          {backgroundColor: color},
-                          selectedColor === color && styles.selectedColorOption,
-                        ]}
-                        onPress={() => setSelectedColor(color)}
-                        activeOpacity={0.8}>
-                        {selectedColor === color && (
-                          <Icon name="checkmark" size={16} color="white" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Preview */}
-                {selectedIcon && selectedColor && categoryName.trim() && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Preview</Text>
-                    <View style={styles.previewContainer}>
-                      <View
-                        style={[
-                          styles.categoryIconContainer,
-                          {backgroundColor: `${selectedColor}26`},
-                        ]}>
-                        <Icon
-                          name={selectedIcon}
-                          size={20}
-                          color={selectedColor}
-                        />
-                      </View>
-                      <Text style={styles.categoryName}>
-                        {categoryName.trim()}
-                      </Text>
-                    </View>
-                  </View>
-                )}
               </ScrollView>
             </View>
           </Animated.View>
@@ -895,9 +927,34 @@ const AddTransactionModal = ({
       {/* Calendar Modal */}
       <CalendarModal
         visible={showCalendar}
-        onClose={() => setShowCalendar(false)}
+        onClose={onHideCalendar}
         selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
+        onDateChange={onDateChange}
+      />
+
+      {/* Payment Status Modal */}
+      <PaymentStatusModal
+        visible={showPaymentStatusModal}
+        onClose={() => setShowPaymentStatusModal(false)}
+        selectedPaymentStatus={selectedPaymentStatus}
+        onPaymentStatusSelect={handlePaymentStatusSelect}
+        paymentStatusOptions={paymentStatusOptions}
+      />
+
+      {/* Recurrence Modal */}
+      <RecurrenceModal
+        visible={showRecurrenceModal}
+        onClose={() => setShowRecurrenceModal(false)}
+        selectedRecurrence={selectedRecurrence}
+        onRecurrenceSelect={handleRecurrenceSelect}
+        recurrenceOptions={recurrenceOptions}
+      />
+
+      {/* Tournament Modal */}
+      <AddTournamentContainer
+        visible={showTournamentModal}
+        onClose={onTournamentModalClose}
+        onSave={onTournamentSave}
       />
     </Modal>
   );
@@ -915,7 +972,7 @@ const styles = StyleSheet.create({
   },
   viewContainer: {
     flexDirection: 'row',
-    width: screenWidth * 4, // Four screens: Transaction, Category, Recurrence, Add Category
+    width: screenWidth * 3, // 3 views: Transaction, Category, Subcategory
     height: '100%',
   },
   view: {
@@ -963,12 +1020,90 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite,
   },
+  saveButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveTextDisabled: {
+    opacity: 0.5,
+  },
   placeholder: {
     width: 32,
   },
   formContainer: {
     padding: 20,
     flex: 1,
+  },
+  // Transaction Type Selector Styles
+  transactionTypeContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background || '#F8FAFC',
+    paddingHorizontal: 4,
+    paddingTop: 2,
+    paddingBottom: 2,
+    marginBottom: 12,
+  },
+  transactionTypeButton: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    marginHorizontal: 1,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  transactionTypeButtonExpense: {
+    borderBottomColor: colors.primary || '#6366F1',
+  },
+  transactionTypeButtonIncome: {
+    borderBottomColor: colors.primary || '#6366F1',
+  },
+  transactionTypeButtonPoker: {
+    borderBottomColor: colors.primary || '#6366F1',
+  },
+  transactionTypeButtonActiveExpense: {
+    backgroundColor: colors.primary || '#6366F1',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  transactionTypeButtonActiveIncome: {
+    backgroundColor: colors.primary || '#6366F1',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  transactionTypeButtonActivePoker: {
+    backgroundColor: colors.primary || '#6366F1',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  transactionTypeIcon: {
+    marginRight: 8,
+  },
+  transactionTypeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+  transactionTypeTextActive: {
+    color: colors.textWhite || '#FFFFFF',
+    fontWeight: '600',
   },
   dateField: {
     flexDirection: 'row',
@@ -1036,6 +1171,7 @@ const styles = StyleSheet.create({
   categoryLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   categoryIconContainer: {
     width: 28,
@@ -1059,6 +1195,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textPrimary,
+    flex: 1,
   },
   categoryPlaceholder: {
     fontSize: 16,
@@ -1074,6 +1211,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
+    marginBottom: 32,
   },
   recurrenceLeft: {
     flexDirection: 'row',
@@ -1091,7 +1229,58 @@ const styles = StyleSheet.create({
   recurrenceActiveText: {
     color: colors.textPrimary,
   },
-  // Category picker styles
+  dueDateField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 32,
+  },
+  dueDateLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dueDateIcon: {
+    marginRight: 12,
+  },
+  dueDateText: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  dueDateActiveText: {
+    color: colors.textPrimary,
+  },
+  paymentStatusField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 32,
+  },
+  paymentStatusLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  paymentStatusIcon: {
+    marginRight: 12,
+  },
+  paymentStatusText: {
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  paymentStatusActiveText: {
+    color: colors.textPrimary,
+  },
   loadingContainer: {
     paddingVertical: 40,
     alignItems: 'center',
@@ -1114,6 +1303,10 @@ const styles = StyleSheet.create({
   selectedOption: {
     backgroundColor: colors.overlayLight,
   },
+  categoryRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   categoryInfo: {
     flex: 1,
   },
@@ -1130,99 +1323,51 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  addCategoryButton: {
+  // Small Currency Input Styles (for Poker fields)
+  smallInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    marginTop: 20,
-    borderRadius: 12,
-    backgroundColor: colors.overlayLight,
-  },
-  addCategoryText: {
-    fontSize: 16,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.primary,
-    marginLeft: 8,
-  },
-  // Add Category Form styles
-  section: {
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  nameInput: {
-    fontSize: 16,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textPrimary,
+    marginBottom: 20,
     paddingVertical: 16,
     paddingHorizontal: 16,
     backgroundColor: colors.overlayLight,
     borderRadius: 12,
   },
-  characterCount: {
-    fontSize: 12,
+  smallCurrencySymbol: {
+    fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',
-    color: colors.textSecondary,
-    textAlign: 'right',
-    marginTop: 4,
+    color: colors.textPrimary,
+    marginRight: 8,
   },
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  smallAmountInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    padding: 0,
   },
-  iconOption: {
-    width: '18%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
+  fieldIcon: {
+    marginRight: 8,
   },
-  selectedIconOption: {
-    borderColor: colors.primary,
-    backgroundColor: `${colors.primary}10`,
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  colorOption: {
-    width: '18%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 3,
-    borderColor: 'transparent',
-  },
-  selectedColorOption: {
-    borderColor: colors.textPrimary,
-  },
-  previewContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+
+  // Create Tournament Button Styles
+  createTournamentButton: {
+    backgroundColor: colors.primary,
     paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.overlayLight,
+    paddingHorizontal: 24,
     borderRadius: 12,
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginTop: 40,
+    marginBottom: 20,
   },
-  saveButtonDisabled: {
-    opacity: 0.5,
+  createTournamentText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textWhite,
   },
 });
 
