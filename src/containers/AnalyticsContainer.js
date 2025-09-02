@@ -157,8 +157,13 @@ const AnalyticsContainer = () => {
 
       console.log('📋 Fetching bills analytics from backend...');
 
-      // Try backend bills analytics first
-      const billsResponse = await TrendAPIService.getBillsAnalytics();
+      // Use pay period filtering fallback since backend uses calendar month filtering
+      console.log('📋 Using pay period filtering fallback for better bill analytics');
+      await loadBillsAnalyticsFallback();
+      return;
+
+      // Backend endpoint exists but uses calendar month filtering - skip it
+      // const billsResponse = await TrendAPIService.getBillsAnalytics();
 
       if (isMountedRef.current && billsResponse) {
         setBillsAnalytics(billsResponse);
@@ -189,19 +194,26 @@ const AnalyticsContainer = () => {
     }
   }, [isOnline, loadBillsAnalyticsFallback]);
 
-  // Temporary fallback processing until backend implements bills-analytics endpoint
+  // Pay period based bills analytics processing 
   const loadBillsAnalyticsFallback = useCallback(async () => {
     try {
-      // Get all transactions with due dates (bills)
-      const response = await TrendAPIService.getTransactions();
-      const allTransactions = response?.transactions || [];
+      // Get all transactions with due dates (bills) and user profile for pay period calculation
+      const [transactionResponse, userProfile] = await Promise.all([
+        TrendAPIService.getTransactions(),
+        TrendAPIService.getUserProfile()
+      ]);
+      
+      const allTransactions = transactionResponse?.transactions || [];
 
-      console.log('📋 Bills Analytics: Fetched transactions:', {
-        responseType: typeof response,
+      console.log('📋 Bills Analytics: Fetched data:', {
+        responseType: typeof transactionResponse,
         transactionsType: typeof allTransactions,
         isArray: Array.isArray(allTransactions),
         length: allTransactions?.length || 0,
         sample: allTransactions?.slice(0, 2) || 'no data',
+        hasUserProfile: !!userProfile,
+        hasNextPayDate: !!userProfile?.nextPayDate,
+        hasIncomeFrequency: !!userProfile?.incomeFrequency,
       });
 
       // Check if transactions data is valid
@@ -242,31 +254,101 @@ const AnalyticsContainer = () => {
           recurrence: tx.recurrence,
           status: tx.status,
         })),
+        // Show some non-bill transactions for comparison
+        sampleNonBills: allTransactions.filter(tx => !tx.dueDate && (!tx.recurrence || tx.recurrence === 'none')).slice(0, 3).map(tx => ({
+          id: tx.id,
+          description: tx.description,
+          amount: tx.amount,
+          dueDate: tx.dueDate,
+          recurrence: tx.recurrence,
+          status: tx.status,
+        })),
       });
 
-      // Process bills analytics client-side (temporary)
+      // Calculate pay period boundaries (same logic as HomeContainer)
       const now = new Date();
       const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
+      let periodStart, periodEnd;
 
-      const monthlyBills = billTransactions.filter(bill => {
+      if (userProfile?.nextPayDate && userProfile?.incomeFrequency) {
+        try {
+          // Parse next pay date with error handling
+          let nextPayDate;
+          if (userProfile.nextPayDate.includes('T')) {
+            nextPayDate = new Date(userProfile.nextPayDate);
+          } else {
+            // For date-only format, create date in local timezone at noon to avoid timezone issues
+            nextPayDate = new Date(userProfile.nextPayDate + 'T12:00:00');
+          }
+
+          if (isNaN(nextPayDate.getTime())) {
+            throw new Error('Invalid next pay date');
+          }
+
+          // Set period end to the next pay date
+          periodEnd = new Date(nextPayDate);
+          periodEnd.setHours(23, 59, 59, 999);
+
+          // Calculate the PREVIOUS pay date - this becomes the start of the current period
+          if (userProfile.incomeFrequency === 'weekly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setDate(periodStart.getDate() - 7);
+          } else if (userProfile.incomeFrequency === 'fortnightly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setDate(periodStart.getDate() - 14);
+          } else if (userProfile.incomeFrequency === 'monthly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setMonth(periodStart.getMonth() - 1);
+          } else if (userProfile.incomeFrequency === 'sixmonths') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setMonth(periodStart.getMonth() - 6);
+          } else if (userProfile.incomeFrequency === 'yearly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setFullYear(periodStart.getFullYear() - 1);
+          } else {
+            // Default to monthly if frequency is unknown
+            periodStart = new Date(nextPayDate);
+            periodStart.setMonth(periodStart.getMonth() - 1);
+          }
+
+          // Set period start to beginning of day to include all transactions from that day
+          periodStart.setHours(0, 0, 0, 0);
+
+          console.log('📋 Bills Analytics: Pay period calculated:', {
+            frequency: userProfile.incomeFrequency,
+            nextPayDate: nextPayDate.toISOString(),
+            periodStart: periodStart.toISOString(),
+            periodEnd: periodEnd.toISOString(),
+            today: now.toISOString(),
+          });
+        } catch (periodError) {
+          console.error('📋 Bills Analytics: Error calculating pay period:', periodError);
+          // Fallback to current month if pay period calculation fails
+          periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        }
+      } else {
+        console.warn('📋 Bills Analytics: Missing pay schedule data, falling back to current month');
+        // Fallback to current month if no pay schedule data
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      }
+
+      // Filter bills by pay period instead of calendar month
+      const payPeriodBills = billTransactions.filter(bill => {
         if (!bill.dueDate) {
           return false;
         }
         const billDate = new Date(bill.dueDate);
-        return (
-          billDate.getMonth() === currentMonth &&
-          billDate.getFullYear() === currentYear
-        );
+        return billDate >= periodStart && billDate <= periodEnd;
       });
 
       // Categorize bills by status
-      const paidBillsList = monthlyBills.filter(bill => bill.status === 'PAID');
-      const unpaidBillsList = monthlyBills.filter(
+      const paidBillsList = payPeriodBills.filter(bill => bill.status === 'PAID');
+      const unpaidBillsList = payPeriodBills.filter(
         bill => bill.status === 'UPCOMING',
       );
-      const overdueBillsList = monthlyBills.filter(bill => {
+      const overdueBillsList = payPeriodBills.filter(bill => {
         if (bill.status === 'PAID') {
           return false;
         }
@@ -274,7 +356,7 @@ const AnalyticsContainer = () => {
       });
 
       // Upcoming bills (next 7 days)
-      const upcomingBills = monthlyBills.filter(bill => {
+      const upcomingBills = payPeriodBills.filter(bill => {
         if (bill.status === 'PAID') {
           return false;
         }
@@ -283,7 +365,7 @@ const AnalyticsContainer = () => {
       });
 
       // Calculate amounts
-      const totalAmount = monthlyBills.reduce(
+      const totalAmount = payPeriodBills.reduce(
         (sum, bill) => sum + Math.abs(bill.amount),
         0,
       );
@@ -305,7 +387,7 @@ const AnalyticsContainer = () => {
         totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
 
       const fallbackAnalytics = {
-        totalBills: monthlyBills.length,
+        totalBills: payPeriodBills.length,
         paidBills: paidBillsList.length,
         unpaidBills: unpaidBillsList.length,
         overdueBills: overdueBillsList.length,
@@ -328,12 +410,24 @@ const AnalyticsContainer = () => {
         progress,
       };
 
+      console.log('📋 Bills Analytics: Pay period filtering results:', {
+        totalBillTransactions: billTransactions.length,
+        payPeriodBills: payPeriodBills.length,
+        paidBills: paidBillsList.length,
+        unpaidBills: unpaidBillsList.length,
+        overdueBills: overdueBillsList.length,
+        upcomingBills: upcomingBills.length,
+        totalAmount,
+        periodStart: periodStart?.toISOString(),
+        periodEnd: periodEnd?.toISOString(),
+      });
+
       if (isMountedRef.current) {
         setBillsAnalytics(fallbackAnalytics);
 
-        // Cache the fallback results for future use
+        // Cache the pay period results for future use
         await billsAnalyticsCache.set(fallbackAnalytics);
-        console.log('📋 Fallback bills analytics cached successfully');
+        console.log('📋 Pay period bills analytics cached successfully');
       }
     } catch (fallbackErr) {
       console.error('Error in bills analytics fallback:', fallbackErr);
