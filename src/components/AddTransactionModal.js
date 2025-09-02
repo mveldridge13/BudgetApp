@@ -344,8 +344,6 @@ const AddTransactionModal = ({
     switch (selectedTransactionType) {
       case 'INCOME':
         return 'Income';
-      case 'POKER':
-        return 'Poker';
       default:
         return 'Expense';
     }
@@ -565,99 +563,49 @@ const AddTransactionModal = ({
                     </Text>
                   </TouchableOpacity>
 
-                  {pokerTrackerEnabled && (
-                    <TouchableOpacity
-                      style={[
-                        styles.transactionTypeButton,
-                        styles.transactionTypeButtonPoker,
-                        selectedTransactionType === 'POKER' &&
-                          styles.transactionTypeButtonActivePoker,
-                      ]}
-                      onPress={() => handleTransactionTypeSelect('POKER')}
-                      activeOpacity={0.7}>
-                      <Icon
-                        name="trophy-outline"
-                        size={18}
-                        color={
-                          selectedTransactionType === 'POKER'
-                            ? colors.textWhite || '#FFFFFF'
-                            : colors.textSecondary
-                        }
-                        style={styles.transactionTypeIcon}
-                      />
-                      <Text
-                        style={[
-                          styles.transactionTypeText,
-                          selectedTransactionType === 'POKER' &&
-                            styles.transactionTypeTextActive,
-                        ]}>
-                        Poker
-                      </Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
 
                 {/* Date Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <TouchableOpacity
-                    style={styles.dateField}
-                    onPress={onShowCalendar}
-                    activeOpacity={0.7}>
-                    <Icon
-                      name="calendar-outline"
-                      size={18}
-                      color="#007AFF"
-                      style={styles.dateIcon}
-                    />
-                    <Text style={styles.dateText}>
-                      {formatDate(selectedDate)}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.dateField}
+                  onPress={onShowCalendar}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name="calendar-outline"
+                    size={18}
+                    color="#007AFF"
+                    style={styles.dateIcon}
+                  />
+                  <Text style={styles.dateText}>
+                    {formatDate(selectedDate)}
+                  </Text>
+                </TouchableOpacity>
 
-                {/* Poker Tracker Fields */}
-                {selectedTransactionType === 'POKER' && (
-                  <>
-                    <TouchableOpacity
-                      style={styles.createTournamentButton}
-                      onPress={onCreateTournamentPress}
-                      activeOpacity={0.7}>
-                      <Text style={styles.createTournamentText}>
-                        Create Tournament
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
 
                 {/* Amount Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.currencySymbol}>$</Text>
-                    <TextInput
-                      style={styles.amountInput}
-                      value={amount}
-                      onChangeText={onAmountChange}
-                      placeholder="0.00"
-                      placeholderTextColor={colors.textSecondary}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                )}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.amountInput}
+                    value={amount}
+                    onChangeText={onAmountChange}
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
 
                 {/* Description Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <TextInput
-                    style={styles.descriptionInput}
-                    value={description}
-                    onChangeText={onDescriptionChange}
-                    placeholder="Description (optional)"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                )}
+                <TextInput
+                  style={styles.descriptionInput}
+                  value={description}
+                  onChangeText={onDescriptionChange}
+                  placeholder="Description (optional)"
+                  placeholderTextColor={colors.textSecondary}
+                />
 
                 {/* Category Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <TouchableOpacity
+                <TouchableOpacity
                     style={styles.categoryField}
                     onPress={showCategoryPicker}
                     activeOpacity={0.7}>
@@ -699,11 +647,9 @@ const AddTransactionModal = ({
                       color={colors.textSecondary}
                     />
                   </TouchableOpacity>
-                )}
 
                 {/* Recurrence Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <TouchableOpacity
+                <TouchableOpacity
                     style={styles.recurrenceField}
                     onPress={showRecurrencePicker}
                     activeOpacity={0.7}>
@@ -729,11 +675,9 @@ const AddTransactionModal = ({
                       color={colors.textSecondary}
                     />
                   </TouchableOpacity>
-                )}
 
                 {/* Due Date Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <TouchableOpacity
+                <TouchableOpacity
                     style={styles.dueDateField}
                     onPress={() => onShowCalendar('dueDate')}
                     activeOpacity={0.7}>
@@ -768,11 +712,9 @@ const AddTransactionModal = ({
                       color={colors.textSecondary}
                     />
                   </TouchableOpacity>
-                )}
 
                 {/* Payment Status Field */}
-                {selectedTransactionType !== 'POKER' && (
-                  <TouchableOpacity
+                <TouchableOpacity
                     style={styles.paymentStatusField}
                     onPress={showPaymentStatusPicker}
                     activeOpacity={0.7}>
@@ -798,7 +740,6 @@ const AddTransactionModal = ({
                       color={colors.textSecondary}
                     />
                   </TouchableOpacity>
-                )}
               </ScrollView>
             </View>
 
@@ -1138,9 +1079,6 @@ const styles = StyleSheet.create({
   transactionTypeButtonIncome: {
     borderBottomColor: colors.primary || '#6366F1',
   },
-  transactionTypeButtonPoker: {
-    borderBottomColor: colors.primary || '#6366F1',
-  },
   transactionTypeButtonActiveExpense: {
     backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
@@ -1152,16 +1090,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   transactionTypeButtonActiveIncome: {
-    backgroundColor: colors.primary || '#6366F1',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary || '#6366F1',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: -2},
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  transactionTypeButtonActivePoker: {
     backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
     borderBottomColor: colors.primary || '#6366F1',
@@ -1401,52 +1329,6 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     marginTop: 2,
-  },
-  // Small Currency Input Styles (for Poker fields)
-  smallInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-  },
-  smallCurrencySymbol: {
-    fontSize: 16,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    marginRight: 8,
-  },
-  smallAmountInput: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    padding: 0,
-  },
-  fieldIcon: {
-    marginRight: 8,
-  },
-
-  // Create Tournament Button Styles
-  createTournamentButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 40,
-    marginBottom: 20,
-  },
-  createTournamentText: {
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'System',
-    color: colors.textWhite,
   },
 });
 
