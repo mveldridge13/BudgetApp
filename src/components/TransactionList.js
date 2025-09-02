@@ -17,7 +17,6 @@ const TransactionList = ({
   onTransactionLayout,
 }) => {
   const [showDueToday, setShowDueToday] = useState(false);
-  const [isLoadingPreference, setIsLoadingPreference] = useState(true);
 
   // Load filter preference from AsyncStorage on component mount
   useEffect(() => {
@@ -29,8 +28,6 @@ const TransactionList = ({
         }
       } catch (error) {
         console.warn('Failed to load filter preference:', error);
-      } finally {
-        setIsLoadingPreference(false);
       }
     };
 
@@ -201,21 +198,9 @@ const TransactionList = ({
           <Text style={styles.sectionTitle}>Today's Transactions</Text>
           <TouchableOpacity
             onPress={handleToggleFilter}
-            disabled={isLoadingPreference}
-            style={[
-              styles.toggleButton,
-              isLoadingPreference && styles.toggleButtonDisabled,
-            ]}>
-            <Text
-              style={[
-                styles.toggleText,
-                isLoadingPreference && styles.toggleTextDisabled,
-              ]}>
-              {isLoadingPreference
-                ? 'Loading...'
-                : showDueToday
-                ? 'View All'
-                : 'Due Today'}
+            style={styles.toggleButton}>
+            <Text style={styles.toggleText}>
+              {showDueToday ? 'View All' : 'Due Today'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -329,12 +314,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: colors.textPrimary,
-  },
-  toggleButtonDisabled: {
-    opacity: 0.5,
-  },
-  toggleTextDisabled: {
-    color: colors.textSecondary,
   },
   transactionItemContainer: {
     marginBottom: 8,

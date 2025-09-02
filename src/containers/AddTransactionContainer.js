@@ -16,7 +16,12 @@ const recurrenceOptions = [
 
 const paymentStatusOptions = [
   {id: 'UPCOMING', name: 'Upcoming', icon: 'time-outline', color: '#007AFF'},
-  {id: 'PAID', name: 'Paid', icon: 'checkmark-circle-outline', color: '#4CAF50'},
+  {
+    id: 'PAID',
+    name: 'Paid',
+    icon: 'checkmark-circle-outline',
+    color: '#4CAF50',
+  },
   {id: 'OVERDUE', name: 'Overdue', icon: 'warning-outline', color: '#F44336'},
 ];
 
@@ -52,6 +57,9 @@ const AddTransactionContainer = ({
 
   // Track if user manually entered description
   const [hasManualDescription, setHasManualDescription] = useState(false);
+
+  // Overlay state
+  const [overlayMode, setOverlayMode] = useState('quick'); // 'quick', 'category', 'subcategory', 'amount', null
 
   // Other modals state
   const [showCalendar, setShowCalendar] = useState(false);
@@ -150,8 +158,37 @@ const AddTransactionContainer = ({
         );
       }
 
-      // Sort main categories alphabetically by name
-      return result.sort((a, b) => a.name.localeCompare(b.name));
+      // Sort main categories with custom order: Other comes after Transport
+      return result.sort((a, b) => {
+        const customOrder = [
+          'Bills',
+          'Entertainment',
+          'Food',
+          'Health',
+          'Shopping',
+          'Transport',
+          'Other', // Other moved after Transport
+        ];
+
+        const aIndex = customOrder.indexOf(a.name);
+        const bIndex = customOrder.indexOf(b.name);
+
+        // If both categories are in custom order, use that order
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex;
+        }
+
+        // If only one is in custom order, prioritize it
+        if (aIndex !== -1) {
+          return -1;
+        }
+        if (bIndex !== -1) {
+          return 1;
+        }
+
+        // If neither is in custom order, sort alphabetically
+        return a.name.localeCompare(b.name);
+      });
     },
     [],
   );
@@ -162,8 +199,16 @@ const AddTransactionContainer = ({
   // ======
 
   const getCategoryById = useCallback(
-    id => categories.find(cat => cat.id === id),
-    [categories],
+    id => {
+      // First try to find in the transformed categories (includes subcategories)
+      const category = categories.find(cat => cat.id === id);
+      if (category) {
+        return category;
+      }
+      // Fallback to allCategories if not found in filtered categories
+      return allCategories.find(cat => cat.id === id);
+    },
+    [categories, allCategories],
   );
 
   const getRecurrenceById = useCallback(
@@ -208,7 +253,10 @@ const AddTransactionContainer = ({
       setIsLoading(true);
       setErrorState(null);
 
-      console.log('📂 AddTransactionContainer: loadCategories START - Platform:', Platform.OS);
+      console.log(
+        '📂 AddTransactionContainer: loadCategories START - Platform:',
+        Platform.OS,
+      );
 
       // 🔄 CACHE-FIRST: Load from cache immediately
       const cached = await CategoryCache.get();
@@ -238,7 +286,9 @@ const AddTransactionContainer = ({
         );
 
         if (backendCategories && Array.isArray(backendCategories)) {
-          console.log('📂 AddTransactionContainer: Setting categories from API and updating cache');
+          console.log(
+            '📂 AddTransactionContainer: Setting categories from API and updating cache',
+          );
 
           // Update cache in background
           CategoryCache.set(backendCategories);
@@ -246,7 +296,10 @@ const AddTransactionContainer = ({
           // Update state
           setAllCategories(backendCategories);
         } else {
-          console.warn('📂 AddTransactionContainer: Invalid categories response:', backendCategories);
+          console.warn(
+            '📂 AddTransactionContainer: Invalid categories response:',
+            backendCategories,
+          );
 
           // If API fails but we have cached data, keep using cached data
           if (!cached) {
@@ -274,7 +327,10 @@ const AddTransactionContainer = ({
         }
       }
     } catch (error) {
-      console.error('📂 AddTransactionContainer: Error loading categories:', error);
+      console.error(
+        '📂 AddTransactionContainer: Error loading categories:',
+        error,
+      );
       setErrorState(error.message);
       setAllCategories([]);
     } finally {
@@ -298,6 +354,9 @@ const AddTransactionContainer = ({
     setSelectedPaymentStatus(null);
     setCurrentSubcategoryData(null);
     setHasManualDescription(false);
+
+    // Reset overlay mode
+    setOverlayMode('quick');
 
     // Reset tournament form
     setTournamentName('');
@@ -532,6 +591,72 @@ const AddTransactionContainer = ({
     },
     [categories, description],
   );
+
+  // ==============================================
+  // OVERLAY EVENT HANDLERS
+  // ==============================================
+
+  const handleQuickAddClose = useCallback(() => {
+    setOverlayMode(null);
+  }, []);
+
+  const handleQuickAddCategoryPress = useCallback(() => {
+    setOverlayMode('category');
+  }, []);
+
+  const handleCategoryOverlayClose = useCallback(() => {
+    setOverlayMode('quick');
+  }, []);
+
+  const handleCategoryOverlaySelect = useCallback(categoryId => {
+    const category = getCategoryById(categoryId);
+    if (category && category.hasSubcategories && category.subcategories?.length > 0) {
+      // Category has subcategories, show subcategory overlay
+      setCurrentSubcategoryData(category);
+      setOverlayMode('subcategory');
+    } else {
+      // No subcategories, select category directly and go to amount overlay
+      setSelectedCategory(categoryId);
+      setSelectedSubcategory(null);
+      setOverlayMode('amount');
+    }
+  }, [getCategoryById]);
+
+  const handleQuickAddDatePress = useCallback(() => {
+    setShowCalendar(true);
+    setCalendarMode('transaction');
+  }, []);
+
+  const handleSubcategoryOverlayClose = useCallback(() => {
+    setOverlayMode('category');
+  }, []);
+
+  const handleSubcategoryOverlaySelect = useCallback(
+    subcategoryId => {
+      if (currentSubcategoryData) {
+        setSelectedCategory(currentSubcategoryData.id);
+        setSelectedSubcategory(subcategoryId);
+        setCurrentSubcategoryData(null);
+        setOverlayMode('amount');
+      }
+    },
+    [currentSubcategoryData],
+  );
+
+  const handleAmountOverlayClose = useCallback(() => {
+    // If we have a subcategory selected, go back to subcategory overlay
+    // Otherwise, go back to category overlay
+    if (selectedSubcategory) {
+      setOverlayMode('subcategory');
+    } else {
+      setOverlayMode('category');
+    }
+  }, [selectedSubcategory]);
+
+  const handleAmountOverlaySave = useCallback(() => {
+    // Save the transaction with current form data
+    handleSave();
+  }, [handleSave]);
 
   // ==============================================
   // TOURNAMENT EVENT HANDLERS
@@ -844,6 +969,19 @@ const AddTransactionContainer = ({
       paymentStatusOptions={paymentStatusOptions}
       // Module settings
       pokerTrackerEnabled={pokerTrackerEnabled}
+      // Overlay props
+      overlayMode={overlayMode}
+      onQuickAddClose={handleQuickAddClose}
+      onQuickAddCategoryPress={handleQuickAddCategoryPress}
+      onQuickAddDatePress={handleQuickAddDatePress}
+      onCategoryOverlayClose={handleCategoryOverlayClose}
+      onCategoryOverlaySelect={handleCategoryOverlaySelect}
+      onSubcategoryOverlayClose={handleSubcategoryOverlayClose}
+      onSubcategoryOverlaySelect={handleSubcategoryOverlaySelect}
+      onAmountOverlayClose={handleAmountOverlayClose}
+      onAmountOverlaySave={handleAmountOverlaySave}
+      allCategories={allCategories}
+      transformCategoriesForUI={transformCategoriesForUI}
       // Tournament props
       showTournamentModal={showTournamentModal}
       tournamentName={tournamentName}

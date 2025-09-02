@@ -17,6 +17,10 @@ import CalendarModal from './CalendarModal';
 import PaymentStatusModal from './PaymentStatusModal';
 import RecurrenceModal from './RecurrenceModal';
 import AddTournamentContainer from '../containers/AddTournamentContainer';
+import QuickAddOverlay from './QuickAddOverlay';
+import CategorySelectionOverlay from './CategorySelectionOverlay';
+import SubcategorySelectionOverlay from './SubcategorySelectionOverlay';
+import AmountEntryOverlay from './AmountEntryOverlay';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -70,6 +74,20 @@ const AddTransactionModal = ({
   // Module settings
   pokerTrackerEnabled,
 
+  // Overlay props
+  overlayMode,
+  onQuickAddClose,
+  onQuickAddCategoryPress,
+  onQuickAddDatePress,
+  onCategoryOverlayClose,
+  onCategoryOverlaySelect,
+  onSubcategoryOverlayClose,
+  onSubcategoryOverlaySelect,
+  onAmountOverlayClose,
+  onAmountOverlaySave,
+  allCategories,
+  transformCategoriesForUI,
+
   // Tournament props (simplified for container)
   showTournamentModal,
   onCreateTournamentPress,
@@ -118,6 +136,7 @@ const AddTransactionModal = ({
       fadeAnim.setValue(0);
     }
   }, [visible, slideAnim, modalAnim, fadeAnim]);
+
 
   // ==============================================
   // UI EVENT HANDLERS
@@ -956,6 +975,66 @@ const AddTransactionModal = ({
         onClose={onTournamentModalClose}
         onSave={onTournamentSave}
       />
+
+      {/* Quick Add Overlay */}
+      {overlayMode === 'quick' && (
+        <QuickAddOverlay
+          visible={true}
+          onClose={onQuickAddClose}
+          onCategoryPress={onQuickAddCategoryPress}
+          onDatePress={onQuickAddDatePress}
+          selectedDate={selectedDate}
+          description={description}
+          onDescriptionChange={onDescriptionChange}
+          selectedCategory={selectedCategory}
+          getCategoryById={getCategoryById}
+        />
+      )}
+
+      {/* Category Selection Overlay */}
+      {overlayMode === 'category' && (
+        <CategorySelectionOverlay
+          visible={true}
+          onClose={onCategoryOverlayClose}
+          onCategorySelect={onCategoryOverlaySelect}
+          allCategories={allCategories}
+          transformCategoriesForUI={transformCategoriesForUI}
+          selectedTransactionType={selectedTransactionType}
+          onTransactionTypeChange={onTransactionTypeChange}
+          selectedCategory={selectedCategory}
+          isLoading={isLoading}
+        />
+      )}
+
+      {/* Subcategory Selection Overlay */}
+      {overlayMode === 'subcategory' && (
+        <SubcategorySelectionOverlay
+          visible={true}
+          onClose={onSubcategoryOverlayClose}
+          onSubcategorySelect={onSubcategoryOverlaySelect}
+          selectedCategory={currentSubcategoryData?.id}
+          selectedSubcategory={selectedSubcategory}
+          getCategoryById={getCategoryById}
+          isLoading={isLoading}
+        />
+      )}
+
+      {/* Amount Entry Overlay */}
+      {overlayMode === 'amount' && (
+        <AmountEntryOverlay
+          visible={true}
+          onClose={onAmountOverlayClose}
+          onSave={onAmountOverlaySave}
+          amount={amount}
+          onAmountChange={onAmountChange}
+          description={description}
+          selectedCategory={selectedCategory}
+          selectedSubcategory={selectedSubcategory}
+          getCategoryById={getCategoryById}
+          selectedDate={selectedDate}
+          selectedTransactionType={selectedTransactionType}
+        />
+      )}
     </Modal>
   );
 };
