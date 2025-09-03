@@ -59,7 +59,8 @@ const AddTransactionContainer = ({
   const [hasManualDescription, setHasManualDescription] = useState(false);
 
   // Overlay state
-  const [overlayMode, setOverlayMode] = useState('quick'); // 'quick', 'category', 'subcategory', 'amount', null
+  const [overlayMode, setOverlayMode] = useState('transactionType'); // 'transactionType', 'quick', 'category', 'subcategory', 'amount', 'recurrence', null
+  const [isRecurringTransaction, setIsRecurringTransaction] = useState(false);
 
   // Other modals state
   const [showCalendar, setShowCalendar] = useState(false);
@@ -356,7 +357,8 @@ const AddTransactionContainer = ({
     setHasManualDescription(false);
 
     // Reset overlay mode
-    setOverlayMode('quick');
+    setOverlayMode('transactionType');
+    setIsRecurringTransaction(false);
 
     // Reset tournament form
     setTournamentName('');
@@ -405,6 +407,12 @@ const AddTransactionContainer = ({
         editingTransaction.description &&
         editingTransaction.description.trim() !== categoryDisplayName;
       setHasManualDescription(hasCustomDescription);
+
+      // Set isRecurringTransaction based on existing transaction
+      setIsRecurringTransaction(editingTransaction.recurrence && editingTransaction.recurrence !== 'none');
+
+      // For edit mode, skip overlay flow and go straight to full form
+      setOverlayMode(null);
     }
     // Remove the resetForm() call for new transactions - let user set their own transaction type
   }, [editingTransaction, visible, getCategoryById, getCategoryDisplayName]);
@@ -608,19 +616,26 @@ const AddTransactionContainer = ({
     setOverlayMode('quick');
   }, []);
 
-  const handleCategoryOverlaySelect = useCallback(categoryId => {
-    const category = getCategoryById(categoryId);
-    if (category && category.hasSubcategories && category.subcategories?.length > 0) {
-      // Category has subcategories, show subcategory overlay
-      setCurrentSubcategoryData(category);
-      setOverlayMode('subcategory');
-    } else {
-      // No subcategories, select category directly and go to amount overlay
-      setSelectedCategory(categoryId);
-      setSelectedSubcategory(null);
-      setOverlayMode('amount');
-    }
-  }, [getCategoryById]);
+  const handleCategoryOverlaySelect = useCallback(
+    categoryId => {
+      const category = getCategoryById(categoryId);
+      if (
+        category &&
+        category.hasSubcategories &&
+        category.subcategories?.length > 0
+      ) {
+        // Category has subcategories, show subcategory overlay
+        setCurrentSubcategoryData(category);
+        setOverlayMode('subcategory');
+      } else {
+        // No subcategories, select category directly and go to amount overlay
+        setSelectedCategory(categoryId);
+        setSelectedSubcategory(null);
+        setOverlayMode('amount');
+      }
+    },
+    [getCategoryById],
+  );
 
   const handleQuickAddDatePress = useCallback(() => {
     setShowCalendar(true);
@@ -657,6 +672,36 @@ const AddTransactionContainer = ({
     // Save the transaction with current form data
     handleSave();
   }, [handleSave]);
+
+  const handleTransactionTypeSelect = useCallback((type) => {
+    setIsRecurringTransaction(type === 'recurring');
+    if (type === 'recurring') {
+      setOverlayMode('recurrence');
+    } else {
+      setOverlayMode('quick');
+    }
+  }, []);
+
+  const handleTransactionTypeClose = useCallback(() => {
+    setOverlayMode(null);
+  }, []);
+
+  const handleRecurrenceOverlayClose = useCallback(() => {
+    setOverlayMode('transactionType');
+  }, []);
+
+  const handleRecurrenceOverlayContinue = useCallback(() => {
+    setOverlayMode('quick');
+  }, []);
+
+  const handleRecurrenceOverlayRecurrenceSelect = useCallback((recurrenceId) => {
+    setSelectedRecurrence(recurrenceId);
+  }, []);
+
+  const handleRecurrenceOverlayDueDatePress = useCallback(() => {
+    setShowCalendar(true);
+    setCalendarMode('dueDate');
+  }, []);
 
   // ==============================================
   // TOURNAMENT EVENT HANDLERS
@@ -982,6 +1027,15 @@ const AddTransactionContainer = ({
       onAmountOverlaySave={handleAmountOverlaySave}
       allCategories={allCategories}
       transformCategoriesForUI={transformCategoriesForUI}
+      // Transaction type overlay props
+      isRecurringTransaction={isRecurringTransaction}
+      onTransactionTypeSelect={handleTransactionTypeSelect}
+      onTransactionTypeClose={handleTransactionTypeClose}
+      // Recurrence overlay props
+      onRecurrenceOverlayClose={handleRecurrenceOverlayClose}
+      onRecurrenceOverlayContinue={handleRecurrenceOverlayContinue}
+      onRecurrenceOverlayRecurrenceSelect={handleRecurrenceOverlayRecurrenceSelect}
+      onRecurrenceOverlayDueDatePress={handleRecurrenceOverlayDueDatePress}
       // Tournament props
       showTournamentModal={showTournamentModal}
       tournamentName={tournamentName}

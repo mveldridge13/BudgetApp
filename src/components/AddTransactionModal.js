@@ -17,6 +17,8 @@ import CalendarModal from './CalendarModal';
 import PaymentStatusModal from './PaymentStatusModal';
 import RecurrenceModal from './RecurrenceModal';
 import AddTournamentContainer from '../containers/AddTournamentContainer';
+import TransactionTypeOverlay from './TransactionTypeOverlay';
+import RecurrenceOverlay from './RecurrenceOverlay';
 import QuickAddOverlay from './QuickAddOverlay';
 import CategorySelectionOverlay from './CategorySelectionOverlay';
 import SubcategorySelectionOverlay from './SubcategorySelectionOverlay';
@@ -87,6 +89,17 @@ const AddTransactionModal = ({
   onAmountOverlaySave,
   allCategories,
   transformCategoriesForUI,
+
+  // Transaction type overlay props
+  isRecurringTransaction,
+  onTransactionTypeSelect,
+  onTransactionTypeClose,
+
+  // Recurrence overlay props
+  onRecurrenceOverlayClose,
+  onRecurrenceOverlayContinue,
+  onRecurrenceOverlayRecurrenceSelect,
+  onRecurrenceOverlayDueDatePress,
 
   // Tournament props (simplified for container)
   showTournamentModal,
@@ -917,6 +930,29 @@ const AddTransactionModal = ({
         onSave={onTournamentSave}
       />
 
+      {/* Transaction Type Overlay */}
+      {overlayMode === 'transactionType' && (
+        <TransactionTypeOverlay
+          visible={true}
+          onClose={onTransactionTypeClose}
+          onTypeSelect={onTransactionTypeSelect}
+        />
+      )}
+
+      {/* Recurrence Overlay */}
+      {overlayMode === 'recurrence' && (
+        <RecurrenceOverlay
+          visible={true}
+          onClose={onRecurrenceOverlayClose}
+          onContinue={onRecurrenceOverlayContinue}
+          selectedRecurrence={selectedRecurrence}
+          selectedDueDate={selectedDueDate}
+          onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
+          onDueDatePress={onRecurrenceOverlayDueDatePress}
+          recurrenceOptions={recurrenceOptions}
+        />
+      )}
+
       {/* Quick Add Overlay */}
       {overlayMode === 'quick' && (
         <QuickAddOverlay
@@ -976,6 +1012,7 @@ const AddTransactionModal = ({
           selectedTransactionType={selectedTransactionType}
         />
       )}
+
     </Modal>
   );
 };

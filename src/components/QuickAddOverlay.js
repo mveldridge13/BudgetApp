@@ -111,6 +111,7 @@ const QuickAddOverlay = ({
     return colors.textSecondary;
   };
 
+
   return (
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
       <TouchableOpacity
