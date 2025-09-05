@@ -24,6 +24,10 @@ const BalanceCard = ({
   currency = 'AUD',
   // Transactions for expense breakdown
   transactions = [],
+  // Rollover props
+  rolloverAmount = 0,
+  isRolloverAvailable = false,
+  onRolloverPress = () => {},
 }) => {
   const formatCurrency = amount => {
     return formatCurrencySync(amount, currency);
@@ -36,7 +40,6 @@ const BalanceCard = ({
     });
     return `${month} ${day}`;
   };
-
 
   // Filter goals that should be shown on balance card
   const balanceCardGoals = goals.filter(goal => goal.showOnBalanceCard);
@@ -79,7 +82,7 @@ const BalanceCard = ({
   }, [transactions]);
 
   // Calculate values
-  const incomeAmount = incomeData?.income || 0;
+  const incomeAmount = (incomeData?.income || 0) + rolloverAmount;
   const leftToSpend = incomeAmount - totalExpenses;
   const adjustedLeftToSpend =
     leftToSpend -
@@ -270,8 +273,36 @@ const BalanceCard = ({
           </View>
         )}
 
-        <View style={styles.leftToSpendSection}>
-          <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
+        <TouchableOpacity
+          style={[
+            styles.leftToSpendSection,
+            isRolloverAvailable &&
+              adjustedLeftToSpend > 0 &&
+              styles.clickableSection,
+          ]}
+          onPress={
+            isRolloverAvailable && adjustedLeftToSpend > 0
+              ? onRolloverPress
+              : undefined
+          }
+          activeOpacity={
+            isRolloverAvailable && adjustedLeftToSpend > 0 ? 0.7 : 1
+          }>
+          <View style={styles.leftToSpendHeader}>
+            <Text style={styles.balanceLabel}>
+              {isRolloverAvailable && adjustedLeftToSpend > 0
+                ? 'ROLLOVER'
+                : 'LEFT TO SPEND'}
+            </Text>
+            {isRolloverAvailable && adjustedLeftToSpend > 0 && (
+              <Icon
+                name="arrow-right-circle"
+                size={16}
+                color={colors.textWhite}
+                style={{opacity: 0.8}}
+              />
+            )}
+          </View>
           <View style={styles.leftAmountRow}>
             <Text
               style={[
@@ -339,7 +370,7 @@ const BalanceCard = ({
           )}
 
           <View style={styles.bottomPadding} />
-        </View>
+        </TouchableOpacity>
 
         {/* Edit Income Icon */}
         <TouchableOpacity
@@ -608,6 +639,18 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
+  },
+  clickableSection: {
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 12,
+    marginHorizontal: -12,
+  },
+  leftToSpendHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
   },
   leftAmountRow: {
     flexDirection: 'row',

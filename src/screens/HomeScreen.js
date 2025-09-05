@@ -35,6 +35,11 @@ const HomeScreen = ({
   totalAdditionalIncome = 0,
   currency = 'AUD',
 
+  // Rollover props
+  rolloverAmount = 0,
+  isRolloverAvailable = false,
+  onRolloverPress = () => {},
+
   // Tournament/Poker props
   tournaments = [],
   pokerSectionExpanded = false,
@@ -193,6 +198,9 @@ const HomeScreen = ({
           onGoalsPress={onGoalsPress}
           currency={currency}
           transactions={transactions}
+          rolloverAmount={rolloverAmount}
+          isRolloverAvailable={isRolloverAvailable}
+          onRolloverPress={onRolloverPress}
         />
       </View>
 
