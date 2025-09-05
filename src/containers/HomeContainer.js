@@ -426,7 +426,8 @@ const HomeContainer = ({navigation}) => {
           CategoryCache.set(backendCategories);
 
           // Update state with transformed categories
-          const transformedCategories = transformCategoriesForUI(backendCategories);
+          const transformedCategories =
+            transformCategoriesForUI(backendCategories);
           setCategories(transformedCategories);
         } else {
           console.warn('📂 Invalid categories response:', backendCategories);
@@ -568,7 +569,10 @@ const HomeContainer = ({navigation}) => {
             ...transaction,
             updatedAt: new Date().toISOString(),
             // Pre-resolve category data to prevent flicker
-            categoryData: resolveCategoryForTransaction(transaction, categoryMap),
+            categoryData: resolveCategoryForTransaction(
+              transaction,
+              categoryMap,
+            ),
           };
 
           setTransactions(prev => {
@@ -587,7 +591,10 @@ const HomeContainer = ({navigation}) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             // Pre-resolve category data to prevent flicker
-            categoryData: resolveCategoryForTransaction(transaction, categoryMap),
+            categoryData: resolveCategoryForTransaction(
+              transaction,
+              categoryMap,
+            ),
           };
 
           setTransactions(prev => {
@@ -605,10 +612,6 @@ const HomeContainer = ({navigation}) => {
         startTransition(() => {
           (async () => {
             try {
-              console.log(
-                '🔍 TRANSACTION: Updating spending goals with optimistic data',
-              );
-
               if (isEditing) {
                 const originalTransaction = transactions.find(
                   t => t.id === transaction.id,
@@ -621,10 +624,6 @@ const HomeContainer = ({navigation}) => {
                 await updateSpendingGoals(optimisticTransaction, null);
               }
             } catch (goalError) {
-              console.error(
-                '🔍 TRANSACTION: Failed to update spending goals:',
-                goalError,
-              );
               // Don't fail the transaction save if goal update fails
             }
           })();
@@ -645,13 +644,11 @@ const HomeContainer = ({navigation}) => {
           status: transaction.status,
         };
 
-
         if (isEditing) {
           // 🎯 EDITS: Background sync (cache-first)
           setTimeout(async () => {
             try {
               setBackgroundSyncCount(prev => prev + 1);
-              console.log('🔍 TRANSACTION: Background sync for edit');
               const savedTransaction = await TrendAPIService.updateTransaction(
                 transaction.id,
                 transactionData,
@@ -666,9 +663,6 @@ const HomeContainer = ({navigation}) => {
                   current.description !== savedTransaction.description ||
                   current.categoryId !== savedTransaction.categoryId
                 ) {
-                  console.log(
-                    '🔍 TRANSACTION: Server data differs, updating UI',
-                  );
                   return sortTransactionsByDate(
                     prev.map(t =>
                       t.id === transaction.id ? savedTransaction : t,
@@ -678,10 +672,6 @@ const HomeContainer = ({navigation}) => {
                 return prev;
               });
             } catch (syncError) {
-              console.error(
-                '🔍 TRANSACTION: Background sync failed:',
-                syncError,
-              );
             } finally {
               setBackgroundSyncCount(prev => Math.max(0, prev - 1));
             }
@@ -689,7 +679,6 @@ const HomeContainer = ({navigation}) => {
         } else {
           // 🎯 CREATION: Synchronous (like before - no flicker)
           try {
-            console.log('🔍 TRANSACTION: Synchronous creation');
             const savedTransaction = await TrendAPIService.createTransaction(
               transactionData,
             );
@@ -704,7 +693,6 @@ const HomeContainer = ({navigation}) => {
 
             optimisticTransaction = savedTransaction; // Update for return value
           } catch (createError) {
-            console.error('🔍 TRANSACTION: Creation failed:', createError);
             throw createError; // Let the catch block handle rollback
           }
         }
@@ -712,13 +700,8 @@ const HomeContainer = ({navigation}) => {
         // 🎯 BACKGROUND SYNC: Reload categories without blocking transaction UI
         setTimeout(async () => {
           try {
-            console.log('🔍 TRANSACTION: Background category reload');
             await loadCategories();
           } catch (categoryError) {
-            console.error(
-              'Failed to reload categories after transaction save:',
-              categoryError,
-            );
             // Don't fail the transaction save if category reload fails
           }
         }, 100); // Small delay to ensure transaction UI has updated
@@ -1534,12 +1517,20 @@ const HomeContainer = ({navigation}) => {
     if (hasResolvedCategories) {
       return transactions.map(transaction => ({
         ...transaction,
-        categoryData: transaction.categoryData || resolveCategoryForTransaction(transaction, categoryMap),
+        categoryData:
+          transaction.categoryData ||
+          resolveCategoryForTransaction(transaction, categoryMap),
       }));
     }
 
     return processTransactionsWithCategories(transactions);
-  }, [loading, transactions, categories, processTransactionsWithCategories, categoryMap]);
+  }, [
+    loading,
+    transactions,
+    categories,
+    processTransactionsWithCategories,
+    categoryMap,
+  ]);
 
   // Debug what we're passing to the Balance Card (commented out to reduce noise)
   /*
@@ -1582,7 +1573,6 @@ const HomeContainer = ({navigation}) => {
           loadTournaments(),
           loadCurrencySetting(),
         ]);
-
       } catch (error) {
         console.error('HomeContainer: Error in loadInitialData:', error);
       } finally {

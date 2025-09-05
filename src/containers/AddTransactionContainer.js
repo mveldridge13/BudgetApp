@@ -1,5 +1,5 @@
 import React, {useState, useCallback, useEffect} from 'react';
-import {Alert, Platform} from 'react-native';
+import {Alert} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import CategoryCache from '../services/CategoryCache';
 import AddTransactionModal from '../components/AddTransactionModal';
@@ -129,33 +129,13 @@ const AddTransactionContainer = ({
       }));
 
       // Filter categories based on transaction type
-      console.log(
-        '🔍 DEBUG: Before filtering, result has',
-        result.length,
-        'categories',
-      );
-      console.log(
-        '🔍 DEBUG: All category names:',
-        result.map(c => c.name),
-      );
-
       if (transactionType === 'EXPENSE') {
         result = result.filter(
           category => category.name.toLowerCase() !== 'income',
         );
-        console.log(
-          '🔍 DEBUG: After EXPENSE filter, result has',
-          result.length,
-          'categories',
-        );
       } else if (transactionType === 'INCOME') {
         result = result.filter(
           category => category.name.toLowerCase() === 'income',
-        );
-        console.log(
-          '🔍 DEBUG: After INCOME filter, result has',
-          result.length,
-          'categories',
         );
       }
 
@@ -254,19 +234,9 @@ const AddTransactionContainer = ({
       setIsLoading(true);
       setErrorState(null);
 
-      console.log(
-        '📂 AddTransactionContainer: loadCategories START - Platform:',
-        Platform.OS,
-      );
-
       // 🔄 CACHE-FIRST: Load from cache immediately
       const cached = await CategoryCache.get();
       if (cached && cached.data) {
-        console.log('📂 AddTransactionContainer: Using cached categories:', {
-          count: cached.data.length,
-          age: Math.round(cached.age / 1000 / 60),
-          isStale: cached.isStale,
-        });
         setAllCategories(cached.data);
         setIsLoading(false);
 
@@ -281,38 +251,19 @@ const AddTransactionContainer = ({
         const response = await TrendAPIService.getCategories();
         const backendCategories = response?.categories || [];
 
-        console.log(
-          '📂 AddTransactionContainer: Categories received from backend:',
-          backendCategories?.length || 0,
-        );
-
         if (backendCategories && Array.isArray(backendCategories)) {
-          console.log(
-            '📂 AddTransactionContainer: Setting categories from API and updating cache',
-          );
-
           // Update cache in background
           CategoryCache.set(backendCategories);
 
           // Update state
           setAllCategories(backendCategories);
         } else {
-          console.warn(
-            '📂 AddTransactionContainer: Invalid categories response:',
-            backendCategories,
-          );
-
           // If API fails but we have cached data, keep using cached data
           if (!cached) {
             setAllCategories([]);
           }
         }
       } catch (apiError) {
-        console.error(
-          '📂 AddTransactionContainer: API request failed, using cached data if available:',
-          apiError,
-        );
-
         // If API fails and we don't have cached data, show error
         if (!cached) {
           setErrorState(apiError.message);
@@ -328,10 +279,6 @@ const AddTransactionContainer = ({
         }
       }
     } catch (error) {
-      console.error(
-        '📂 AddTransactionContainer: Error loading categories:',
-        error,
-      );
       setErrorState(error.message);
       setAllCategories([]);
     } finally {
@@ -409,7 +356,10 @@ const AddTransactionContainer = ({
       setHasManualDescription(hasCustomDescription);
 
       // Set isRecurringTransaction based on existing transaction
-      setIsRecurringTransaction(editingTransaction.recurrence && editingTransaction.recurrence !== 'none');
+      setIsRecurringTransaction(
+        editingTransaction.recurrence &&
+          editingTransaction.recurrence !== 'none',
+      );
 
       // For edit mode, skip overlay flow and go straight to full form
       setOverlayMode(null);
@@ -573,11 +523,6 @@ const AddTransactionContainer = ({
 
   const handleTransactionTypeChange = useCallback(
     type => {
-      console.log(
-        '🔍 DEBUG: handleTransactionTypeChange called with type:',
-        type,
-      );
-
       // Check if current description matches a category name (auto-generated)
       const descriptionMatchesCategory = categories.some(
         cat =>
@@ -673,7 +618,7 @@ const AddTransactionContainer = ({
     handleSave();
   }, [handleSave]);
 
-  const handleTransactionTypeSelect = useCallback((type) => {
+  const handleTransactionTypeSelect = useCallback(type => {
     setIsRecurringTransaction(type === 'recurring');
     if (type === 'recurring') {
       setOverlayMode('recurrence');
@@ -694,7 +639,7 @@ const AddTransactionContainer = ({
     setOverlayMode('quick');
   }, []);
 
-  const handleRecurrenceOverlayRecurrenceSelect = useCallback((recurrenceId) => {
+  const handleRecurrenceOverlayRecurrenceSelect = useCallback(recurrenceId => {
     setSelectedRecurrence(recurrenceId);
   }, []);
 
@@ -832,15 +777,7 @@ const AddTransactionContainer = ({
 
   // Effect to auto-update description when category changes
   useEffect(() => {
-    console.log('🟦 AUTO-DESC: Effect triggered', {
-      visible,
-      selectedCategory,
-      categoriesLength: categories.length,
-      description,
-    });
-
     if (!visible || !selectedCategory || categories.length === 0) {
-      console.log('🟦 AUTO-DESC: Early return - missing requirements');
       return;
     }
 
@@ -848,15 +785,10 @@ const AddTransactionContainer = ({
       selectedCategory,
       selectedSubcategory,
     );
-    console.log(
-      '🟦 AUTO-DESC: New category display name:',
-      newCategoryDisplayName,
-    );
 
     if (isEditMode && editingTransaction) {
       // Don't auto-update if user has manually entered a description
       if (hasManualDescription) {
-        console.log('🟦 AUTO-DESC: Skipping - user has manual description');
         return;
       }
 
@@ -871,25 +803,12 @@ const AddTransactionContainer = ({
         !description.trim() || // Empty description
         description.trim() === originalCategoryDisplayName; // Matches original category
 
-      console.log(
-        '🟦 AUTO-DESC: Edit mode shouldAutoUpdate:',
-        shouldAutoUpdate,
-        'hasManualDescription:',
-        hasManualDescription,
-      );
       if (shouldAutoUpdate) {
-        console.log(
-          '🟦 AUTO-DESC: Setting description to:',
-          newCategoryDisplayName,
-        );
         setDescription(newCategoryDisplayName);
       }
     } else {
       // For new transactions, don't auto-update if user has manually entered a description
       if (hasManualDescription) {
-        console.log(
-          '🟦 AUTO-DESC: Skipping new transaction - user has manual description',
-        );
         return;
       }
 
@@ -904,22 +823,7 @@ const AddTransactionContainer = ({
       const shouldAutoUpdate =
         !description.trim() || descriptionMatchesCategory;
 
-      console.log(
-        '🟦 AUTO-DESC: New transaction mode, shouldAutoUpdate?',
-        shouldAutoUpdate,
-        'empty?',
-        !description.trim(),
-        'matchesCategory?',
-        descriptionMatchesCategory,
-        'hasManualDescription:',
-        hasManualDescription,
-      );
-
       if (shouldAutoUpdate) {
-        console.log(
-          '🟦 AUTO-DESC: Setting description to:',
-          newCategoryDisplayName,
-        );
         setDescription(newCategoryDisplayName);
       }
     }
@@ -952,16 +856,11 @@ const AddTransactionContainer = ({
 
   // Effect to update categories when transaction type changes
   useEffect(() => {
-    console.log('🔍 DEBUG: useEffect for transaction type change triggered');
-    console.log('🔍 DEBUG: selectedTransactionType:', selectedTransactionType);
-    console.log('🔍 DEBUG: allCategories.length:', allCategories.length);
-
     if (allCategories.length > 0) {
       const filteredCategories = transformCategoriesForUI(
         allCategories,
         selectedTransactionType,
       );
-      console.log('🔍 DEBUG: Setting filtered categories:', filteredCategories);
       setCategories(filteredCategories);
     }
   }, [selectedTransactionType, allCategories, transformCategoriesForUI]);
@@ -1034,7 +933,9 @@ const AddTransactionContainer = ({
       // Recurrence overlay props
       onRecurrenceOverlayClose={handleRecurrenceOverlayClose}
       onRecurrenceOverlayContinue={handleRecurrenceOverlayContinue}
-      onRecurrenceOverlayRecurrenceSelect={handleRecurrenceOverlayRecurrenceSelect}
+      onRecurrenceOverlayRecurrenceSelect={
+        handleRecurrenceOverlayRecurrenceSelect
+      }
       onRecurrenceOverlayDueDatePress={handleRecurrenceOverlayDueDatePress}
       // Tournament props
       showTournamentModal={showTournamentModal}
