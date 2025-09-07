@@ -19,6 +19,7 @@ import useOnboarding from '../hooks/useOnboarding';
 import useGoals from '../hooks/useGoals';
 import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
+import PayPeriodService from '../services/PayPeriodService';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import AddTournamentContainer from './AddTournamentContainer';
 import RolloverOptionsModal from '../components/RolloverOptionsModal';
@@ -919,111 +920,35 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-      // Parse next pay date with error handling - treat as local date
-      let nextPayDate;
-      try {
-        // Always extract just the date part and treat as local date
-        let dateOnly;
-        if (incomeData.nextPayDate.includes('T')) {
-          // Extract date part: "2025-09-07T02:00:00.000Z" -> "2025-09-07"
-          dateOnly = incomeData.nextPayDate.split('T')[0];
-        } else {
-          dateOnly = incomeData.nextPayDate;
-        }
-        // Create as local date at noon to avoid timezone issues
-        nextPayDate = new Date(dateOnly + 'T12:00:00');
 
-        if (isNaN(nextPayDate.getTime())) {
-          throw new Error('Invalid date after parsing');
-        }
+      // Calculate period start and end using PayPeriodService
+      const payPeriodBoundaries = PayPeriodService.calculatePayPeriodBoundaries(
+        incomeData.nextPayDate,
+        incomeData.frequency,
+        true // useCurrentPeriodForNewPeriod = true for expenses
+      );
 
-        console.log('💰 Parsed nextPayDate:', nextPayDate.toISOString());
-      } catch (dateError) {
-        console.error('🧮 Error parsing next pay date:', dateError);
-        nextPayDate = new Date();
+      if (!payPeriodBoundaries) {
+        console.error('💰 Failed to calculate pay period boundaries');
+        return 0;
       }
 
-      // Calculate period start and end based on frequency
-      let periodStart;
-      let periodEnd;
+      const { start: periodStart, end: periodEnd } = payPeriodBoundaries;
 
-      try {
-        // Set period end to the next pay date
-        periodEnd = new Date(nextPayDate);
-        periodEnd.setHours(23, 59, 59, 999);
-
-        // Check if today is on/after the pay date (new period has started) - using local timezone
-        const now = new Date(); // Current local time
-        const todayStart = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-        );
-        const payDateStart = new Date(
-          nextPayDate.getFullYear(),
-          nextPayDate.getMonth(),
-          nextPayDate.getDate(),
-        );
-        const isNewPayPeriod = todayStart >= payDateStart;
-
-        if (isNewPayPeriod) {
-          // If we're in a new pay period, period starts TODAY (not from previous pay date)
-          periodStart = new Date(todayStart);
-          periodStart.setHours(0, 0, 0, 0);
-        } else {
-          // Calculate the PREVIOUS pay date - this becomes the start of the current period
-          if (incomeData.frequency.toLowerCase() === 'weekly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setDate(periodStart.getDate() - 7);
-          } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setDate(periodStart.getDate() - 14);
-          } else if (incomeData.frequency.toLowerCase() === 'monthly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setMonth(periodStart.getMonth() - 1);
-          } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setMonth(periodStart.getMonth() - 6);
-          } else if (incomeData.frequency.toLowerCase() === 'yearly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setFullYear(periodStart.getFullYear() - 1);
-          } else {
-            // Default to monthly if frequency is unknown
-            periodStart = new Date(nextPayDate);
-            periodStart.setMonth(periodStart.getMonth() - 1);
-          }
-
-          // Set period start to beginning of day to include all transactions from that day
-          periodStart.setHours(0, 0, 0, 0);
-        }
-
-        // Ensure periodStart is not invalid
-        if (isNaN(periodStart.getTime())) {
-          throw new Error('Invalid period start date');
-        }
-
-        console.log('💰 Period calculated:', {
-          platform: Platform.OS,
-          frequency: incomeData.frequency,
-          nextPayDate: nextPayDate.toISOString(),
-          periodStart: periodStart.toISOString(),
-          periodEnd: periodEnd.toISOString(),
-          today: now.toISOString(),
-          todayLocal: now.toLocaleDateString() + ' ' + now.toLocaleTimeString(),
-          isNewPayPeriod: isNewPayPeriod,
-          todayStart: todayStart.toISOString(),
-          todayStartLocal: todayStart.toLocaleDateString(),
-          payDateStart: payDateStart.toISOString(),
-          payDateStartLocal: payDateStart.toLocaleDateString(),
-          deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        });
-      } catch (periodError) {
-        console.error('🧮 Error calculating period:', periodError);
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - 30);
-        periodEnd = new Date(nextPayDate);
-        periodEnd.setHours(23, 59, 59, 999);
+      // Ensure periodStart is not invalid
+      if (isNaN(periodStart.getTime())) {
+        console.error('💰 Invalid period start date calculated');
+        return 0;
       }
+
+      console.log('💰 Period calculated:', {
+        platform: Platform.OS,
+        frequency: incomeData.frequency,
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+        isNewPeriod: payPeriodBoundaries.isNewPeriod,
+        deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
 
       // Filter transactions for the period - only count EXPENSE transactions
       const periodTransactions = transactions.filter(transaction => {
@@ -1119,55 +1044,10 @@ const HomeContainer = ({navigation}) => {
 
   // Calculate if we should show "New period started!" message (for UI display)
   const isNewPayPeriodForUI = useMemo(() => {
-    if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-      return false;
-    }
-
-    // Parse nextPayDate as local date
-    let nextPayDate;
-    if (incomeData.nextPayDate.includes('T')) {
-      const dateOnly = incomeData.nextPayDate.split('T')[0];
-      nextPayDate = new Date(dateOnly + 'T12:00:00');
-    } else {
-      nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-    }
-
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    // Calculate what the previous pay date should have been based on frequency
-    let previousPayDate = new Date(nextPayDate);
-    if (incomeData.frequency.toLowerCase() === 'weekly') {
-      previousPayDate.setDate(previousPayDate.getDate() - 7);
-    } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
-      previousPayDate.setDate(previousPayDate.getDate() - 14);
-    } else if (incomeData.frequency.toLowerCase() === 'monthly') {
-      previousPayDate.setMonth(previousPayDate.getMonth() - 1);
-    } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
-      previousPayDate.setMonth(previousPayDate.getMonth() - 6);
-    } else if (incomeData.frequency.toLowerCase() === 'yearly') {
-      previousPayDate.setFullYear(previousPayDate.getFullYear() - 1);
-    } else {
-      previousPayDate.setMonth(previousPayDate.getMonth() - 1);
-    }
-
-    const previousPayDateStart = new Date(previousPayDate.getFullYear(), previousPayDate.getMonth(), previousPayDate.getDate());
-
-    // Check if today matches the previous pay date (meaning it's pay day)
-    const isPayDay = todayStart.getTime() === previousPayDateStart.getTime();
-
-    if (!isPayDay) {
-      return false;
-    }
-
-    // If it's pay day, only show "New period started!" message for 12 hours
-    const payPeriodStartTime = new Date(todayStart);
-    payPeriodStartTime.setHours(0, 0, 0, 0);
-
-    const twelveHoursLater = new Date(payPeriodStartTime);
-    twelveHoursLater.setHours(12, 0, 0, 0);
-
-    return now < twelveHoursLater;
+    return PayPeriodService.shouldShowNewPeriodMessage(
+      incomeData?.nextPayDate,
+      incomeData?.frequency
+    );
   }, [incomeData?.nextPayDate, incomeData?.frequency]);
 
   // Update state only when memoized value changes (non-blocking)
