@@ -46,7 +46,7 @@ const BalanceCard = ({
   // Use the pay period state calculated by HomeContainer (maintains separation of concerns)
   const isNewPayPeriod = isNewPayPeriodForUI;
 
-  // Get pay period status text
+  // Get pay period status text (simplified - no countdown)
   const getPayPeriodStatus = () => {
     if (!incomeData?.nextPayDate) {
       return null;
@@ -56,29 +56,7 @@ const BalanceCard = ({
       return 'New period started!';
     }
 
-    // Parse nextPayDate as local date
-    let nextPayDate;
-    if (incomeData.nextPayDate.includes('T')) {
-      const dateOnly = incomeData.nextPayDate.split('T')[0];
-      nextPayDate = new Date(dateOnly + 'T12:00:00');
-    } else {
-      nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-    }
-
-    const today = new Date();
-    const timeDiff = nextPayDate.getTime() - today.getTime();
-    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-
-    if (daysDiff === 0) {
-      return 'Pay day today!';
-    }
-    if (daysDiff === 1) {
-      return 'Pay day tomorrow';
-    }
-    if (daysDiff > 1) {
-      return `${daysDiff} days to pay day`;
-    }
-    return null;
+    return null; // No countdown display
   };
 
   // Filter goals that should be shown on balance card
