@@ -16,7 +16,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">
       <Dashboard onAddTransaction={() => setIsTransactionModalOpen(true)} />
-      <TransactionModal 
+      <TransactionModal
         visible={isTransactionModalOpen}
         onClose={() => setIsTransactionModalOpen(false)}
         onSave={handleSaveTransaction}

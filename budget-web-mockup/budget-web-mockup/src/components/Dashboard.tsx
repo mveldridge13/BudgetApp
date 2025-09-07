@@ -33,7 +33,7 @@ export default function Dashboard({onAddTransaction}: DashboardProps) {
                   Track and manage your financial transactions
                 </p>
               </div>
-              <button 
+              <button
                 onClick={onAddTransaction}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
               >

@@ -43,7 +43,7 @@ const IoniconSvg = ({ name, color, size }: { name: string; color: string; size: 
       <svg fill="none" stroke={color} viewBox="0 0 24 24" width={size} height={size}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
       </svg>
-    )
+    ),
   };
 
   return iconMap[name] || (
@@ -81,7 +81,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
   };
 
   const getRecurrenceDisplay = (recurrence: string) => {
-    if (recurrence === 'none') return 'One-time';
+    if (recurrence === 'none') {return 'One-time';}
     return recurrence.charAt(0).toUpperCase() + recurrence.slice(1);
   };
 
@@ -102,36 +102,36 @@ export default function TransactionList({ transactions }: TransactionListProps) 
     const startX = e.clientX;
     let isDraggingThis = true;
     setIsDragging(transactionId);
-    
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!isDraggingThis) return;
+      if (!isDraggingThis) {return;}
       const currentX = moveEvent.clientX;
       const deltaX = currentX - startX; // Fixed: currentX - startX (not startX - currentX)
       const clampedDelta = Math.max(-100, Math.min(100, deltaX));
-      
+
       setSwipeStates(prev => ({
         ...prev,
-        [transactionId]: clampedDelta
+        [transactionId]: clampedDelta,
       }));
     };
 
     const handleMouseUp = () => {
       const currentSwipe = swipeStates[transactionId] || 0;
-      
+
       if (Math.abs(currentSwipe) < 30) {
         // Snap back to center if swipe wasn't significant
         setSwipeStates(prev => ({
           ...prev,
-          [transactionId]: 0
+          [transactionId]: 0,
         }));
       } else if (currentSwipe > 0) {
         // Swiped right - edit
         handleEdit(transactionId);
       } else {
-        // Swiped left - delete  
+        // Swiped left - delete
         handleDelete(transactionId);
       }
-      
+
       isDraggingThis = false;
       setIsDragging(null);
       document.removeEventListener('mousemove', handleMouseMove);
@@ -147,7 +147,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
     // Reset swipe state
     setSwipeStates(prev => ({
       ...prev,
-      [transactionId]: 0
+      [transactionId]: 0,
     }));
   };
 
@@ -156,7 +156,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
     // Reset swipe state
     setSwipeStates(prev => ({
       ...prev,
-      [transactionId]: 0
+      [transactionId]: 0,
     }));
   };
 
@@ -240,7 +240,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
             const swipeOffset = swipeStates[transaction.id] || 0;
             const isBeingDragged = isDragging === transaction.id;
             const isRecurring = transaction.recurrence && transaction.recurrence !== 'none';
-            
+
             const getAmountDisplay = () => {
               if (transaction.transactionType === 'INCOME') {
                 return `+${formatCurrency(transaction.amount)}`;
@@ -275,11 +275,11 @@ export default function TransactionList({ transactions }: TransactionListProps) 
                 return `${categoryName} • ${formatDate(transaction.date)}`;
               }
             };
-            
+
             return (
               <div key={transaction.id} className="relative overflow-hidden mb-2">
                 {/* Edit Background (Right Swipe) */}
-                <div 
+                <div
                   className="absolute inset-0 rounded-xl flex items-center justify-start pl-5"
                   style={{
                     backgroundColor: '#52C788',
@@ -296,7 +296,7 @@ export default function TransactionList({ transactions }: TransactionListProps) 
                 </div>
 
                 {/* Delete Background (Left Swipe) */}
-                <div 
+                <div
                   className="absolute inset-0 rounded-xl flex items-center justify-end pr-5"
                   style={{
                     backgroundColor: '#FF6B85',
@@ -330,9 +330,9 @@ export default function TransactionList({ transactions }: TransactionListProps) 
                         style={{ backgroundColor: getLightBackgroundColor(transaction.category.color) }}
                       >
                         {/* Render Ionicon as SVG */}
-                        <IoniconSvg 
-                          name={transaction.category.icon} 
-                          color={transaction.category.color} 
+                        <IoniconSvg
+                          name={transaction.category.icon}
+                          color={transaction.category.color}
                           size={20}
                         />
                       </div>
@@ -361,12 +361,12 @@ export default function TransactionList({ transactions }: TransactionListProps) 
                         </p>
                       )}
                       {transaction.paymentStatus && transaction.paymentStatus !== 'PAID' && (
-                        <p className="text-xs font-medium mt-1" style={{ 
+                        <p className="text-xs font-medium mt-1" style={{
                           letterSpacing: '-0.1px',
-                          color: transaction.paymentStatus === 'UPCOMING' ? '#007AFF' : 
-                                transaction.paymentStatus === 'OVERDUE' ? '#F44336' : '#6B7280'
+                          color: transaction.paymentStatus === 'UPCOMING' ? '#007AFF' :
+                                transaction.paymentStatus === 'OVERDUE' ? '#F44336' : '#6B7280',
                         }}>
-                          {transaction.paymentStatus === 'UPCOMING' ? 'Upcoming' : 
+                          {transaction.paymentStatus === 'UPCOMING' ? 'Upcoming' :
                            transaction.paymentStatus === 'OVERDUE' ? 'Overdue' : transaction.paymentStatus}
                         </p>
                       )}
@@ -374,11 +374,11 @@ export default function TransactionList({ transactions }: TransactionListProps) 
 
                     {/* Amount */}
                     <div className="text-right ml-4">
-                      <p 
-                        className="text-base font-light" 
-                        style={{ 
+                      <p
+                        className="text-base font-light"
+                        style={{
                           color: getAmountColor(),
-                          letterSpacing: '-0.2px'
+                          letterSpacing: '-0.2px',
                         }}
                       >
                         {getAmountDisplay()}

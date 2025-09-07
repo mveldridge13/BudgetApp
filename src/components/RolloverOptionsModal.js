@@ -79,8 +79,8 @@ const RolloverOptionsModal = ({
     });
   };
 
-  const activeGoals = goals.filter(goal => 
-    !goal.completed && 
+  const activeGoals = goals.filter(goal =>
+    !goal.completed &&
     (goal.type === 'debt' ? goal.current > 0 : goal.current < goal.target)
   );
 
@@ -158,7 +158,7 @@ const RolloverOptionsModal = ({
                   <Text style={styles.optionTitle}>Save to Goals</Text>
                   <Text style={styles.optionDescription}>
                     {activeGoals.length > 0
-                      ? `Put ${formatCurrency(availableAmount)} towards your active goals`
+                      ? `Choose how to allocate ${formatCurrency(availableAmount)} among your ${activeGoals.length} active goal${activeGoals.length > 1 ? 's' : ''}`
                       : 'Create a new goal and allocate these funds to it'}
                   </Text>
                 </View>
@@ -180,7 +180,7 @@ const RolloverOptionsModal = ({
                   <View style={styles.goalInfo}>
                     <Text style={styles.goalTitle}>{goal.title}</Text>
                     <Text style={styles.goalProgress}>
-                      {goal.type === 'debt' 
+                      {goal.type === 'debt'
                         ? `${formatCurrency(goal.current)} remaining`
                         : `${formatCurrency(goal.current)} / ${formatCurrency(goal.target)}`
                       }

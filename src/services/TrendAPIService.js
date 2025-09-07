@@ -735,11 +735,21 @@ class TrendAPIService {
   }
 
   async getGoalContributions(goalId, filters = {}) {
-    const queryString = this.buildQueryString(filters);
-    const endpoint = queryString
-      ? `/goals/${goalId}/contributions?${queryString}`
-      : `/goals/${goalId}/contributions`;
-    return this.makeRequest(endpoint);
+    try {
+      const queryString = this.buildQueryString(filters);
+      const endpoint = queryString
+        ? `/goals/${goalId}/contributions?${queryString}`
+        : `/goals/${goalId}/contributions`;
+      return this.makeRequest(endpoint);
+    } catch (error) {
+      // Handle 404 errors gracefully for deleted/non-existent goals
+      if (error.message?.includes('404') || error.message?.includes('Goal not found')) {
+        console.log(`🔍 TREND_API: Goal ${goalId} not found when fetching contributions (likely deleted)`);
+        return []; // Return empty array instead of throwing error
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getGoalAnalytics(goalId) {
@@ -1248,6 +1258,32 @@ class TrendAPIService {
     const endpoint = queryString
       ? `/poker/tournaments/${tournamentId}/analytics?${queryString}`
       : `/poker/tournaments/${tournamentId}/analytics`;
+    return this.makeRequest(endpoint);
+  }
+
+  // ============================================================================
+  // ROLLOVER METHODS
+  // ============================================================================
+
+  async getRolloverAmount() {
+    return this.makeRequest('/users/rollover');
+  }
+
+  async processRollover(rolloverData) {
+    return this.makeRequest('/users/rollover', {
+      method: 'PUT',
+      body: {
+        rolloverAmount: rolloverData.amount,
+        lastRolloverDate: new Date().toISOString(),
+      },
+    });
+  }
+
+  async getRolloverHistory(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/users/rollover/history?${queryString}`
+      : '/users/rollover/history';
     return this.makeRequest(endpoint);
   }
 

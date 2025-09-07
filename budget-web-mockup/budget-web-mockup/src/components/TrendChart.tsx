@@ -21,7 +21,7 @@ export default function TrendChart() {
     { day: 11, amount: 407.21 },
     { day: 12, amount: 432.21 },
     { day: 13, amount: 521.20 },
-    { day: 14, amount: 594.19 }
+    { day: 14, amount: 594.19 },
   ];
 
   const lastPayPeriod = [
@@ -38,7 +38,7 @@ export default function TrendChart() {
     { day: 11, amount: 431.25 },
     { day: 12, amount: 476.75 },
     { day: 13, amount: 522.25 },
-    { day: 14, amount: 567.75 }
+    { day: 14, amount: 567.75 },
   ];
 
   const maxAmount = Math.max(
@@ -74,7 +74,7 @@ export default function TrendChart() {
         <h2 className="text-sm text-gray-900">Spending Trend</h2>
         <p className="text-gray-600 text-base font-bold">{formatCurrency(currentTotal)}</p>
         <div className="flex items-center mt-1">
-          <span 
+          <span
             className={`text-xs font-medium ${
               difference >= 0 ? 'text-red-600' : 'text-green-600'
             }`}
@@ -95,7 +95,7 @@ export default function TrendChart() {
               </pattern>
             </defs>
             <rect width="100" height="60" fill="url(#grid)" opacity="0.5"/>
-            
+
             {/* Last pay period line */}
             <path
               d={lastPath}
@@ -105,7 +105,7 @@ export default function TrendChart() {
               strokeDasharray="1,1"
               className="opacity-40"
             />
-            
+
             {/* Current pay period line */}
             <path
               d={currentPath}
@@ -134,11 +134,11 @@ export default function TrendChart() {
           {/* Legend */}
           <div className="mt-4 flex justify-center space-x-6">
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-0.5 bg-indigo-600"></div>
+              <div className="w-4 h-0.5 bg-indigo-600" />
               <span className="text-xs text-gray-600">Current Pay Period</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-0.5 border-t-2 border-dashed border-red-400"></div>
+              <div className="w-4 h-0.5 border-t-2 border-dashed border-red-400" />
               <span className="text-xs text-gray-600">Last Pay Period</span>
             </div>
           </div>

@@ -21,6 +21,8 @@ import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import AddTournamentContainer from './AddTournamentContainer';
+import RolloverOptionsModal from '../components/RolloverOptionsModal';
+import GoalAllocationModal from '../components/GoalAllocationModal';
 
 const HomeContainer = ({navigation}) => {
   // ==============================================
@@ -47,11 +49,23 @@ const HomeContainer = ({navigation}) => {
   const [showAddTournament, setShowAddTournament] = useState(false);
   const [editingTournament, setEditingTournament] = useState(null);
 
+  // Rollover state
+  const [rolloverAmount, setRolloverAmount] = useState(0);
+  const [isRolloverAvailable, setIsRolloverAvailable] = useState(false);
+  const [showRolloverModal, setShowRolloverModal] = useState(false);
+  const [showGoalAllocationModal, setShowGoalAllocationModal] = useState(false);
+  const [lastRolloverDate, setLastRolloverDate] = useState(null);
+
   // ==============================================
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
-  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
+  const {
+    goals,
+    loadGoals: loadGoalsFromHook,
+    updateSpendingGoals,
+    addGoalContribution,
+  } = useGoals();
   const {moduleSettings} = useAppSettings();
 
   // Get poker module setting
@@ -141,6 +155,7 @@ const HomeContainer = ({navigation}) => {
   // Reload goals when screen comes into focus (e.g., returning from GoalsScreen)
   // Only loads from cache now - no API calls to prevent race conditions
   const loadGoalsRef = useRef();
+  const rolloverLoadTimeRef = useRef(0);
 
   useEffect(() => {
     loadGoalsRef.current = loadGoals;
@@ -706,6 +721,34 @@ const HomeContainer = ({navigation}) => {
           }
         }, 100); // Small delay to ensure transaction UI has updated
 
+        // 🔄 ROLLOVER LOGIC: If rollover is available and this is an expense, reduce rollover amount
+        if (
+          isRolloverAvailable &&
+          transaction.type === 'EXPENSE' &&
+          rolloverAmount > 0 &&
+          !isEditing // Only for new transactions, not edits
+        ) {
+          const newRolloverAmount = Math.max(
+            0,
+            rolloverAmount - transaction.amount,
+          );
+          try {
+            await TrendAPIService.processRollover({
+              amount: newRolloverAmount,
+            });
+            setRolloverAmount(newRolloverAmount);
+            console.log(
+              `🔄 Rollover reduced from $${rolloverAmount} to $${newRolloverAmount} due to $${transaction.amount} expense`,
+            );
+          } catch (rolloverError) {
+            console.error(
+              '🔄 Failed to update rollover amount:',
+              rolloverError,
+            );
+            // Don't fail the transaction if rollover update fails
+          }
+        }
+
         return {
           success: true,
           isNewTransaction: !isEditing,
@@ -734,7 +777,13 @@ const HomeContainer = ({navigation}) => {
         }, 1000); // Keep lock for 1 second after transaction completes
       }
     },
-    [transactions, onboarding, loadTransactions],
+    [
+      transactions,
+      onboarding,
+      loadTransactions,
+      isRolloverAvailable,
+      rolloverAmount,
+    ],
   );
 
   const deleteTransaction = useCallback(async transactionId => {
@@ -870,16 +919,19 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-      // Parse next pay date with error handling
+      // Parse next pay date with error handling - treat as local date
       let nextPayDate;
       try {
-        // Handle both date-only format (YYYY-MM-DD) and full ISO string
+        // Always extract just the date part and treat as local date
+        let dateOnly;
         if (incomeData.nextPayDate.includes('T')) {
-          nextPayDate = new Date(incomeData.nextPayDate);
+          // Extract date part: "2025-09-07T02:00:00.000Z" -> "2025-09-07"
+          dateOnly = incomeData.nextPayDate.split('T')[0];
         } else {
-          // For date-only format, create date in local timezone at noon to avoid timezone issues
-          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+          dateOnly = incomeData.nextPayDate;
         }
+        // Create as local date at noon to avoid timezone issues
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
 
         if (isNaN(nextPayDate.getTime())) {
           throw new Error('Invalid date after parsing');
@@ -900,30 +952,50 @@ const HomeContainer = ({navigation}) => {
         periodEnd = new Date(nextPayDate);
         periodEnd.setHours(23, 59, 59, 999);
 
-        // Calculate the PREVIOUS pay date - this becomes the start of the current period
-        if (incomeData.frequency === 'weekly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 7);
-        } else if (incomeData.frequency === 'fortnightly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 14);
-        } else if (incomeData.frequency === 'monthly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        } else if (incomeData.frequency === 'sixmonths') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 6);
-        } else if (incomeData.frequency === 'yearly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setFullYear(periodStart.getFullYear() - 1);
-        } else {
-          // Default to monthly if frequency is unknown
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        }
+        // Check if today is on/after the pay date (new period has started) - using local timezone
+        const now = new Date(); // Current local time
+        const todayStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+        );
+        const payDateStart = new Date(
+          nextPayDate.getFullYear(),
+          nextPayDate.getMonth(),
+          nextPayDate.getDate(),
+        );
+        const isNewPayPeriod = todayStart >= payDateStart;
 
-        // Set period start to beginning of day to include all transactions from that day
-        periodStart.setHours(0, 0, 0, 0);
+        if (isNewPayPeriod) {
+          // If we're in a new pay period, period starts TODAY (not from previous pay date)
+          periodStart = new Date(todayStart);
+          periodStart.setHours(0, 0, 0, 0);
+        } else {
+          // Calculate the PREVIOUS pay date - this becomes the start of the current period
+          if (incomeData.frequency.toLowerCase() === 'weekly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setDate(periodStart.getDate() - 7);
+          } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setDate(periodStart.getDate() - 14);
+          } else if (incomeData.frequency.toLowerCase() === 'monthly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setMonth(periodStart.getMonth() - 1);
+          } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setMonth(periodStart.getMonth() - 6);
+          } else if (incomeData.frequency.toLowerCase() === 'yearly') {
+            periodStart = new Date(nextPayDate);
+            periodStart.setFullYear(periodStart.getFullYear() - 1);
+          } else {
+            // Default to monthly if frequency is unknown
+            periodStart = new Date(nextPayDate);
+            periodStart.setMonth(periodStart.getMonth() - 1);
+          }
+
+          // Set period start to beginning of day to include all transactions from that day
+          periodStart.setHours(0, 0, 0, 0);
+        }
 
         // Ensure periodStart is not invalid
         if (isNaN(periodStart.getTime())) {
@@ -936,7 +1008,14 @@ const HomeContainer = ({navigation}) => {
           nextPayDate: nextPayDate.toISOString(),
           periodStart: periodStart.toISOString(),
           periodEnd: periodEnd.toISOString(),
-          today: new Date().toISOString(),
+          today: now.toISOString(),
+          todayLocal: now.toLocaleDateString() + ' ' + now.toLocaleTimeString(),
+          isNewPayPeriod: isNewPayPeriod,
+          todayStart: todayStart.toISOString(),
+          todayStartLocal: todayStart.toLocaleDateString(),
+          payDateStart: payDateStart.toISOString(),
+          payDateStartLocal: payDateStart.toLocaleDateString(),
+          deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
       } catch (periodError) {
         console.error('🧮 Error calculating period:', periodError);
@@ -1003,6 +1082,8 @@ const HomeContainer = ({navigation}) => {
       console.log('💰 calculateTotalExpenses RESULT:', {
         platform: Platform.OS,
         total: total,
+        filteredTransactionCount: periodTransactions.length,
+        totalTransactionCount: transactions.length,
       });
       return total;
     } catch (error) {
@@ -1035,6 +1116,59 @@ const HomeContainer = ({navigation}) => {
     }
     return 0;
   }, [transactionsSignature, incomeSignature, calculateTotalExpenses]);
+
+  // Calculate if we should show "New period started!" message (for UI display)
+  const isNewPayPeriodForUI = useMemo(() => {
+    if (!incomeData?.nextPayDate || !incomeData?.frequency) {
+      return false;
+    }
+
+    // Parse nextPayDate as local date
+    let nextPayDate;
+    if (incomeData.nextPayDate.includes('T')) {
+      const dateOnly = incomeData.nextPayDate.split('T')[0];
+      nextPayDate = new Date(dateOnly + 'T12:00:00');
+    } else {
+      nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+    }
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Calculate what the previous pay date should have been based on frequency
+    let previousPayDate = new Date(nextPayDate);
+    if (incomeData.frequency.toLowerCase() === 'weekly') {
+      previousPayDate.setDate(previousPayDate.getDate() - 7);
+    } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
+      previousPayDate.setDate(previousPayDate.getDate() - 14);
+    } else if (incomeData.frequency.toLowerCase() === 'monthly') {
+      previousPayDate.setMonth(previousPayDate.getMonth() - 1);
+    } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
+      previousPayDate.setMonth(previousPayDate.getMonth() - 6);
+    } else if (incomeData.frequency.toLowerCase() === 'yearly') {
+      previousPayDate.setFullYear(previousPayDate.getFullYear() - 1);
+    } else {
+      previousPayDate.setMonth(previousPayDate.getMonth() - 1);
+    }
+
+    const previousPayDateStart = new Date(previousPayDate.getFullYear(), previousPayDate.getMonth(), previousPayDate.getDate());
+
+    // Check if today matches the previous pay date (meaning it's pay day)
+    const isPayDay = todayStart.getTime() === previousPayDateStart.getTime();
+
+    if (!isPayDay) {
+      return false;
+    }
+
+    // If it's pay day, only show "New period started!" message for 12 hours
+    const payPeriodStartTime = new Date(todayStart);
+    payPeriodStartTime.setHours(0, 0, 0, 0);
+
+    const twelveHoursLater = new Date(payPeriodStartTime);
+    twelveHoursLater.setHours(12, 0, 0, 0);
+
+    return now < twelveHoursLater;
+  }, [incomeData?.nextPayDate, incomeData?.frequency]);
 
   // Update state only when memoized value changes (non-blocking)
   useEffect(() => {
@@ -1098,13 +1232,13 @@ const HomeContainer = ({navigation}) => {
       periodEnd = new Date(nextPayDate);
       periodEnd.setHours(23, 59, 59, 999);
 
-      if (incomeData.frequency === 'weekly') {
+      if (incomeData.frequency.toLowerCase() === 'weekly') {
         periodStart = new Date(nextPayDate);
         periodStart.setDate(periodStart.getDate() - 7);
-      } else if (incomeData.frequency === 'fortnightly') {
+      } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
         periodStart = new Date(nextPayDate);
         periodStart.setDate(periodStart.getDate() - 14);
-      } else if (incomeData.frequency === 'monthly') {
+      } else if (incomeData.frequency.toLowerCase() === 'monthly') {
         periodStart = new Date(nextPayDate);
         periodStart.setMonth(periodStart.getMonth() - 1);
       } else {
@@ -1168,6 +1302,435 @@ const HomeContainer = ({navigation}) => {
       setTotalAdditionalIncome(totalAdditionalIncomeValue);
     });
   }, [totalAdditionalIncomeValue]);
+
+  // ==============================================
+  // ROLLOVER CALCULATION AND MANAGEMENT
+  // ==============================================
+
+  // Load current rollover amount from backend
+  const loadRolloverAmount = useCallback(async () => {
+    try {
+      if (!TrendAPIService.isAuthenticated()) {
+        return;
+      }
+
+      // Track when we're loading rollover data
+      rolloverLoadTimeRef.current = Date.now();
+
+      const rolloverData = await TrendAPIService.getRolloverAmount();
+      setRolloverAmount(rolloverData.rolloverAmount || 0);
+      setLastRolloverDate(rolloverData.lastRolloverDate);
+    } catch (error) {
+      console.error('🔄 Error loading rollover amount:', error);
+    }
+  }, []);
+
+  // Check if today is the day before pay period ends
+  const checkRolloverAvailability = useCallback(() => {
+    try {
+      if (!incomeData?.nextPayDate) {
+        setIsRolloverAvailable(false);
+        return;
+      }
+
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Check if tomorrow is the pay date (today is day before)
+      const isDayBeforePayday =
+        tomorrow.toDateString() === nextPayDate.toDateString();
+
+      // Also check we haven't already processed rollover for this period
+      const hasRecentRollover =
+        lastRolloverDate &&
+        Math.abs(new Date(lastRolloverDate) - nextPayDate) <
+          2 * 24 * 60 * 60 * 1000; // Within 2 days
+
+      setIsRolloverAvailable(isDayBeforePayday && !hasRecentRollover);
+    } catch (error) {
+      console.error('🔄 Error checking rollover availability:', error);
+      setIsRolloverAvailable(false);
+    }
+  }, [incomeData?.nextPayDate, lastRolloverDate]);
+
+  // Handle rollover button press - show modal
+  const handleRolloverPress = useCallback(() => {
+    setShowRolloverModal(true);
+  }, []);
+
+  // Handle goal allocation confirmation from modal
+  const handleGoalAllocationConfirm = useCallback(
+    async ({goalAllocations, totalAllocated, remainingRollover}) => {
+      try {
+        console.log('🎯 Processing goal allocations:', {
+          totalAllocations: goalAllocations.length,
+          totalAllocated,
+          remainingRollover,
+        });
+
+        // Add contributions to selected goals
+        for (const allocation of goalAllocations) {
+          try {
+            await addGoalContribution(
+              allocation.goalId,
+              allocation.amount,
+              'ROLLOVER',
+              `Rollover allocation from ${incomeData.frequency} period`,
+            );
+            console.log(
+              `🎯 Added $${allocation.amount.toFixed(2)} to goal: ${
+                allocation.goal.title
+              }`,
+            );
+          } catch (goalError) {
+            console.error(
+              `🎯 Failed to add contribution to goal ${allocation.goal.title}:`,
+              goalError,
+            );
+          }
+        }
+
+        // Update rollover amount with remaining funds
+        await TrendAPIService.processRollover({
+          amount: remainingRollover,
+        });
+
+        setRolloverAmount(remainingRollover);
+
+        // Mark this period as processed if all funds were allocated
+        if (remainingRollover === 0) {
+          setLastRolloverDate(new Date().toISOString());
+          setIsRolloverAvailable(false);
+        }
+
+        setShowGoalAllocationModal(false);
+
+        // Show success message
+        const allocatedGoalsCount = goalAllocations.length;
+        Alert.alert(
+          'Goal Allocation Complete',
+          `$${totalAllocated.toFixed(
+            2,
+          )} allocated to ${allocatedGoalsCount} goal${
+            allocatedGoalsCount > 1 ? 's' : ''
+          }${
+            remainingRollover > 0
+              ? `\n$${remainingRollover.toFixed(2)} remains for next period`
+              : ''
+          }`,
+        );
+      } catch (error) {
+        console.error('🔄 Error processing goal allocation:', error);
+        Alert.alert(
+          'Error',
+          'Unable to process goal allocation. Please try again.',
+        );
+      }
+    },
+    [incomeData, addGoalContribution],
+  );
+
+  // Handle rollover decision from modal
+  const handleRolloverConfirm = useCallback(
+    async rolloverDecision => {
+      try {
+        const {option} = rolloverDecision;
+
+        // Calculate available surplus (Left to Spend amount)
+        const totalGoalContributions = goals.reduce(
+          (sum, goal) => sum + (goal.autoContribute || 0),
+          0,
+        );
+        const availableSurplus = Math.max(
+          0,
+          incomeData.income +
+            rolloverAmount -
+            totalExpenses -
+            totalGoalContributions,
+        );
+
+        if (option === 'rollover') {
+          // Roll over to next pay period - update user's total rollover amount
+          const newTotalRollover = rolloverAmount + availableSurplus;
+
+          await TrendAPIService.processRollover({
+            amount: newTotalRollover,
+          });
+
+          setRolloverAmount(newTotalRollover);
+
+          Alert.alert(
+            'Rollover Complete',
+            `$${availableSurplus.toFixed(2)} rolled over to next ${
+              incomeData.frequency
+            } period`,
+          );
+        } else if (option === 'goals') {
+          // Check if we have active goals for allocation
+          const activeGoals = goals.filter(
+            goal =>
+              !goal.completed &&
+              (goal.type === 'debt'
+                ? goal.current > 0
+                : goal.current < goal.target),
+          );
+
+          if (activeGoals.length > 0) {
+            // Open goal allocation modal to let user choose specific allocations
+            setShowRolloverModal(false);
+            setShowGoalAllocationModal(true);
+            return; // Exit early, allocation will be handled by the modal
+          } else {
+            // No active goals, navigate to create goal flow
+            setShowRolloverModal(false);
+            navigation.navigate('Goals', {
+              fromRollover: true,
+              rolloverAmount: availableSurplus,
+              rolloverFrequency: incomeData.frequency,
+              returnToHome: true,
+            });
+            return;
+          }
+        } else if (option === 'createGoal') {
+          // Navigate to Goals screen to create a new goal with rollover context
+          setShowRolloverModal(false);
+          navigation.navigate('Goals', {
+            fromRollover: true,
+            rolloverAmount: availableSurplus,
+            rolloverFrequency: incomeData.frequency,
+            returnToHome: true, // Flag to indicate we should refresh rollover on return
+          });
+          return; // Exit early, don't mark rollover as processed yet
+        }
+
+        // Mark this period as processed
+        setLastRolloverDate(new Date().toISOString());
+        setIsRolloverAvailable(false);
+        setShowRolloverModal(false);
+      } catch (error) {
+        console.error('🔄 Error processing rollover:', error);
+        Alert.alert('Error', 'Unable to process rollover. Please try again.');
+      }
+    },
+    [
+      incomeData,
+      totalExpenses,
+      goals,
+      rolloverAmount,
+      navigation,
+      addGoalContribution,
+    ],
+  );
+
+  // Load rollover data on component mount
+  useEffect(() => {
+    loadRolloverAmount();
+  }, [loadRolloverAmount]);
+
+  // Listen for navigation events to refresh rollover amount when returning from Goals
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Always reload rollover amount when returning to Home screen
+      // This ensures we get the latest rollover state after goal creation
+      loadRolloverAmount();
+
+      // Also reload goals to ensure we have the latest goal data (including contributions)
+      if (loadGoalsRef.current) {
+        loadGoalsRef.current();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, loadRolloverAmount]);
+
+  // ==============================================
+  // PAY PERIOD TRANSITION DETECTION
+  // ==============================================
+
+  // Check if we've crossed into a new pay period and need to reset
+  const checkPayPeriodTransition = useCallback(async () => {
+    try {
+      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
+        return;
+      }
+
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      const now = new Date(); // Current local time
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      const payDateStart = new Date(
+        nextPayDate.getFullYear(),
+        nextPayDate.getMonth(),
+        nextPayDate.getDate(),
+      );
+
+
+      // Check if today is on or after the pay date (new period has started)
+      if (todayStart >= payDateStart) {
+        // Calculate the next pay date based on frequency
+        // Create date explicitly to avoid timezone issues
+        let newNextPayDate;
+        let dateOnly;
+        if (incomeData.nextPayDate.includes('T')) {
+          dateOnly = incomeData.nextPayDate.split('T')[0]; // "2025-09-07"
+        } else {
+          dateOnly = incomeData.nextPayDate; // "2025-09-07"
+        }
+
+        // Parse date parts explicitly to avoid timezone conversion
+        const [year, month, day] = dateOnly
+          .split('-')
+          .map(num => parseInt(num, 10));
+        newNextPayDate = new Date(year, month - 1, day, 12, 0, 0); // month is 0-indexed
+
+
+        if (incomeData.frequency.toLowerCase() === 'weekly') {
+          const newDay = newNextPayDate.getDate() + 7;
+          newNextPayDate.setDate(newDay);
+          console.log('🔄 Added 7 days, new day should be:', newDay);
+        } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
+          const currentDay = newNextPayDate.getDate();
+          const newDay = currentDay + 14;
+          console.log('🔄 Fortnightly: currentDay =', currentDay, ', adding 14 =', newDay);
+          newNextPayDate.setDate(newDay);
+          console.log('🔄 After setDate, date is now:', newNextPayDate.toISOString());
+        } else if (incomeData.frequency.toLowerCase() === 'monthly') {
+          newNextPayDate.setMonth(newNextPayDate.getMonth() + 1);
+        } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
+          newNextPayDate.setMonth(newNextPayDate.getMonth() + 6);
+        } else if (incomeData.frequency.toLowerCase() === 'yearly') {
+          newNextPayDate.setFullYear(newNextPayDate.getFullYear() + 1);
+        }
+
+        console.log('🔄 After adding frequency:', {
+          frequency: incomeData.frequency,
+          newDate: newNextPayDate.toISOString(),
+          newDateLocal: newNextPayDate.toLocaleDateString(),
+        });
+
+        // Compare dates properly - extract just date parts
+        const currentDateStr = incomeData.nextPayDate.includes('T')
+          ? incomeData.nextPayDate.split('T')[0]
+          : incomeData.nextPayDate;
+        const newDateStr = newNextPayDate.toISOString().split('T')[0];
+
+        console.log('🔄 Pay period transition: Calculating new date:', {
+          currentNextPayDate: currentDateStr,
+          calculatedNewDate: newDateStr,
+          frequency: incomeData.frequency,
+          willUpdate: currentDateStr !== newDateStr,
+        });
+
+        // Don't update if the dates are the same (prevents infinite loop)
+        if (currentDateStr === newDateStr) {
+          console.log(
+            '🔄 Pay period transition: Skipping - dates are the same',
+          );
+          return;
+        }
+
+        // Update the user profile with the new next pay date
+        try {
+          const updateData = {
+            nextPayDate: new Date(
+              newNextPayDate.getFullYear(),
+              newNextPayDate.getMonth(),
+              newNextPayDate.getDate(),
+              12,
+              0,
+              0,
+            ).toISOString(), // Send as full ISO string at noon to match backend expectations
+          };
+
+          await TrendAPIService.updateIncomeProfile(updateData);
+
+          // Update local state
+          setIncomeData(prev => ({
+            ...prev,
+            nextPayDate: newNextPayDate.toISOString().split('T')[0],
+          }));
+
+          // Calculate if there were leftover funds from previous period
+          const totalGoalContributions = goals.reduce(
+            (sum, goal) => sum + (goal.autoContribute || 0),
+            0,
+          );
+
+          const previousPeriodSurplus = Math.max(
+            0,
+            incomeData.income +
+              rolloverAmount -
+              totalExpenses -
+              totalGoalContributions,
+          );
+
+          // If there's a surplus and rollover isn't already available, make it available
+          if (previousPeriodSurplus > 0 && !isRolloverAvailable) {
+            setIsRolloverAvailable(true);
+          }
+        } catch (error) {
+          console.error(
+            'Pay period transition failed to update next pay date:',
+            error,
+          );
+
+          // More detailed error logging
+          console.error('🔄 Pay period transition error details:', {
+            errorMessage: error.message,
+            errorStack: error.stack,
+            currentNextPayDate: incomeData.nextPayDate,
+            newNextPayDate: newNextPayDate.toISOString().split('T')[0],
+            frequency: incomeData.frequency,
+            apiEndpoint: '/users/income',
+          });
+
+          // Still update local state even if server update fails
+          // This prevents the app from getting stuck in an infinite loop
+          setIncomeData(prev => ({
+            ...prev,
+            nextPayDate: newNextPayDate.toISOString().split('T')[0],
+          }));
+
+          // Don't throw - this shouldn't break the app, just log the error
+        }
+      }
+    } catch (error) {
+      console.error('Pay period transition error:', error);
+    }
+  }, [incomeData, rolloverAmount, totalExpenses, goals, isRolloverAvailable]);
+
+  // Check pay period transition when app becomes active or when income data changes
+  useEffect(() => {
+    if (incomeData?.nextPayDate && incomeData?.frequency) {
+      checkPayPeriodTransition();
+    }
+  }, [checkPayPeriodTransition, incomeData?.nextPayDate]);
+
+  // Check rollover availability when date or income data changes
+  useEffect(() => {
+    checkRolloverAvailability();
+  }, [checkRolloverAvailability]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -1645,12 +2208,14 @@ const HomeContainer = ({navigation}) => {
             setSelectedDate(new Date());
           }
 
-          // Reload data for new day
+          // Reload data for new day and check for pay period transitions
           const reloadForNewDay = async () => {
             try {
               setLoading(true);
 
               if (AuthService.isAuthenticated()) {
+                // Check for pay period transitions first (this may update nextPayDate)
+                await checkPayPeriodTransition();
                 await Promise.all([
                   loadUserProfile(), // ✅ Will reload backend profile data
                   loadTransactions(),
@@ -1678,17 +2243,65 @@ const HomeContainer = ({navigation}) => {
   // State for total income payments from backend
   const [totalIncomePayments, setTotalIncomePayments] = useState(0);
 
-  // Load total income payments from backend
+  // Load total income payments from backend for current pay period only
   const loadTotalIncomePayments = useCallback(async () => {
     try {
-      if (!AuthService.isAuthenticated() || goals.length === 0) {
+      if (
+        !AuthService.isAuthenticated() ||
+        goals.length === 0 ||
+        !incomeData?.nextPayDate
+      ) {
         return;
       }
 
-      console.log('🔍 HOME_CONTAINER: Loading income payments from backend');
+      // Calculate current pay period boundaries (same logic as calculateTotalExpenses)
+      let periodStart, periodEnd;
+      try {
+        // Parse nextPayDate as local date
+        let nextPayDate;
+        if (incomeData.nextPayDate.includes('T')) {
+          const dateOnly = incomeData.nextPayDate.split('T')[0];
+          nextPayDate = new Date(dateOnly + 'T12:00:00');
+        } else {
+          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+        }
+
+        periodEnd = new Date(nextPayDate);
+        periodEnd.setHours(23, 59, 59, 999);
+
+        // Calculate previous pay date based on frequency
+        if (incomeData.frequency.toLowerCase() === 'weekly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setDate(periodStart.getDate() - 7);
+        } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setDate(periodStart.getDate() - 14);
+        } else if (incomeData.frequency.toLowerCase() === 'monthly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setMonth(periodStart.getMonth() - 1);
+        } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setMonth(periodStart.getMonth() - 6);
+        } else if (incomeData.frequency.toLowerCase() === 'yearly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setFullYear(periodStart.getFullYear() - 1);
+        } else {
+          // Default to monthly
+          periodStart = new Date(nextPayDate);
+          periodStart.setMonth(periodStart.getMonth() - 1);
+        }
+        periodStart.setHours(0, 0, 0, 0);
+      } catch (dateError) {
+        console.error(
+          '🔍 HOME_CONTAINER: Error calculating pay period for income payments:',
+          dateError,
+        );
+        return;
+      }
+
       let totalPayments = 0;
 
-      // Get contributions for all goals and sum up income payments
+      // Get contributions for all goals and sum up income payments for current period only
       for (const goal of goals) {
         if (!goal.id.startsWith('local_')) {
           // Only fetch for backend goals
@@ -1700,26 +2313,53 @@ const HomeContainer = ({navigation}) => {
             );
 
             if (allContributions && Array.isArray(allContributions)) {
-              const incomeTotal = allContributions.reduce((sum, contrib) => {
-                if (contrib.type === 'MANUAL') {
-                  // MANUAL contributions subtract from income (money going to goals)
-                  return sum + (contrib.amount || 0);
-                } else if (contrib.type === 'WITHDRAWAL') {
-                  // WITHDRAWAL contributions add back to income (money coming back from goals)
-                  return sum - (contrib.amount || 0);
-                } else {
-                  // Other types (AUTOMATIC, TRANSACTION, INTEREST, WINDFALL) don't affect income
-                  return sum;
-                }
-              }, 0);
+              // Filter contributions to current pay period only
+              const currentPeriodContributions = allContributions.filter(
+                contrib => {
+                  if (!contrib.contributionDate) {
+                    return false;
+                  }
+
+                  const contribDate = new Date(contrib.contributionDate);
+                  return contribDate >= periodStart && contribDate <= periodEnd;
+                },
+              );
+
+              const incomeTotal = currentPeriodContributions.reduce(
+                (sum, contrib) => {
+                  if (contrib.type === 'MANUAL') {
+                    // MANUAL contributions subtract from income (money going to goals)
+                    return sum + (contrib.amount || 0);
+                  } else if (contrib.type === 'WITHDRAWAL') {
+                    // WITHDRAWAL contributions add back to income (money coming back from goals)
+                    return sum - (contrib.amount || 0);
+                  } else {
+                    // Other types (AUTOMATIC, TRANSACTION, INTEREST, WINDFALL) don't affect income
+                    return sum;
+                  }
+                },
+                0,
+              );
+
               totalPayments += incomeTotal;
             }
           } catch (error) {
-            console.warn(
-              '🔍 HOME_CONTAINER: Failed to load contributions for goal',
-              goal.id,
-              error,
-            );
+            // Handle 404 errors more gracefully (goal might not exist anymore)
+            if (
+              error.message?.includes('404') ||
+              error.message?.includes('Goal not found')
+            ) {
+              console.log(
+                '🔍 HOME_CONTAINER: Goal not found when loading contributions (likely deleted):',
+                goal.id,
+              );
+            } else {
+              console.warn(
+                '🔍 HOME_CONTAINER: Failed to load contributions for goal',
+                goal.id,
+                error,
+              );
+            }
           }
         }
       }
@@ -1739,7 +2379,7 @@ const HomeContainer = ({navigation}) => {
     if (goals.length > 0) {
       loadTotalIncomePayments();
     }
-  }, [goals.length]); // Remove function dependency, use goals.length instead
+  }, [goals.length, incomeData?.nextPayDate]); // Add nextPayDate dependency to recalculate on pay period changes
 
   // Store current loadTotalIncomePayments in a ref for event handlers
   const loadTotalIncomePaymentsRef = useRef(loadTotalIncomePayments);
@@ -1831,6 +2471,11 @@ const HomeContainer = ({navigation}) => {
         totalAdditionalIncome={totalAdditionalIncome}
         currency={currency}
         isBackgroundSyncing={backgroundSyncCount > 0}
+        isNewPayPeriodForUI={isNewPayPeriodForUI}
+        // Rollover props
+        rolloverAmount={rolloverAmount}
+        isRolloverAvailable={isRolloverAvailable}
+        onRolloverPress={handleRolloverPress}
         // Tournament/Poker props
         tournaments={tournaments}
         pokerSectionExpanded={pokerSectionExpanded}
@@ -1862,6 +2507,40 @@ const HomeContainer = ({navigation}) => {
         onClose={handleCloseAddTournament}
         onSave={handleSaveTournament}
         editingTournament={editingTournament}
+      />
+
+      {/* Rollover Options Modal */}
+      <RolloverOptionsModal
+        visible={showRolloverModal}
+        onClose={() => setShowRolloverModal(false)}
+        onConfirm={handleRolloverConfirm}
+        availableAmount={Math.max(
+          0,
+          (incomeData?.income || 0) +
+            rolloverAmount -
+            totalExpenses -
+            goals.reduce((sum, goal) => sum + (goal.autoContribute || 0), 0),
+        )}
+        currency={currency}
+        goals={goals}
+        frequency={incomeData?.frequency || 'monthly'}
+      />
+
+      {/* Goal Allocation Modal */}
+      <GoalAllocationModal
+        visible={showGoalAllocationModal}
+        onClose={() => setShowGoalAllocationModal(false)}
+        onConfirm={handleGoalAllocationConfirm}
+        availableAmount={Math.max(
+          0,
+          (incomeData?.income || 0) +
+            rolloverAmount -
+            totalExpenses -
+            goals.reduce((sum, goal) => sum + (goal.autoContribute || 0), 0),
+        )}
+        currency={currency}
+        goals={goals}
+        frequency={incomeData?.frequency || 'monthly'}
       />
     </>
   );

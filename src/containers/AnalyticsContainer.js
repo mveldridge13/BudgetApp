@@ -33,8 +33,6 @@ const AnalyticsContainer = () => {
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
 
-
-
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -158,20 +156,20 @@ const AnalyticsContainer = () => {
       console.log('📋 Fetching bills analytics from backend...');
 
       // Use pay period filtering fallback since backend uses calendar month filtering
-      console.log('📋 Using pay period filtering fallback for better bill analytics');
+      console.log(
+        '📋 Using pay period filtering fallback for better bill analytics',
+      );
       await loadBillsAnalyticsFallback();
       return;
 
       // Backend endpoint exists but uses calendar month filtering - skip it
       // const billsResponse = await TrendAPIService.getBillsAnalytics();
-
-      if (isMountedRef.current && billsResponse) {
-        setBillsAnalytics(billsResponse);
-
-        // Cache the response for future use
-        await billsAnalyticsCache.set(billsResponse);
-        console.log('📋 Bills analytics cached successfully');
-      }
+      // if (isMountedRef.current && billsResponse) {
+      //   setBillsAnalytics(billsResponse);
+      //   // Cache the response for future use
+      //   await billsAnalyticsCache.set(billsResponse);
+      //   console.log('📋 Bills analytics cached successfully');
+      // }
     } catch (err) {
       console.error('Error loading bills analytics from backend:', err);
 
@@ -194,15 +192,15 @@ const AnalyticsContainer = () => {
     }
   }, [isOnline, loadBillsAnalyticsFallback]);
 
-  // Pay period based bills analytics processing 
+  // Pay period based bills analytics processing
   const loadBillsAnalyticsFallback = useCallback(async () => {
     try {
       // Get all transactions with due dates (bills) and user profile for pay period calculation
       const [transactionResponse, userProfile] = await Promise.all([
         TrendAPIService.getTransactions(),
-        TrendAPIService.getUserProfile()
+        TrendAPIService.getUserProfile(),
       ]);
-      
+
       const allTransactions = transactionResponse?.transactions || [];
 
       console.log('📋 Bills Analytics: Fetched data:', {
@@ -255,14 +253,19 @@ const AnalyticsContainer = () => {
           status: tx.status,
         })),
         // Show some non-bill transactions for comparison
-        sampleNonBills: allTransactions.filter(tx => !tx.dueDate && (!tx.recurrence || tx.recurrence === 'none')).slice(0, 3).map(tx => ({
-          id: tx.id,
-          description: tx.description,
-          amount: tx.amount,
-          dueDate: tx.dueDate,
-          recurrence: tx.recurrence,
-          status: tx.status,
-        })),
+        sampleNonBills: allTransactions
+          .filter(
+            tx => !tx.dueDate && (!tx.recurrence || tx.recurrence === 'none'),
+          )
+          .slice(0, 3)
+          .map(tx => ({
+            id: tx.id,
+            description: tx.description,
+            amount: tx.amount,
+            dueDate: tx.dueDate,
+            recurrence: tx.recurrence,
+            status: tx.status,
+          })),
       });
 
       // Calculate pay period boundaries (same logic as HomeContainer)
@@ -322,16 +325,37 @@ const AnalyticsContainer = () => {
             today: now.toISOString(),
           });
         } catch (periodError) {
-          console.error('📋 Bills Analytics: Error calculating pay period:', periodError);
+          console.error(
+            '📋 Bills Analytics: Error calculating pay period:',
+            periodError,
+          );
           // Fallback to current month if pay period calculation fails
           periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          periodEnd = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999,
+          );
         }
       } else {
-        console.warn('📋 Bills Analytics: Missing pay schedule data, falling back to current month');
+        console.warn(
+          '📋 Bills Analytics: Missing pay schedule data, falling back to current month',
+        );
         // Fallback to current month if no pay schedule data
         periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        periodEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
       }
 
       // Filter bills by pay period instead of calendar month
@@ -344,7 +368,9 @@ const AnalyticsContainer = () => {
       });
 
       // Categorize bills by status
-      const paidBillsList = payPeriodBills.filter(bill => bill.status === 'PAID');
+      const paidBillsList = payPeriodBills.filter(
+        bill => bill.status === 'PAID',
+      );
       const unpaidBillsList = payPeriodBills.filter(
         bill => bill.status === 'UPCOMING',
       );

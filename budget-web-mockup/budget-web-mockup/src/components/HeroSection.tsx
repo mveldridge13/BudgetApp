@@ -9,17 +9,17 @@ export default function HeroSection() {
     committedExpenses: 1840.00, // Bills, rent, subscriptions, etc.
     discretionaryExpenses: 239.23, // Food, entertainment, shopping, etc.
     leftToSpend: 1120.77,
-    budgetLimit: 2800.00
+    budgetLimit: 2800.00,
   };
 
   const totalExpenses = balanceData.committedExpenses + balanceData.discretionaryExpenses;
-  
-  const currentExpenses = expenseView === 'committed' 
-    ? balanceData.committedExpenses 
+
+  const currentExpenses = expenseView === 'committed'
+    ? balanceData.committedExpenses
     : balanceData.discretionaryExpenses;
 
   const progressPercentage = Math.min(
-    ((balanceData.budgetLimit - balanceData.leftToSpend) / balanceData.budgetLimit) * 100, 
+    ((balanceData.budgetLimit - balanceData.leftToSpend) / balanceData.budgetLimit) * 100,
     100
   );
 
@@ -67,8 +67,8 @@ export default function HeroSection() {
           </div>
           <p className="text-lg font-bold">{formatCurrency(totalExpenses)}</p>
           <p className="text-xs opacity-60 mt-1">
-            {expenseView === 'committed' 
-              ? `${formatCurrency(currentExpenses)} committed` 
+            {expenseView === 'committed'
+              ? `${formatCurrency(currentExpenses)} committed`
               : `${formatCurrency(currentExpenses)} discretionary`
             }
           </p>

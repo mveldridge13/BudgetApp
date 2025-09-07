@@ -33,10 +33,10 @@ export default function BillsList({ bills }: BillsListProps) {
     const dueDate = new Date(dateStr);
     const diffTime = dueDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return `${Math.abs(diffDays)} days overdue`;
-    if (diffDays === 0) return 'Due today';
-    if (diffDays === 1) return 'Due tomorrow';
+
+    if (diffDays < 0) {return `${Math.abs(diffDays)} days overdue`;}
+    if (diffDays === 0) {return 'Due today';}
+    if (diffDays === 1) {return 'Due tomorrow';}
     return `Due in ${diffDays} days`;
   };
 
@@ -70,7 +70,7 @@ export default function BillsList({ bills }: BillsListProps) {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="text-right">
                   <div className="flex items-center space-x-3">
                     <div>

@@ -28,6 +28,8 @@ const BalanceCard = ({
   rolloverAmount = 0,
   isRolloverAvailable = false,
   onRolloverPress = () => {},
+  // Pay period UI state (calculated by HomeContainer)
+  isNewPayPeriodForUI = false,
 }) => {
   const formatCurrency = amount => {
     return formatCurrencySync(amount, currency);
@@ -39,6 +41,44 @@ const BalanceCard = ({
       month: 'short',
     });
     return `${month} ${day}`;
+  };
+
+  // Use the pay period state calculated by HomeContainer (maintains separation of concerns)
+  const isNewPayPeriod = isNewPayPeriodForUI;
+
+  // Get pay period status text
+  const getPayPeriodStatus = () => {
+    if (!incomeData?.nextPayDate) {
+      return null;
+    }
+
+    if (isNewPayPeriod) {
+      return 'New period started!';
+    }
+
+    // Parse nextPayDate as local date
+    let nextPayDate;
+    if (incomeData.nextPayDate.includes('T')) {
+      const dateOnly = incomeData.nextPayDate.split('T')[0];
+      nextPayDate = new Date(dateOnly + 'T12:00:00');
+    } else {
+      nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+    }
+
+    const today = new Date();
+    const timeDiff = nextPayDate.getTime() - today.getTime();
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+    if (daysDiff === 0) {
+      return 'Pay day today!';
+    }
+    if (daysDiff === 1) {
+      return 'Pay day tomorrow';
+    }
+    if (daysDiff > 1) {
+      return `${daysDiff} days to pay day`;
+    }
+    return null;
   };
 
   // Filter goals that should be shown on balance card
@@ -76,10 +116,80 @@ const BalanceCard = ({
     return sum;
   }, 0);
 
-  // Calculate expense breakdown with memoization
+  // Calculate expense breakdown with memoization - filter to current pay period only
   const expenseBreakdown = useMemo(() => {
-    return getExpenseBreakdownSync(transactions);
-  }, [transactions]);
+    if (!incomeData?.nextPayDate || !incomeData?.frequency || !Array.isArray(transactions)) {
+      return getExpenseBreakdownSync([]);
+    }
+
+    // Calculate current pay period boundaries (same logic as HomeContainer)
+    try {
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      let periodStart, periodEnd;
+      periodEnd = new Date(nextPayDate);
+      periodEnd.setHours(23, 59, 59, 999);
+
+      // Check if we're in a new pay period using local timezone
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const payDateStart = new Date(nextPayDate.getFullYear(), nextPayDate.getMonth(), nextPayDate.getDate());
+      const isInNewPeriod = todayStart >= payDateStart;
+
+      if (isInNewPeriod) {
+        // If in new period, start from today
+        periodStart = new Date(todayStart);
+        periodStart.setHours(0, 0, 0, 0);
+      } else {
+        // Calculate previous pay date
+        if (incomeData.frequency.toLowerCase() === 'weekly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setDate(periodStart.getDate() - 7);
+        } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setDate(periodStart.getDate() - 14);
+        } else if (incomeData.frequency.toLowerCase() === 'monthly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setMonth(periodStart.getMonth() - 1);
+        } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setMonth(periodStart.getMonth() - 6);
+        } else if (incomeData.frequency.toLowerCase() === 'yearly') {
+          periodStart = new Date(nextPayDate);
+          periodStart.setFullYear(periodStart.getFullYear() - 1);
+        } else {
+          periodStart = new Date(nextPayDate);
+          periodStart.setMonth(periodStart.getMonth() - 1);
+        }
+        periodStart.setHours(0, 0, 0, 0);
+      }
+
+      // Filter transactions to current pay period only
+      const currentPeriodTransactions = transactions.filter(transaction => {
+        try {
+          const transactionDate = new Date(transaction.date);
+          if (isNaN(transactionDate.getTime())) {
+            return false;
+          }
+
+          return transactionDate >= periodStart && transactionDate <= periodEnd;
+        } catch (error) {
+          return false;
+        }
+      });
+
+      return getExpenseBreakdownSync(currentPeriodTransactions);
+    } catch (error) {
+      return getExpenseBreakdownSync(transactions); // Fallback to all transactions
+    }
+  }, [transactions, incomeData?.nextPayDate, incomeData?.frequency]);
 
   // Calculate values
   const incomeAmount = (incomeData?.income || 0) + rolloverAmount;
@@ -89,6 +199,7 @@ const BalanceCard = ({
     totalGoalContributions -
     totalIncomePayments -
     localIncomePayments;
+
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
 
@@ -142,6 +253,15 @@ const BalanceCard = ({
           <Text style={styles.frequencyDisplay}>
             Paid {incomeData.frequency}
           </Text>
+          {getPayPeriodStatus() && (
+            <Text
+              style={[
+                styles.payPeriodStatus,
+                isNewPayPeriod && styles.newPeriodStatus,
+              ]}>
+              {getPayPeriodStatus()}
+            </Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -443,6 +563,20 @@ const styles = StyleSheet.create({
     color: colors.textWhite,
     opacity: 0.7,
     letterSpacing: -0.1,
+  },
+  payPeriodStatus: {
+    fontSize: 11,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.8,
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
+  newPeriodStatus: {
+    color: colors.progressGreen,
+    fontWeight: '500',
+    opacity: 1,
   },
   balanceCard: {
     backgroundColor: colors.overlayLight,

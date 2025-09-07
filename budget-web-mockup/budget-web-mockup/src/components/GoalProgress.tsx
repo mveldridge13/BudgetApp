@@ -17,8 +17,8 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
   };
 
   const getPriorityBadge = (category: string, percentage: number) => {
-    if (percentage >= 80) return { text: 'High', color: 'bg-red-100 text-red-700' };
-    if (percentage >= 40) return { text: 'Medium', color: 'bg-orange-100 text-orange-700' };
+    if (percentage >= 80) {return { text: 'High', color: 'bg-red-100 text-red-700' };}
+    if (percentage >= 40) {return { text: 'Medium', color: 'bg-orange-100 text-orange-700' };}
     return { text: 'Low', color: 'bg-gray-100 text-gray-700' };
   };
 
@@ -43,7 +43,7 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
       progress: 65,
       current: 6500,
       target: 10000,
-      priority: 'High'
+      priority: 'High',
     },
     {
       id: '2',
@@ -53,7 +53,7 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
       progress: 56,
       current: 2800,
       target: 5000,
-      priority: 'Medium'
+      priority: 'Medium',
     },
     {
       id: '3',
@@ -63,7 +63,7 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
       progress: 66,
       current: 3300,
       target: 5000,
-      priority: 'High'
+      priority: 'High',
     },
     {
       id: '4',
@@ -73,8 +73,8 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
       progress: 53,
       current: 265,
       target: 500,
-      priority: 'Medium'
-    }
+      priority: 'Medium',
+    },
   ];
 
   return (
@@ -91,8 +91,8 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
               </div>
             </div>
             <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-              goal.priority === 'High' 
-                ? 'bg-red-50 text-red-400' 
+              goal.priority === 'High'
+                ? 'bg-red-50 text-red-400'
                 : goal.priority === 'Medium'
                 ? 'bg-orange-50 text-orange-400'
                 : 'bg-gray-50 text-gray-400'
@@ -106,7 +106,7 @@ export default function GoalProgress({ goals }: GoalProgressProps) {
               <span className="text-sm font-medium text-gray-700">Progress</span>
               <span className="text-sm font-semibold text-gray-900">{goal.progress}%</span>
             </div>
-            
+
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className="h-2 rounded-full transition-all duration-300"

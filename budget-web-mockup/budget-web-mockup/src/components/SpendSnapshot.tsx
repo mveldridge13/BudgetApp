@@ -4,19 +4,19 @@ export default function SpendSnapshot() {
   // Calculate expenses by main category
   const calculateExpensesByCategory = () => {
     const categoryTotals: { [key: string]: { amount: number; color: string; name: string } } = {};
-    
+
     mockTransactions
       .filter(transaction => transaction.transactionType === 'EXPENSE')
       .forEach(transaction => {
         const categoryId = transaction.category.id;
         const categoryName = transaction.category.name;
         const categoryColor = transaction.category.color;
-        
+
         if (!categoryTotals[categoryId]) {
           categoryTotals[categoryId] = {
             amount: 0,
             color: categoryColor,
-            name: categoryName
+            name: categoryName,
           };
         }
         categoryTotals[categoryId].amount += Math.abs(transaction.amount);
@@ -26,7 +26,7 @@ export default function SpendSnapshot() {
       id,
       name: data.name,
       amount: data.amount,
-      color: data.color
+      color: data.color,
     }));
   };
 
@@ -37,7 +37,7 @@ export default function SpendSnapshot() {
   const chartData = expenseData.map(category => ({
     ...category,
     percentage: (category.amount / totalExpenses) * 100,
-    angle: (category.amount / totalExpenses) * 360
+    angle: (category.amount / totalExpenses) * 360,
   }));
 
   const formatCurrency = (amount: number) => {
@@ -69,7 +69,7 @@ export default function SpendSnapshot() {
       'A', outerRadius, outerRadius, 0, largeArcFlag, 1, x2, y2,
       'L', x3, y3,
       'A', innerRadius, innerRadius, 0, largeArcFlag, 0, x4, y4,
-      'Z'
+      'Z',
     ].join(' ');
   };
 
@@ -100,7 +100,7 @@ export default function SpendSnapshot() {
             {chartData.map((category) => {
               const path = createDonutPath(currentAngle, currentAngle + category.angle, 28, 45);
               currentAngle += category.angle;
-              
+
               return (
                 <g key={category.id}>
                   <path
@@ -111,10 +111,10 @@ export default function SpendSnapshot() {
                 </g>
               );
             })}
-            
+
             {/* Center circle */}
             <circle cx="50" cy="50" r="28" fill="white" stroke="#f3f4f6" strokeWidth="0.5" />
-            
+
           </svg>
 
           {/* Center text - positioned absolutely */}
@@ -131,11 +131,11 @@ export default function SpendSnapshot() {
             return chartData.map((category) => {
               const labelPos = getLabelPosition(labelAngle, labelAngle + category.angle, 50);
               labelAngle += category.angle;
-              
+
               // Determine text alignment based on position
               const isLeft = labelPos.x < 50;
               const isTop = labelPos.y < 50;
-              
+
               return (
                 <div
                   key={`label-${category.id}`}

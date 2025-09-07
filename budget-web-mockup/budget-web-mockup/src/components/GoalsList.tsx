@@ -56,7 +56,7 @@ export default function GoalsList({ goals }: GoalsListProps) {
         goals.map((goal) => {
           const percentage = getProgressPercentage(goal.currentAmount, goal.targetAmount);
           const remaining = goal.targetAmount - goal.currentAmount;
-          
+
           return (
             <div key={goal.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-start justify-between mb-4">
@@ -77,7 +77,7 @@ export default function GoalsList({ goals }: GoalsListProps) {
                   <span className="text-sm font-medium text-gray-700">Progress</span>
                   <span className="text-sm font-semibold text-gray-900">{percentage}%</span>
                 </div>
-                
+
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
                     className="h-3 rounded-full transition-all duration-300"

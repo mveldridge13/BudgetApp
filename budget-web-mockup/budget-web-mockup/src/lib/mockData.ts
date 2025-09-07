@@ -58,7 +58,7 @@ export const mockCategories: Category[] = [
       { id: '1-1', name: 'Restaurants', categoryId: '1' },
       { id: '1-2', name: 'Groceries', categoryId: '1' },
       { id: '1-3', name: 'Coffee & Tea', categoryId: '1' },
-    ]
+    ],
   },
   {
     id: '2',
@@ -69,7 +69,7 @@ export const mockCategories: Category[] = [
       { id: '2-1', name: 'Fuel', categoryId: '2' },
       { id: '2-2', name: 'Public Transport', categoryId: '2' },
       { id: '2-3', name: 'Parking', categoryId: '2' },
-    ]
+    ],
   },
   {
     id: '3',
@@ -80,7 +80,7 @@ export const mockCategories: Category[] = [
       { id: '3-1', name: 'Movies', categoryId: '3' },
       { id: '3-2', name: 'Games', categoryId: '3' },
       { id: '3-3', name: 'Subscriptions', categoryId: '3' },
-    ]
+    ],
   },
   {
     id: '4',
@@ -91,7 +91,7 @@ export const mockCategories: Category[] = [
       { id: '4-1', name: 'Clothing', categoryId: '4' },
       { id: '4-2', name: 'Electronics', categoryId: '4' },
       { id: '4-3', name: 'Home & Garden', categoryId: '4' },
-    ]
+    ],
   },
   {
     id: '5',
@@ -102,7 +102,7 @@ export const mockCategories: Category[] = [
       { id: '5-1', name: 'Salary', categoryId: '5' },
       { id: '5-2', name: 'Freelance', categoryId: '5' },
       { id: '5-3', name: 'Investment', categoryId: '5' },
-    ]
+    ],
   },
   {
     id: '6',
@@ -113,7 +113,7 @@ export const mockCategories: Category[] = [
       { id: '6-1', name: 'Doctor Visits', categoryId: '6' },
       { id: '6-2', name: 'Gym Membership', categoryId: '6' },
       { id: '6-3', name: 'Pharmacy', categoryId: '6' },
-    ]
+    ],
   },
   {
     id: '7',
@@ -124,7 +124,7 @@ export const mockCategories: Category[] = [
       { id: '7-1', name: 'Electricity', categoryId: '7' },
       { id: '7-2', name: 'Water', categoryId: '7' },
       { id: '7-3', name: 'Internet', categoryId: '7' },
-    ]
+    ],
   },
   {
     id: '8',
@@ -135,8 +135,8 @@ export const mockCategories: Category[] = [
       { id: '8-1', name: 'Online Courses', categoryId: '8' },
       { id: '8-2', name: 'Books', categoryId: '8' },
       { id: '8-3', name: 'Certification', categoryId: '8' },
-    ]
-  }
+    ],
+  },
 ];
 
 // Mock Transactions
@@ -151,7 +151,7 @@ export const mockTransactions: Transaction[] = [
     recurrence: 'none',
     transactionType: 'EXPENSE',
     paymentStatus: 'PAID',
-    location: 'Downtown'
+    location: 'Downtown',
   },
   {
     id: '2',
@@ -162,7 +162,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-14',
     recurrence: 'none',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '3',
@@ -173,7 +173,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-13',
     recurrence: 'weekly',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '4',
@@ -184,7 +184,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-12',
     recurrence: 'none',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '5',
@@ -195,7 +195,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-01',
     recurrence: 'monthly',
     transactionType: 'INCOME',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '6',
@@ -207,7 +207,7 @@ export const mockTransactions: Transaction[] = [
     dueDate: '2025-02-10',
     recurrence: 'monthly',
     transactionType: 'EXPENSE',
-    paymentStatus: 'UPCOMING'
+    paymentStatus: 'UPCOMING',
   },
   {
     id: '7',
@@ -218,7 +218,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-09',
     recurrence: 'none',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '8',
@@ -229,7 +229,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-08',
     recurrence: 'monthly',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '9',
@@ -240,7 +240,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-07',
     recurrence: 'monthly',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '10',
@@ -251,7 +251,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-06',
     recurrence: 'monthly',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '11',
@@ -262,7 +262,7 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-05',
     recurrence: 'none',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
+    paymentStatus: 'PAID',
   },
   {
     id: '12',
@@ -273,8 +273,8 @@ export const mockTransactions: Transaction[] = [
     date: '2025-01-04',
     recurrence: 'none',
     transactionType: 'EXPENSE',
-    paymentStatus: 'PAID'
-  }
+    paymentStatus: 'PAID',
+  },
 ];
 
 // Mock Goals
@@ -286,7 +286,7 @@ export const mockGoals: Goal[] = [
     targetAmount: 15000,
     currentAmount: 8500,
     dueDate: '2025-12-31',
-    category: 'Savings'
+    category: 'Savings',
   },
   {
     id: '2',
@@ -295,7 +295,7 @@ export const mockGoals: Goal[] = [
     targetAmount: 5000,
     currentAmount: 1200,
     dueDate: '2025-08-15',
-    category: 'Travel'
+    category: 'Travel',
   },
   {
     id: '3',
@@ -304,8 +304,8 @@ export const mockGoals: Goal[] = [
     targetAmount: 2500,
     currentAmount: 750,
     dueDate: '2025-06-01',
-    category: 'Technology'
-  }
+    category: 'Technology',
+  },
 ];
 
 // Mock Bills
@@ -317,7 +317,7 @@ export const mockBills: Bill[] = [
     dueDate: '2025-02-01',
     recurrence: 'monthly',
     category: { id: 'housing', name: 'Housing', color: '#FF9F43', icon: '🏠', subcategories: [] },
-    status: 'UPCOMING'
+    status: 'UPCOMING',
   },
   {
     id: '2',
@@ -326,7 +326,7 @@ export const mockBills: Bill[] = [
     dueDate: '2025-01-25',
     recurrence: 'monthly',
     category: { id: 'utilities', name: 'Utilities', color: '#FEA47F', icon: '⚡', subcategories: [] },
-    status: 'UPCOMING'
+    status: 'UPCOMING',
   },
   {
     id: '3',
@@ -335,7 +335,7 @@ export const mockBills: Bill[] = [
     dueDate: '2025-01-20',
     recurrence: 'monthly',
     category: { id: 'utilities', name: 'Utilities', color: '#FEA47F', icon: '📡', subcategories: [] },
-    status: 'OVERDUE'
+    status: 'OVERDUE',
   },
   {
     id: '4',
@@ -344,8 +344,8 @@ export const mockBills: Bill[] = [
     dueDate: '2025-01-15',
     recurrence: 'monthly',
     category: { id: 'utilities', name: 'Utilities', color: '#FEA47F', icon: '📱', subcategories: [] },
-    status: 'PAID'
-  }
+    status: 'PAID',
+  },
 ];
 
 // Summary data
@@ -355,5 +355,5 @@ export const mockSummary = {
   balance: 2960.77,
   upcomingBills: 1340,
   goalsSavings: 10450,
-  monthlyBudget: 2800
+  monthlyBudget: 2800,
 };

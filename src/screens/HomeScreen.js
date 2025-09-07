@@ -34,6 +34,7 @@ const HomeScreen = ({
   totalIncomePayments = 0,
   totalAdditionalIncome = 0,
   currency = 'AUD',
+  isNewPayPeriodForUI = false,
 
   // Rollover props
   rolloverAmount = 0,
@@ -201,6 +202,7 @@ const HomeScreen = ({
           rolloverAmount={rolloverAmount}
           isRolloverAvailable={isRolloverAvailable}
           onRolloverPress={onRolloverPress}
+          isNewPayPeriodForUI={isNewPayPeriodForUI}
         />
       </View>
 

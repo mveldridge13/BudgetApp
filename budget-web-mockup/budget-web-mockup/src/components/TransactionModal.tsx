@@ -40,10 +40,10 @@ const ModalIoniconSvg = ({ name, color, size }: { name: string; color: string; s
       <svg fill="none" stroke={color} viewBox="0 0 24 24" width={size} height={size}>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
-    )
+    ),
   };
 
-  return iconMap[name] || <div></div>;
+  return iconMap[name] || <div />;
 };
 
 export default function TransactionModal({ visible, onClose, onSave, isEditMode = false }: TransactionModalProps) {
@@ -70,7 +70,7 @@ export default function TransactionModal({ visible, onClose, onSave, isEditMode 
       weekday: 'long',
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -99,22 +99,22 @@ export default function TransactionModal({ visible, onClose, onSave, isEditMode 
       date: selectedDate,
       recurrence,
       transactionType,
-      paymentStatus: 'PAID'
+      paymentStatus: 'PAID',
     };
 
     onSave(transactionData);
     onClose();
   };
 
-  if (!visible) return null;
+  if (!visible) {return null;}
 
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center z-50" 
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50"
       style={{ backgroundColor: 'rgba(0, 0, 0, 0.05)' }}
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white rounded-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-hidden shadow-2xl border-2 border-gray-300"
         onClick={(e) => e.stopPropagation()}
       >
@@ -133,8 +133,8 @@ export default function TransactionModal({ visible, onClose, onSave, isEditMode 
             onClick={handleSave}
             disabled={!amount || !selectedCategory}
             className={`font-medium ${
-              amount && selectedCategory 
-                ? 'text-blue-600 hover:text-blue-700' 
+              amount && selectedCategory
+                ? 'text-blue-600 hover:text-blue-700'
                 : 'text-gray-400 cursor-not-allowed'
             }`}
           >
@@ -155,10 +155,10 @@ export default function TransactionModal({ visible, onClose, onSave, isEditMode 
                     : 'border-gray-200 text-gray-600 hover:border-red-300 hover:bg-red-50'
                 }`}
               >
-                <ModalIoniconSvg 
-                  name="trending-down" 
-                  color={transactionType === 'EXPENSE' ? '#FFFFFF' : '#6B7280'} 
-                  size={18} 
+                <ModalIoniconSvg
+                  name="trending-down"
+                  color={transactionType === 'EXPENSE' ? '#FFFFFF' : '#6B7280'}
+                  size={18}
                 />
                 <span className="ml-2 font-medium">Expense</span>
               </button>
@@ -170,10 +170,10 @@ export default function TransactionModal({ visible, onClose, onSave, isEditMode 
                     : 'border-gray-200 text-gray-600 hover:border-green-300 hover:bg-green-50'
                 }`}
               >
-                <ModalIoniconSvg 
-                  name="trending-up" 
-                  color={transactionType === 'INCOME' ? '#FFFFFF' : '#6B7280'} 
-                  size={18} 
+                <ModalIoniconSvg
+                  name="trending-up"
+                  color={transactionType === 'INCOME' ? '#FFFFFF' : '#6B7280'}
+                  size={18}
                 />
                 <span className="ml-2 font-medium">Income</span>
               </button>
