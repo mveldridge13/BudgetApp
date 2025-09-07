@@ -284,6 +284,178 @@ class PayPeriodService {
     // Return as ISO string for storage
     return newNextPayDate.toISOString();
   }
+
+  /**
+   * Filter transactions to current pay period only
+   * Returns array of transactions within the current pay period
+   */
+  static filterTransactionsForCurrentPeriod(transactions, nextPayDateString, frequency, transactionType = null) {
+    if (!transactions || !Array.isArray(transactions) || !nextPayDateString || !frequency) {
+      return [];
+    }
+
+    const payPeriodBoundaries = this.calculatePayPeriodBoundaries(
+      nextPayDateString,
+      frequency,
+      true // useCurrentPeriodForNewPeriod = true
+    );
+
+    if (!payPeriodBoundaries) {
+      return [];
+    }
+
+    const { start: periodStart, end: periodEnd } = payPeriodBoundaries;
+
+    return transactions.filter(transaction => {
+      try {
+        const transactionDate = new Date(transaction.date);
+        if (isNaN(transactionDate.getTime())) {
+          return false;
+        }
+
+        const inPeriod = transactionDate >= periodStart && transactionDate <= periodEnd;
+
+        // If transaction type filter is specified, apply it
+        if (transactionType) {
+          const matchesType = transactionType === 'EXPENSE'
+            ? (transaction.type === 'EXPENSE' || !transaction.type)
+            : transaction.type === transactionType;
+          return inPeriod && matchesType;
+        }
+
+        return inPeriod;
+      } catch (error) {
+        console.error('PayPeriodService: Error filtering transaction:', error, transaction);
+        return false;
+      }
+    });
+  }
+
+  /**
+   * Calculate total expenses for current pay period
+   * Returns the sum of all expense transactions in the current pay period
+   */
+  static calculateTotalExpensesForPeriod(transactions, nextPayDateString, frequency) {
+    const periodTransactions = this.filterTransactionsForCurrentPeriod(
+      transactions,
+      nextPayDateString,
+      frequency,
+      'EXPENSE',
+    );
+
+    return periodTransactions.reduce((sum, transaction) => {
+      try {
+        const amount = parseFloat(transaction.amount) || 0;
+        return sum + amount;
+      } catch (error) {
+        console.error('PayPeriodService: Error adding transaction amount:', error, transaction);
+        return sum;
+      }
+    }, 0);
+  }
+
+  /**
+   * Calculate total additional income for current pay period
+   * Returns the sum of all income transactions in the current pay period
+   */
+  static calculateTotalAdditionalIncomeForPeriod(transactions, nextPayDateString, frequency) {
+    const periodTransactions = this.filterTransactionsForCurrentPeriod(
+      transactions,
+      nextPayDateString,
+      frequency,
+      'INCOME',
+    );
+
+    return periodTransactions.reduce((sum, transaction) => {
+      try {
+        const amount = parseFloat(transaction.amount) || 0;
+        return sum + amount;
+      } catch (error) {
+        console.error('PayPeriodService: Error adding income transaction amount:', error, transaction);
+        return sum;
+      }
+    }, 0);
+  }
+
+  /**
+   * Check if today is the day before pay period ends (rollover availability)
+   */
+  static isRolloverAvailable(nextPayDateString, lastRolloverDate = null) {
+    if (!nextPayDateString) {
+      return false;
+    }
+
+    const nextPayDate = this.parseNextPayDate(nextPayDateString);
+    if (!nextPayDate) {
+      return false;
+    }
+
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Check if tomorrow is the pay date (today is day before)
+    const isDayBeforePayday = tomorrow.toDateString() === nextPayDate.toDateString();
+
+    // Also check we haven't already processed rollover for this period
+    const hasRecentRollover = lastRolloverDate &&
+      Math.abs(new Date(lastRolloverDate) - nextPayDate) < 2 * 24 * 60 * 60 * 1000; // Within 2 days
+
+    return isDayBeforePayday && !hasRecentRollover;
+  }
+
+  /**
+   * Check if we need to transition to a new pay period and return the new pay date
+   * Returns { shouldTransition: boolean, newNextPayDate: string | null }
+   */
+  static checkPayPeriodTransition(currentNextPayDateString, frequency) {
+    if (!currentNextPayDateString || !frequency) {
+      return { shouldTransition: false, newNextPayDate: null };
+    }
+
+    const nextPayDate = this.parseNextPayDate(currentNextPayDateString);
+    if (!nextPayDate) {
+      return { shouldTransition: false, newNextPayDate: null };
+    }
+
+    const now = new Date();
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const payDateStart = new Date(
+      nextPayDate.getFullYear(),
+      nextPayDate.getMonth(),
+      nextPayDate.getDate(),
+    );
+
+    // Check if today is on or after the pay date (new period has started)
+    if (todayStart >= payDateStart) {
+      // Calculate the next pay date based on frequency
+      const newNextPayDate = this.calculateNextPayDate(nextPayDate, frequency);
+      if (!newNextPayDate) {
+        return { shouldTransition: false, newNextPayDate: null };
+      }
+
+      // Don't transition if the dates are the same (prevents infinite loop)
+      const currentDateStr = currentNextPayDateString.includes('T')
+        ? currentNextPayDateString.split('T')[0]
+        : currentNextPayDateString;
+      const newDateStr = newNextPayDate.toISOString().split('T')[0];
+
+      if (currentDateStr === newDateStr) {
+        return { shouldTransition: false, newNextPayDate: null };
+      }
+
+      return {
+        shouldTransition: true,
+        newNextPayDate: newNextPayDate.toISOString(),
+      };
+    }
+
+    return { shouldTransition: false, newNextPayDate: null };
+  }
 }
 
 export default PayPeriodService;

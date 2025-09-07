@@ -897,16 +897,6 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const calculateTotalExpenses = useCallback(() => {
     try {
-      // Reduced logging to prevent console spam
-      // console.log('💰 calculateTotalExpenses START - Platform:', Platform.OS);
-      // console.log('💰 Input data check:', {
-      //   platform: Platform.OS,
-      //   transactionsLength: transactions?.length || 0,
-      //   incomeData: incomeData ? 'exists' : 'null',
-      //   nextPayDate: incomeData?.nextPayDate,
-      //   frequency: incomeData?.frequency,
-      // });
-
       if (!transactions?.length) {
         console.log('💰 No transactions, returning 0');
         return 0;
@@ -920,94 +910,16 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-
-      // Calculate period start and end using PayPeriodService
-      const payPeriodBoundaries = PayPeriodService.calculatePayPeriodBoundaries(
+      // Use PayPeriodService to calculate total expenses
+      const total = PayPeriodService.calculateTotalExpensesForPeriod(
+        transactions,
         incomeData.nextPayDate,
         incomeData.frequency,
-        true // useCurrentPeriodForNewPeriod = true for expenses
       );
-
-      if (!payPeriodBoundaries) {
-        console.error('💰 Failed to calculate pay period boundaries');
-        return 0;
-      }
-
-      const { start: periodStart, end: periodEnd } = payPeriodBoundaries;
-
-      // Ensure periodStart is not invalid
-      if (isNaN(periodStart.getTime())) {
-        console.error('💰 Invalid period start date calculated');
-        return 0;
-      }
-
-      console.log('💰 Period calculated:', {
-        platform: Platform.OS,
-        frequency: incomeData.frequency,
-        periodStart: periodStart.toISOString(),
-        periodEnd: periodEnd.toISOString(),
-        isNewPeriod: payPeriodBoundaries.isNewPeriod,
-        deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-
-      // Filter transactions for the period - only count EXPENSE transactions
-      const periodTransactions = transactions.filter(transaction => {
-        try {
-          const transactionDate = new Date(transaction.date);
-          if (isNaN(transactionDate.getTime())) {
-            return false;
-          }
-
-          const inPeriod =
-            transactionDate >= periodStart && transactionDate <= periodEnd;
-          const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
-
-          return inPeriod && isExpense;
-        } catch (error) {
-          console.error('🧮 Error checking transaction:', error, transaction);
-          return false;
-        }
-      });
-
-      console.log('💰 Transaction filtering results:', {
-        platform: Platform.OS,
-        totalTransactions: transactions.length,
-        periodTransactions: periodTransactions.length,
-        allTransactionDates: transactions.map(t => ({
-          date: t.date,
-          type: t.type,
-          amount: t.amount,
-          description: t.description,
-          inPeriod:
-            new Date(t.date) >= periodStart && new Date(t.date) <= periodEnd,
-        })),
-        periodTransactionAmounts: periodTransactions.map(t => ({
-          amount: t.amount,
-          date: t.date,
-          type: t.type,
-          description: t.description,
-        })),
-      });
-
-      // Sum up the expenses for the period
-      const total = periodTransactions.reduce((sum, transaction) => {
-        try {
-          const amount = parseFloat(transaction.amount) || 0;
-          return sum + amount;
-        } catch (error) {
-          console.error(
-            '🧮 Error adding transaction amount:',
-            error,
-            transaction,
-          );
-          return sum;
-        }
-      }, 0);
 
       console.log('💰 calculateTotalExpenses RESULT:', {
         platform: Platform.OS,
         total: total,
-        filteredTransactionCount: periodTransactions.length,
         totalTransactionCount: transactions.length,
       });
       return total;
@@ -1073,90 +985,12 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-      // Parse next pay date with error handling
-      let nextPayDate;
-      try {
-        // Handle both date-only format (YYYY-MM-DD) and full ISO string
-        if (incomeData.nextPayDate.includes('T')) {
-          nextPayDate = new Date(incomeData.nextPayDate);
-        } else if (incomeData.nextPayDate.includes('-')) {
-          // YYYY-MM-DD format
-          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-        } else {
-          // Legacy DD/MM/YYYY format
-          const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-          nextPayDate = new Date(
-            2000 + parseInt(yearStr, 10),
-            parseInt(monthStr, 10) - 1,
-            parseInt(dayStr, 10),
-            12,
-            0,
-            0,
-            0,
-          );
-        }
-
-        if (isNaN(nextPayDate.getTime())) {
-          throw new Error('Invalid date after parsing');
-        }
-      } catch (dateError) {
-        console.error(
-          '🧮 Date parsing error for additional income:',
-          dateError,
-        );
-        nextPayDate = new Date(); // Fallback to current date
-      }
-
-      // Calculate period boundaries (same logic as calculateTotalExpenses)
-      let periodStart, periodEnd;
-      periodEnd = new Date(nextPayDate);
-      periodEnd.setHours(23, 59, 59, 999);
-
-      if (incomeData.frequency.toLowerCase() === 'weekly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - 7);
-      } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - 14);
-      } else if (incomeData.frequency.toLowerCase() === 'monthly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setMonth(periodStart.getMonth() - 1);
-      } else {
-        // Default to monthly if frequency is unknown
-        periodStart = new Date(nextPayDate);
-        periodStart.setMonth(periodStart.getMonth() - 1);
-      }
-
-      periodStart.setHours(0, 0, 0, 0);
-
-      // Filter transactions for the period - only count INCOME transactions
-      const periodIncomeTransactions = transactions.filter(transaction => {
-        try {
-          const transactionDate = new Date(transaction.date);
-          if (isNaN(transactionDate.getTime())) {
-            return false;
-          }
-
-          const inPeriod =
-            transactionDate >= periodStart && transactionDate <= periodEnd;
-          const isIncome = transaction.type === 'INCOME';
-
-          return inPeriod && isIncome;
-        } catch (error) {
-          console.error(
-            '🧮 Error checking income transaction:',
-            error,
-            transaction,
-          );
-          return false;
-        }
-      });
-
-      // Calculate total additional income
-      const total = periodIncomeTransactions.reduce((sum, transaction) => {
-        const amount = parseFloat(transaction.amount) || 0;
-        return sum + amount;
-      }, 0);
+      // Use PayPeriodService to calculate total additional income
+      const total = PayPeriodService.calculateTotalAdditionalIncomeForPeriod(
+        transactions,
+        incomeData.nextPayDate,
+        incomeData.frequency,
+      );
 
       return total;
     } catch (error) {
@@ -1213,30 +1047,13 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      // Parse nextPayDate as local date
-      let nextPayDate;
-      if (incomeData.nextPayDate.includes('T')) {
-        const dateOnly = incomeData.nextPayDate.split('T')[0];
-        nextPayDate = new Date(dateOnly + 'T12:00:00');
-      } else {
-        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-      }
+      // Use PayPeriodService to check rollover availability
+      const isAvailable = PayPeriodService.isRolloverAvailable(
+        incomeData.nextPayDate,
+        lastRolloverDate,
+      );
 
-      const today = new Date();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      // Check if tomorrow is the pay date (today is day before)
-      const isDayBeforePayday =
-        tomorrow.toDateString() === nextPayDate.toDateString();
-
-      // Also check we haven't already processed rollover for this period
-      const hasRecentRollover =
-        lastRolloverDate &&
-        Math.abs(new Date(lastRolloverDate) - nextPayDate) <
-          2 * 24 * 60 * 60 * 1000; // Within 2 days
-
-      setIsRolloverAvailable(isDayBeforePayday && !hasRecentRollover);
+      setIsRolloverAvailable(isAvailable);
     } catch (error) {
       console.error('🔄 Error checking rollover availability:', error);
       setIsRolloverAvailable(false);
@@ -1444,156 +1261,65 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      // Parse nextPayDate as local date
-      let nextPayDate;
-      if (incomeData.nextPayDate.includes('T')) {
-        const dateOnly = incomeData.nextPayDate.split('T')[0];
-        nextPayDate = new Date(dateOnly + 'T12:00:00');
-      } else {
-        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      // Use PayPeriodService to check if transition is needed
+      const transitionResult = PayPeriodService.checkPayPeriodTransition(
+        incomeData.nextPayDate,
+        incomeData.frequency,
+      );
+
+      if (!transitionResult.shouldTransition) {
+        return;
       }
 
-      const now = new Date(); // Current local time
-      const todayStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      );
-      const payDateStart = new Date(
-        nextPayDate.getFullYear(),
-        nextPayDate.getMonth(),
-        nextPayDate.getDate(),
-      );
+      console.log('🔄 Pay period transition detected:', {
+        currentNextPayDate: incomeData.nextPayDate,
+        newNextPayDate: transitionResult.newNextPayDate,
+        frequency: incomeData.frequency,
+      });
 
+      // Update the user profile with the new next pay date
+      try {
+        const updateData = {
+          nextPayDate: transitionResult.newNextPayDate,
+        };
 
-      // Check if today is on or after the pay date (new period has started)
-      if (todayStart >= payDateStart) {
-        // Calculate the next pay date based on frequency
-        // Create date explicitly to avoid timezone issues
-        let newNextPayDate;
-        let dateOnly;
-        if (incomeData.nextPayDate.includes('T')) {
-          dateOnly = incomeData.nextPayDate.split('T')[0]; // "2025-09-07"
-        } else {
-          dateOnly = incomeData.nextPayDate; // "2025-09-07"
+        await TrendAPIService.updateIncomeProfile(updateData);
+
+        // Update local state
+        setIncomeData(prev => ({
+          ...prev,
+          nextPayDate: transitionResult.newNextPayDate.split('T')[0],
+        }));
+
+        // Calculate if there were leftover funds from previous period
+        const totalGoalContributions = goals.reduce(
+          (sum, goal) => sum + (goal.autoContribute || 0),
+          0,
+        );
+
+        const previousPeriodSurplus = Math.max(
+          0,
+          incomeData.income +
+            rolloverAmount -
+            totalExpenses -
+            totalGoalContributions,
+        );
+
+        // If there's a surplus and rollover isn't already available, make it available
+        if (previousPeriodSurplus > 0 && !isRolloverAvailable) {
+          setIsRolloverAvailable(true);
         }
+      } catch (error) {
+        console.error('Pay period transition failed to update next pay date:', error);
 
-        // Parse date parts explicitly to avoid timezone conversion
-        const [year, month, day] = dateOnly
-          .split('-')
-          .map(num => parseInt(num, 10));
-        newNextPayDate = new Date(year, month - 1, day, 12, 0, 0); // month is 0-indexed
+        // Still update local state even if server update fails
+        // This prevents the app from getting stuck in an infinite loop
+        setIncomeData(prev => ({
+          ...prev,
+          nextPayDate: transitionResult.newNextPayDate.split('T')[0],
+        }));
 
-
-        if (incomeData.frequency.toLowerCase() === 'weekly') {
-          const newDay = newNextPayDate.getDate() + 7;
-          newNextPayDate.setDate(newDay);
-          console.log('🔄 Added 7 days, new day should be:', newDay);
-        } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
-          const currentDay = newNextPayDate.getDate();
-          const newDay = currentDay + 14;
-          console.log('🔄 Fortnightly: currentDay =', currentDay, ', adding 14 =', newDay);
-          newNextPayDate.setDate(newDay);
-          console.log('🔄 After setDate, date is now:', newNextPayDate.toISOString());
-        } else if (incomeData.frequency.toLowerCase() === 'monthly') {
-          newNextPayDate.setMonth(newNextPayDate.getMonth() + 1);
-        } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
-          newNextPayDate.setMonth(newNextPayDate.getMonth() + 6);
-        } else if (incomeData.frequency.toLowerCase() === 'yearly') {
-          newNextPayDate.setFullYear(newNextPayDate.getFullYear() + 1);
-        }
-
-        console.log('🔄 After adding frequency:', {
-          frequency: incomeData.frequency,
-          newDate: newNextPayDate.toISOString(),
-          newDateLocal: newNextPayDate.toLocaleDateString(),
-        });
-
-        // Compare dates properly - extract just date parts
-        const currentDateStr = incomeData.nextPayDate.includes('T')
-          ? incomeData.nextPayDate.split('T')[0]
-          : incomeData.nextPayDate;
-        const newDateStr = newNextPayDate.toISOString().split('T')[0];
-
-        console.log('🔄 Pay period transition: Calculating new date:', {
-          currentNextPayDate: currentDateStr,
-          calculatedNewDate: newDateStr,
-          frequency: incomeData.frequency,
-          willUpdate: currentDateStr !== newDateStr,
-        });
-
-        // Don't update if the dates are the same (prevents infinite loop)
-        if (currentDateStr === newDateStr) {
-          console.log(
-            '🔄 Pay period transition: Skipping - dates are the same',
-          );
-          return;
-        }
-
-        // Update the user profile with the new next pay date
-        try {
-          const updateData = {
-            nextPayDate: new Date(
-              newNextPayDate.getFullYear(),
-              newNextPayDate.getMonth(),
-              newNextPayDate.getDate(),
-              12,
-              0,
-              0,
-            ).toISOString(), // Send as full ISO string at noon to match backend expectations
-          };
-
-          await TrendAPIService.updateIncomeProfile(updateData);
-
-          // Update local state
-          setIncomeData(prev => ({
-            ...prev,
-            nextPayDate: newNextPayDate.toISOString().split('T')[0],
-          }));
-
-          // Calculate if there were leftover funds from previous period
-          const totalGoalContributions = goals.reduce(
-            (sum, goal) => sum + (goal.autoContribute || 0),
-            0,
-          );
-
-          const previousPeriodSurplus = Math.max(
-            0,
-            incomeData.income +
-              rolloverAmount -
-              totalExpenses -
-              totalGoalContributions,
-          );
-
-          // If there's a surplus and rollover isn't already available, make it available
-          if (previousPeriodSurplus > 0 && !isRolloverAvailable) {
-            setIsRolloverAvailable(true);
-          }
-        } catch (error) {
-          console.error(
-            'Pay period transition failed to update next pay date:',
-            error,
-          );
-
-          // More detailed error logging
-          console.error('🔄 Pay period transition error details:', {
-            errorMessage: error.message,
-            errorStack: error.stack,
-            currentNextPayDate: incomeData.nextPayDate,
-            newNextPayDate: newNextPayDate.toISOString().split('T')[0],
-            frequency: incomeData.frequency,
-            apiEndpoint: '/users/income',
-          });
-
-          // Still update local state even if server update fails
-          // This prevents the app from getting stuck in an infinite loop
-          setIncomeData(prev => ({
-            ...prev,
-            nextPayDate: newNextPayDate.toISOString().split('T')[0],
-          }));
-
-          // Don't throw - this shouldn't break the app, just log the error
-        }
+        // Don't throw - this shouldn't break the app, just log the error
       }
     } catch (error) {
       console.error('Pay period transition error:', error);
@@ -2134,43 +1860,22 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      // Calculate current pay period boundaries (same logic as calculateTotalExpenses)
+      // Calculate current pay period boundaries using PayPeriodService
       let periodStart, periodEnd;
       try {
-        // Parse nextPayDate as local date
-        let nextPayDate;
-        if (incomeData.nextPayDate.includes('T')) {
-          const dateOnly = incomeData.nextPayDate.split('T')[0];
-          nextPayDate = new Date(dateOnly + 'T12:00:00');
-        } else {
-          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+        const payPeriodBoundaries = PayPeriodService.calculatePayPeriodBoundaries(
+          incomeData.nextPayDate,
+          incomeData.frequency,
+          true, // useCurrentPeriodForNewPeriod = true
+        );
+
+        if (!payPeriodBoundaries) {
+          console.error('🔍 HOME_CONTAINER: Failed to calculate pay period boundaries for income payments');
+          return;
         }
 
-        periodEnd = new Date(nextPayDate);
-        periodEnd.setHours(23, 59, 59, 999);
-
-        // Calculate previous pay date based on frequency
-        if (incomeData.frequency.toLowerCase() === 'weekly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 7);
-        } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 14);
-        } else if (incomeData.frequency.toLowerCase() === 'monthly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 6);
-        } else if (incomeData.frequency.toLowerCase() === 'yearly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setFullYear(periodStart.getFullYear() - 1);
-        } else {
-          // Default to monthly
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        }
-        periodStart.setHours(0, 0, 0, 0);
+        periodStart = payPeriodBoundaries.start;
+        periodEnd = payPeriodBoundaries.end;
       } catch (dateError) {
         console.error(
           '🔍 HOME_CONTAINER: Error calculating pay period for income payments:',
