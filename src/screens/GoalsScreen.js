@@ -28,6 +28,15 @@ const GoalsScreen = ({route, navigation}) => {
   // Extract rollover parameters from route
   const rolloverParams = route?.params || {};
   const {fromRollover, rolloverAmount, rolloverFrequency} = rolloverParams;
+  
+  // Debug logging for rollover parameters
+  console.log('🔍 GOALS_SCREEN: Navigation params received:', {
+    hasParams: !!route?.params,
+    rolloverParams,
+    fromRollover,
+    rolloverAmount,
+    rolloverFrequency,
+  });
 
   // Get currency setting from context
   const {appSettings} = useAppSettings();
@@ -199,6 +208,16 @@ const GoalsScreen = ({route, navigation}) => {
 
   // Handle rollover flow - automatically open Add Goal modal when coming from rollover
   useEffect(() => {
+    console.log('🔍 GOALS_SCREEN: Rollover effect triggered with state:', {
+      fromRollover,
+      rolloverAmount,
+      rolloverFrequency,
+      showAddGoal,
+      hasProcessedRollover,
+      pendingRolloverAllocation,
+      rolloverCompleted,
+    });
+    
     // Only open modal if we have fresh rollover params and haven't completed the rollover process
     if (fromRollover && rolloverAmount && !showAddGoal && !hasProcessedRollover && !pendingRolloverAllocation && !rolloverCompleted) {
       console.log('🔄 GoalsScreen: Opening Add Goal modal for rollover flow:', {
@@ -211,6 +230,10 @@ const GoalsScreen = ({route, navigation}) => {
         amount: rolloverAmount,
         frequency: rolloverFrequency,
       });
+      console.log('🔍 GOALS_SCREEN: Set pendingRolloverAllocation:', {
+        amount: rolloverAmount,
+        frequency: rolloverFrequency,
+      });
 
       // Mark as processed to prevent loops
       setHasProcessedRollover(true);
@@ -218,6 +241,8 @@ const GoalsScreen = ({route, navigation}) => {
       // Automatically open Add Goal modal
       clearEditingGoal();
       setShowAddGoal(true);
+    } else {
+      console.log('🔍 GOALS_SCREEN: Rollover effect conditions not met');
     }
   }, [fromRollover, rolloverAmount, rolloverFrequency, showAddGoal, hasProcessedRollover, pendingRolloverAllocation, rolloverCompleted, clearEditingGoal]);
 
@@ -283,6 +308,13 @@ const GoalsScreen = ({route, navigation}) => {
           }
 
           // Handle rollover allocation if this goal was created from rollover flow
+          console.log('🔍 GOALS_SCREEN: Checking rollover allocation:', {
+            hasPendingRolloverAllocation: !!pendingRolloverAllocation,
+            pendingRolloverAllocation,
+            hasGoalId: !!result.goal?.id,
+            goalId: result.goal?.id,
+          });
+          
           if (pendingRolloverAllocation && result.goal?.id) {
             try {
               console.log('🔄 GOALS_SCREEN: Allocating rollover funds to new goal:', {
@@ -309,6 +341,19 @@ const GoalsScreen = ({route, navigation}) => {
                 result.goal.id,
                 contributionData,
               );
+
+              // Emit event to notify HomeContainer to reload income payments
+              try {
+                const {DeviceEventEmitter} = require('react-native');
+                DeviceEventEmitter.emit('goalIncomePaymentMade', {
+                  goalId: result.goal.id,
+                  amount: pendingRolloverAllocation.amount,
+                  type: 'ROLLOVER',
+                });
+                console.log('🔍 GOALS_SCREEN: Emitted goalIncomePaymentMade event for ROLLOVER');
+              } catch (eventError) {
+                console.error('🔍 GOALS_SCREEN: Failed to emit goalIncomePaymentMade event:', eventError);
+              }
 
               // Process rollover completion on backend
               await TrendAPIService.processRollover({

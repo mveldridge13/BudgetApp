@@ -20,6 +20,7 @@ import useGoals from '../hooks/useGoals';
 import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
 import PayPeriodService from '../services/PayPeriodService';
+import RolloverService from '../services/RolloverService';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import AddTournamentContainer from './AddTournamentContainer';
 import RolloverOptionsModal from '../components/RolloverOptionsModal';
@@ -156,7 +157,6 @@ const HomeContainer = ({navigation}) => {
   // Reload goals when screen comes into focus (e.g., returning from GoalsScreen)
   // Only loads from cache now - no API calls to prevent race conditions
   const loadGoalsRef = useRef();
-  const rolloverLoadTimeRef = useRef(0);
 
   useEffect(() => {
     loadGoalsRef.current = loadGoals;
@@ -722,25 +722,21 @@ const HomeContainer = ({navigation}) => {
           }
         }, 100); // Small delay to ensure transaction UI has updated
 
-        // 🔄 ROLLOVER LOGIC: If rollover is available and this is an expense, reduce rollover amount
+        // 🔄 ROLLOVER LOGIC: If rollover is available and this is an expense, reduce rollover amount using RolloverService
         if (
           isRolloverAvailable &&
           transaction.type === 'EXPENSE' &&
           rolloverAmount > 0 &&
           !isEditing // Only for new transactions, not edits
         ) {
-          const newRolloverAmount = Math.max(
-            0,
-            rolloverAmount - transaction.amount,
-          );
           try {
-            await TrendAPIService.processRollover({
-              amount: newRolloverAmount,
-            });
-            setRolloverAmount(newRolloverAmount);
-            console.log(
-              `🔄 Rollover reduced from $${rolloverAmount} to $${newRolloverAmount} due to $${transaction.amount} expense`,
+            const result = await RolloverService.reduceRolloverForExpense(
+              rolloverAmount,
+              transaction.amount,
             );
+            if (result.success) {
+              setRolloverAmount(result.newRolloverAmount);
+            }
           } catch (rolloverError) {
             console.error(
               '🔄 Failed to update rollover amount:',
@@ -958,7 +954,7 @@ const HomeContainer = ({navigation}) => {
   const isNewPayPeriodForUI = useMemo(() => {
     return PayPeriodService.shouldShowNewPeriodMessage(
       incomeData?.nextPayDate,
-      incomeData?.frequency
+      incomeData?.frequency,
     );
   }, [incomeData?.nextPayDate, incomeData?.frequency]);
 
@@ -1021,38 +1017,25 @@ const HomeContainer = ({navigation}) => {
   // ROLLOVER CALCULATION AND MANAGEMENT
   // ==============================================
 
-  // Load current rollover amount from backend
+  // Load current rollover amount from backend using RolloverService
   const loadRolloverAmount = useCallback(async () => {
     try {
-      if (!TrendAPIService.isAuthenticated()) {
-        return;
-      }
-
-      // Track when we're loading rollover data
-      rolloverLoadTimeRef.current = Date.now();
-
-      const rolloverData = await TrendAPIService.getRolloverAmount();
-      setRolloverAmount(rolloverData.rolloverAmount || 0);
+      const rolloverData = await RolloverService.loadRolloverAmount();
+      console.log('🔄 HomeContainer: Loaded rollover data:', rolloverData);
+      setRolloverAmount(rolloverData.rolloverAmount);
       setLastRolloverDate(rolloverData.lastRolloverDate);
     } catch (error) {
       console.error('🔄 Error loading rollover amount:', error);
     }
   }, []);
 
-  // Check if today is the day before pay period ends
+  // Check if today is the day before pay period ends using RolloverService
   const checkRolloverAvailability = useCallback(() => {
     try {
-      if (!incomeData?.nextPayDate) {
-        setIsRolloverAvailable(false);
-        return;
-      }
-
-      // Use PayPeriodService to check rollover availability
-      const isAvailable = PayPeriodService.isRolloverAvailable(
-        incomeData.nextPayDate,
+      const isAvailable = RolloverService.checkRolloverAvailability(
+        incomeData?.nextPayDate,
         lastRolloverDate,
       );
-
       setIsRolloverAvailable(isAvailable);
     } catch (error) {
       console.error('🔄 Error checking rollover availability:', error);
@@ -1067,65 +1050,36 @@ const HomeContainer = ({navigation}) => {
 
   // Handle goal allocation confirmation from modal
   const handleGoalAllocationConfirm = useCallback(
-    async ({goalAllocations, totalAllocated, remainingRollover}) => {
+    async ({goalAllocations}) => {
       try {
-        console.log('🎯 Processing goal allocations:', {
-          totalAllocations: goalAllocations.length,
-          totalAllocated,
-          remainingRollover,
-        });
-
-        // Add contributions to selected goals
-        for (const allocation of goalAllocations) {
-          try {
-            await addGoalContribution(
-              allocation.goalId,
-              allocation.amount,
-              'ROLLOVER',
-              `Rollover allocation from ${incomeData.frequency} period`,
-            );
-            console.log(
-              `🎯 Added $${allocation.amount.toFixed(2)} to goal: ${
-                allocation.goal.title
-              }`,
-            );
-          } catch (goalError) {
-            console.error(
-              `🎯 Failed to add contribution to goal ${allocation.goal.title}:`,
-              goalError,
-            );
-          }
-        }
-
-        // Update rollover amount with remaining funds
-        await TrendAPIService.processRollover({
-          amount: remainingRollover,
-        });
-
-        setRolloverAmount(remainingRollover);
-
-        // Mark this period as processed if all funds were allocated
-        if (remainingRollover === 0) {
-          setLastRolloverDate(new Date().toISOString());
-          setIsRolloverAvailable(false);
-        }
-
-        setShowGoalAllocationModal(false);
-
-        // Show success message
-        const allocatedGoalsCount = goalAllocations.length;
-        Alert.alert(
-          'Goal Allocation Complete',
-          `$${totalAllocated.toFixed(
-            2,
-          )} allocated to ${allocatedGoalsCount} goal${
-            allocatedGoalsCount > 1 ? 's' : ''
-          }${
-            remainingRollover > 0
-              ? `\n$${remainingRollover.toFixed(2)} remains for next period`
-              : ''
-          }`,
+        // Process goal allocations using RolloverService
+        const result = await RolloverService.processGoalAllocations(
+          goalAllocations,
+          addGoalContribution,
+          incomeData,
         );
+
+        if (result.success) {
+          // Update rollover amount
+          console.log(
+            '🏠 HomeContainer: Updating rollover amount from',
+            rolloverAmount,
+            'to',
+            result.newRolloverAmount,
+          );
+          setRolloverAmount(result.newRolloverAmount);
+
+          // Mark period as processed if all funds were allocated
+          if (result.shouldMarkProcessed) {
+            setLastRolloverDate(RolloverService.markRolloverPeriodProcessed());
+            setIsRolloverAvailable(false);
+          }
+
+          setShowGoalAllocationModal(false);
+
+          // Show success message
+          Alert.alert('Goal Allocation Complete', result.message);
+        }
       } catch (error) {
         console.error('🔄 Error processing goal allocation:', error);
         Alert.alert(
@@ -1134,86 +1088,62 @@ const HomeContainer = ({navigation}) => {
         );
       }
     },
-    [incomeData, addGoalContribution],
+    [addGoalContribution, incomeData, rolloverAmount],
   );
 
-  // Handle rollover decision from modal
+  // Handle rollover decision from modal using RolloverService
   const handleRolloverConfirm = useCallback(
     async rolloverDecision => {
       try {
         const {option} = rolloverDecision;
 
-        // Calculate available surplus (Left to Spend amount)
-        const totalGoalContributions = goals.reduce(
-          (sum, goal) => sum + (goal.autoContribute || 0),
-          0,
-        );
-        const availableSurplus = Math.max(
-          0,
-          incomeData.income +
-            rolloverAmount -
-            totalExpenses -
-            totalGoalContributions,
+        // Calculate available surplus using RolloverService
+        const availableSurplus = RolloverService.calculateAvailableSurplus(
+          incomeData,
+          rolloverAmount,
+          totalExpenses,
+          goals,
         );
 
-        if (option === 'rollover') {
-          // Roll over to next pay period - update user's total rollover amount
-          const newTotalRollover = rolloverAmount + availableSurplus;
+        // Process rollover decision using RolloverService
+        const result = await RolloverService.processRolloverDecision({
+          option,
+          availableSurplus,
+          currentRollover: rolloverAmount,
+          incomeData,
+          goals,
+          addGoalContribution,
+          navigation,
+        });
 
-          await TrendAPIService.processRollover({
-            amount: newTotalRollover,
-          });
+        if (result.success) {
+          // Update rollover amount if needed
+          if (typeof result.newRolloverAmount === 'number') {
+            setRolloverAmount(result.newRolloverAmount);
+          }
 
-          setRolloverAmount(newTotalRollover);
+          // Mark period as processed if needed
+          if (result.shouldMarkProcessed) {
+            setLastRolloverDate(RolloverService.markRolloverPeriodProcessed());
+            setIsRolloverAvailable(false);
+          }
 
-          Alert.alert(
-            'Rollover Complete',
-            `$${availableSurplus.toFixed(2)} rolled over to next ${
-              incomeData.frequency
-            } period`,
-          );
-        } else if (option === 'goals') {
-          // Check if we have active goals for allocation
-          const activeGoals = goals.filter(
-            goal =>
-              !goal.completed &&
-              (goal.type === 'debt'
-                ? goal.current > 0
-                : goal.current < goal.target),
-          );
-
-          if (activeGoals.length > 0) {
-            // Open goal allocation modal to let user choose specific allocations
+          // Close modal if needed
+          if (result.shouldCloseModal) {
             setShowRolloverModal(false);
+          }
+
+          // Open goal allocation modal if needed
+          if (result.shouldOpenGoalAllocation) {
             setShowGoalAllocationModal(true);
             return; // Exit early, allocation will be handled by the modal
-          } else {
-            // No active goals, navigate to create goal flow
-            setShowRolloverModal(false);
-            navigation.navigate('Goals', {
-              fromRollover: true,
-              rolloverAmount: availableSurplus,
-              rolloverFrequency: incomeData.frequency,
-              returnToHome: true,
-            });
-            return;
           }
-        } else if (option === 'createGoal') {
-          // Navigate to Goals screen to create a new goal with rollover context
-          setShowRolloverModal(false);
-          navigation.navigate('Goals', {
-            fromRollover: true,
-            rolloverAmount: availableSurplus,
-            rolloverFrequency: incomeData.frequency,
-            returnToHome: true, // Flag to indicate we should refresh rollover on return
-          });
-          return; // Exit early, don't mark rollover as processed yet
-        }
 
-        // Mark this period as processed
-        setLastRolloverDate(new Date().toISOString());
-        setIsRolloverAvailable(false);
-        setShowRolloverModal(false);
+          // Show alert if provided
+          if (result.alertTitle && result.alertMessage) {
+            Alert.alert(result.alertTitle, result.alertMessage);
+          }
+        }
       } catch (error) {
         console.error('🔄 Error processing rollover:', error);
         Alert.alert('Error', 'Unable to process rollover. Please try again.');
@@ -1291,26 +1221,28 @@ const HomeContainer = ({navigation}) => {
           nextPayDate: transitionResult.newNextPayDate.split('T')[0],
         }));
 
-        // Calculate if there were leftover funds from previous period
-        const totalGoalContributions = goals.reduce(
-          (sum, goal) => sum + (goal.autoContribute || 0),
-          0,
-        );
-
-        const previousPeriodSurplus = Math.max(
-          0,
-          incomeData.income +
-            rolloverAmount -
-            totalExpenses -
-            totalGoalContributions,
+        // Calculate if there were leftover funds from previous period using RolloverService
+        const previousPeriodSurplus = RolloverService.calculateAvailableSurplus(
+          incomeData,
+          rolloverAmount,
+          totalExpenses,
+          goals,
         );
 
         // If there's a surplus and rollover isn't already available, make it available
-        if (previousPeriodSurplus > 0 && !isRolloverAvailable) {
+        if (
+          RolloverService.shouldMakeRolloverAvailableAfterTransition(
+            previousPeriodSurplus,
+            isRolloverAvailable,
+          )
+        ) {
           setIsRolloverAvailable(true);
         }
       } catch (error) {
-        console.error('Pay period transition failed to update next pay date:', error);
+        console.error(
+          'Pay period transition failed to update next pay date:',
+          error,
+        );
 
         // Still update local state even if server update fails
         // This prevents the app from getting stuck in an infinite loop
@@ -1863,19 +1795,32 @@ const HomeContainer = ({navigation}) => {
       // Calculate current pay period boundaries using PayPeriodService
       let periodStart, periodEnd;
       try {
-        const payPeriodBoundaries = PayPeriodService.calculatePayPeriodBoundaries(
-          incomeData.nextPayDate,
-          incomeData.frequency,
-          true, // useCurrentPeriodForNewPeriod = true
-        );
+        const payPeriodBoundaries =
+          PayPeriodService.calculatePayPeriodBoundaries(
+            incomeData.nextPayDate,
+            incomeData.frequency,
+            true, // useCurrentPeriodForNewPeriod = true
+          );
 
         if (!payPeriodBoundaries) {
-          console.error('🔍 HOME_CONTAINER: Failed to calculate pay period boundaries for income payments');
+          console.error(
+            '🔍 HOME_CONTAINER: Failed to calculate pay period boundaries for income payments',
+          );
           return;
         }
 
         periodStart = payPeriodBoundaries.start;
         periodEnd = payPeriodBoundaries.end;
+
+        console.log(
+          '🔍 HOME_CONTAINER: Pay period boundaries for income payment calculation:',
+          {
+            start: periodStart.toLocaleString(),
+            end: periodEnd.toLocaleString(),
+            nextPayDate: incomeData.nextPayDate,
+            frequency: incomeData.frequency,
+          },
+        );
       } catch (dateError) {
         console.error(
           '🔍 HOME_CONTAINER: Error calculating pay period for income payments:',
@@ -1898,30 +1843,91 @@ const HomeContainer = ({navigation}) => {
             );
 
             if (allContributions && Array.isArray(allContributions)) {
+              console.log(
+                `🔍 HOME_CONTAINER: All contributions for goal ${goal.id} (${goal.title}):`,
+                allContributions.map(c => ({
+                  id: c.id,
+                  type: c.type,
+                  amount: c.amount,
+                  date: c.date,
+                  created: new Date(c.date).toLocaleString(),
+                })),
+              );
+
               // Filter contributions to current pay period only
               const currentPeriodContributions = allContributions.filter(
                 contrib => {
-                  if (!contrib.contributionDate) {
+                  // LESSON LEARNED: Backend returns 'date' field, not 'contributionDate'
+                  if (!contrib.date) {
                     return false;
                   }
 
-                  const contribDate = new Date(contrib.contributionDate);
-                  return contribDate >= periodStart && contribDate <= periodEnd;
+                  const contribDate = new Date(contrib.date);
+                  const isInPeriod =
+                    contribDate >= periodStart && contribDate <= periodEnd;
+                  console.log(
+                    `🔍 HOME_CONTAINER: Contribution ${contrib.id} date check:`,
+                    {
+                      date: contrib.date,
+                      parsed: contribDate.toLocaleString(),
+                      periodStart: periodStart.toLocaleString(),
+                      periodEnd: periodEnd.toLocaleString(),
+                      isInPeriod,
+                    },
+                  );
+                  return isInPeriod;
                 },
+              );
+
+              console.log(
+                `🔍 HOME_CONTAINER: Current period contributions for goal ${goal.id}:`,
+                currentPeriodContributions.map(c => ({
+                  id: c.id,
+                  type: c.type,
+                  amount: c.amount,
+                  date: c.date,
+                })),
               );
 
               const incomeTotal = currentPeriodContributions.reduce(
                 (sum, contrib) => {
-                  if (contrib.type === 'MANUAL') {
-                    // MANUAL contributions subtract from income (money going to goals)
-                    return sum + (contrib.amount || 0);
+                  let newSum = sum;
+                  if (
+                    contrib.type === 'MANUAL' ||
+                    contrib.type === 'ROLLOVER'
+                  ) {
+                    // MANUAL and ROLLOVER contributions subtract from income (money going to goals)
+                    newSum = sum + (contrib.amount || 0);
+                    console.log(
+                      `🔍 HOME_CONTAINER: Adding ${contrib.type} contribution:`,
+                      {
+                        amount: contrib.amount,
+                        previousSum: sum,
+                        newSum,
+                      },
+                    );
                   } else if (contrib.type === 'WITHDRAWAL') {
                     // WITHDRAWAL contributions add back to income (money coming back from goals)
-                    return sum - (contrib.amount || 0);
+                    newSum = sum - (contrib.amount || 0);
+                    console.log(
+                      '🔍 HOME_CONTAINER: Subtracting WITHDRAWAL contribution:',
+                      {
+                        amount: contrib.amount,
+                        previousSum: sum,
+                        newSum,
+                      },
+                    );
                   } else {
                     // Other types (AUTOMATIC, TRANSACTION, INTEREST, WINDFALL) don't affect income
-                    return sum;
+                    console.log(
+                      `🔍 HOME_CONTAINER: Ignoring ${contrib.type} contribution:`,
+                      {
+                        amount: contrib.amount,
+                        sum: newSum,
+                      },
+                    );
                   }
+                  return newSum;
                 },
                 0,
               );
@@ -1957,14 +1963,28 @@ const HomeContainer = ({navigation}) => {
     } catch (error) {
       console.error('🔍 HOME_CONTAINER: Error loading income payments:', error);
     }
-  }, [goals]);
+  }, [goals, incomeData?.nextPayDate, incomeData?.frequency]);
 
   // Load income payments when goals change
   useEffect(() => {
+    console.log(
+      '🔍 HOME_CONTAINER: loadTotalIncomePayments useEffect triggered:',
+      {
+        goalsLength: goals.length,
+        hasNextPayDate: !!incomeData?.nextPayDate,
+        nextPayDate: incomeData?.nextPayDate,
+      },
+    );
+
     if (goals.length > 0) {
+      console.log('🔍 HOME_CONTAINER: Calling loadTotalIncomePayments...');
       loadTotalIncomePayments();
+    } else {
+      console.log(
+        '🔍 HOME_CONTAINER: Skipping loadTotalIncomePayments - no goals loaded yet',
+      );
     }
-  }, [goals.length, incomeData?.nextPayDate]); // Add nextPayDate dependency to recalculate on pay period changes
+  }, [goals.length, incomeData?.nextPayDate, loadTotalIncomePayments]); // Add nextPayDate dependency to recalculate on pay period changes
 
   // Store current loadTotalIncomePayments in a ref for event handlers
   const loadTotalIncomePaymentsRef = useRef(loadTotalIncomePayments);
@@ -2099,12 +2119,11 @@ const HomeContainer = ({navigation}) => {
         visible={showRolloverModal}
         onClose={() => setShowRolloverModal(false)}
         onConfirm={handleRolloverConfirm}
-        availableAmount={Math.max(
-          0,
-          (incomeData?.income || 0) +
-            rolloverAmount -
-            totalExpenses -
-            goals.reduce((sum, goal) => sum + (goal.autoContribute || 0), 0),
+        availableAmount={RolloverService.calculateAvailableSurplus(
+          incomeData,
+          rolloverAmount,
+          totalExpenses,
+          goals,
         )}
         currency={currency}
         goals={goals}
@@ -2116,12 +2135,11 @@ const HomeContainer = ({navigation}) => {
         visible={showGoalAllocationModal}
         onClose={() => setShowGoalAllocationModal(false)}
         onConfirm={handleGoalAllocationConfirm}
-        availableAmount={Math.max(
-          0,
-          (incomeData?.income || 0) +
-            rolloverAmount -
-            totalExpenses -
-            goals.reduce((sum, goal) => sum + (goal.autoContribute || 0), 0),
+        availableAmount={RolloverService.calculateAvailableSurplus(
+          incomeData,
+          rolloverAmount,
+          totalExpenses,
+          goals,
         )}
         currency={currency}
         goals={goals}
