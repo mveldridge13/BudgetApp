@@ -1831,6 +1831,71 @@ const HomeContainer = ({navigation}) => {
 
       let totalPayments = 0;
 
+      // Get rollover entries for current pay period and add to total payments
+      try {
+        const allRolloverEntries = await RolloverService.loadRolloverEntries();
+
+        // Filter entries to current pay period on frontend
+        const rolloverEntries =
+          allRolloverEntries?.filter(entry => {
+            if (!entry.periodStart || !entry.periodEnd) {
+              return false;
+            }
+
+            const entryStart = new Date(entry.periodStart);
+            const entryEnd = new Date(entry.periodEnd);
+
+            // Check if entry period overlaps with current pay period
+            return (
+              (entryStart >= periodStart && entryStart <= periodEnd) ||
+              (entryEnd >= periodStart && entryEnd <= periodEnd) ||
+              (entryStart <= periodStart && entryEnd >= periodEnd)
+            );
+          }) || [];
+
+        if (rolloverEntries && Array.isArray(rolloverEntries)) {
+          console.log(
+            '🔍 HOME_CONTAINER: Rollover entries for current period:',
+            rolloverEntries.map(entry => ({
+              id: entry.id,
+              amount: entry.amount,
+              type: entry.type,
+              date: entry.date,
+              description: entry.description,
+            })),
+          );
+
+          const rolloverTotal = rolloverEntries.reduce((sum, entry) => {
+            if (entry.type === 'ROLLOVER') {
+              // ROLLOVER entries are for analytics only - don't reduce available spending
+              // The rollover amount is already added to income in BalanceCard
+              console.log(
+                '🔍 HOME_CONTAINER: Skipping ROLLOVER entry (analytics only):',
+                {
+                  amount: entry.amount,
+                  type: entry.type,
+                  description: entry.description,
+                },
+              );
+              return sum; // Don't add to totalPayments to avoid double accounting
+            }
+            return sum;
+          }, 0);
+
+          totalPayments += rolloverTotal;
+          console.log(
+            '🔍 HOME_CONTAINER: Total from rollover entries:',
+            rolloverTotal,
+          );
+        }
+      } catch (rolloverError) {
+        console.warn(
+          '🔍 HOME_CONTAINER: Failed to load rollover entries:',
+          rolloverError,
+        );
+        // Don't fail the entire function if rollover entries can't be loaded
+      }
+
       // Get contributions for all goals and sum up income payments for current period only
       for (const goal of goals) {
         if (!goal.id.startsWith('local_')) {

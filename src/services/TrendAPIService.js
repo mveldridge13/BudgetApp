@@ -1279,7 +1279,23 @@ class TrendAPIService {
     });
   }
 
+  async createRolloverEntry(rolloverEntryData) {
+    console.log('🔄 TREND_API: Creating rollover entry:', rolloverEntryData);
+    return this.makeRequest('/users/rollover/entries', {
+      method: 'POST',
+      body: rolloverEntryData,
+    });
+  }
+
   async getRolloverHistory(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/users/rollover/history?${queryString}`
+      : '/users/rollover/history';
+    return this.makeRequest(endpoint);
+  }
+
+  async getRolloverEntries(filters = {}) {
     const queryString = this.buildQueryString(filters);
     const endpoint = queryString
       ? `/users/rollover/history?${queryString}`

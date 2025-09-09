@@ -251,9 +251,22 @@ const BalanceCard = ({
         <View style={styles.balanceRow}>
           <View style={styles.balanceItem}>
             <Text style={styles.balanceLabel}>BALANCE</Text>
-            <Text style={styles.totalIncome}>
-              {loading ? '$0.00' : formatCurrency(incomeAmount)}
-            </Text>
+            {loading ? (
+              <Text style={styles.totalIncome}>$0.00</Text>
+            ) : rolloverAmount > 0 ? (
+              <View style={styles.incomeBreakdown}>
+                <Text style={styles.totalIncome}>
+                  {formatCurrency(incomeAmount)}
+                </Text>
+                <Text style={styles.incomeBreakdownText}>
+                  {formatCurrency(incomeData?.income || 0)} + {formatCurrency(rolloverAmount)} rollover
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.totalIncome}>
+                {formatCurrency(incomeAmount)}
+              </Text>
+            )}
           </View>
           <View style={[styles.balanceItem, styles.balanceItemRight]}>
             <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
@@ -629,6 +642,18 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite,
     letterSpacing: -0.5,
+  },
+  incomeBreakdown: {
+    alignItems: 'flex-start',
+  },
+  incomeBreakdownText: {
+    fontSize: 12,
+    fontWeight: '300',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+    marginTop: 2,
+    letterSpacing: -0.2,
   },
   goalsSection: {
     marginBottom: 20,
