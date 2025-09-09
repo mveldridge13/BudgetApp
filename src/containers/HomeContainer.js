@@ -23,8 +23,6 @@ import PayPeriodService from '../services/PayPeriodService';
 import RolloverService from '../services/RolloverService';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import AddTournamentContainer from './AddTournamentContainer';
-import RolloverOptionsModal from '../components/RolloverOptionsModal';
-import GoalAllocationModal from '../components/GoalAllocationModal';
 
 const HomeContainer = ({navigation}) => {
   // ==============================================
@@ -53,10 +51,6 @@ const HomeContainer = ({navigation}) => {
 
   // Rollover state
   const [rolloverAmount, setRolloverAmount] = useState(0);
-  const [isRolloverAvailable, setIsRolloverAvailable] = useState(false);
-  const [showRolloverModal, setShowRolloverModal] = useState(false);
-  const [showGoalAllocationModal, setShowGoalAllocationModal] = useState(false);
-  const [lastRolloverDate, setLastRolloverDate] = useState(null);
 
   // ==============================================
   // HOOKS
@@ -66,7 +60,6 @@ const HomeContainer = ({navigation}) => {
     goals,
     loadGoals: loadGoalsFromHook,
     updateSpendingGoals,
-    addGoalContribution,
   } = useGoals();
   const {moduleSettings} = useAppSettings();
 
@@ -722,9 +715,8 @@ const HomeContainer = ({navigation}) => {
           }
         }, 100); // Small delay to ensure transaction UI has updated
 
-        // 🔄 ROLLOVER LOGIC: If rollover is available and this is an expense, reduce rollover amount using RolloverService
+        // 🔄 ROLLOVER LOGIC: If this is an expense, reduce rollover amount using RolloverService
         if (
-          isRolloverAvailable &&
           transaction.type === 'EXPENSE' &&
           rolloverAmount > 0 &&
           !isEditing // Only for new transactions, not edits
@@ -774,13 +766,7 @@ const HomeContainer = ({navigation}) => {
         }, 1000); // Keep lock for 1 second after transaction completes
       }
     },
-    [
-      transactions,
-      onboarding,
-      loadTransactions,
-      isRolloverAvailable,
-      rolloverAmount,
-    ],
+    [transactions, onboarding, loadTransactions, rolloverAmount],
   );
 
   const deleteTransaction = useCallback(async transactionId => {
@@ -1023,141 +1009,10 @@ const HomeContainer = ({navigation}) => {
       const rolloverData = await RolloverService.loadRolloverAmount();
       console.log('🔄 HomeContainer: Loaded rollover data:', rolloverData);
       setRolloverAmount(rolloverData.rolloverAmount);
-      setLastRolloverDate(rolloverData.lastRolloverDate);
     } catch (error) {
       console.error('🔄 Error loading rollover amount:', error);
     }
   }, []);
-
-  // Check if today is the day before pay period ends using RolloverService
-  const checkRolloverAvailability = useCallback(() => {
-    try {
-      const isAvailable = RolloverService.checkRolloverAvailability(
-        incomeData?.nextPayDate,
-        lastRolloverDate,
-      );
-      setIsRolloverAvailable(isAvailable);
-    } catch (error) {
-      console.error('🔄 Error checking rollover availability:', error);
-      setIsRolloverAvailable(false);
-    }
-  }, [incomeData?.nextPayDate, lastRolloverDate]);
-
-  // Handle rollover button press - show modal
-  const handleRolloverPress = useCallback(() => {
-    setShowRolloverModal(true);
-  }, []);
-
-  // Handle goal allocation confirmation from modal
-  const handleGoalAllocationConfirm = useCallback(
-    async ({goalAllocations}) => {
-      try {
-        // Process goal allocations using RolloverService
-        const result = await RolloverService.processGoalAllocations(
-          goalAllocations,
-          addGoalContribution,
-          incomeData,
-        );
-
-        if (result.success) {
-          // Update rollover amount
-          console.log(
-            '🏠 HomeContainer: Updating rollover amount from',
-            rolloverAmount,
-            'to',
-            result.newRolloverAmount,
-          );
-          setRolloverAmount(result.newRolloverAmount);
-
-          // Mark period as processed if all funds were allocated
-          if (result.shouldMarkProcessed) {
-            setLastRolloverDate(RolloverService.markRolloverPeriodProcessed());
-            setIsRolloverAvailable(false);
-          }
-
-          setShowGoalAllocationModal(false);
-
-          // Show success message
-          Alert.alert('Goal Allocation Complete', result.message);
-        }
-      } catch (error) {
-        console.error('🔄 Error processing goal allocation:', error);
-        Alert.alert(
-          'Error',
-          'Unable to process goal allocation. Please try again.',
-        );
-      }
-    },
-    [addGoalContribution, incomeData, rolloverAmount],
-  );
-
-  // Handle rollover decision from modal using RolloverService
-  const handleRolloverConfirm = useCallback(
-    async rolloverDecision => {
-      try {
-        const {option} = rolloverDecision;
-
-        // Calculate available surplus using RolloverService
-        const availableSurplus = RolloverService.calculateAvailableSurplus(
-          incomeData,
-          rolloverAmount,
-          totalExpenses,
-          goals,
-        );
-
-        // Process rollover decision using RolloverService
-        const result = await RolloverService.processRolloverDecision({
-          option,
-          availableSurplus,
-          currentRollover: rolloverAmount,
-          incomeData,
-          goals,
-          addGoalContribution,
-          navigation,
-        });
-
-        if (result.success) {
-          // Update rollover amount if needed
-          if (typeof result.newRolloverAmount === 'number') {
-            setRolloverAmount(result.newRolloverAmount);
-          }
-
-          // Mark period as processed if needed
-          if (result.shouldMarkProcessed) {
-            setLastRolloverDate(RolloverService.markRolloverPeriodProcessed());
-            setIsRolloverAvailable(false);
-          }
-
-          // Close modal if needed
-          if (result.shouldCloseModal) {
-            setShowRolloverModal(false);
-          }
-
-          // Open goal allocation modal if needed
-          if (result.shouldOpenGoalAllocation) {
-            setShowGoalAllocationModal(true);
-            return; // Exit early, allocation will be handled by the modal
-          }
-
-          // Show alert if provided
-          if (result.alertTitle && result.alertMessage) {
-            Alert.alert(result.alertTitle, result.alertMessage);
-          }
-        }
-      } catch (error) {
-        console.error('🔄 Error processing rollover:', error);
-        Alert.alert('Error', 'Unable to process rollover. Please try again.');
-      }
-    },
-    [
-      incomeData,
-      totalExpenses,
-      goals,
-      rolloverAmount,
-      navigation,
-      addGoalContribution,
-    ],
-  );
 
   // Load rollover data on component mount
   useEffect(() => {
@@ -1229,14 +1084,12 @@ const HomeContainer = ({navigation}) => {
           goals,
         );
 
-        // If there's a surplus and rollover isn't already available, make it available
-        if (
-          RolloverService.shouldMakeRolloverAvailableAfterTransition(
+        // Log surplus for automatic rollover processing
+        if (previousPeriodSurplus > 0) {
+          console.log(
+            '🔄 Previous period surplus detected:',
             previousPeriodSurplus,
-            isRolloverAvailable,
-          )
-        ) {
-          setIsRolloverAvailable(true);
+          );
         }
       } catch (error) {
         console.error(
@@ -1256,7 +1109,7 @@ const HomeContainer = ({navigation}) => {
     } catch (error) {
       console.error('Pay period transition error:', error);
     }
-  }, [incomeData, rolloverAmount, totalExpenses, goals, isRolloverAvailable]);
+  }, [incomeData, rolloverAmount, totalExpenses, goals]);
 
   // Check pay period transition when app becomes active or when income data changes
   useEffect(() => {
@@ -1264,11 +1117,6 @@ const HomeContainer = ({navigation}) => {
       checkPayPeriodTransition();
     }
   }, [checkPayPeriodTransition, incomeData?.nextPayDate]);
-
-  // Check rollover availability when date or income data changes
-  useEffect(() => {
-    checkRolloverAvailability();
-  }, [checkRolloverAvailability]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -2144,8 +1992,6 @@ const HomeContainer = ({navigation}) => {
         isNewPayPeriodForUI={isNewPayPeriodForUI}
         // Rollover props
         rolloverAmount={rolloverAmount}
-        isRolloverAvailable={isRolloverAvailable}
-        onRolloverPress={handleRolloverPress}
         // Tournament/Poker props
         tournaments={tournaments}
         pokerSectionExpanded={pokerSectionExpanded}
@@ -2177,38 +2023,6 @@ const HomeContainer = ({navigation}) => {
         onClose={handleCloseAddTournament}
         onSave={handleSaveTournament}
         editingTournament={editingTournament}
-      />
-
-      {/* Rollover Options Modal */}
-      <RolloverOptionsModal
-        visible={showRolloverModal}
-        onClose={() => setShowRolloverModal(false)}
-        onConfirm={handleRolloverConfirm}
-        availableAmount={RolloverService.calculateAvailableSurplus(
-          incomeData,
-          rolloverAmount,
-          totalExpenses,
-          goals,
-        )}
-        currency={currency}
-        goals={goals}
-        frequency={incomeData?.frequency || 'monthly'}
-      />
-
-      {/* Goal Allocation Modal */}
-      <GoalAllocationModal
-        visible={showGoalAllocationModal}
-        onClose={() => setShowGoalAllocationModal(false)}
-        onConfirm={handleGoalAllocationConfirm}
-        availableAmount={RolloverService.calculateAvailableSurplus(
-          incomeData,
-          rolloverAmount,
-          totalExpenses,
-          goals,
-        )}
-        currency={currency}
-        goals={goals}
-        frequency={incomeData?.frequency || 'monthly'}
       />
     </>
   );

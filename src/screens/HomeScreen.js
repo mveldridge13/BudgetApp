@@ -38,8 +38,6 @@ const HomeScreen = ({
 
   // Rollover props
   rolloverAmount = 0,
-  isRolloverAvailable = false,
-  onRolloverPress = () => {},
 
   // Tournament/Poker props
   tournaments = [],
@@ -200,8 +198,6 @@ const HomeScreen = ({
           currency={currency}
           transactions={transactions}
           rolloverAmount={rolloverAmount}
-          isRolloverAvailable={isRolloverAvailable}
-          onRolloverPress={onRolloverPress}
           isNewPayPeriodForUI={isNewPayPeriodForUI}
         />
       </View>

@@ -26,8 +26,6 @@ const BalanceCard = ({
   transactions = [],
   // Rollover props
   rolloverAmount = 0,
-  isRolloverAvailable = false,
-  onRolloverPress = () => {},
   // Pay period UI state (calculated by HomeContainer)
   isNewPayPeriodForUI = false,
 }) => {
@@ -94,9 +92,55 @@ const BalanceCard = ({
     return sum;
   }, 0);
 
+  // Check if rollover preview should be shown (1 day before new pay period)
+  const shouldShowRolloverPreview = useMemo(() => {
+    if (!incomeData?.nextPayDate || adjustedLeftToSpend <= 0) {
+      return false;
+    }
+
+    try {
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      // Get today's date
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+
+      // Get tomorrow's date
+      const tomorrow = new Date(todayStart);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Get pay date start (without time)
+      const payDateStart = new Date(
+        nextPayDate.getFullYear(),
+        nextPayDate.getMonth(),
+        nextPayDate.getDate(),
+      );
+
+      // Show preview if tomorrow is the pay date (i.e., today is 1 day before)
+      return tomorrow.getTime() === payDateStart.getTime();
+    } catch (error) {
+      return false;
+    }
+  }, [incomeData?.nextPayDate, adjustedLeftToSpend]);
+
   // Calculate expense breakdown with memoization - filter to current pay period only
   const expenseBreakdown = useMemo(() => {
-    if (!incomeData?.nextPayDate || !incomeData?.frequency || !Array.isArray(transactions)) {
+    if (
+      !incomeData?.nextPayDate ||
+      !incomeData?.frequency ||
+      !Array.isArray(transactions)
+    ) {
       return getExpenseBreakdownSync([]);
     }
 
@@ -117,8 +161,16 @@ const BalanceCard = ({
 
       // Check if we're in a new pay period using local timezone
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const payDateStart = new Date(nextPayDate.getFullYear(), nextPayDate.getMonth(), nextPayDate.getDate());
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+      const payDateStart = new Date(
+        nextPayDate.getFullYear(),
+        nextPayDate.getMonth(),
+        nextPayDate.getDate(),
+      );
       const isInNewPeriod = todayStart >= payDateStart;
 
       if (isInNewPeriod) {
@@ -259,7 +311,8 @@ const BalanceCard = ({
                   {formatCurrency(incomeAmount)}
                 </Text>
                 <Text style={styles.incomeBreakdownText}>
-                  {formatCurrency(incomeData?.income || 0)} + {formatCurrency(rolloverAmount)} rollover
+                  {formatCurrency(incomeData?.income || 0)} +{' '}
+                  {formatCurrency(rolloverAmount)} rollover
                 </Text>
               </View>
             ) : (
@@ -384,45 +437,27 @@ const BalanceCard = ({
           </View>
         )}
 
-        <TouchableOpacity
-          style={[
-            styles.leftToSpendSection,
-            isRolloverAvailable &&
-              adjustedLeftToSpend > 0 &&
-              styles.clickableSection,
-          ]}
-          onPress={
-            isRolloverAvailable && adjustedLeftToSpend > 0
-              ? onRolloverPress
-              : undefined
-          }
-          activeOpacity={
-            isRolloverAvailable && adjustedLeftToSpend > 0 ? 0.7 : 1
-          }>
+        <View style={styles.leftToSpendSection}>
           <View style={styles.leftToSpendHeader}>
-            <Text style={styles.balanceLabel}>
-              {isRolloverAvailable && adjustedLeftToSpend > 0
-                ? 'ROLLOVER'
-                : 'LEFT TO SPEND'}
-            </Text>
-            {isRolloverAvailable && adjustedLeftToSpend > 0 && (
-              <Icon
-                name="arrow-right-circle"
-                size={16}
-                color={colors.textWhite}
-                style={{opacity: 0.8}}
-              />
-            )}
+            <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
           </View>
           <View style={styles.leftAmountRow}>
-            <Text
-              style={[
-                styles.leftAmount,
-                isOverBudget && styles.overBudgetText,
-                isCloseToLimit && styles.warningText,
-              ]}>
-              {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
-            </Text>
+            <View style={styles.leftAmountContainer}>
+              <Text
+                style={[
+                  styles.leftAmount,
+                  isOverBudget && styles.overBudgetText,
+                  isCloseToLimit && styles.warningText,
+                ]}>
+                {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
+              </Text>
+              {shouldShowRolloverPreview && !loading && (
+                <Text style={styles.rolloverPreviewText}>
+                  {formatCurrency(adjustedLeftToSpend)} scheduled to roll to
+                  next period
+                </Text>
+              )}
+            </View>
             {totalAdditionalIncome > 0 && (
               <View style={styles.adjustedAmountContainer}>
                 <Text style={styles.adjustedLabel}>Additional income:</Text>
@@ -481,7 +516,7 @@ const BalanceCard = ({
           )}
 
           <View style={styles.bottomPadding} />
-        </TouchableOpacity>
+        </View>
 
         {/* Edit Income Icon */}
         <TouchableOpacity
@@ -777,12 +812,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
-  clickableSection: {
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 12,
-    marginHorizontal: -12,
-  },
   leftToSpendHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -795,12 +824,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginBottom: 10,
   },
+  leftAmountContainer: {
+    alignItems: 'flex-start',
+  },
   leftAmount: {
     fontSize: 20,
     fontWeight: '300',
     fontFamily: 'System',
     color: colors.textWhite,
     letterSpacing: -0.3,
+  },
+  rolloverPreviewText: {
+    fontSize: 12,
+    fontWeight: '300',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+    marginTop: 2,
+    letterSpacing: -0.2,
   },
   adjustedAmountContainer: {
     alignItems: 'flex-end',
