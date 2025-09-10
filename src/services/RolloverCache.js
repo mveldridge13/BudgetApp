@@ -3,9 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TrendAPIService from './TrendAPIService';
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes (shorter TTL for financial data)
+const BANNER_TTL = 3 * 24 * 60 * 60 * 1000; // 3 days (longer TTL for banner visibility)
 
 // Generate user-specific cache keys
-const getUserCacheKey = async (baseKey) => {
+const getUserCacheKey = async baseKey => {
   try {
     if (!TrendAPIService.isAuthenticated()) {
       throw new Error('User not authenticated');
@@ -16,7 +17,10 @@ const getUserCacheKey = async (baseKey) => {
     }
     return `${baseKey}_user_${profile.id}`;
   } catch (error) {
-    console.error('🔄 RolloverCache: Failed to get user-specific cache key:', error);
+    console.error(
+      '🔄 RolloverCache: Failed to get user-specific cache key:',
+      error,
+    );
     throw error;
   }
 };
@@ -223,14 +227,17 @@ class RolloverCache {
   async clearAllUsersCache() {
     try {
       const allKeys = await AsyncStorage.getAllKeys();
-      const rolloverKeys = allKeys.filter(key =>
-        key.startsWith('rollover_cache_user_') ||
-        key.startsWith('rollover_entries_cache_user_')
+      const rolloverKeys = allKeys.filter(
+        key =>
+          key.startsWith('rollover_cache_user_') ||
+          key.startsWith('rollover_entries_cache_user_'),
       );
 
       if (rolloverKeys.length > 0) {
         await AsyncStorage.multiRemove(rolloverKeys);
-        console.log(`🔄 RolloverCache: Cleared cache for ${rolloverKeys.length} keys across all users`);
+        console.log(
+          `🔄 RolloverCache: Cleared cache for ${rolloverKeys.length} keys across all users`,
+        );
       }
 
       return true;
@@ -388,6 +395,82 @@ class RolloverCache {
       return success;
     } catch (error) {
       console.error('🔄 RolloverCache: Update rollover amount error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get cached rollover banner data
+   * @returns {Promise<{data: object, timestamp: number, age: number, isStale: boolean} | null>}
+   */
+  async getRolloverBanner() {
+    try {
+      const cacheKey = await getUserCacheKey('rollover_banner_cache');
+      const cached = await AsyncStorage.getItem(cacheKey);
+      if (!cached) {
+        return null;
+      }
+
+      const {data, timestamp} = JSON.parse(cached);
+      const age = Date.now() - timestamp;
+      const isStale = age > BANNER_TTL; // Use 3-day TTL for banner
+
+      console.log('🔄 RolloverCache: Retrieved rollover banner cache', {
+        age: Math.round(age / 1000 / 60 / 60), // hours
+        ageInDays: Math.round(age / 1000 / 60 / 60 / 24), // days
+        isStale,
+        banner: data,
+      });
+
+      return {
+        data: data || null,
+        timestamp,
+        age,
+        isStale,
+      };
+    } catch (error) {
+      console.error('🔄 RolloverCache: Get rollover banner error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set rollover banner data in cache
+   * @param {object} data - Rollover banner data to cache
+   * @returns {Promise<boolean>}
+   */
+  async setRolloverBanner(data) {
+    try {
+      const cacheKey = await getUserCacheKey('rollover_banner_cache');
+      const cacheData = {
+        data: data || null,
+        timestamp: Date.now(),
+      };
+
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      console.log('🔄 RolloverCache: Rollover banner cached successfully', {
+        timestamp: cacheData.timestamp,
+        banner: data,
+      });
+      return true;
+    } catch (error) {
+      console.error('🔄 RolloverCache: Set rollover banner error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear rollover banner cache
+   * @returns {Promise<boolean>}
+   */
+  async clearRolloverBanner() {
+    try {
+      const cacheKey = await getUserCacheKey('rollover_banner_cache');
+      await AsyncStorage.removeItem(cacheKey);
+      console.log('🔄 RolloverCache: Rollover banner cache cleared');
+      return true;
+    } catch (error) {
+      console.error('🔄 RolloverCache: Clear rollover banner error:', error);
       return false;
     }
   }

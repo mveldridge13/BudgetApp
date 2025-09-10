@@ -51,16 +51,13 @@ const HomeContainer = ({navigation}) => {
 
   // Rollover state
   const [rolloverAmount, setRolloverAmount] = useState(0);
+  const [rolloverBanner, setRolloverBanner] = useState(null); // {amount: number, frequency: string, date: string}
 
   // ==============================================
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
-  const {
-    goals,
-    loadGoals: loadGoalsFromHook,
-    updateSpendingGoals,
-  } = useGoals();
+  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
   const {moduleSettings} = useAppSettings();
 
   // Get poker module setting
@@ -1014,10 +1011,22 @@ const HomeContainer = ({navigation}) => {
     }
   }, []);
 
-  // Load rollover data on component mount
+  // Load rollover data and banner on component mount
   useEffect(() => {
     loadRolloverAmount();
-  }, [loadRolloverAmount]);
+    loadRolloverBanner();
+  }, [loadRolloverAmount, loadRolloverBanner]);
+
+  // Load rollover banner from cache using cache-first approach
+  const loadRolloverBanner = useCallback(async () => {
+    try {
+      const bannerData = await RolloverService.loadRolloverBanner();
+      console.log('🔄 HomeContainer: Loaded rollover banner:', bannerData);
+      setRolloverBanner(bannerData);
+    } catch (error) {
+      console.error('🔄 Error loading rollover banner:', error);
+    }
+  }, []);
 
   // Listen for navigation events to refresh rollover amount when returning from Goals
   useEffect(() => {
@@ -1077,19 +1086,108 @@ const HomeContainer = ({navigation}) => {
         }));
 
         // Calculate if there were leftover funds from previous period using RolloverService
+        // NOTE: Use 0 for rolloverAmount since we're calculating the previous period's surplus
+        // before any rollover was applied to this new period
+
+        // Ensure we have complete data before calculating surplus
+        if (
+          totalExpenses === null ||
+          totalExpenses === undefined ||
+          !Array.isArray(goals)
+        ) {
+          console.log('🔄 Skipping auto-rollover: incomplete data', {
+            totalExpenses,
+            goalsLoaded: Array.isArray(goals),
+            goalsCount: goals?.length || 0,
+          });
+          return;
+        }
+
+        // Calculate expenses from PREVIOUS pay period (not current period)
+        // This is crucial for mid-period app adoption scenarios
+        const previousPeriodExpenses =
+          PayPeriodService.calculateTotalExpensesForPreviousPeriod(
+            transactions,
+            incomeData.nextPayDate,
+            incomeData.frequency,
+          );
+
         const previousPeriodSurplus = RolloverService.calculateAvailableSurplus(
           incomeData,
-          rolloverAmount,
-          totalExpenses,
+          0, // Previous period had no rollover contribution
+          previousPeriodExpenses, // Use previous period expenses, not current period
           goals,
         );
 
-        // Log surplus for automatic rollover processing
+        console.log('🔄 Surplus calculation details:', {
+          income: incomeData.income,
+          currentPeriodExpenses: totalExpenses, // Current period (should be 0 for new period)
+          previousPeriodExpenses, // Previous period (where the $500 transaction should be)
+          goals: goals.map(g => ({
+            id: g.id,
+            autoContribute: g.autoContribute || 0,
+          })),
+          goalContributions: goals.reduce(
+            (sum, g) => sum + (g.autoContribute || 0),
+            0,
+          ),
+          calculatedSurplus: previousPeriodSurplus,
+          expectedSurplus:
+            incomeData.income -
+            previousPeriodExpenses - // Use previous period expenses for surplus calculation
+            goals.reduce((sum, g) => sum + (g.autoContribute || 0), 0),
+        });
+
+        // AUTO-ROLLOVER: Automatically process surplus rollover to new period
         if (previousPeriodSurplus > 0) {
           console.log(
-            '🔄 Previous period surplus detected:',
+            '🔄 Auto-rollover: Processing surplus from previous period:',
             previousPeriodSurplus,
           );
+
+          try {
+            const rolloverResult =
+              await RolloverService.processRolloverToNextPeriod(
+                previousPeriodSurplus,
+                rolloverAmount,
+                incomeData.frequency,
+                incomeData,
+              );
+
+            // Update rollover amount in state
+            setRolloverAmount(rolloverResult.newRolloverAmount);
+
+            // Set rollover banner using cache-first approach
+            // Use simple leftToSpend calculation from PREVIOUS period
+            const leftToSpend = incomeData.income - previousPeriodExpenses;
+            const bannerData = {
+              amount: leftToSpend, // Show actual Left to Spend amount from previous period
+              frequency: incomeData.frequency,
+              date: new Date().toISOString(),
+            };
+
+            // Cache the banner data and update UI state
+            await RolloverService.setRolloverBanner(bannerData);
+            setRolloverBanner(bannerData);
+
+            console.log(
+              '🔄 Auto-rollover completed:',
+              `$${previousPeriodSurplus.toFixed(
+                2,
+              )} → New total: $${rolloverResult.newRolloverAmount.toFixed(2)}`,
+            );
+          } catch (rolloverError) {
+            console.error('🔄 Auto-rollover failed:', rolloverError);
+
+            // Show error notification to user
+            Alert.alert(
+              'Auto-Rollover Failed',
+              `Failed to automatically roll over $${previousPeriodSurplus.toFixed(
+                2,
+              )}. You can manually process this in your settings.`,
+              [{text: 'OK'}],
+            );
+          }
         }
       } catch (error) {
         console.error(
@@ -1111,12 +1209,43 @@ const HomeContainer = ({navigation}) => {
     }
   }, [incomeData, rolloverAmount, totalExpenses, goals]);
 
-  // Check pay period transition when app becomes active or when income data changes
+  // Check pay period transition when app becomes active or when all required data is loaded
   useEffect(() => {
-    if (incomeData?.nextPayDate && incomeData?.frequency) {
+    if (
+      incomeData?.nextPayDate &&
+      incomeData?.frequency &&
+      totalExpenses !== null &&
+      totalExpenses !== undefined &&
+      Array.isArray(goals) &&
+      !loading // Wait for initial loading to complete
+    ) {
+      console.log('🔄 All data loaded, checking pay period transition', {
+        incomeLoaded: !!incomeData?.nextPayDate,
+        expensesCalculated: totalExpenses !== null,
+        totalExpenses,
+        goalsLoaded: Array.isArray(goals),
+        transactionCount: transactions.length,
+        loadingComplete: !loading,
+      });
       checkPayPeriodTransition();
+    } else {
+      console.log('🔄 Waiting for data before pay period check', {
+        incomeLoaded: !!incomeData?.nextPayDate,
+        expensesCalculated: totalExpenses !== null,
+        totalExpenses,
+        goalsLoaded: Array.isArray(goals),
+        transactionCount: transactions?.length || 0,
+        stillLoading: loading,
+      });
     }
-  }, [checkPayPeriodTransition, incomeData?.nextPayDate]);
+  }, [
+    checkPayPeriodTransition,
+    incomeData?.nextPayDate,
+    totalExpenses,
+    goals,
+    loading,
+    transactions.length,
+  ]);
 
   // ==============================================
   // EVENT HANDLERS
@@ -1971,6 +2100,84 @@ const HomeContainer = ({navigation}) => {
   }, [pokerTrackerEnabled, loadTournaments, moduleSettings]);
 
   // ==============================================
+  // DEBUG FUNCTIONS
+  // ==============================================
+
+  // Make debug functions available globally for testing
+  useEffect(() => {
+    if (__DEV__) {
+      global.debugClearRolloverBanner = async () => {
+        console.log('🔧 DEBUG: Clearing rollover banner...');
+        const result = await RolloverService.debugClearBanner();
+        if (result) {
+          setRolloverBanner(null);
+          console.log('🔧 DEBUG: Banner cleared from cache and UI state');
+        }
+        return result;
+      };
+
+      global.debugClearAllRolloverCaches = async () => {
+        console.log('🔧 DEBUG: Clearing all rollover caches...');
+        const result = await RolloverService.debugClearAllCaches();
+        if (result) {
+          setRolloverAmount(0);
+          setRolloverBanner(null);
+          console.log('🔧 DEBUG: All caches cleared and UI state reset');
+        }
+        return result;
+      };
+
+      global.debugTestAutoRollover = async () => {
+        console.log('🔧 DEBUG: Testing auto-rollover with current data...');
+        console.log('🔧 DEBUG: Current state:', {
+          incomeData,
+          rolloverAmount,
+          totalExpenses,
+          goalsCount: goals.length,
+        });
+
+        const result = await RolloverService.debugAutoRollover(
+          incomeData,
+          rolloverAmount,
+          transactions, // Pass transactions instead of totalExpenses
+          goals,
+        );
+
+        if (result.success) {
+          setRolloverBanner(result.bannerData);
+          console.log('🔧 DEBUG: Auto-rollover test completed successfully');
+        } else {
+          console.log('🔧 DEBUG: Auto-rollover test failed:', result);
+        }
+
+        return result;
+      };
+
+      global.debugLogCurrentState = () => {
+        console.log('🔧 DEBUG: Current HomeContainer state:', {
+          incomeData,
+          rolloverAmount,
+          totalExpenses,
+          totalExpensesType: typeof totalExpenses,
+          goalsCount: goals.length,
+          goals: goals.map(g => ({
+            id: g.id,
+            title: g.title,
+            autoContribute: g.autoContribute || 0,
+          })),
+          rolloverBanner,
+        });
+      };
+
+      console.log('🔧 DEBUG: Global debug functions available:');
+      console.log('  - debugClearRolloverBanner()');
+      console.log('  - debugClearAllRolloverCaches()');
+      console.log('  - debugTestAutoRollover()');
+      console.log('  - debugLogCurrentState()');
+    }
+  }, [incomeData, rolloverAmount, totalExpenses, goals, rolloverBanner]);
+
+  // ==============================================
   // RENDER
   // ==============================================
   return (
@@ -1992,6 +2199,19 @@ const HomeContainer = ({navigation}) => {
         isNewPayPeriodForUI={isNewPayPeriodForUI}
         // Rollover props
         rolloverAmount={rolloverAmount}
+        rolloverBanner={rolloverBanner}
+        onDismissRolloverBanner={async () => {
+          const result = await RolloverService.confirmRolloverBanner();
+          if (result.success) {
+            setRolloverBanner(null);
+            console.log('🔄 HomeContainer: Rollover confirmed by user');
+          } else {
+            console.error(
+              '🔄 HomeContainer: Failed to confirm rollover:',
+              result.error,
+            );
+          }
+        }}
         // Tournament/Poker props
         tournaments={tournaments}
         pokerSectionExpanded={pokerSectionExpanded}

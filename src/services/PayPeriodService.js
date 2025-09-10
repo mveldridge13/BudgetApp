@@ -289,22 +289,32 @@ class PayPeriodService {
    * Filter transactions to current pay period only
    * Returns array of transactions within the current pay period
    */
-  static filterTransactionsForCurrentPeriod(transactions, nextPayDateString, frequency, transactionType = null) {
-    if (!transactions || !Array.isArray(transactions) || !nextPayDateString || !frequency) {
+  static filterTransactionsForCurrentPeriod(
+    transactions,
+    nextPayDateString,
+    frequency,
+    transactionType = null,
+  ) {
+    if (
+      !transactions ||
+      !Array.isArray(transactions) ||
+      !nextPayDateString ||
+      !frequency
+    ) {
       return [];
     }
 
     const payPeriodBoundaries = this.calculatePayPeriodBoundaries(
       nextPayDateString,
       frequency,
-      true // useCurrentPeriodForNewPeriod = true
+      true, // useCurrentPeriodForNewPeriod = true
     );
 
     if (!payPeriodBoundaries) {
       return [];
     }
 
-    const { start: periodStart, end: periodEnd } = payPeriodBoundaries;
+    const {start: periodStart, end: periodEnd} = payPeriodBoundaries;
 
     return transactions.filter(transaction => {
       try {
@@ -313,19 +323,25 @@ class PayPeriodService {
           return false;
         }
 
-        const inPeriod = transactionDate >= periodStart && transactionDate <= periodEnd;
+        const inPeriod =
+          transactionDate >= periodStart && transactionDate <= periodEnd;
 
         // If transaction type filter is specified, apply it
         if (transactionType) {
-          const matchesType = transactionType === 'EXPENSE'
-            ? (transaction.type === 'EXPENSE' || !transaction.type)
-            : transaction.type === transactionType;
+          const matchesType =
+            transactionType === 'EXPENSE'
+              ? transaction.type === 'EXPENSE' || !transaction.type
+              : transaction.type === transactionType;
           return inPeriod && matchesType;
         }
 
         return inPeriod;
       } catch (error) {
-        console.error('PayPeriodService: Error filtering transaction:', error, transaction);
+        console.error(
+          'PayPeriodService: Error filtering transaction:',
+          error,
+          transaction,
+        );
         return false;
       }
     });
@@ -335,7 +351,11 @@ class PayPeriodService {
    * Calculate total expenses for current pay period
    * Returns the sum of all expense transactions in the current pay period
    */
-  static calculateTotalExpensesForPeriod(transactions, nextPayDateString, frequency) {
+  static calculateTotalExpensesForPeriod(
+    transactions,
+    nextPayDateString,
+    frequency,
+  ) {
     const periodTransactions = this.filterTransactionsForCurrentPeriod(
       transactions,
       nextPayDateString,
@@ -348,17 +368,134 @@ class PayPeriodService {
         const amount = parseFloat(transaction.amount) || 0;
         return sum + amount;
       } catch (error) {
-        console.error('PayPeriodService: Error adding transaction amount:', error, transaction);
+        console.error(
+          'PayPeriodService: Error adding transaction amount:',
+          error,
+          transaction,
+        );
         return sum;
       }
     }, 0);
   }
 
   /**
+   * Calculate total expenses for PREVIOUS pay period
+   * Used for rollover calculations when transitioning to new pay period
+   * Handles all frequency types: weekly, fortnightly, monthly, sixmonths
+   */
+  static calculateTotalExpensesForPreviousPeriod(
+    transactions,
+    nextPayDateString,
+    frequency,
+  ) {
+    if (
+      !transactions ||
+      !Array.isArray(transactions) ||
+      !nextPayDateString ||
+      !frequency
+    ) {
+      return 0;
+    }
+
+    // Parse the next pay date
+    const nextPayDate = this.parseNextPayDate(nextPayDateString);
+    if (!nextPayDate) {
+      return 0;
+    }
+
+    // Calculate previous pay period boundaries
+    const previousPayDate = this.calculatePreviousPayDate(
+      nextPayDate,
+      frequency,
+    );
+    if (!previousPayDate) {
+      return 0;
+    }
+
+    // The "previous period" is the period that just ended
+    // It runs from previousPayDate to nextPayDate (exclusive)
+    const previousPeriodStart = previousPayDate;
+    const previousPeriodEnd = new Date(nextPayDate.getTime() - 1); // Subtract 1ms to make it exclusive
+
+    console.log('🔄 Previous period expense calculation:', {
+      frequency,
+      nextPayDate: nextPayDate.toISOString(),
+      previousPayDate: previousPayDate.toISOString(),
+      previousPeriodStart: previousPeriodStart.toISOString(),
+      previousPeriodEnd: previousPeriodEnd.toISOString(),
+      totalTransactions: transactions.length,
+    });
+
+    // Filter transactions for the previous period
+    const previousPeriodTransactions = transactions.filter(transaction => {
+      try {
+        const transactionDate = new Date(transaction.date);
+        if (isNaN(transactionDate.getTime())) {
+          return false;
+        }
+
+        const inPreviousPeriod =
+          transactionDate >= previousPeriodStart &&
+          transactionDate <= previousPeriodEnd;
+
+        // Only include expense transactions (or transactions without type specified)
+        const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
+
+        const included = inPreviousPeriod && isExpense;
+
+        if (included) {
+          console.log('🔄 Including transaction in previous period:', {
+            date: transaction.date,
+            amount: transaction.amount,
+            type: transaction.type,
+          });
+        }
+
+        return included;
+      } catch (error) {
+        console.error(
+          'PayPeriodService: Error filtering previous period transaction:',
+          error,
+          transaction,
+        );
+        return false;
+      }
+    });
+
+    const totalExpenses = previousPeriodTransactions.reduce(
+      (sum, transaction) => {
+        try {
+          const amount = parseFloat(transaction.amount) || 0;
+          return sum + amount;
+        } catch (error) {
+          console.error(
+            'PayPeriodService: Error adding previous period transaction amount:',
+            error,
+            transaction,
+          );
+          return sum;
+        }
+      },
+      0,
+    );
+
+    console.log('🔄 Previous period expense total:', {
+      transactionsInPeriod: previousPeriodTransactions.length,
+      totalExpenses,
+    });
+
+    return totalExpenses;
+  }
+
+  /**
    * Calculate total additional income for current pay period
    * Returns the sum of all income transactions in the current pay period
    */
-  static calculateTotalAdditionalIncomeForPeriod(transactions, nextPayDateString, frequency) {
+  static calculateTotalAdditionalIncomeForPeriod(
+    transactions,
+    nextPayDateString,
+    frequency,
+  ) {
     const periodTransactions = this.filterTransactionsForCurrentPeriod(
       transactions,
       nextPayDateString,
@@ -371,7 +508,11 @@ class PayPeriodService {
         const amount = parseFloat(transaction.amount) || 0;
         return sum + amount;
       } catch (error) {
-        console.error('PayPeriodService: Error adding income transaction amount:', error, transaction);
+        console.error(
+          'PayPeriodService: Error adding income transaction amount:',
+          error,
+          transaction,
+        );
         return sum;
       }
     }, 0);
@@ -395,11 +536,14 @@ class PayPeriodService {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Check if tomorrow is the pay date (today is day before)
-    const isDayBeforePayday = tomorrow.toDateString() === nextPayDate.toDateString();
+    const isDayBeforePayday =
+      tomorrow.toDateString() === nextPayDate.toDateString();
 
     // Also check we haven't already processed rollover for this period
-    const hasRecentRollover = lastRolloverDate &&
-      Math.abs(new Date(lastRolloverDate) - nextPayDate) < 2 * 24 * 60 * 60 * 1000; // Within 2 days
+    const hasRecentRollover =
+      lastRolloverDate &&
+      Math.abs(new Date(lastRolloverDate) - nextPayDate) <
+        2 * 24 * 60 * 60 * 1000; // Within 2 days
 
     return isDayBeforePayday && !hasRecentRollover;
   }
@@ -410,12 +554,12 @@ class PayPeriodService {
    */
   static checkPayPeriodTransition(currentNextPayDateString, frequency) {
     if (!currentNextPayDateString || !frequency) {
-      return { shouldTransition: false, newNextPayDate: null };
+      return {shouldTransition: false, newNextPayDate: null};
     }
 
     const nextPayDate = this.parseNextPayDate(currentNextPayDateString);
     if (!nextPayDate) {
-      return { shouldTransition: false, newNextPayDate: null };
+      return {shouldTransition: false, newNextPayDate: null};
     }
 
     const now = new Date();
@@ -435,7 +579,7 @@ class PayPeriodService {
       // Calculate the next pay date based on frequency
       const newNextPayDate = this.calculateNextPayDate(nextPayDate, frequency);
       if (!newNextPayDate) {
-        return { shouldTransition: false, newNextPayDate: null };
+        return {shouldTransition: false, newNextPayDate: null};
       }
 
       // Don't transition if the dates are the same (prevents infinite loop)
@@ -445,7 +589,7 @@ class PayPeriodService {
       const newDateStr = newNextPayDate.toISOString().split('T')[0];
 
       if (currentDateStr === newDateStr) {
-        return { shouldTransition: false, newNextPayDate: null };
+        return {shouldTransition: false, newNextPayDate: null};
       }
 
       return {
@@ -454,7 +598,7 @@ class PayPeriodService {
       };
     }
 
-    return { shouldTransition: false, newNextPayDate: null };
+    return {shouldTransition: false, newNextPayDate: null};
   }
 }
 

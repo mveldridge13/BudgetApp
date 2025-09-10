@@ -26,6 +26,8 @@ const BalanceCard = ({
   transactions = [],
   // Rollover props
   rolloverAmount = 0,
+  rolloverBanner = null,
+  onDismissRolloverBanner = null,
   // Pay period UI state (calculated by HomeContainer)
   isNewPayPeriodForUI = false,
 }) => {
@@ -354,6 +356,28 @@ const BalanceCard = ({
           </View>
         </View>
 
+        {/* Rollover Banner - shown after auto-rollover occurs */}
+        {rolloverBanner && (
+          <View style={styles.rolloverBanner}>
+            <View style={styles.rolloverBannerContent}>
+              <Icon name="arrow-right-circle" size={20} color={colors.textWhite} />
+              <View style={styles.rolloverBannerText}>
+                <Text style={styles.rolloverBannerTitle}>
+                  {formatCurrency(rolloverBanner.amount)} has been rolled into this period
+                </Text>
+              </View>
+              {onDismissRolloverBanner && (
+                <TouchableOpacity
+                  style={styles.rolloverBannerDismiss}
+                  onPress={onDismissRolloverBanner}
+                  hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                  <Icon name="x" size={16} color={colors.textWhite} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Goals Section - Only show if user has enabled goals */}
         {balanceCardGoals.length > 0 && (
           <View style={styles.goalsSection}>
@@ -556,6 +580,7 @@ const BalanceCard = ({
           </Text>
         </TouchableOpacity>
       )}
+
     </View>
   );
 };
@@ -967,6 +992,34 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
+  },
+  rolloverBanner: {
+    marginVertical: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  rolloverBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  rolloverBannerText: {
+    flex: 1,
+  },
+  rolloverBannerTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    textAlign: 'center',
+  },
+  rolloverBannerDismiss: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: colors.overlayLight,
   },
 });
 

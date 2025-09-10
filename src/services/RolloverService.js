@@ -588,6 +588,95 @@ class RolloverService {
   }
 
   /**
+   * Load rollover banner using cache-first, background sync approach
+   * Returns banner data or null if no banner should be shown
+   */
+  static async loadRolloverBanner() {
+    try {
+      if (!TrendAPIService.isAuthenticated()) {
+        return null;
+      }
+
+      // Try to get from cache first
+      const cached = await RolloverCache.getRolloverBanner();
+
+      if (cached && !cached.isStale) {
+        // Cache hit and fresh - return cached data
+        console.log('🔄 RolloverService: Using fresh cached rollover banner');
+        return cached.data;
+      }
+
+      // For banner, we don't fetch from API - it's only set by auto-rollover
+      // If cache is stale (older than 3 days), auto-confirm the rollover
+      if (cached?.isStale) {
+        console.log('🔄 RolloverService: Rollover banner expired after 3 days - auto-confirming rollover');
+        await RolloverCache.clearRolloverBanner();
+
+        // Auto-expiry means user implicitly accepts rollover by not interacting
+        // Rollover funds remain in spendable pool (no additional action needed)
+        console.log('🔄 RolloverService: Rollover auto-confirmed via 3-day expiry');
+      }
+
+      return null;
+    } catch (error) {
+      console.error('🔄 RolloverService: Error loading rollover banner:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set rollover banner (after auto-rollover occurs)
+   */
+  static async setRolloverBanner(bannerData) {
+    try {
+      console.log('🔄 RolloverService: Setting rollover banner:', bannerData);
+      await RolloverCache.setRolloverBanner(bannerData);
+      return true;
+    } catch (error) {
+      console.error('🔄 RolloverService: Error setting rollover banner:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Confirm rollover banner (user clicked X)
+   * This acknowledges the rollover and confirms funds should stay in spendable pool
+   */
+  static async confirmRolloverBanner() {
+    try {
+      console.log('🔄 RolloverService: Confirming rollover banner - user accepts rollover');
+
+      // Clear the banner from cache since user has acknowledged it
+      await RolloverCache.clearRolloverBanner();
+
+      // Note: The rollover amount is already integrated into the user's balance
+      // and available in their spendable pool from the auto-rollover process.
+      // No additional API calls needed - the X click just confirms acceptance.
+
+      console.log('🔄 RolloverService: Rollover confirmed, banner dismissed');
+      return {
+        success: true,
+        message: 'Rollover confirmed and banner dismissed',
+      };
+    } catch (error) {
+      console.error('🔄 RolloverService: Error confirming rollover banner:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Dismiss rollover banner (legacy method - use confirmRolloverBanner instead)
+   * @deprecated Use confirmRolloverBanner() instead
+   */
+  static async dismissRolloverBanner() {
+    console.warn('🔄 RolloverService: dismissRolloverBanner() is deprecated, use confirmRolloverBanner() instead');
+    return this.confirmRolloverBanner();
+  }
+
+  /**
    * Get cache statistics for debugging
    */
   static async getCacheStats() {
@@ -596,6 +685,114 @@ class RolloverService {
     } catch (error) {
       console.error('🔄 RolloverService: Error getting cache stats:', error);
       return null;
+    }
+  }
+
+  /**
+   * DEBUG: Clear rollover banner cache and force fresh calculation
+   * This is a debug function to test corrected rollover amount logic
+   */
+  static async debugClearBanner() {
+    try {
+      console.log('🔧 DEBUG: Clearing rollover banner cache');
+      await RolloverCache.clearRolloverBanner();
+      console.log('🔧 DEBUG: Rollover banner cache cleared successfully');
+      return true;
+    } catch (error) {
+      console.error('🔧 DEBUG: Error clearing rollover banner cache:', error);
+      return false;
+    }
+  }
+
+  /**
+   * DEBUG: Clear all rollover caches and force fresh data
+   * This is a debug function to reset all cached rollover data
+   */
+  static async debugClearAllCaches() {
+    try {
+      console.log('🔧 DEBUG: Clearing all rollover caches');
+      await RolloverCache.clearAll();
+      console.log('🔧 DEBUG: All rollover caches cleared successfully');
+      return true;
+    } catch (error) {
+      console.error('🔧 DEBUG: Error clearing all rollover caches:', error);
+      return false;
+    }
+  }
+
+  /**
+   * DEBUG: Process auto-rollover with proper data validation
+   * This ensures all expense data is loaded before calculating surplus
+   * NOTE: This function requires transactions to calculate previous period expenses
+   */
+  static async debugAutoRollover(incomeData, rolloverAmount, transactions, goals) {
+    try {
+      console.log('🔧 DEBUG: Processing auto-rollover with validation');
+
+      // Validate all required data is present
+      if (!incomeData || typeof incomeData.income !== 'number') {
+        console.log('🔧 DEBUG: Income data not ready:', incomeData);
+        return { success: false, reason: 'Income data not ready' };
+      }
+
+      if (!Array.isArray(transactions)) {
+        console.log('🔧 DEBUG: Transactions not ready:', transactions);
+        return { success: false, reason: 'Transactions not ready' };
+      }
+
+      if (!Array.isArray(goals)) {
+        console.log('🔧 DEBUG: Goals data not ready:', goals);
+        return { success: false, reason: 'Goals data not ready' };
+      }
+
+      // Calculate previous period expenses (not current period)
+      const previousPeriodExpenses = PayPeriodService.calculateTotalExpensesForPreviousPeriod(
+        transactions,
+        incomeData.nextPayDate,
+        incomeData.frequency,
+      );
+
+      console.log('🔧 DEBUG: All data validated, calculating surplus:', {
+        income: incomeData.income,
+        rolloverAmount,
+        transactionCount: transactions.length,
+        previousPeriodExpenses,
+        goalsCount: goals.length,
+      });
+
+      const surplus = this.calculateAvailableSurplus(incomeData, rolloverAmount, previousPeriodExpenses, goals);
+      // Use simple leftToSpend calculation for banner (from previous period)
+      const leftToSpend = incomeData.income - previousPeriodExpenses;
+
+      console.log('🔧 DEBUG: Calculated surplus:', surplus);
+      console.log('🔧 DEBUG: Simple leftToSpend for banner:', leftToSpend);
+
+      if (leftToSpend > 0) {
+        console.log('🔧 DEBUG: Setting rollover banner with leftToSpend amount:', leftToSpend);
+
+        const bannerData = {
+          amount: leftToSpend, // Show actual Left to Spend amount, not complex surplus
+          frequency: incomeData.frequency,
+          date: new Date().toISOString(),
+        };
+
+        await this.setRolloverBanner(bannerData);
+
+        return {
+          success: true,
+          surplus,
+          leftToSpend,
+          bannerData,
+          message: `Debug auto-rollover completed with $${leftToSpend} left to spend`,
+        };
+      } else {
+        console.log('🔧 DEBUG: No leftToSpend to rollover:', leftToSpend);
+        return { success: false, reason: 'No leftToSpend to rollover' };
+      }
+
+    } catch (error) {
+      console.error('🔧 DEBUG: Error in debug auto-rollover:', error);
+      return { success: false, error: error.message };
     }
   }
 }

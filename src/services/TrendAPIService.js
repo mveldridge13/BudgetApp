@@ -743,8 +743,13 @@ class TrendAPIService {
       return this.makeRequest(endpoint);
     } catch (error) {
       // Handle 404 errors gracefully for deleted/non-existent goals
-      if (error.message?.includes('404') || error.message?.includes('Goal not found')) {
-        console.log(`🔍 TREND_API: Goal ${goalId} not found when fetching contributions (likely deleted)`);
+      if (
+        error.message?.includes('404') ||
+        error.message?.includes('Goal not found')
+      ) {
+        console.log(
+          `🔍 TREND_API: Goal ${goalId} not found when fetching contributions (likely deleted)`,
+        );
         return []; // Return empty array instead of throwing error
       }
       // Re-throw other errors
@@ -923,7 +928,6 @@ class TrendAPIService {
   // ============================================================================
 
   async createTournament(tournamentData) {
-
     // Create a clean copy to avoid mutating the input
     const cleanTournamentData = {...tournamentData};
 
@@ -967,13 +971,11 @@ class TrendAPIService {
       throw new Error('End date cannot be before start date');
     }
 
-
     try {
       const response = await this.makeRequest('/poker/tournaments', {
         method: 'POST',
         body: mappedData,
       });
-
 
       // Handle different possible response formats
       if (response?.tournament) {
@@ -1034,6 +1036,7 @@ class TrendAPIService {
       mappedData.dateStart =
         cleanTournamentData.dateStart || cleanTournamentData.startDate;
     }
+
     if (cleanTournamentData.dateEnd || cleanTournamentData.endDate) {
       mappedData.dateEnd =
         cleanTournamentData.dateEnd || cleanTournamentData.endDate;
@@ -1155,7 +1158,6 @@ class TrendAPIService {
         },
       );
 
-
       if (response?.event) {
         return response.event;
       } else if (response?.data) {
@@ -1214,7 +1216,6 @@ class TrendAPIService {
       );
     }
 
-
     const response = await this.makeRequest(
       `/poker/tournaments/events/${eventId}`,
       {
@@ -1222,7 +1223,6 @@ class TrendAPIService {
         body: cleanEventData,
       },
     );
-
 
     if (response?.event) {
       return response.event;
