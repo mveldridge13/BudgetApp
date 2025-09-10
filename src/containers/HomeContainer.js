@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // import {useFocusEffect} from '@react-navigation/native'; // Removed to eliminate reload delay
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
+import DateService from '../services/DateService';
 import HomeScreen from '../screens/HomeScreen';
 import useOnboarding from '../hooks/useOnboarding';
 import useGoals from '../hooks/useGoals';
@@ -642,11 +643,9 @@ const HomeContainer = ({navigation}) => {
           description: transaction.description,
           categoryId: transaction.categoryId || transaction.category,
           subcategoryId: transaction.subcategoryId || transaction.subcategory,
-          date: transaction.date.toISOString(),
+          date: DateService.prepareForBackend(transaction.date),
           recurrence: transaction.recurrence,
-          dueDate: transaction.dueDate
-            ? transaction.dueDate.toISOString()
-            : null,
+          dueDate: DateService.prepareForBackend(transaction.dueDate),
           status: transaction.status,
         };
 

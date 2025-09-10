@@ -1,0 +1,20 @@
+# Ignore JSON files
+*.json
+
+# Ignore node_modules
+node_modules/
+
+# Ignore build outputs
+build/
+dist/
+
+# Ignore iOS/Android build folders
+ios/build/
+android/build/
+android/app/build/
+
+# Ignore Metro bundler cache
+.metro
+
+# Ignore web mockup (separate project)
+budget-web-mockup/

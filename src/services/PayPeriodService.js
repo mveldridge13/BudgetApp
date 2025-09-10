@@ -1,4 +1,5 @@
 // services/PayPeriodService.js - Pay period calculation service
+import DateService from './DateService';
 
 /**
  * PayPeriodService handles all pay period related calculations and logic
@@ -6,22 +7,14 @@
  */
 class PayPeriodService {
   /**
-   * Parse nextPayDate as local date (ignoring timezone in stored data)
+   * Parse nextPayDate in user's timezone
    */
   static parseNextPayDate(nextPayDateString) {
     if (!nextPayDateString) {
       return null;
     }
 
-    let nextPayDate;
-    if (nextPayDateString.includes('T')) {
-      const dateOnly = nextPayDateString.split('T')[0];
-      nextPayDate = new Date(dateOnly + 'T12:00:00');
-    } else {
-      nextPayDate = new Date(nextPayDateString + 'T12:00:00');
-    }
-
-    return nextPayDate;
+    return DateService.parseInTimezone(nextPayDateString);
   }
 
   /**
@@ -109,19 +102,8 @@ class PayPeriodService {
       return false;
     }
 
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const payDateStart = new Date(
-      nextPayDate.getFullYear(),
-      nextPayDate.getMonth(),
-      nextPayDate.getDate(),
-    );
-
-    return todayStart >= payDateStart;
+    const todayStart = DateService.startOfToday();
+    return DateService.isOnOrAfterInTimezone(todayStart, nextPayDate);
   }
 
   /**
@@ -137,12 +119,7 @@ class PayPeriodService {
       return false;
     }
 
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
+    const todayStart = DateService.startOfToday();
 
     // Calculate what the previous pay date should have been
     const previousPayDate = this.calculatePreviousPayDate(
@@ -153,20 +130,18 @@ class PayPeriodService {
       return false;
     }
 
-    const previousPayDateStart = new Date(
-      previousPayDate.getFullYear(),
-      previousPayDate.getMonth(),
-      previousPayDate.getDate(),
-    );
-
     // Check if today matches the previous pay date (meaning it's pay day)
-    const isPayDay = todayStart.getTime() === previousPayDateStart.getTime();
+    const isPayDay = DateService.isSameDayInTimezone(
+      todayStart,
+      previousPayDate,
+    );
 
     if (!isPayDay) {
       return false;
     }
 
     // If it's pay day, only show message for 12 hours
+    const now = DateService.now();
     const payPeriodStartTime = new Date(todayStart);
     payPeriodStartTime.setHours(0, 0, 0, 0);
 
@@ -203,14 +178,7 @@ class PayPeriodService {
 
     if (isNewPeriod && useCurrentPeriodForNewPeriod) {
       // If we're in a new pay period, period starts TODAY (not from previous pay date)
-      const now = new Date();
-      const todayStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      );
-      periodStart = new Date(todayStart);
-      periodStart.setHours(0, 0, 0, 0);
+      periodStart = DateService.startOfToday();
     } else {
       // Calculate the previous pay date - this becomes the start of the current period
       const previousPayDate = this.calculatePreviousPayDate(
@@ -245,9 +213,8 @@ class PayPeriodService {
       return null;
     }
 
-    const today = new Date();
-    const timeDiff = nextPayDate.getTime() - today.getTime();
-    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    const today = DateService.startOfToday();
+    const daysDiff = DateService.daysDifferenceInTimezone(nextPayDate, today);
 
     if (daysDiff === 0) {
       return 'Pay day today!';
@@ -434,9 +401,14 @@ class PayPeriodService {
           return false;
         }
 
-        const inPreviousPeriod =
-          transactionDate >= previousPeriodStart &&
-          transactionDate <= previousPeriodEnd;
+        // Use DateService for timezone-aware date comparison
+        const inPreviousPeriod = DateService.isWithinIntervalInTimezone(
+          transactionDate,
+          {
+            start: previousPeriodStart,
+            end: previousPeriodEnd,
+          },
+        );
 
         // Only include expense transactions (or transactions without type specified)
         const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
@@ -448,6 +420,11 @@ class PayPeriodService {
             date: transaction.date,
             amount: transaction.amount,
             type: transaction.type,
+          });
+        } else if (isExpense) {
+          console.log('🔄 Excluding transaction (outside period):', {
+            date: transaction.date,
+            amount: transaction.amount,
           });
         }
 
@@ -531,13 +508,15 @@ class PayPeriodService {
       return false;
     }
 
-    const today = new Date();
+    const today = DateService.startOfToday();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Check if tomorrow is the pay date (today is day before)
-    const isDayBeforePayday =
-      tomorrow.toDateString() === nextPayDate.toDateString();
+    const isDayBeforePayday = DateService.isSameDayInTimezone(
+      tomorrow,
+      nextPayDate,
+    );
 
     // Also check we haven't already processed rollover for this period
     const hasRecentRollover =
@@ -562,20 +541,10 @@ class PayPeriodService {
       return {shouldTransition: false, newNextPayDate: null};
     }
 
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const payDateStart = new Date(
-      nextPayDate.getFullYear(),
-      nextPayDate.getMonth(),
-      nextPayDate.getDate(),
-    );
+    const todayStart = DateService.startOfToday();
 
     // Check if today is on or after the pay date (new period has started)
-    if (todayStart >= payDateStart) {
+    if (DateService.isOnOrAfterInTimezone(todayStart, nextPayDate)) {
       // Calculate the next pay date based on frequency
       const newNextPayDate = this.calculateNextPayDate(nextPayDate, frequency);
       if (!newNextPayDate) {

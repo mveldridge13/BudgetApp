@@ -4,6 +4,7 @@ import TrendAPIService from '../services/TrendAPIService';
 import CategoryCache from '../services/CategoryCache';
 import AddTransactionModal from '../components/AddTransactionModal';
 import {useAppSettings} from '../contexts/AppSettingsContext';
+import DateService from '../services/DateService';
 
 const recurrenceOptions = [
   {id: 'none', name: 'Does not repeat'},
@@ -41,7 +42,7 @@ const AddTransactionContainer = ({
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => DateService.createTodayInTimezone());
   const [selectedDueDate, setSelectedDueDate] = useState(null);
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
   const [selectedTransactionType, setSelectedTransactionType] =
@@ -295,7 +296,7 @@ const AddTransactionContainer = ({
     setDescription('');
     setSelectedCategory(null);
     setSelectedSubcategory(null);
-    setSelectedDate(new Date());
+    setSelectedDate(DateService.createTodayInTimezone());
     setSelectedDueDate(null);
     setSelectedRecurrence('none');
     setSelectedTransactionType('EXPENSE');
@@ -327,10 +328,10 @@ const AddTransactionContainer = ({
       setDescription(editingTransaction.description || '');
       setSelectedCategory(editingTransaction.categoryId);
       setSelectedSubcategory(editingTransaction.subcategoryId || null);
-      setSelectedDate(new Date(editingTransaction.date));
+      setSelectedDate(DateService.parseInTimezone(editingTransaction.date) || DateService.createTodayInTimezone());
       setSelectedDueDate(
         editingTransaction.dueDate
-          ? new Date(editingTransaction.dueDate)
+          ? DateService.parseInTimezone(editingTransaction.dueDate)
           : null,
       );
       setSelectedRecurrence(editingTransaction.recurrence || 'none');
@@ -388,13 +389,13 @@ const AddTransactionContainer = ({
       description: finalDescription,
       categoryId: selectedCategory, // ✅ CORRECT field name
       subcategoryId: selectedSubcategory, // ✅ FIXED - was 'subcategory'
-      date: selectedDate,
-      dueDate: selectedDueDate,
+      date: DateService.prepareForBackend(selectedDate),
+      dueDate: DateService.prepareForBackend(selectedDueDate),
       recurrence: selectedRecurrence,
       type: selectedTransactionType,
       status: selectedPaymentStatus,
-      createdAt: isEditMode ? editingTransaction.createdAt : new Date(),
-      updatedAt: isEditMode ? new Date() : undefined,
+      createdAt: isEditMode ? editingTransaction.createdAt : DateService.prepareForBackend(new Date()),
+      updatedAt: isEditMode ? DateService.prepareForBackend(new Date()) : undefined,
     };
 
     try {
@@ -674,8 +675,8 @@ const AddTransactionContainer = ({
       const tournamentData = {
         name: tournamentName,
         location: tournamentLocation,
-        dateStart: tournamentStartDate,
-        dateEnd: tournamentEndDate,
+        dateStart: DateService.prepareForBackend(tournamentStartDate),
+        dateEnd: DateService.prepareForBackend(tournamentEndDate),
         accommodation: tournamentAccommodation,
         food: tournamentFood,
         otherExpenses: tournamentOtherExpenses,

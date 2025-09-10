@@ -28,7 +28,7 @@ const GoalsScreen = ({route, navigation}) => {
   // Extract rollover parameters from route
   const rolloverParams = route?.params || {};
   const {fromRollover, rolloverAmount, rolloverFrequency} = rolloverParams;
-  
+
   // Debug logging for rollover parameters
   console.log('🔍 GOALS_SCREEN: Navigation params received:', {
     hasParams: !!route?.params,
@@ -217,7 +217,7 @@ const GoalsScreen = ({route, navigation}) => {
       pendingRolloverAllocation,
       rolloverCompleted,
     });
-    
+
     // Only open modal if we have fresh rollover params and haven't completed the rollover process
     if (fromRollover && rolloverAmount && !showAddGoal && !hasProcessedRollover && !pendingRolloverAllocation && !rolloverCompleted) {
       console.log('🔄 GoalsScreen: Opening Add Goal modal for rollover flow:', {
@@ -314,7 +314,7 @@ const GoalsScreen = ({route, navigation}) => {
             hasGoalId: !!result.goal?.id,
             goalId: result.goal?.id,
           });
-          
+
           if (pendingRolloverAllocation && result.goal?.id) {
             try {
               console.log('🔄 GOALS_SCREEN: Allocating rollover funds to new goal:', {

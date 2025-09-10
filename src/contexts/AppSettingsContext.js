@@ -9,6 +9,7 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UserProfileCache from '../services/UserProfileCache';
 import TrendAPIService from '../services/TrendAPIService';
+import DateService from '../services/DateService';
 
 const AppSettingsContext = createContext();
 
@@ -65,6 +66,8 @@ export const AppSettingsProvider = ({children}) => {
       // Process user profile
       if (cachedProfile && cachedProfile.profile) {
         setUserProfile(cachedProfile.profile);
+        // Initialize DateService with user's timezone
+        DateService.initializeFromProfile(cachedProfile.profile);
       }
 
       // Process app settings
@@ -116,6 +119,8 @@ export const AppSettingsProvider = ({children}) => {
       if (freshProfile && isMountedRef.current) {
         setUserProfile(freshProfile);
         await UserProfileCache.set(freshProfile);
+        // Update DateService with fresh timezone
+        DateService.initializeFromProfile(freshProfile);
       }
     } catch (error) {
       console.error('Error refreshing user profile:', error);
