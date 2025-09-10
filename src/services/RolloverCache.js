@@ -1,9 +1,25 @@
 // services/RolloverCache.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TrendAPIService from './TrendAPIService';
 
-const ROLLOVER_CACHE_KEY = 'rollover_cache';
-const ROLLOVER_ENTRIES_CACHE_KEY = 'rollover_entries_cache';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes (shorter TTL for financial data)
+
+// Generate user-specific cache keys
+const getUserCacheKey = async (baseKey) => {
+  try {
+    if (!TrendAPIService.isAuthenticated()) {
+      throw new Error('User not authenticated');
+    }
+    const profile = await TrendAPIService.getUserProfile();
+    if (!profile?.id) {
+      throw new Error('User profile ID not available');
+    }
+    return `${baseKey}_user_${profile.id}`;
+  } catch (error) {
+    console.error('🔄 RolloverCache: Failed to get user-specific cache key:', error);
+    throw error;
+  }
+};
 
 class RolloverCache {
   /**
@@ -12,7 +28,8 @@ class RolloverCache {
    */
   async getRolloverAmount() {
     try {
-      const cached = await AsyncStorage.getItem(ROLLOVER_CACHE_KEY);
+      const cacheKey = await getUserCacheKey('rollover_cache');
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (!cached) {
         return null;
       }
@@ -47,12 +64,13 @@ class RolloverCache {
    */
   async setRolloverAmount(data) {
     try {
+      const cacheKey = await getUserCacheKey('rollover_cache');
       const cacheData = {
         data: data || {rolloverAmount: 0, lastRolloverDate: null},
         timestamp: Date.now(),
       };
 
-      await AsyncStorage.setItem(ROLLOVER_CACHE_KEY, JSON.stringify(cacheData));
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       console.log('🔄 RolloverCache: Rollover amount cached successfully', {
         timestamp: cacheData.timestamp,
         rolloverAmount: data?.rolloverAmount || 0,
@@ -71,7 +89,8 @@ class RolloverCache {
    */
   async getRolloverEntries() {
     try {
-      const cached = await AsyncStorage.getItem(ROLLOVER_ENTRIES_CACHE_KEY);
+      const cacheKey = await getUserCacheKey('rollover_entries_cache');
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (!cached) {
         return null;
       }
@@ -105,15 +124,13 @@ class RolloverCache {
    */
   async setRolloverEntries(data) {
     try {
+      const cacheKey = await getUserCacheKey('rollover_entries_cache');
       const cacheData = {
         data: data || [],
         timestamp: Date.now(),
       };
 
-      await AsyncStorage.setItem(
-        ROLLOVER_ENTRIES_CACHE_KEY,
-        JSON.stringify(cacheData),
-      );
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       console.log('🔄 RolloverCache: Rollover entries cached successfully', {
         timestamp: cacheData.timestamp,
         entriesCount: data?.length || 0,
@@ -131,7 +148,8 @@ class RolloverCache {
    */
   async clearRolloverAmount() {
     try {
-      await AsyncStorage.removeItem(ROLLOVER_CACHE_KEY);
+      const cacheKey = await getUserCacheKey('rollover_cache');
+      await AsyncStorage.removeItem(cacheKey);
       console.log('🔄 RolloverCache: Rollover amount cache cleared');
       return true;
     } catch (error) {
@@ -146,7 +164,8 @@ class RolloverCache {
    */
   async clearRolloverEntries() {
     try {
-      await AsyncStorage.removeItem(ROLLOVER_ENTRIES_CACHE_KEY);
+      const cacheKey = await getUserCacheKey('rollover_entries_cache');
+      await AsyncStorage.removeItem(cacheKey);
       console.log('🔄 RolloverCache: Rollover entries cache cleared');
       return true;
     } catch (error) {
@@ -168,6 +187,55 @@ class RolloverCache {
       return results.every(result => result === true);
     } catch (error) {
       console.error('🔄 RolloverCache: Clear all error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear all rollover caches for a specific user
+   * Useful when switching users or logging out
+   * @param {string} userId - User ID to clear cache for
+   * @returns {Promise<boolean>}
+   */
+  async clearUserCache(userId) {
+    try {
+      const rolloverCacheKey = `rollover_cache_user_${userId}`;
+      const entriesCacheKey = `rollover_entries_cache_user_${userId}`;
+
+      await Promise.all([
+        AsyncStorage.removeItem(rolloverCacheKey),
+        AsyncStorage.removeItem(entriesCacheKey),
+      ]);
+
+      console.log(`🔄 RolloverCache: Cleared all cache for user ${userId}`);
+      return true;
+    } catch (error) {
+      console.error('🔄 RolloverCache: Clear user cache error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear all rollover caches for all users
+   * WARNING: This clears cache for ALL users on the device
+   * @returns {Promise<boolean>}
+   */
+  async clearAllUsersCache() {
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const rolloverKeys = allKeys.filter(key =>
+        key.startsWith('rollover_cache_user_') ||
+        key.startsWith('rollover_entries_cache_user_')
+      );
+
+      if (rolloverKeys.length > 0) {
+        await AsyncStorage.multiRemove(rolloverKeys);
+        console.log(`🔄 RolloverCache: Cleared cache for ${rolloverKeys.length} keys across all users`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('🔄 RolloverCache: Clear all users cache error:', error);
       return false;
     }
   }
@@ -197,7 +265,8 @@ class RolloverCache {
    */
   async invalidateRolloverAmount() {
     try {
-      const cached = await AsyncStorage.getItem(ROLLOVER_CACHE_KEY);
+      const cacheKey = await getUserCacheKey('rollover_cache');
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         const {data} = JSON.parse(cached);
         const cacheData = {
@@ -205,10 +274,7 @@ class RolloverCache {
           timestamp: 0, // Mark as stale but keep data
         };
 
-        await AsyncStorage.setItem(
-          ROLLOVER_CACHE_KEY,
-          JSON.stringify(cacheData),
-        );
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
         console.log('🔄 RolloverCache: Rollover amount cache invalidated');
         return true;
       }
@@ -229,7 +295,8 @@ class RolloverCache {
    */
   async invalidateRolloverEntries() {
     try {
-      const cached = await AsyncStorage.getItem(ROLLOVER_ENTRIES_CACHE_KEY);
+      const cacheKey = await getUserCacheKey('rollover_entries_cache');
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         const {data} = JSON.parse(cached);
         const cacheData = {
@@ -237,10 +304,7 @@ class RolloverCache {
           timestamp: 0, // Mark as stale but keep data
         };
 
-        await AsyncStorage.setItem(
-          ROLLOVER_ENTRIES_CACHE_KEY,
-          JSON.stringify(cacheData),
-        );
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
         console.log('🔄 RolloverCache: Rollover entries cache invalidated');
         return true;
       }
