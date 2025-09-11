@@ -275,6 +275,17 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
+      // 🌍 Check and update timezone for existing UTC users (one-time fix)
+      try {
+        const timezoneUpdate = await AuthService.updateTimezoneIfNeeded();
+        if (timezoneUpdate.success && !timezoneUpdate.alreadySet) {
+          console.log('🌍 HomeContainer: Timezone updated successfully:', timezoneUpdate);
+        }
+      } catch (timezoneError) {
+        console.warn('🌍 HomeContainer: Timezone update failed (non-critical):', timezoneError);
+        // Don't fail the entire profile load if timezone update fails
+      }
+
       const profile = await TrendAPIService.getUserProfile();
       console.log('👤 Profile received from backend:', {
         platform: Platform.OS,
@@ -711,28 +722,9 @@ const HomeContainer = ({navigation}) => {
           }
         }, 100); // Small delay to ensure transaction UI has updated
 
-        // 🔄 ROLLOVER LOGIC: If this is an expense, reduce rollover amount using RolloverService
-        if (
-          transaction.type === 'EXPENSE' &&
-          rolloverAmount > 0 &&
-          !isEditing // Only for new transactions, not edits
-        ) {
-          try {
-            const result = await RolloverService.reduceRolloverForExpense(
-              rolloverAmount,
-              transaction.amount,
-            );
-            if (result.success) {
-              setRolloverAmount(result.newRolloverAmount);
-            }
-          } catch (rolloverError) {
-            console.error(
-              '🔄 Failed to update rollover amount:',
-              rolloverError,
-            );
-            // Don't fail the transaction if rollover update fails
-          }
-        }
+        // NOTE: Rollover amount should remain constant during the pay period
+        // It represents money carried over from the previous period and shouldn't change
+        // when adding/removing current period transactions
 
         return {
           success: true,
@@ -808,6 +800,10 @@ const HomeContainer = ({navigation}) => {
           );
           // Don't fail the entire transaction delete if goal update fails
         }
+
+        // NOTE: Don't clear rollover cache for current period transactions
+        // Rollover amount should remain constant during the pay period
+        // It only gets recalculated during pay period transitions
       }
     } catch (error) {
       console.error('HomeContainer: Transaction delete failed:', error);

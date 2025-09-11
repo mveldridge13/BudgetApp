@@ -7,7 +7,7 @@ import {startOfDay, isWithinInterval, format} from 'date-fns';
  */
 class DateService {
   // Default timezone - will be set from user profile
-  static defaultTimezone = 'Australia/Sydney';
+  static defaultTimezone = 'UTC';
   static isInitialized = false;
 
   /**
@@ -39,10 +39,28 @@ class DateService {
       this.defaultTimezone = timezone;
     } catch (error) {
       console.warn(
-        'Invalid timezone provided, falling back to Australia/Sydney:',
+        'Invalid timezone provided, falling back to UTC:',
         timezone,
       );
-      this.defaultTimezone = 'Australia/Sydney';
+      this.defaultTimezone = 'UTC';
+    }
+  }
+
+  /**
+   * Auto-detect user's timezone using browser/device timezone
+   * Returns detected timezone string (e.g., "Australia/Sydney", "America/New_York")
+   */
+  static detectUserTimezone() {
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      console.log('🌍 DateService: Auto-detected user timezone:', timezone);
+      return timezone;
+    } catch (error) {
+      console.warn(
+        '🌍 DateService: Failed to detect timezone, using UTC fallback:',
+        error
+      );
+      return 'UTC'; // Universal fallback - no geographic assumptions
     }
   }
 

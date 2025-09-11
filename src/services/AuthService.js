@@ -1,4 +1,5 @@
 import TrendAPI from './TrendAPIService';
+import DateService from './DateService';
 
 /**
  * Authentication Service
@@ -77,11 +78,16 @@ class AuthService {
   // Register new user
   async register(userData) {
     try {
+      // Auto-detect user's timezone for new registrations
+      const detectedTimezone = DateService.detectUserTimezone();
+      
       const result = await TrendAPI.register({
         firstName: userData.firstName,
         lastName: userData.lastName,
         email: userData.email,
         password: userData.password,
+        // Use provided timezone from onboarding, or auto-detect as fallback
+        timezone: userData.timezone || detectedTimezone,
       });
 
       if (result.success) {
@@ -126,6 +132,61 @@ class AuthService {
       this.currentUser = null;
       await TrendAPI.clearToken();
       return {success: true};
+    }
+  }
+
+  /**
+   * Check and update timezone for existing users who have "UTC"
+   * This is a one-time fix for users created before timezone detection
+   */
+  async updateTimezoneIfNeeded() {
+    if (!this.isAuthenticated()) {
+      return {success: false, error: 'Not authenticated'};
+    }
+
+    try {
+      // Get current user profile to check timezone
+      const userProfile = await TrendAPI.getUserProfile();
+
+      if (userProfile?.timezone === 'UTC') {
+        console.log('🌍 AuthService: Found UTC user, updating to detected timezone');
+
+        // Detect user's actual timezone
+        const detectedTimezone = DateService.detectUserTimezone();
+
+        // Update user profile with detected timezone
+        const updateResult = await TrendAPI.updateUserProfile({
+          timezone: detectedTimezone,
+        });
+
+        if (updateResult.success) {
+          // Update DateService with new timezone immediately
+          DateService.setTimezone(detectedTimezone);
+
+          console.log(`🌍 AuthService: Successfully updated user timezone from UTC to ${detectedTimezone}`);
+
+          return {
+            success: true,
+            previousTimezone: 'UTC',
+            newTimezone: detectedTimezone,
+            message: `Timezone updated from UTC to ${detectedTimezone}`,
+          };
+        } else {
+          console.error('🌍 AuthService: Failed to update user timezone:', updateResult.error);
+          return {success: false, error: updateResult.error};
+        }
+      } else {
+        console.log(`🌍 AuthService: User timezone is already set to: ${userProfile?.timezone || 'unknown'}`);
+        return {
+          success: true,
+          alreadySet: true,
+          currentTimezone: userProfile?.timezone,
+          message: 'Timezone already configured',
+        };
+      }
+    } catch (error) {
+      console.error('🌍 AuthService: Error checking/updating timezone:', error);
+      return {success: false, error: error.message};
     }
   }
 

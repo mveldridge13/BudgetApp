@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.48:3001/api/v1', // Updated with correct IP
+  baseURL: 'http://192.168.1.54:3001/api/v1', // Updated with correct IP
   timeout: 30000, // Increased timeout for mobile devices
 };
 
