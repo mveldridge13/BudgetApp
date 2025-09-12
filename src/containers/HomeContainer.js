@@ -18,6 +18,8 @@ import DateService from '../services/DateService';
 import HomeScreen from '../screens/HomeScreen';
 import useOnboarding from '../hooks/useOnboarding';
 import useGoals from '../hooks/useGoals';
+import GoalAllocationModal from '../components/GoalAllocationModal';
+import AddGoalModal from '../components/AddGoalModal';
 import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
 import PayPeriodService from '../services/PayPeriodService';
@@ -53,12 +55,15 @@ const HomeContainer = ({navigation}) => {
   // Rollover state
   const [rolloverAmount, setRolloverAmount] = useState(0);
   const [rolloverBanner, setRolloverBanner] = useState(null); // {amount: number, frequency: string, date: string}
+  const [showGoalAllocationModal, setShowGoalAllocationModal] = useState(false);
+  const [rolloverAmountToAllocate, setRolloverAmountToAllocate] = useState(0);
+  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
 
   // ==============================================
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
-  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
+  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals, saveGoal, addGoalContribution} = useGoals();
   const {moduleSettings} = useAppSettings();
 
   // Get poker module setting
@@ -279,10 +284,16 @@ const HomeContainer = ({navigation}) => {
       try {
         const timezoneUpdate = await AuthService.updateTimezoneIfNeeded();
         if (timezoneUpdate.success && !timezoneUpdate.alreadySet) {
-          console.log('🌍 HomeContainer: Timezone updated successfully:', timezoneUpdate);
+          console.log(
+            '🌍 HomeContainer: Timezone updated successfully:',
+            timezoneUpdate,
+          );
         }
       } catch (timezoneError) {
-        console.warn('🌍 HomeContainer: Timezone update failed (non-critical):', timezoneError);
+        console.warn(
+          '🌍 HomeContainer: Timezone update failed (non-critical):',
+          timezoneError,
+        );
         // Don't fail the entire profile load if timezone update fails
       }
 
@@ -2207,6 +2218,14 @@ const HomeContainer = ({navigation}) => {
             );
           }
         }}
+        onReassignRollover={amount => {
+          console.log(
+            '🔄 HomeContainer: Rollover reassignment requested:',
+            amount,
+          );
+          setRolloverAmountToAllocate(amount);
+          setShowGoalAllocationModal(true);
+        }}
         // Tournament/Poker props
         tournaments={tournaments}
         pokerSectionExpanded={pokerSectionExpanded}
@@ -2238,6 +2257,66 @@ const HomeContainer = ({navigation}) => {
         onClose={handleCloseAddTournament}
         onSave={handleSaveTournament}
         editingTournament={editingTournament}
+      />
+
+      {/* Goal Allocation Modal for Rollover Reassignment */}
+      <GoalAllocationModal
+        key={`goal-allocation-${goals.length}-${showGoalAllocationModal}`}
+        visible={showGoalAllocationModal}
+        onClose={() => setShowGoalAllocationModal(false)}
+        onConfirm={async (allocation) => {
+          try {
+            console.log('🔄 HomeContainer: Goal allocation confirmed:', allocation);
+            // Use RolloverService to process goal allocations with optimistic updates
+            const result = await RolloverService.processGoalAllocations(
+              allocation.goalAllocations,
+              addGoalContribution
+            );
+
+            if (result.success) {
+              console.log('🎯 HomeContainer: Goal allocations processed successfully');
+              setShowGoalAllocationModal(false);
+            } else {
+              console.error('🔄 HomeContainer: Goal allocation failed:', result.error);
+              Alert.alert('Error', result.error || 'Failed to allocate funds to goals');
+            }
+          } catch (error) {
+            console.error('🔄 HomeContainer: Error processing goal allocations:', error);
+            Alert.alert('Error', 'An unexpected error occurred while allocating funds');
+          }
+        }}
+        onCreateGoal={() => {
+          // Open AddGoalModal directly
+          setShowAddGoalModal(true);
+        }}
+        availableAmount={rolloverAmountToAllocate}
+        goals={goals}
+        frequency={incomeData?.frequency || 'fortnightly'}
+      />
+
+      {/* Add Goal Modal */}
+      <AddGoalModal
+        visible={showAddGoalModal}
+        onClose={() => setShowAddGoalModal(false)}
+        onSave={async (goalData) => {
+          try {
+            // Actually save the goal using the useGoals hook
+            const result = await saveGoal(goalData);
+            if (result && result.success) {
+              console.log('🎯 Goal saved successfully, refreshing goals list');
+              setShowAddGoalModal(false);
+              // Force refresh goals to ensure GoalAllocationModal sees the new goal
+              await loadGoals();
+              return {success: true};
+            } else {
+              return {success: false, error: result?.error || 'Failed to save goal'};
+            }
+          } catch (error) {
+            console.error('HomeContainer: Error saving goal from overlay:', error);
+            return {success: false, error: error.message || 'Failed to save goal'};
+          }
+        }}
+        navigation={navigation}
       />
     </>
   );

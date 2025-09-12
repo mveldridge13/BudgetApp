@@ -28,6 +28,7 @@ const BalanceCard = ({
   rolloverAmount = 0,
   rolloverBanner = null,
   onDismissRolloverBanner = null,
+  onReassignRollover = null,
   // Pay period UI state (calculated by HomeContainer)
   isNewPayPeriodForUI = false,
 }) => {
@@ -360,10 +361,33 @@ const BalanceCard = ({
         {rolloverBanner && (
           <View style={styles.rolloverBanner}>
             <View style={styles.rolloverBannerContent}>
-              <Icon name="arrow-right-circle" size={20} color={colors.textWhite} />
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('🔄 Arrow pressed! Props:', {
+                    hasCallback: !!onReassignRollover,
+                    amount: rolloverBanner?.amount,
+                  });
+                  if (onReassignRollover && rolloverBanner?.amount) {
+                    console.log(
+                      '🔄 Calling onReassignRollover with:',
+                      rolloverBanner.amount,
+                    );
+                    onReassignRollover(rolloverBanner.amount);
+                  } else {
+                    console.log('🔄 Missing callback or amount');
+                  }
+                }}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Icon
+                  name="arrow-right-circle"
+                  size={20}
+                  color={colors.textWhite}
+                />
+              </TouchableOpacity>
               <View style={styles.rolloverBannerText}>
                 <Text style={styles.rolloverBannerTitle}>
-                  {formatCurrency(rolloverBanner.amount)} has been rolled into this period
+                  {formatCurrency(rolloverBanner.amount)} has been rolled into
+                  this period
                 </Text>
               </View>
               {onDismissRolloverBanner && (
@@ -580,7 +604,6 @@ const BalanceCard = ({
           </Text>
         </TouchableOpacity>
       )}
-
     </View>
   );
 };
