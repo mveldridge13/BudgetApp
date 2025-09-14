@@ -236,13 +236,56 @@ const BalanceCard = ({
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
 
-  // Additional calculated metrics
-  const dailyBudget =
-    incomeData?.frequency === 'weekly'
-      ? adjustedLeftToSpend / 7
-      : incomeData?.frequency === 'fortnightly'
-      ? adjustedLeftToSpend / 14
-      : adjustedLeftToSpend / 30;
+  // Additional calculated metrics - use actual days until next pay
+  const getDaysUntilNextPay = () => {
+    if (!incomeData?.nextPayDate) {
+      // Fallback to frequency-based calculation
+      return incomeData?.frequency === 'weekly' ? 7
+        : incomeData?.frequency === 'fortnightly' ? 14
+        : 30;
+    }
+
+    try {
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      // Get today's date
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+
+      // Get pay date start (without time)
+      const payDateStart = new Date(
+        nextPayDate.getFullYear(),
+        nextPayDate.getMonth(),
+        nextPayDate.getDate(),
+      );
+
+      // Calculate days remaining
+      const timeDiff = payDateStart.getTime() - todayStart.getTime();
+      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+      return Math.max(1, daysDiff); // Minimum 1 day to avoid division by zero
+    } catch (error) {
+      // Fallback to frequency-based calculation
+      return incomeData?.frequency === 'weekly' ? 7
+        : incomeData?.frequency === 'fortnightly' ? 14
+        : 30;
+    }
+  };
+
+  const daysUntilNextPay = getDaysUntilNextPay();
+  const dailyBudget = adjustedLeftToSpend / daysUntilNextPay;
+  const weeklyBudget = dailyBudget * 7;
 
   const isOverBudget = leftToSpend < 0;
   const isCloseToLimit = percentageRemaining < 20 && percentageRemaining >= 0;
@@ -539,7 +582,7 @@ const BalanceCard = ({
 
             {!loading && dailyBudget > 0 && (
               <Text style={styles.dailyBudgetText}>
-                {formatCurrency(dailyBudget)}/day
+                {formatCurrency(dailyBudget)}/day ({formatCurrency(weeklyBudget)}/week)
               </Text>
             )}
           </View>
