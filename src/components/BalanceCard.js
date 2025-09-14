@@ -245,7 +245,8 @@ const BalanceCard = ({
       : adjustedLeftToSpend / 30;
 
   const isOverBudget = leftToSpend < 0;
-  const isCloseToLimit = percentageRemaining < 20 && percentageRemaining > 0;
+  const isCloseToLimit = percentageRemaining < 20 && percentageRemaining >= 0;
+  const isLowBalance = percentageRemaining < 50 && percentageRemaining >= 20;
   const isGoalImpact = totalGoalContributions > 0 && adjustedLeftToSpend < 500;
 
   // Calculate goal progress for display
@@ -495,7 +496,6 @@ const BalanceCard = ({
                 style={[
                   styles.leftAmount,
                   isOverBudget && styles.overBudgetText,
-                  isCloseToLimit && styles.warningText,
                 ]}>
                 {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
               </Text>
@@ -524,7 +524,8 @@ const BalanceCard = ({
                   width: `${Math.max(0, Math.min(100, percentageRemaining))}%`,
                 },
                 isOverBudget && styles.overBudgetBar,
-                isCloseToLimit && styles.warningBar,
+                isCloseToLimit && styles.overBudgetBar,
+                isLowBalance && styles.warningBar,
               ]}
             />
           </View>
@@ -554,12 +555,6 @@ const BalanceCard = ({
           {isOverBudget && (
             <Text style={styles.statusWarning}>
               ⚠️ Over budget by {formatCurrency(Math.abs(leftToSpend))}
-            </Text>
-          )}
-
-          {isCloseToLimit && !isGoalImpact && (
-            <Text style={styles.statusWarning}>
-              💡 Low balance - consider reducing expenses
             </Text>
           )}
 
