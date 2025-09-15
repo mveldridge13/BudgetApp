@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   StyleSheet,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {LineChart} from 'react-native-chart-kit';
@@ -22,6 +24,214 @@ const ProBadge = () => (
     <Text style={styles.proBadgeText}>PRO</Text>
   </View>
 );
+
+// Constants for swipe gestures
+const SWIPE_THRESHOLD = 120;
+const ACTIVATION_THRESHOLD = 15;
+
+// BillItem Component with swipe gestures
+const BillItem = ({ bill, onDelete, onMarkPaid, formatDueDate }) => {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Animation values
+  const translateX = useRef(new Animated.Value(0)).current;
+  const deleteOpacity = useRef(new Animated.Value(0)).current;
+  const paidOpacity = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+
+  const resetPosition = () => {
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 120,
+        friction: 8,
+      }),
+      Animated.timing(deleteOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(paidOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const performDelete = () => {
+    setIsDeleting(true);
+
+    if (onDelete) {
+      onDelete(bill);
+    }
+
+    // Animate card out
+    Animated.parallel([
+      Animated.timing(cardOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardScale, {
+        toValue: 0.8,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: -400,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(deleteOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const performMarkPaid = () => {
+    if (onMarkPaid) {
+      onMarkPaid(bill);
+    }
+    resetPosition();
+  };
+
+  // Pan responder for swipe gestures
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        const isHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const hasMinMovement = Math.abs(gestureState.dx) > ACTIVATION_THRESHOLD;
+        return isHorizontal && hasMinMovement;
+      },
+      onPanResponderGrant: (evt, gestureState) => {
+        Animated.spring(cardScale, {
+          toValue: 0.98,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 7,
+        }).start();
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const newTranslateX = gestureState.dx;
+        translateX.setValue(newTranslateX);
+
+        if (newTranslateX < 0) {
+          // Left swipe - delete
+          const progress = Math.min(1, Math.abs(newTranslateX) / SWIPE_THRESHOLD);
+          deleteOpacity.setValue(progress);
+          paidOpacity.setValue(0);
+        } else if (newTranslateX > 0) {
+          // Right swipe - mark paid
+          const progress = Math.min(1, Math.abs(newTranslateX) / SWIPE_THRESHOLD);
+          paidOpacity.setValue(progress);
+          deleteOpacity.setValue(0);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const swipeDistance = gestureState.dx;
+        const swipeVelocity = gestureState.vx;
+
+        Animated.spring(cardScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 7,
+        }).start();
+
+        if (swipeDistance < -SWIPE_THRESHOLD || swipeVelocity < -0.5) {
+          performDelete();
+        } else if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
+          performMarkPaid();
+        } else {
+          resetPosition();
+        }
+      },
+      onPanResponderTerminate: () => {
+        resetPosition();
+      },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+    }),
+  ).current;
+
+  if (isDeleting) {
+    return null;
+  }
+
+  return (
+    <View style={styles.billItemContainer}>
+      {/* Delete Background */}
+      <Animated.View
+        style={[
+          styles.billDeleteBackground,
+          {
+            opacity: deleteOpacity,
+          },
+        ]}>
+        <View style={styles.billDeleteContent}>
+          <Icon name="trash-outline" size={24} color="#FFFFFF" />
+          <Text style={styles.billDeleteText}>Delete</Text>
+        </View>
+      </Animated.View>
+
+      {/* Mark Paid Background */}
+      <Animated.View
+        style={[
+          styles.billPaidBackground,
+          {
+            opacity: paidOpacity,
+          },
+        ]}>
+        <View style={styles.billPaidContent}>
+          <Icon name="checkmark-outline" size={24} color="#FFFFFF" />
+          <Text style={styles.billPaidText}>Mark Paid</Text>
+        </View>
+      </Animated.View>
+
+      {/* Main Bill Item */}
+      <Animated.View
+        style={[
+          styles.billItemWrapper,
+          {
+            transform: [{translateX: translateX}, {scale: cardScale}],
+            opacity: cardOpacity,
+          },
+        ]}>
+        <View style={styles.billsListItem} {...panResponder.panHandlers}>
+          <View style={styles.billsListLeft}>
+            <Text style={styles.billsListName}>
+              {bill.description || bill.category?.name || 'Bill'}
+            </Text>
+            <Text style={styles.billsListCategory}>
+              {bill.category?.name || 'General'}
+            </Text>
+            <Text style={styles.billsListDueDate}>
+              {formatDueDate(bill.dueDate)}
+            </Text>
+          </View>
+          <View style={styles.billsListRight}>
+            <Text style={styles.billsListAmount}>
+              ${Math.abs(bill.amount).toFixed(2)}
+            </Text>
+            <View
+              style={[
+                styles.billsStatusBadge,
+                styles.billsStatusUpcoming,
+              ]}>
+              <Text style={styles.billsStatusText}>Due Soon</Text>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+    </View>
+  );
+};
 
 const AnalyticsScreen = ({
   // Core data
@@ -47,7 +257,7 @@ const AnalyticsScreen = ({
   // ✅ NEW: Spending velocity data
   spendingVelocity,
 
-  // ✅ NEW: Bills analytics data
+  // ✅ NEW: Bills analytics data - cache-first, background sync
   billsAnalytics,
 
   // ✅ NEW: Income analytics data
@@ -62,6 +272,10 @@ const AnalyticsScreen = ({
   onDiscretionaryClick,
   onCloseBreakdown,
   onRefresh,
+
+  // Bill event handlers
+  onBillDelete,
+  onBillMarkPaid,
 
   // Helper functions
   isRecurringTransaction,
@@ -796,41 +1010,26 @@ const AnalyticsScreen = ({
             {/* Upcoming Bills (Next 7 Days) */}
             <View style={styles.chartContainer}>
               <Text style={styles.chartTitle}>
-                Upcoming Bills (Next 7 Days)
+                Upcoming Bills
+              </Text>
+              <Text style={styles.chartSubtitle}>
+                Swipe left to delete • Swipe right to mark paid
               </Text>
               <View style={styles.billsListContainer}>
                 {billsAnalytics?.upcomingBills?.length > 0 ? (
                   billsAnalytics.upcomingBills.map((bill, index) => (
-                    <View key={index} style={styles.billsListItem}>
-                      <View style={styles.billsListLeft}>
-                        <Text style={styles.billsListName}>
-                          {bill.description || bill.category?.name || 'Bill'}
-                        </Text>
-                        <Text style={styles.billsListCategory}>
-                          {bill.category?.name || 'General'}
-                        </Text>
-                        <Text style={styles.billsListDueDate}>
-                          {formatDueDate(bill.dueDate)}
-                        </Text>
-                      </View>
-                      <View style={styles.billsListRight}>
-                        <Text style={styles.billsListAmount}>
-                          ${Math.abs(bill.amount).toFixed(2)}
-                        </Text>
-                        <View
-                          style={[
-                            styles.billsStatusBadge,
-                            styles.billsStatusUpcoming,
-                          ]}>
-                          <Text style={styles.billsStatusText}>Due Soon</Text>
-                        </View>
-                      </View>
-                    </View>
+                    <BillItem
+                      key={bill.id || `bill-${index}`}
+                      bill={bill}
+                      onDelete={onBillDelete}
+                      onMarkPaid={onBillMarkPaid}
+                      formatDueDate={formatDueDate}
+                    />
                   ))
                 ) : (
                   <View style={styles.billsListItem}>
                     <Text style={styles.billsListName}>
-                      No bills due in the next 7 days
+                      No upcoming bills
                     </Text>
                   </View>
                 )}
@@ -1004,9 +1203,9 @@ const AnalyticsScreen = ({
                     <Text style={styles.insightBold}>Upcoming deadlines:</Text>{' '}
                     You have {billsAnalytics.upcomingBills.length}{' '}
                     {billsAnalytics.upcomingBills.length === 1
-                      ? 'bill'
-                      : 'bills'}{' '}
-                    due in the next 7 days totaling $
+                      ? 'upcoming bill'
+                      : 'upcoming bills'}{' '}
+                    totaling $
                     {billsAnalytics.upcomingBills
                       .reduce((sum, bill) => sum + Math.abs(bill.amount), 0)
                       .toFixed(2)}
@@ -1539,8 +1738,16 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.overlayLight || '#E5E7EB',
+    borderWidth: 0.5,
+    borderColor: '#D1D5DB',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   billsListItemLate: {
     borderColor: colors.danger || '#EF4444',
@@ -1675,6 +1882,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary || '#6B7280',
     fontFamily: 'System',
+  },
+
+  // Chart subtitle for instructions
+  chartSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+
+  // Bill swipe styles
+  billItemContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  billItemWrapper: {
+    zIndex: 2,
+  },
+  billDeleteBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FF6B85',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingRight: 20,
+    zIndex: 1,
+  },
+  billDeleteContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    marginLeft: 8,
+    letterSpacing: -0.2,
+  },
+  billPaidBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#52C788',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingLeft: 20,
+    zIndex: 1,
+  },
+  billPaidContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billPaidText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    marginLeft: 8,
+    letterSpacing: -0.2,
   },
 });
 

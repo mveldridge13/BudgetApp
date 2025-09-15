@@ -2,12 +2,16 @@ import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {AppState, Alert, Dimensions} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import TrendAPIService from '../services/TrendAPIService';
 import billsAnalyticsCache from '../services/BillsAnalyticsCache';
 import incomeAnalyticsCache from '../services/IncomeAnalyticsCache';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import {colors} from '../styles';
+
+// Cache keys to match useTransactions hook
+const TRANSACTIONS_KEY = 'transactions';
 
 const AnalyticsContainer = () => {
   // Get Pro status and module settings from context
@@ -270,7 +274,6 @@ const AnalyticsContainer = () => {
 
       // Calculate pay period boundaries (same logic as HomeContainer)
       const now = new Date();
-      const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       let periodStart, periodEnd;
 
       if (userProfile?.nextPayDate && userProfile?.incomeFrequency) {
@@ -378,16 +381,27 @@ const AnalyticsContainer = () => {
         if (bill.status === 'PAID') {
           return false;
         }
-        return new Date(bill.dueDate) < now;
+        // Only include bills that are past due (before today, not including today)
+        const billDueDate = new Date(bill.dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+        billDueDate.setHours(0, 0, 0, 0); // Start of due date
+
+        return billDueDate < today; // Strictly before today
       });
 
-      // Upcoming bills (next 7 days)
+      // Upcoming bills (all unpaid bills from today onwards)
       const upcomingBills = payPeriodBills.filter(bill => {
         if (bill.status === 'PAID') {
           return false;
         }
-        const dueDate = new Date(bill.dueDate);
-        return dueDate >= now && dueDate <= oneWeekFromNow;
+        const billDueDate = new Date(bill.dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+        billDueDate.setHours(0, 0, 0, 0); // Start of due date
+
+        // Include all bills due from today onwards (no 7-day limit)
+        return billDueDate >= today;
       });
 
       // Calculate amounts
@@ -552,6 +566,17 @@ const AnalyticsContainer = () => {
       }
     }
   }, [isOnline]);
+
+  // Simple cache invalidation - let existing systems handle the refresh
+  const invalidateTransactionCache = useCallback(async () => {
+    try {
+      // Just clear the cache - useTransactions hook will handle background refresh
+      await AsyncStorage.removeItem(TRANSACTIONS_KEY);
+      console.log('🗑️ Transaction cache cleared - will refresh on next access');
+    } catch (error) {
+      console.error('Error clearing transaction cache:', error);
+    }
+  }, []);
 
   // Load analytics from backend - let backend do ALL the work
   const loadAnalyticsData = useCallback(
@@ -864,6 +889,70 @@ const AnalyticsContainer = () => {
     [loadAnalyticsData, loadBillsAnalytics, loadIncomeAnalytics, refreshing],
   );
 
+  // ============================================================================
+  // BILL ACTION HANDLERS - FOLLOWING CACHE-FIRST, BACKGROUND SYNC PATTERN
+  // ============================================================================
+
+  const handleBillDelete = useCallback(
+    async bill => {
+      try {
+        // 1. Background sync - delete the actual transaction (NO optimistic updates)
+        if (isOnline) {
+          await TrendAPIService.deleteTransaction(bill.id);
+          console.log('✅ Bill deleted from backend:', bill.id);
+        } else {
+          console.log('📱 Offline - bill deletion will sync when online');
+          // TODO: Add to offline queue following established pattern
+        }
+
+        // 2. Invalidate related caches - background sync will handle refresh
+        await billsAnalyticsCache.invalidate();
+        await invalidateTransactionCache();
+        console.log('🗑️ Bills and transaction caches invalidated');
+
+        // 3. Immediate refresh to show changes
+        await loadBillsAnalytics(true);
+      } catch (error) {
+        console.error('Error deleting bill:', error);
+
+        Alert.alert('Error', 'Failed to delete bill. Please try again.', [
+          {text: 'OK'},
+        ]);
+      }
+    },
+    [isOnline, loadBillsAnalytics, invalidateTransactionCache],
+  );
+
+  const handleBillMarkPaid = useCallback(
+    async bill => {
+      try {
+        // 1. Background sync - update the actual transaction status (NO optimistic updates)
+        if (isOnline) {
+          await TrendAPIService.updateTransaction(bill.id, {status: 'PAID'});
+          console.log('✅ Bill marked as paid in backend:', bill.id);
+        } else {
+          console.log('📱 Offline - bill status update will sync when online');
+          // TODO: Add to offline queue following established pattern
+        }
+
+        // 2. Invalidate related caches - background sync will handle refresh
+        await billsAnalyticsCache.invalidate();
+        await invalidateTransactionCache();
+        console.log('💳 Bills and transaction caches invalidated');
+
+        // 3. Immediate refresh to show changes
+        await loadBillsAnalytics(true);
+      } catch (error) {
+        console.error('Error marking bill as paid:', error);
+
+        Alert.alert('Error', 'Failed to mark bill as paid. Please try again.', [
+          {text: 'OK'},
+        ]);
+      }
+    },
+    [isOnline, loadBillsAnalytics, invalidateTransactionCache],
+  );
+
   useEffect(() => {
     const handleAppStateChange = nextAppState => {
       if (nextAppState === 'active' && isMountedRef.current) {
@@ -946,7 +1035,7 @@ const AnalyticsContainer = () => {
     // ✅ NEW: Spending velocity data from backend
     spendingVelocity: processedData.spendingVelocity,
 
-    // ✅ NEW: Backend bills analytics data - direct pass-through
+    // ✅ NEW: Backend bills analytics data - cache-first, background sync
     billsAnalytics: billsAnalytics,
 
     // ✅ NEW: Backend income analytics data - direct pass-through
@@ -961,6 +1050,10 @@ const AnalyticsContainer = () => {
     onDiscretionaryClick: handleDiscretionaryClick,
     onCloseBreakdown: handleCloseBreakdown,
     onRefresh: handleRefresh,
+
+    // Bill action handlers
+    onBillDelete: handleBillDelete,
+    onBillMarkPaid: handleBillMarkPaid,
 
     // Helper for breakdown component
     isRecurringTransaction,

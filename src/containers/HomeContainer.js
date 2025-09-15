@@ -1045,10 +1045,13 @@ const HomeContainer = ({navigation}) => {
       if (loadGoalsRef.current) {
         loadGoalsRef.current();
       }
+
+      // Reload transactions to pick up any changes made in other screens (like Analytics bill updates)
+      loadTransactions();
     });
 
     return unsubscribe;
-  }, [navigation, loadRolloverAmount]);
+  }, [navigation, loadRolloverAmount, loadTransactions]);
 
   // ==============================================
   // PAY PERIOD TRANSITION DETECTION
