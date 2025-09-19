@@ -337,7 +337,7 @@ const AddTransactionContainer = ({
           }
         } else {
           // Use cached data
-          setAllCategories(cachedCategories);
+          setAllCategories(cachedCategories.data || []);
         }
       } catch (apiError) {
         // If API fails, show error
