@@ -595,7 +595,7 @@ const useGoalData = checkNetworkConnectivity => {
                 amount: Math.abs(parsedAmount).toFixed(2), // Backend expects positive decimal string
                 currency: 'AUD',
                 description: isWithdrawal
-                  ? `Income withdrawal from ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`
+                  ? `Withdrawal from ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`
                   : `Income payment to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`,
                 type: isWithdrawal ? 'WITHDRAWAL' : 'MANUAL', // Different types for withdrawals vs additions
                 date: updateTimestamp,

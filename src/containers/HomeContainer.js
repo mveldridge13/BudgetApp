@@ -1958,14 +1958,12 @@ const HomeContainer = ({navigation}) => {
                       },
                     );
                   } else if (contrib.type === 'WITHDRAWAL') {
-                    // WITHDRAWAL contributions add back to income (money coming back from goals)
-                    newSum = sum - (contrib.amount || 0);
+                    // WITHDRAWAL contributions no longer affect income - just reduce goal amount
                     console.log(
-                      '🔍 HOME_CONTAINER: Subtracting WITHDRAWAL contribution:',
+                      '🔍 HOME_CONTAINER: Ignoring WITHDRAWAL contribution for income calculation:',
                       {
                         amount: contrib.amount,
-                        previousSum: sum,
-                        newSum,
+                        type: contrib.type,
                       },
                     );
                   } else {

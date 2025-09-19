@@ -188,7 +188,7 @@ const GoalCard = ({
     const isWithdrawal = transactionType === 'withdraw';
     const actionText = isDebtGoal ? 'Pay' : (isWithdrawal ? 'Withdraw' : 'Add');
     const prepositionText = isDebtGoal ? 'toward' : (isWithdrawal ? 'from' : 'to');
-    const sourceText = isWithdrawal ? 'back to Income' : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
+    const sourceText = isWithdrawal ? '' : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
 
     Alert.alert(
       isDebtGoal ? 'Make Payment' : (isWithdrawal ? 'Withdraw Money' : 'Add Contribution'),
@@ -448,7 +448,7 @@ const GoalCard = ({
           {(transactionType === 'add' || isDebtGoal) && (
             <View style={styles.sourceSelectionContainer}>
               <Text style={styles.sourceSelectionLabel}>
-                {transactionType === 'withdraw' ? 'Withdraw To' : 'Payment Source'}
+                Payment Source
               </Text>
             <TouchableOpacity
               style={styles.sourceSelectionButton}
