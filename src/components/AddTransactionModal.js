@@ -82,10 +82,14 @@ const AddTransactionModal = ({
   onQuickAddCategoryPress,
   onQuickAddDatePress,
   onCategoryOverlayClose,
+  onCategoryOverlayBack,
   onCategoryOverlaySelect,
   onSubcategoryOverlayClose,
+  onSubcategoryOverlayBack,
   onSubcategoryOverlaySelect,
+  onAddSubcategory,
   onAmountOverlayClose,
+  onAmountOverlayBack,
   onAmountOverlaySave,
   allCategories,
   transformCategoriesForUI,
@@ -973,6 +977,7 @@ const AddTransactionModal = ({
         <CategorySelectionOverlay
           visible={true}
           onClose={onCategoryOverlayClose}
+          onBack={onCategoryOverlayBack}
           onCategorySelect={onCategoryOverlaySelect}
           allCategories={allCategories}
           transformCategoriesForUI={transformCategoriesForUI}
@@ -988,11 +993,13 @@ const AddTransactionModal = ({
         <SubcategorySelectionOverlay
           visible={true}
           onClose={onSubcategoryOverlayClose}
+          onBack={onSubcategoryOverlayBack}
           onSubcategorySelect={onSubcategoryOverlaySelect}
           selectedCategory={currentSubcategoryData?.id}
           selectedSubcategory={selectedSubcategory}
           getCategoryById={getCategoryById}
           isLoading={isLoading}
+          onAddSubcategory={onAddSubcategory}
         />
       )}
 
@@ -1001,6 +1008,7 @@ const AddTransactionModal = ({
         <AmountEntryOverlay
           visible={true}
           onClose={onAmountOverlayClose}
+          onBack={onAmountOverlayBack}
           onSave={onAmountOverlaySave}
           amount={amount}
           onAmountChange={onAmountChange}

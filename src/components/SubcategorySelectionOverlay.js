@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -9,27 +9,37 @@ import {
   ScrollView,
   Keyboard,
   Platform,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
+import SubcategoryCreationModal from './SubcategoryCreationModal';
 
 const {width: screenWidth} = Dimensions.get('window');
 
 const SubcategorySelectionOverlay = ({
   visible,
   onClose,
+  onBack,
   onSubcategorySelect,
   selectedCategory,
   selectedSubcategory,
   getCategoryById,
   isLoading,
+  onAddSubcategory,
 }) => {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const keyboardAnim = useRef(new Animated.Value(0)).current;
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (visible) {
+      // Reset animation values before starting
+      slideAnim.setValue(300);
+      fadeAnim.setValue(0);
+      keyboardAnim.setValue(0);
+
       setTimeout(() => {
         Animated.parallel([
           Animated.timing(slideAnim, {
@@ -44,10 +54,6 @@ const SubcategorySelectionOverlay = ({
           }),
         ]).start();
       }, 100);
-    } else {
-      slideAnim.setValue(300);
-      fadeAnim.setValue(0);
-      keyboardAnim.setValue(0);
     }
   }, [visible, slideAnim, fadeAnim, keyboardAnim]);
 
@@ -86,11 +92,49 @@ const SubcategorySelectionOverlay = ({
   }
 
   const categoryData = getCategoryById(selectedCategory);
-  const subcategories = categoryData?.subcategories || [];
+  const rawSubcategories = categoryData?.subcategories || [];
+
+  // Deduplicate subcategories by name (keep the first occurrence)
+  const subcategories = rawSubcategories.filter((subcategory, index, array) =>
+    array.findIndex(s => s.name.toLowerCase() === subcategory.name.toLowerCase()) === index
+  );
+
+
+  // Get fresh category data for the modal (used after refresh)
+  const getFreshCategoryData = () => getCategoryById(selectedCategory);
 
   const handleSubcategoryPress = (subcategoryId) => {
     onSubcategorySelect(subcategoryId);
     // Don't call onClose() - let the container handle overlay transitions
+  };
+
+  const handleAddSubcategoryPress = async () => {
+    if (onAddSubcategory) {
+      // Open modal immediately for smooth UX - validation will work with current data
+      // Only refresh if validation fails due to stale data
+      setShowCreateModal(true);
+    } else {
+      // Fallback for components that don't support subcategory creation yet
+      Alert.alert(
+        'Feature Not Available',
+        'Subcategory creation is not available in this context.',
+        [{text: 'OK'}],
+      );
+    }
+  };
+
+  const handleSubcategoryCreated = async (parentCategoryId, subcategoryData) => {
+    if (onAddSubcategory) {
+      const result = await onAddSubcategory(parentCategoryId, subcategoryData);
+      if (result) {
+        // Auto-select the newly created subcategory
+        setTimeout(() => {
+          onSubcategorySelect(result.id);
+        }, 300);
+      }
+      return result;
+    }
+    return null;
   };
 
   const getCategoryIconStyle = (color) => {
@@ -150,43 +194,63 @@ const SubcategorySelectionOverlay = ({
   };
 
   return (
-    <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
-      <TouchableOpacity
-        style={styles.backdrop}
-        onPress={onClose}
-        activeOpacity={1}
-      />
+    <>
+      <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
+        <TouchableOpacity
+          style={styles.backdrop}
+          onPress={onClose}
+          activeOpacity={1}
+        />
 
-      <Animated.View
-        style={[
-          styles.overlayContent,
-          {
-            transform: [{translateY: slideAnim}, {translateY: keyboardAnim}],
-          },
-        ]}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={onClose}
-            activeOpacity={0.7}>
-            <Icon name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.title}>
-            {categoryData?.name || 'Select Subcategory'}
-          </Text>
-          <View style={styles.placeholder} />
-        </View>
+        <Animated.View
+          style={[
+            styles.overlayContent,
+            {
+              transform: [{translateY: slideAnim}, {translateY: keyboardAnim}],
+            },
+          ]}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={onBack || onClose}
+              activeOpacity={0.7}>
+              <Icon name="chevron-back" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.title}>
+              {categoryData?.name || 'Select Subcategory'}
+            </Text>
+            <View style={styles.placeholder} />
+          </View>
 
-        {/* Subcategory Grid */}
-        <View style={styles.scrollContainer}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}>
-            {renderSubcategoryGrid()}
-          </ScrollView>
-        </View>
+          {/* Subcategory Grid */}
+          <View style={styles.scrollContainer}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.scrollContent}>
+              {renderSubcategoryGrid()}
+
+              {/* Add Subcategory Button */}
+              <TouchableOpacity
+                style={styles.addSubcategoryButton}
+                onPress={handleAddSubcategoryPress}
+                activeOpacity={0.7}>
+                <Icon name="add" size={20} color={colors.primary} />
+                <Text style={styles.addSubcategoryText}>Add Subcategory</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </Animated.View>
       </Animated.View>
-    </Animated.View>
+
+      {/* Subcategory Creation Modal - Outside overlay for proper positioning */}
+      <SubcategoryCreationModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSave={handleSubcategoryCreated}
+        parentCategory={getFreshCategoryData()}
+        isLoading={false}
+      />
+    </>
   );
 };
 
@@ -218,7 +282,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 20,
     width: screenWidth,
-    height: '50%', // Smaller than main category overlay
+    height: '70%', // Increased to accommodate more subcategories
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -4},
     shadowOpacity: 0.25,
@@ -325,6 +389,27 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
+  },
+  addSubcategoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    marginTop: 20,
+    marginBottom: 20,
+    marginHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: colors.overlayLight,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+    borderStyle: 'dashed',
+  },
+  addSubcategoryText: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.primary,
+    marginLeft: 8,
   },
 });
 

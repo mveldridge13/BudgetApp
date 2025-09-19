@@ -96,15 +96,79 @@ const AddTransactionContainer = ({
         return [];
       }
 
-      // Separate main categories and subcategories
-      const mainCategories = backendCategories.filter(cat => !cat.parentId);
-      const subcategories = backendCategories.filter(cat => cat.parentId);
 
-      const subcategoriesMap = subcategories.reduce((map, subcat) => {
-        if (!map[subcat.parentId]) {
-          map[subcat.parentId] = [];
+      // 🔧 HANDLE NESTED SUBCATEGORIES: Flatten if subcategories are nested inside parent categories
+      let flattenedCategories = [];
+      let mainCategories = [];
+      let subcategories = [];
+
+      backendCategories.forEach(cat => {
+        if (!cat.parentId) {
+          // This is a main category (remove nested subcategories to avoid duplication)
+          const mainCategory = {
+            ...cat,
+            subcategories: undefined, // Remove nested subcategories from the main category
+          };
+          mainCategories.push(mainCategory);
+          flattenedCategories.push(mainCategory);
+
+          // Check if this category has nested subcategories
+          if (cat.subcategories && Array.isArray(cat.subcategories)) {
+
+            // Flatten nested subcategories and add parentId
+            cat.subcategories.forEach(subcat => {
+              const flatSubcat = {
+                ...subcat,
+                parentId: cat.id, // Ensure parentId is set correctly
+              };
+              subcategories.push(flatSubcat);
+              flattenedCategories.push(flatSubcat);
+            });
+          }
+        } else {
+          // This is already a flat subcategory
+          subcategories.push(cat);
+          flattenedCategories.push(cat);
         }
-        map[subcat.parentId].push({
+      });
+
+      // Deduplicate by ID to avoid duplicate keys in React
+      const uniqueMainCategories = mainCategories.filter((category, index, array) =>
+        array.findIndex(c => c.id === category.id) === index
+      );
+      const uniqueSubcategories = subcategories.filter((category, index, array) =>
+        array.findIndex(c => c.id === category.id) === index
+      );
+
+
+      // Update the arrays with deduplicated versions
+      mainCategories = uniqueMainCategories;
+      subcategories = uniqueSubcategories;
+
+      // Filter subcategories by transaction type BEFORE building the map
+      const filteredSubcategories = subcategories.filter(subcat => {
+        if (transactionType === 'EXPENSE') {
+          // For EXPENSE, exclude INCOME and TRANSFER type subcategories
+          return subcat.type !== 'INCOME' && subcat.type !== 'TRANSFER';
+        } else if (transactionType === 'INCOME') {
+          // For INCOME, only include INCOME type subcategories
+          return subcat.type === 'INCOME';
+        } else if (transactionType === 'TRANSFER') {
+          // For TRANSFER, only include TRANSFER type subcategories
+          return subcat.type === 'TRANSFER';
+        }
+        // Default: include all subcategories
+        return true;
+      });
+
+      const subcategoriesMap = filteredSubcategories.reduce((map, subcat) => {
+        // Handle potential type mismatch between parentId and category id
+        const parentKey = String(subcat.parentId);
+        if (!map[parentKey]) {
+          map[parentKey] = [];
+        }
+
+        map[parentKey].push({
           id: subcat.id,
           name: subcat.name,
           icon: subcat.icon || 'albums-outline',
@@ -115,19 +179,24 @@ const AddTransactionContainer = ({
         return map;
       }, {});
 
+
       // Transform main categories and attach their subcategories
-      let result = mainCategories.map(category => ({
-        id: category.id,
-        name: category.name,
-        icon: category.icon || 'albums-outline',
-        color: category.color || '#4ECDC4',
-        isCustom: !category.isSystem,
-        parentId: category.parentId,
-        hasSubcategories:
-          subcategoriesMap[category.id] &&
-          subcategoriesMap[category.id].length > 0,
-        subcategories: subcategoriesMap[category.id] || [],
-      }));
+      let result = mainCategories.map(category => {
+        const transformed = {
+          id: category.id,
+          name: category.name,
+          icon: category.icon || 'albums-outline',
+          color: category.color || '#4ECDC4',
+          isCustom: !category.isSystem,
+          parentId: category.parentId,
+          hasSubcategories:
+            subcategoriesMap[String(category.id)] &&
+            subcategoriesMap[String(category.id)].length > 0,
+          subcategories: subcategoriesMap[String(category.id)] || [],
+        };
+
+        return transformed;
+      });
 
       // Filter categories based on transaction type
       if (transactionType === 'EXPENSE') {
@@ -139,6 +208,7 @@ const AddTransactionContainer = ({
           category => category.name.toLowerCase() === 'income',
         );
       }
+
 
       // Sort main categories with custom order: Other comes after Transport
       return result.sort((a, b) => {
@@ -179,6 +249,19 @@ const AddTransactionContainer = ({
   // HELPER FUNCTIONS
   // ========================================
   // ======
+
+  const cleanupTemporarySubcategories = useCallback(() => {
+    setCategories(prevCategories => {
+      const cleanedCategories = prevCategories.map(category => ({
+        ...category,
+        subcategories: category.subcategories.filter(sub =>
+          !sub.id.toString().startsWith('temp_')
+        ),
+      }));
+
+      return cleanedCategories;
+    });
+  }, []);
 
   const getCategoryById = useCallback(
     id => {
@@ -235,49 +318,39 @@ const AddTransactionContainer = ({
       setIsLoading(true);
       setErrorState(null);
 
-      // 🔄 CACHE-FIRST: Load from cache immediately
-      const cached = await CategoryCache.get();
-      if (cached && cached.data) {
-        setAllCategories(cached.data);
-        setIsLoading(false);
-
-        // If cache is fresh, we're done
-        if (!cached.isStale) {
-          return;
-        }
-      }
-
-      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      // 🌐 BACKGROUND SYNC: Check cache first, then fetch from API if needed
       try {
-        const response = await TrendAPIService.getCategories();
-        const backendCategories = response?.categories || [];
+        let cachedCategories = await CategoryCache.get();
 
-        if (backendCategories && Array.isArray(backendCategories)) {
-          // Update cache in background
-          CategoryCache.set(backendCategories);
+        if (!cachedCategories) {
+          // Fetch from API
+          const response = await TrendAPIService.getCategories();
+          const backendCategories = response?.categories || [];
 
-          // Update state
-          setAllCategories(backendCategories);
-        } else {
-          // If API fails but we have cached data, keep using cached data
-          if (!cached) {
+          if (backendCategories && Array.isArray(backendCategories)) {
+            // Update cache in background
+            CategoryCache.set(backendCategories);
+            // Update state
+            setAllCategories(backendCategories);
+          } else {
             setAllCategories([]);
           }
+        } else {
+          // Use cached data
+          setAllCategories(cachedCategories);
         }
       } catch (apiError) {
-        // If API fails and we don't have cached data, show error
-        if (!cached) {
-          setErrorState(apiError.message);
-          Alert.alert(
-            'Connection Issue',
-            'Unable to load categories. Please check your connection and try again.',
-            [
-              {text: 'Retry', onPress: () => loadCategories()},
-              {text: 'Cancel', style: 'cancel'},
-            ],
-          );
-          setAllCategories([]);
-        }
+        // If API fails, show error
+        setErrorState(apiError.message);
+        Alert.alert(
+          'Connection Issue',
+          'Unable to load categories. Please check your connection and try again.',
+          [
+            {text: 'Retry', onPress: () => loadCategories()},
+            {text: 'Cancel', style: 'cancel'},
+          ],
+        );
+        setAllCategories([]);
       }
     } catch (error) {
       setErrorState(error.message);
@@ -369,12 +442,178 @@ const AddTransactionContainer = ({
   }, [editingTransaction, visible, getCategoryById, getCategoryDisplayName]);
 
   // ==============================================
+  // SUBCATEGORY CREATION
+  // ==============================================
+
+  const handleAddSubcategory = useCallback(
+    async (parentCategoryId, subcategoryData) => {
+      if (!TrendAPIService.isAuthenticated()) {
+        navigation.navigate('Auth');
+        return null;
+      }
+
+      const subcategoryPayload = {
+        ...subcategoryData,
+        parentId: parentCategoryId,
+        type: selectedTransactionType || 'EXPENSE', // Default to EXPENSE if no type selected
+      };
+
+      // Optimistic update: Add to cache immediately
+      const optimisticSubcategory = {
+          id: `temp_${Date.now()}`, // Temporary ID
+          name: subcategoryPayload.name,
+          icon: subcategoryPayload.icon,
+          color: subcategoryPayload.color,
+          isCustom: true,
+          parentId: subcategoryPayload.parentId,
+          type: subcategoryPayload.type,
+        };
+
+      try {
+        // Update cache optimistically
+        await CategoryCache.upsertCategory(optimisticSubcategory);
+
+        // Update UI state immediately (cache-first)
+        const updateCategories = (prevCategories) => {
+          return prevCategories.map(category => {
+            if (category.id === parentCategoryId) {
+              return {
+                ...category,
+                hasSubcategories: true,
+                subcategories: [...(category.subcategories || []), optimisticSubcategory],
+              };
+            }
+            return category;
+          });
+        };
+
+        setCategories(updateCategories);
+
+        // Update current subcategory data if we're viewing it
+        if (currentSubcategoryData?.id === parentCategoryId) {
+          setCurrentSubcategoryData(prev => ({
+            ...prev,
+            hasSubcategories: true,
+            subcategories: [...(prev.subcategories || []), optimisticSubcategory],
+          }));
+        }
+
+        // Background sync: Send to API and update with real data
+        try {
+          const createdSubcategory = await TrendAPIService.createCategory(
+            subcategoryPayload,
+          );
+
+          // Replace optimistic update with real data
+          const realSubcategory = {
+            id: createdSubcategory.id,
+            name: createdSubcategory.name,
+            icon: createdSubcategory.icon || 'albums-outline',
+            color: createdSubcategory.color || optimisticSubcategory.color,
+            isCustom: !createdSubcategory.isSystem,
+            parentId: createdSubcategory.parentId,
+            type: createdSubcategory.type,
+          };
+
+          // Update cache with real data
+          await CategoryCache.upsertCategory(realSubcategory);
+
+          // Update state with real data
+          setCategories(prevCategories => {
+            return prevCategories.map(category => {
+              if (category.id === parentCategoryId) {
+                return {
+                  ...category,
+                  subcategories: category.subcategories.map(sub =>
+                    sub.id === optimisticSubcategory.id ? realSubcategory : sub
+                  ),
+                };
+              }
+              return category;
+            });
+          });
+
+          // Update current subcategory data if we're viewing it
+          if (currentSubcategoryData?.id === parentCategoryId) {
+            setCurrentSubcategoryData(prev => ({
+              ...prev,
+              subcategories: prev.subcategories.map(sub =>
+                sub.id === optimisticSubcategory.id ? realSubcategory : sub
+              ),
+            }));
+          }
+
+          console.log(
+            '➕ AddTransactionContainer: Subcategory synced successfully:',
+            realSubcategory.name,
+          );
+
+          // Return the real subcategory data
+          return realSubcategory;
+
+        } catch (syncError) {
+          console.error(
+            '➕ AddTransactionContainer: Background sync failed:',
+            syncError,
+          );
+
+          // Keep optimistic update, show subtle warning
+          console.warn('Subcategory created locally, will sync when online');
+
+          // Return optimistic data
+          return optimisticSubcategory;
+        }
+
+      } catch (creationError) {
+        console.error(
+          '➕ AddTransactionContainer: Error creating subcategory:',
+          creationError,
+        );
+
+        // Remove optimistic update on failure
+        await CategoryCache.removeCategory(optimisticSubcategory.id);
+
+        // Revert UI state
+        setCategories(prevCategories => {
+          return prevCategories.map(category => {
+            if (category.id === parentCategoryId) {
+              return {
+                ...category,
+                subcategories: category.subcategories.filter(
+                  sub => sub.id !== optimisticSubcategory.id
+                ),
+              };
+            }
+            return category;
+          });
+        });
+
+        // Show specific error message based on error type
+        const errorMessage = creationError.message?.includes('already exists') || creationError.message?.includes('duplicate')
+          ? 'A subcategory with this name already exists.'
+          : 'Failed to create subcategory. Please try again.';
+
+        Alert.alert('Error', errorMessage);
+        return null;
+      }
+    },
+    [navigation, currentSubcategoryData, selectedTransactionType],
+  );
+
+  // ==============================================
   // EVENT HANDLERS
   // ==============================================
 
   const handleSave = useCallback(async () => {
     if (!amount || !selectedCategory) {
       Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    // Check if subcategory is still being created (has temporary ID)
+    if (selectedSubcategory && typeof selectedSubcategory === 'string' && selectedSubcategory.startsWith('temp_')) {
+      console.log('🚫 AddTransactionContainer: Preventing save with temporary subcategory ID:', selectedSubcategory);
+      Alert.alert('Please wait', 'Subcategory is being created. Please wait a moment and try again.');
       return;
     }
 
@@ -559,7 +798,14 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleCategoryOverlayClose = useCallback(() => {
-    setOverlayMode('quick');
+    setOverlayMode(null);
+    setCurrentSubcategoryData(null);
+  }, []);
+
+  const handleCategoryOverlayBack = useCallback(() => {
+    // Go back from category overlay to transaction type overlay
+    setOverlayMode('transactionType');
+    setCurrentSubcategoryData(null);
   }, []);
 
   const handleCategoryOverlaySelect = useCallback(
@@ -589,7 +835,14 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleSubcategoryOverlayClose = useCallback(() => {
+    setOverlayMode(null);
+    setCurrentSubcategoryData(null);
+  }, []);
+
+  const handleSubcategoryOverlayBack = useCallback(() => {
+    // Go back from subcategory overlay to category overlay
     setOverlayMode('category');
+    // Keep currentSubcategoryData so user returns to the same category context
   }, []);
 
   const handleSubcategoryOverlaySelect = useCallback(
@@ -605,14 +858,22 @@ const AddTransactionContainer = ({
   );
 
   const handleAmountOverlayClose = useCallback(() => {
-    // If we have a subcategory selected, go back to subcategory overlay
-    // Otherwise, go back to category overlay
+    setOverlayMode(null);
+    setCurrentSubcategoryData(null);
+  }, []);
+
+  const handleAmountOverlayBack = useCallback(() => {
+    // Go back from amount overlay to the previous selection step
     if (selectedSubcategory) {
+      // If we have a subcategory selected, go back to subcategory overlay
+      const category = getCategoryById(selectedCategory);
+      setCurrentSubcategoryData(category);
       setOverlayMode('subcategory');
     } else {
+      // If no subcategory, go back to category overlay
       setOverlayMode('category');
     }
-  }, [selectedSubcategory]);
+  }, [selectedSubcategory, selectedCategory, getCategoryById]);
 
   const handleAmountOverlaySave = useCallback(() => {
     // Save the transaction with current form data
@@ -633,7 +894,8 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleRecurrenceOverlayClose = useCallback(() => {
-    setOverlayMode('transactionType');
+    setOverlayMode(null);
+    setCurrentSubcategoryData(null);
   }, []);
 
   const handleRecurrenceOverlayContinue = useCallback(() => {
@@ -850,6 +1112,11 @@ const AddTransactionContainer = ({
     }
   }, [visible, loadCategories]);
 
+  // One-time cleanup on mount to remove any stale temporary IDs
+  useEffect(() => {
+    cleanupTemporarySubcategories();
+  }, [cleanupTemporarySubcategories]);
+
   // Effect to populate form when editing
   useEffect(() => {
     populateFormForEdit();
@@ -863,8 +1130,55 @@ const AddTransactionContainer = ({
         selectedTransactionType,
       );
       setCategories(filteredCategories);
+
+      // Clean up any stale temporary subcategory IDs
+      setTimeout(() => {
+        cleanupTemporarySubcategories();
+      }, 100);
     }
-  }, [selectedTransactionType, allCategories, transformCategoriesForUI]);
+  }, [selectedTransactionType, allCategories, transformCategoriesForUI, cleanupTemporarySubcategories]);
+
+  // Effect to update selected subcategory ID when temporary ID gets replaced with real ID
+  useEffect(() => {
+    if (selectedSubcategory && typeof selectedSubcategory === 'string' && selectedSubcategory.startsWith('temp_') && categories.length > 0) {
+      console.log('🔍 AddTransactionContainer: Checking for temp ID replacement. Temp ID:', selectedSubcategory);
+
+      // Find the category containing our temporary subcategory
+      const parentCategory = categories.find(cat =>
+        cat.subcategories && cat.subcategories.some(sub => sub.id === selectedSubcategory)
+      );
+
+      console.log('🔍 Parent category found:', parentCategory?.name, 'Subcategories:', parentCategory?.subcategories?.map(s => `${s.name}(${s.id})`));
+
+      if (parentCategory) {
+        const tempSubcategory = parentCategory.subcategories.find(sub => sub.id === selectedSubcategory);
+
+        // Look for a real subcategory with the same name that was just created
+        const realSubcategory = parentCategory.subcategories.find(sub =>
+          sub.name === tempSubcategory?.name && !sub.id.startsWith('temp_')
+        );
+
+        if (realSubcategory) {
+          console.log('🔄 AddTransactionContainer: Updating selected subcategory from temp ID to real ID:', realSubcategory.id);
+          setSelectedSubcategory(realSubcategory.id);
+        } else {
+          console.log('⚠️ AddTransactionContainer: No real subcategory found with name:', tempSubcategory?.name);
+          // Clear the temp ID if no real subcategory is found (creation likely failed)
+          console.log('🧹 AddTransactionContainer: Clearing temporary subcategory ID and invalidating cache');
+          setSelectedSubcategory(null);
+          // Clear cache to force refresh from backend
+          CategoryCache.clear();
+          loadCategories();
+        }
+      } else {
+        console.log('⚠️ AddTransactionContainer: No parent category found for temp ID, clearing selection');
+        setSelectedSubcategory(null);
+        // Clear cache to force refresh from backend
+        CategoryCache.clear();
+        loadCategories();
+      }
+    }
+  }, [categories, selectedSubcategory, loadCategories]);
 
   // ==============================================
   // RENDER
@@ -920,10 +1234,14 @@ const AddTransactionContainer = ({
       onQuickAddCategoryPress={handleQuickAddCategoryPress}
       onQuickAddDatePress={handleQuickAddDatePress}
       onCategoryOverlayClose={handleCategoryOverlayClose}
+      onCategoryOverlayBack={handleCategoryOverlayBack}
       onCategoryOverlaySelect={handleCategoryOverlaySelect}
       onSubcategoryOverlayClose={handleSubcategoryOverlayClose}
+      onSubcategoryOverlayBack={handleSubcategoryOverlayBack}
       onSubcategoryOverlaySelect={handleSubcategoryOverlaySelect}
+      onAddSubcategory={handleAddSubcategory}
       onAmountOverlayClose={handleAmountOverlayClose}
+      onAmountOverlayBack={handleAmountOverlayBack}
       onAmountOverlaySave={handleAmountOverlaySave}
       allCategories={allCategories}
       transformCategoriesForUI={transformCategoriesForUI}

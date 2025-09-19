@@ -18,6 +18,7 @@ const {width: screenWidth} = Dimensions.get('window');
 const AmountEntryOverlay = ({
   visible,
   onClose,
+  onBack,
   onSave,
   amount,
   onAmountChange,
@@ -153,7 +154,7 @@ const AmountEntryOverlay = ({
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={onClose}
+            onPress={onBack || onClose}
             activeOpacity={0.7}>
             <Icon name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>

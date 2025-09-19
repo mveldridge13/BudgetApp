@@ -127,13 +127,13 @@ function WelcomeScreen({navigation}) {
   const handleWelcomeComplete = async (onboardingData) => {
     try {
       const updates = {hasSeenWelcome: true};
-      
+
       // Add detected timezone if provided
       if (onboardingData?.detectedTimezone) {
         updates.timezone = onboardingData.detectedTimezone;
         console.log('🌍 AppNavigator: Setting user timezone to:', onboardingData.detectedTimezone);
       }
-      
+
       // Update backend instead of AsyncStorage
       await TrendAPIService.updateUserProfile(updates);
       navigation.navigate('IncomeSetup', {isFirstTime: true});

@@ -104,6 +104,8 @@ class TrendAPIService {
       clearTimeout(timeoutId);
 
       if (response.status === 401) {
+        console.log('🚨 401 UNAUTHORIZED - Token invalid/expired');
+        console.log('🚨 Response body:', await response.text());
         await this.clearToken();
         throw new Error('Authentication required');
       }
@@ -116,6 +118,7 @@ class TrendAPIService {
 
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
+        // Parse JSON response
         const data = await response.json();
         return data;
       } else {

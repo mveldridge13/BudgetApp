@@ -80,7 +80,7 @@ class AuthService {
     try {
       // Auto-detect user's timezone for new registrations
       const detectedTimezone = DateService.detectUserTimezone();
-      
+
       const result = await TrendAPI.register({
         firstName: userData.firstName,
         lastName: userData.lastName,

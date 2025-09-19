@@ -18,6 +18,7 @@ const {width: screenWidth} = Dimensions.get('window');
 const CategorySelectionOverlay = ({
   visible,
   onClose,
+  onBack,
   onCategorySelect,
   allCategories,
   transformCategoriesForUI,
@@ -51,7 +52,7 @@ const CategorySelectionOverlay = ({
       fadeAnim.setValue(0);
       keyboardAnim.setValue(0);
     }
-  }, [visible, slideAnim, fadeAnim, keyboardAnim]);
+  }, [visible, slideAnim, fadeAnim, keyboardAnim, allCategories, selectedTransactionType]);
 
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener(
@@ -175,7 +176,7 @@ const CategorySelectionOverlay = ({
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={onClose}
+            onPress={onBack || onClose}
             activeOpacity={0.7}>
             <Icon name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>

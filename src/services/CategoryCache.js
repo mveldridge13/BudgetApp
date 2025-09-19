@@ -20,13 +20,6 @@ class CategoryCache {
       const age = Date.now() - timestamp;
       const isStale = age > CACHE_TTL;
 
-      console.log('📂 CategoryCache: Retrieved cache', {
-        age: Math.round(age / 1000 / 60), // minutes
-        isStale,
-        categoryCount: data?.length || 0,
-        mainCategories: data?.filter(c => !c.parentId)?.length || 0,
-        subcategories: data?.filter(c => c.parentId)?.length || 0,
-      });
 
       return {
         data: data || [],
@@ -53,13 +46,6 @@ class CategoryCache {
       };
 
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-      console.log('📂 CategoryCache: Data cached successfully', {
-        timestamp: cacheData.timestamp,
-        categoryCount: data?.length || 0,
-        mainCategories: data?.filter(c => !c.parentId)?.length || 0,
-        subcategories: data?.filter(c => c.parentId)?.length || 0,
-        dataSize: JSON.stringify(data).length,
-      });
       return true;
     } catch (error) {
       console.error('📂 CategoryCache: Set error:', error);
@@ -116,7 +102,6 @@ class CategoryCache {
         };
 
         await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-        console.log('📂 CategoryCache: Cache invalidated');
         return true;
       }
       return false;
@@ -198,17 +183,9 @@ class CategoryCache {
           ...categories[existingIndex],
           ...category,
         };
-        console.log(
-          '📂 CategoryCache: Category updated in cache:',
-          category.name,
-        );
       } else {
         // Add new category
         categories.push(category);
-        console.log(
-          '📂 CategoryCache: Category added to cache:',
-          category.name,
-        );
       }
 
       return await this.set(categories);
@@ -231,14 +208,9 @@ class CategoryCache {
       const filteredCategories = categories.filter(c => c.id !== categoryId);
 
       if (filteredCategories.length !== categories.length) {
-        console.log(
-          '📂 CategoryCache: Category removed from cache:',
-          categoryId,
-        );
         return await this.set(filteredCategories);
       }
 
-      console.log('📂 CategoryCache: Category not found in cache:', categoryId);
       return true;
     } catch (error) {
       console.error('📂 CategoryCache: Remove error:', error);
