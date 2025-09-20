@@ -5,6 +5,7 @@ import CategoryCache from '../services/CategoryCache';
 import CategoryPicker from '../components/CategoryPicker';
 
 const CategoryContainer = ({navigation, route}) => {
+
   // ==============================================
   // BUSINESS LOGIC STATE MANAGEMENT
   // ==============================================
@@ -83,11 +84,13 @@ const CategoryContainer = ({navigation, route}) => {
   }, []);
 
   const transformCategoriesForUI = useCallback(backendCategories => {
+
     // First flatten any nested subcategories
     const flattenedCategories = flattenNestedCategories(backendCategories);
 
     // Separate main categories and subcategories from flattened data
     const mainCategories = flattenedCategories.filter(cat => !cat.parentId);
+
     const subcategories = flattenedCategories.filter(cat => cat.parentId);
 
     const subcategoriesMap = subcategories.reduce((map, subcat) => {

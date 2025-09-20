@@ -97,6 +97,7 @@ const AddTransactionContainer = ({
       }
 
 
+
       // 🔧 HANDLE NESTED SUBCATEGORIES: Flatten if subcategories are nested inside parent categories
       let flattenedCategories = [];
       let mainCategories = [];
@@ -147,6 +148,7 @@ const AddTransactionContainer = ({
 
       // Filter subcategories by transaction type BEFORE building the map
       const filteredSubcategories = subcategories.filter(subcat => {
+        // Only filter by transaction type - backend already handles user filtering
         if (transactionType === 'EXPENSE') {
           // For EXPENSE, exclude INCOME and TRANSFER type subcategories
           return subcat.type !== 'INCOME' && subcat.type !== 'TRANSFER';
