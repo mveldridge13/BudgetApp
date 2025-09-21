@@ -83,6 +83,24 @@ const useGoalData = checkNetworkConnectivity => {
           setLoadingWithTimeout(true);
         }
 
+        // 🔄 CACHE-FIRST: Load from cache immediately
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          console.warn('🔍 LOAD_GOALS: No user ID available for goals cache');
+          return {success: true, goals};
+        }
+
+        const cachedResult = await loadGoalsFromCache(currentUserId);
+        if (cachedResult.success && cachedResult.goals.length > 0) {
+          console.log('🔍 LOAD_GOALS: Using cached goals data');
+          setGoals(cachedResult.goals);
+
+          // If we have goals and this is initial load, consider it loaded
+          if (!hasInitiallyLoaded.current) {
+            hasInitiallyLoaded.current = true;
+          }
+        }
+
         const isConnected = await checkNetworkConnectivity();
 
         let result;
@@ -94,14 +112,13 @@ const useGoalData = checkNetworkConnectivity => {
         });
 
         if (isConnected && TrendAPIService.isAuthenticated()) {
-          console.log('🔍 LOAD_GOALS: Loading goals from backend API...');
-          // Try to load from API first
+          console.log('🔍 LOAD_GOALS: Loading goals from backend API (background sync)...');
+          // 🌐 BACKGROUND SYNC: Fetch from API to update with fresh data
           result = await loadGoalsFromAPI();
           console.log('🔍 LOAD_GOALS: API result:', result);
 
           if (result.success) {
             // Merge with cached showOnBalanceCard preferences
-            const cachedResult = await loadGoalsFromCache();
             const cachedPrefs = {};
             const recentProgressUpdates = {};
 
@@ -145,36 +162,32 @@ const useGoalData = checkNetworkConnectivity => {
             });
 
             // Save merged results and update state
-            await saveGoalsToCache(mergedGoals);
+            await saveGoalsToCache(mergedGoals, currentUserId);
             setGoals(mergedGoals);
             lastSyncTime.current = Date.now();
             hasInitiallyLoaded.current = true;
             return {success: true, goals: mergedGoals, source: 'api'};
           } else {
-            // API failed, try cache
-            console.warn('API failed, falling back to cache');
+            // API failed, cache was already loaded at start
+            console.warn('API failed, using previously loaded cache data');
           }
+        } else {
+          // Offline or not authenticated, cache was already loaded at start
+          console.log('🔍 LOAD_GOALS: Offline or not authenticated, using cache data');
         }
 
-        // Load from cache (either offline or API failed)
-        const cacheResult = await loadGoalsFromCache();
-        setGoals(cacheResult.goals);
-        hasInitiallyLoaded.current = true;
-
+        // Return current goals state (either from cache loaded at start, or updated from API)
         return {
           success: true,
-          goals: cacheResult.goals,
-          source: 'cache',
-          cacheTimestamp: cacheResult.cacheTimestamp,
+          goals: goals,
+          source: cachedResult.success ? 'cache' : 'none',
         };
       } catch (error) {
         console.error('Error loading goals:', error);
-        // Even on error, try to return cached data
-        const cacheResult = await loadGoalsFromCache();
-        setGoals(cacheResult.goals);
+        // Return current goals state (cache was already loaded at start if available)
         hasInitiallyLoaded.current = true;
 
-        return {success: false, error: error.message, goals: cacheResult.goals};
+        return {success: false, error: error.message, goals: goals};
       } finally {
         isLoadingRef.current = false;
         clearLoadingTimeout();
@@ -329,7 +342,12 @@ const useGoalData = checkNetworkConnectivity => {
 
         // Save to cache in background
         console.log('🔍 SAVE_GOAL: Saving to cache...');
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          console.warn('🔍 SAVE_GOAL: No user ID available for goals cache');
+          return {success: false, error: 'No user ID available'};
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           console.log('🔍 SAVE_GOAL: Goal saved to cache successfully');
@@ -395,7 +413,11 @@ const useGoalData = checkNetworkConnectivity => {
 
         // Remove from local data regardless of API result
         const updatedGoals = goals.filter(goal => goal.id !== goalId);
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('No user ID available for goals cache');
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           setGoals(saveResult.goals);
@@ -537,7 +559,11 @@ const useGoalData = checkNetworkConnectivity => {
         setGoals(updatedGoals);
 
         // Save to cache first (for offline support)
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('No user ID available for goals cache');
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (!saveResult.success) {
           console.error(
@@ -649,7 +675,7 @@ const useGoalData = checkNetworkConnectivity => {
 
               // Save updated local goals
               setGoals(updatedGoals);
-              await saveGoalsToCache(updatedGoals, false);
+              await saveGoalsToCache(updatedGoals, currentUserId, false);
             }
           }
 
@@ -705,7 +731,7 @@ const useGoalData = checkNetworkConnectivity => {
               }));
 
               setGoals(goalsWithPreferences);
-              await saveGoalsToCache(goalsWithPreferences, false);
+              await saveGoalsToCache(goalsWithPreferences, currentUserId, false);
             }
           } catch (reloadError) {
             console.warn(

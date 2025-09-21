@@ -177,7 +177,10 @@ const CategoryContainer = ({navigation, route}) => {
           const flattenedCategories = flattenNestedCategories(backendCategories);
 
           // Update cache in background with flattened data
-          CategoryCache.set(flattenedCategories);
+          const currentUserId = TrendAPIService.getCurrentUserId();
+          if (currentUserId) {
+            CategoryCache.set(flattenedCategories, currentUserId);
+          }
 
           // Update state
           const transformedCategories = transformCategoriesForUI(backendCategories);
@@ -270,9 +273,15 @@ const CategoryContainer = ({navigation, route}) => {
         parentId: subcategoryPayload.parentId,
       };
 
+      // Get current user ID
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       try {
+
         // Update cache optimistically
-        await CategoryCache.upsertCategory(optimisticSubcategory);
+        if (currentUserId) {
+          await CategoryCache.upsertCategory(optimisticSubcategory, currentUserId);
+        }
 
         // Update UI state immediately (cache-first)
 
@@ -314,7 +323,11 @@ const CategoryContainer = ({navigation, route}) => {
         };
 
         // Update cache with real data
-        await CategoryCache.upsertCategory(realSubcategory);
+        if (currentUserId) {
+          await CategoryCache.upsertCategory(realSubcategory, currentUserId);
+          // Invalidate cache to force fresh reload in other components
+          await CategoryCache.invalidate(currentUserId);
+        }
 
         // Update state with real data
         setCategories(prevCategories => {
@@ -344,7 +357,9 @@ const CategoryContainer = ({navigation, route}) => {
         );
 
         // Rollback optimistic update on failure
-        await CategoryCache.removeCategory(optimisticSubcategory.id);
+        if (currentUserId) {
+          await CategoryCache.removeCategory(optimisticSubcategory.id, currentUserId);
+        }
 
         // Revert UI state
         setCategories(prevCategories => {

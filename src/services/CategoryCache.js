@@ -1,17 +1,25 @@
 // services/CategoryCache.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const CACHE_KEY = 'categories_cache';
+const CACHE_KEY_PREFIX = 'categories_cache_';
 const CACHE_TTL = 60 * 60 * 1000; // 60 minutes (longer TTL since categories change less frequently)
 
 class CategoryCache {
+  getCacheKey(userId) {
+    if (!userId) {
+      throw new Error('CategoryCache: userId is required for user-specific cache');
+    }
+    return `${CACHE_KEY_PREFIX}${userId}`;
+  }
+
   /**
    * Get cached category data
    * @returns {Promise<{data: array, timestamp: number, age: number, isStale: boolean} | null>}
    */
-  async get() {
+  async get(userId) {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (!cached) {
         return null;
       }
@@ -38,14 +46,15 @@ class CategoryCache {
    * @param {array} data - Category data to cache
    * @returns {Promise<boolean>}
    */
-  async set(data) {
+  async set(data, userId) {
     try {
+      const cacheKey = this.getCacheKey(userId);
       const cacheData = {
         data: data || [],
         timestamp: Date.now(),
       };
 
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       return true;
     } catch (error) {
       console.error('📂 CategoryCache: Set error:', error);
@@ -57,9 +66,10 @@ class CategoryCache {
    * Clear category cache
    * @returns {Promise<boolean>}
    */
-  async clear() {
+  async clear(userId) {
     try {
-      await AsyncStorage.removeItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      await AsyncStorage.removeItem(cacheKey);
       console.log('📂 CategoryCache: Cache cleared');
       return true;
     } catch (error) {
@@ -72,8 +82,8 @@ class CategoryCache {
    * Check if cached data exists and is fresh
    * @returns {Promise<boolean>}
    */
-  async isFresh() {
-    const cached = await this.get();
+  async isFresh(userId) {
+    const cached = await this.get(userId);
     return cached && !cached.isStale;
   }
 
@@ -81,8 +91,8 @@ class CategoryCache {
    * Get cache age in minutes
    * @returns {Promise<number | null>}
    */
-  async getAge() {
-    const cached = await this.get();
+  async getAge(userId) {
+    const cached = await this.get(userId);
     return cached ? Math.round(cached.age / 1000 / 60) : null;
   }
 
@@ -91,9 +101,10 @@ class CategoryCache {
    * This keeps the data but marks it as stale for background refresh
    * @returns {Promise<boolean>}
    */
-  async invalidate() {
+  async invalidate(userId) {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         const {data} = JSON.parse(cached);
         const cacheData = {
@@ -101,7 +112,7 @@ class CategoryCache {
           timestamp: 0, // Mark as stale but keep data
         };
 
-        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
         return true;
       }
       return false;
@@ -115,9 +126,9 @@ class CategoryCache {
    * Get cache statistics for debugging
    * @returns {Promise<object>}
    */
-  async getStats() {
+  async getStats(userId) {
     try {
-      const cached = await this.get();
+      const cached = await this.get(userId);
       if (!cached) {
         return {
           exists: false,
@@ -169,9 +180,9 @@ class CategoryCache {
    * @param {object} category - Category data to add/update
    * @returns {Promise<boolean>}
    */
-  async upsertCategory(category) {
+  async upsertCategory(category, userId) {
     try {
-      const cached = await this.get();
+      const cached = await this.get(userId);
       let categories = cached?.data || [];
 
       // Find existing category by ID
@@ -188,7 +199,7 @@ class CategoryCache {
         categories.push(category);
       }
 
-      return await this.set(categories);
+      return await this.set(categories, userId);
     } catch (error) {
       console.error('📂 CategoryCache: Upsert error:', error);
       return false;
@@ -200,15 +211,15 @@ class CategoryCache {
    * @param {string|number} categoryId - ID of category to remove
    * @returns {Promise<boolean>}
    */
-  async removeCategory(categoryId) {
+  async removeCategory(categoryId, userId) {
     try {
-      const cached = await this.get();
+      const cached = await this.get(userId);
       let categories = cached?.data || [];
 
       const filteredCategories = categories.filter(c => c.id !== categoryId);
 
       if (filteredCategories.length !== categories.length) {
-        return await this.set(filteredCategories);
+        return await this.set(filteredCategories, userId);
       }
 
       return true;

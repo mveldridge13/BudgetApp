@@ -94,10 +94,34 @@ const SubcategorySelectionOverlay = ({
   const categoryData = getCategoryById(selectedCategory);
   const rawSubcategories = categoryData?.subcategories || [];
 
+  // Debug logging
+  console.log('🔍 SubcategorySelectionOverlay Debug:', {
+    selectedCategory,
+    categoryData: categoryData ? {
+      id: categoryData.id,
+      name: categoryData.name,
+      subcategoriesCount: categoryData.subcategories?.length || 0
+    } : null,
+    rawSubcategories: rawSubcategories.map(sub => ({
+      id: sub.id,
+      name: sub.name,
+      parentId: sub.parentId
+    }))
+  });
+
   // Deduplicate subcategories by name (keep the first occurrence)
   const subcategories = rawSubcategories.filter((subcategory, index, array) =>
     array.findIndex(s => s.name.toLowerCase() === subcategory.name.toLowerCase()) === index
   );
+
+  console.log('🔍 SubcategorySelectionOverlay After deduplication:', {
+    originalCount: rawSubcategories.length,
+    deduplicatedCount: subcategories.length,
+    subcategories: subcategories.map(sub => ({
+      id: sub.id,
+      name: sub.name
+    }))
+  });
 
 
   // Get fresh category data for the modal (used after refresh)

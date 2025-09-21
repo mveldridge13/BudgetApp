@@ -1,13 +1,21 @@
 // services/UserProfileCache.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const CACHE_KEY = 'user_profile_cache_v1';
+const CACHE_KEY_PREFIX = 'user_profile_cache_v1_';
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 class UserProfileCache {
-  async get() {
+  getCacheKey(userId) {
+    if (!userId) {
+      throw new Error('UserProfileCache: userId is required for user-specific cache');
+    }
+    return `${CACHE_KEY_PREFIX}${userId}`;
+  }
+
+  async get(userId) {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (!cached) {
         return null;
       }
@@ -31,14 +39,15 @@ class UserProfileCache {
     }
   }
 
-  async set(profile) {
+  async set(profile, userId) {
     try {
+      const cacheKey = this.getCacheKey(userId);
       const cacheData = {
         profile,
         timestamp: Date.now(),
       };
 
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       console.log('UserProfileCache: Profile cached successfully');
       return true;
     } catch (error) {
@@ -47,9 +56,10 @@ class UserProfileCache {
     }
   }
 
-  async clear() {
+  async clear(userId) {
     try {
-      await AsyncStorage.removeItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      await AsyncStorage.removeItem(cacheKey);
       console.log('UserProfileCache: Cache cleared');
       return true;
     } catch (error) {

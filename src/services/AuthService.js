@@ -116,11 +116,40 @@ class AuthService {
   // Logout user
   async logout() {
     try {
+      // Get current user ID before clearing token
+      const currentUserId = TrendAPI.getCurrentUserId();
+
       // Call backend logout (if endpoint exists)
       try {
         await TrendAPI.logout();
       } catch (error) {
         // Ignore logout endpoint errors
+      }
+
+      // Clear ALL cache data (old global keys + user-specific keys) to prevent contamination
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+
+        // Clear old global cache keys that were causing contamination
+        await AsyncStorage.removeItem('user_profile_cache_v1'); // Old global key
+        await AsyncStorage.removeItem('categories_cache'); // Old global key
+        await AsyncStorage.removeItem('goals'); // Goals cache key
+
+        // Clear user-specific caches if we have user ID
+        if (currentUserId) {
+          const UserProfileCache = require('./UserProfileCache').default;
+          const CategoryCache = require('./CategoryCache').default;
+
+          await UserProfileCache.clear(currentUserId);
+          await CategoryCache.clear(currentUserId);
+
+          // Clear user-specific goals cache
+          await AsyncStorage.removeItem(`goals_${currentUserId}`);
+        }
+
+        console.log('🔄 AuthService: Cleared all cache data to prevent user contamination');
+      } catch (cacheError) {
+        console.warn('🔄 AuthService: Error clearing caches:', cacheError);
       }
 
       // Clear local user data

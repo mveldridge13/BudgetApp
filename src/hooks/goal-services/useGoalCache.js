@@ -3,14 +3,19 @@ import {useCallback} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import useGoalValidation from './useGoalValidation';
 
-const GOALS_STORAGE_KEY = 'goals';
+const getGoalsStorageKey = (userId) => {
+  if (!userId) {
+    throw new Error('useGoalCache: userId is required for user-specific cache');
+  }
+  return `goals_${userId}`;
+};
 
 const useGoalCache = () => {
   const {validateGoalData, sanitizeGoalData} = useGoalValidation();
 
   // Save goals to cache
   const saveGoalsToCache = useCallback(
-    async (updatedGoals, withTimestamp = true) => {
+    async (updatedGoals, userId, withTimestamp = true) => {
       try {
         if (!Array.isArray(updatedGoals)) {
           throw new Error('Goals must be an array');
@@ -22,8 +27,9 @@ const useGoalCache = () => {
           timestamp: withTimestamp ? Date.now() : null,
         };
 
+        const storageKey = getGoalsStorageKey(userId);
         await AsyncStorage.setItem(
-          GOALS_STORAGE_KEY,
+          storageKey,
           JSON.stringify(cacheData),
         );
         return {success: true, goals: validGoals};
@@ -36,9 +42,10 @@ const useGoalCache = () => {
   );
 
   // Load goals from cache
-  const loadGoalsFromCache = useCallback(async () => {
+  const loadGoalsFromCache = useCallback(async (userId) => {
     try {
-      const cachedData = await AsyncStorage.getItem(GOALS_STORAGE_KEY);
+      const storageKey = getGoalsStorageKey(userId);
+      const cachedData = await AsyncStorage.getItem(storageKey);
       if (!cachedData) {
         return {success: true, goals: [], fromCache: true};
       }
@@ -67,10 +74,11 @@ const useGoalCache = () => {
 
 
 
-  // Clear all cache
-  const clearCache = useCallback(async () => {
+  // Clear user-specific cache
+  const clearCache = useCallback(async (userId) => {
     try {
-      await AsyncStorage.removeItem(GOALS_STORAGE_KEY);
+      const storageKey = getGoalsStorageKey(userId);
+      await AsyncStorage.removeItem(storageKey);
       return {success: true};
     } catch (error) {
       console.error('Error clearing cache:', error);

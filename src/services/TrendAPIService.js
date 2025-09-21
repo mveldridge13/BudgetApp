@@ -1318,6 +1318,37 @@ class TrendAPIService {
     return this.getUserProfile();
   }
 
+  getCurrentUserId() {
+    if (!this.isAuthenticated() || !this.token) {
+      return null;
+    }
+
+    try {
+      // Decode JWT token to get user ID
+      const tokenParts = this.token.split('.');
+      if (tokenParts.length !== 3) {
+        console.error('Invalid JWT token format');
+        return null;
+      }
+
+      // Decode the payload (second part)
+      const payload = tokenParts[1];
+
+      // Add padding if needed
+      const paddedPayload = payload + '='.repeat((4 - payload.length % 4) % 4);
+
+      // Decode base64
+      // eslint-disable-next-line no-undef
+      const decoded = atob(paddedPayload);
+      const payloadObj = JSON.parse(decoded);
+
+      return payloadObj.sub || payloadObj.id || payloadObj.userId || null;
+    } catch (error) {
+      console.error('Failed to decode JWT token:', error);
+      return null;
+    }
+  }
+
   // Helper method to refresh authentication
   async refreshAuth() {
     try {

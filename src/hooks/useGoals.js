@@ -125,6 +125,26 @@ const useGoals = () => {
     [goalDataModule, setLoadingWithTimeout, clearLoadingTimeout], // ✅ FIXED: Removed goals dependency to prevent infinite loops
   );
 
+  // Clear goals state when user changes (real fix for data contamination)
+  const currentUserIdRef = useRef(null);
+  useEffect(() => {
+    const newUserId = TrendAPIService.getCurrentUserId();
+
+    // If user ID changed (user switched accounts), clear goals state
+    if (currentUserIdRef.current && currentUserIdRef.current !== newUserId) {
+      console.log('🔄 useGoals: User switched, clearing goals state');
+      setGoals([]); // Clear contaminated goals immediately
+      hasInitiallyLoaded.current = false; // Reset load state
+
+      // Force fresh load for new user
+      if (loadGoalsRef.current) {
+        loadGoalsRef.current(true, true);
+      }
+    }
+
+    currentUserIdRef.current = newUserId;
+  });
+
   // Only call loadGoals on mount - using ref to avoid dependencies
   const hasCalledInitialLoad = useRef(false);
   const loadGoalsRef = useRef();
@@ -182,7 +202,11 @@ const useGoals = () => {
         setGoals(updatedGoals);
 
         // Save to cache immediately to ensure persistence across screen navigation
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('No user ID available for goals cache');
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           // Force a synchronous state update to ensure immediate UI reflection
@@ -271,7 +295,12 @@ const useGoals = () => {
 
         // Get FRESH goals data from cache to avoid stale state
         console.log('🔍 UPDATE_SPENDING_GOALS: Loading goals from cache...');
-        const cacheResult = await loadGoalsFromCache();
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          console.warn('🔍 UPDATE_SPENDING_GOALS: No user ID available for goals cache');
+          return {success: true};
+        }
+        const cacheResult = await loadGoalsFromCache(currentUserId);
         let updatedGoals = [...cacheResult.goals];
         console.log('🔍 UPDATE_SPENDING_GOALS: Loaded goals from cache:', {
           totalGoals: updatedGoals.length,
@@ -527,7 +556,7 @@ const useGoals = () => {
         }
 
         // STEP 4: Save the updated goals
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           // Update state immediately and synchronously
@@ -588,7 +617,11 @@ const useGoals = () => {
             : goal,
         );
 
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('No user ID available for goals cache');
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           setGoals(saveResult.goals);

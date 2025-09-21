@@ -118,7 +118,10 @@ export const AppSettingsProvider = ({children}) => {
 
       if (freshProfile && isMountedRef.current) {
         setUserProfile(freshProfile);
-        await UserProfileCache.set(freshProfile);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          await UserProfileCache.set(freshProfile, currentUserId);
+        }
         // Update DateService with fresh timezone
         DateService.initializeFromProfile(freshProfile);
       }

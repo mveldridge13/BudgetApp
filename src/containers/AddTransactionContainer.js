@@ -322,7 +322,13 @@ const AddTransactionContainer = ({
 
       // 🌐 BACKGROUND SYNC: Check cache first, then fetch from API if needed
       try {
-        let cachedCategories = await CategoryCache.get();
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          console.warn('➕ AddTransactionContainer: No user ID available for category cache');
+          return;
+        }
+
+        let cachedCategories = await CategoryCache.get(currentUserId);
 
         if (!cachedCategories) {
           // Fetch from API
@@ -331,7 +337,9 @@ const AddTransactionContainer = ({
 
           if (backendCategories && Array.isArray(backendCategories)) {
             // Update cache in background
-            CategoryCache.set(backendCategories);
+            if (currentUserId) {
+              CategoryCache.set(backendCategories, currentUserId);
+            }
             // Update state
             setAllCategories(backendCategories);
           } else {
@@ -471,9 +479,15 @@ const AddTransactionContainer = ({
           type: subcategoryPayload.type,
         };
 
+      // Get current user ID
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       try {
+
         // Update cache optimistically
-        await CategoryCache.upsertCategory(optimisticSubcategory);
+        if (currentUserId) {
+          await CategoryCache.upsertCategory(optimisticSubcategory, currentUserId);
+        }
 
         // Update UI state immediately (cache-first)
         const updateCategories = (prevCategories) => {
@@ -518,7 +532,11 @@ const AddTransactionContainer = ({
           };
 
           // Update cache with real data
-          await CategoryCache.upsertCategory(realSubcategory);
+          if (currentUserId) {
+            await CategoryCache.upsertCategory(realSubcategory, currentUserId);
+            // Invalidate cache to force fresh reload in other components
+            await CategoryCache.invalidate(currentUserId);
+          }
 
           // Update state with real data
           setCategories(prevCategories => {
@@ -573,7 +591,9 @@ const AddTransactionContainer = ({
         );
 
         // Remove optimistic update on failure
-        await CategoryCache.removeCategory(optimisticSubcategory.id);
+        if (currentUserId) {
+          await CategoryCache.removeCategory(optimisticSubcategory.id, currentUserId);
+        }
 
         // Revert UI state
         setCategories(prevCategories => {
@@ -1169,14 +1189,20 @@ const AddTransactionContainer = ({
           console.log('🧹 AddTransactionContainer: Clearing temporary subcategory ID and invalidating cache');
           setSelectedSubcategory(null);
           // Clear cache to force refresh from backend
-          CategoryCache.clear();
+          const currentUserId = TrendAPIService.getCurrentUserId();
+          if (currentUserId) {
+            CategoryCache.clear(currentUserId);
+          }
           loadCategories();
         }
       } else {
         console.log('⚠️ AddTransactionContainer: No parent category found for temp ID, clearing selection');
         setSelectedSubcategory(null);
         // Clear cache to force refresh from backend
-        CategoryCache.clear();
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          CategoryCache.clear(currentUserId);
+        }
         loadCategories();
       }
     }

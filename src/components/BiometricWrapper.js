@@ -77,8 +77,11 @@ const BiometricWrapper = ({children}) => {
         TrendAPIService.getUserProfile()
           .then(profile => {
             if (profile) {
-              UserProfileCache.set(profile);
-              console.log('🔐 BiometricWrapper: User profile pre-loaded');
+              const currentUserId = TrendAPIService.getCurrentUserId();
+              if (currentUserId) {
+                UserProfileCache.set(profile, currentUserId);
+                console.log('🔐 BiometricWrapper: User profile pre-loaded');
+              }
             }
           })
           .catch(err =>

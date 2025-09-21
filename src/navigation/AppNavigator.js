@@ -178,10 +178,13 @@ export default function AppNavigator() {
 
       // Cache the profile so SettingsScreen and other screens can use it immediately
       if (userProfile) {
-        await UserProfileCache.set(userProfile);
-        console.log(
-          '🔍 APP_NAVIGATOR: Cached user profile for immediate screen access',
-        );
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          await UserProfileCache.set(userProfile, currentUserId);
+          console.log(
+            '🔍 APP_NAVIGATOR: Cached user profile for immediate screen access',
+          );
+        }
       }
 
       if (!userProfile.hasSeenWelcome) {

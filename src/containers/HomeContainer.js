@@ -22,6 +22,7 @@ import GoalAllocationModal from '../components/GoalAllocationModal';
 import AddGoalModal from '../components/AddGoalModal';
 import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
+import UserProfileCache from '../services/UserProfileCache';
 import PayPeriodService from '../services/PayPeriodService';
 import RolloverService from '../services/RolloverService';
 import {useAppSettings} from '../contexts/AppSettingsContext';
@@ -280,6 +281,37 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
+      // Get current user ID for user-specific cache
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (!currentUserId) {
+        console.warn('👤 No user ID available, skipping cache');
+      } else {
+        // 🔄 CACHE-FIRST: Load from cache immediately
+        const cached = await UserProfileCache.get(currentUserId);
+        if (cached && cached.profile) {
+          console.log('👤 Using cached profile data');
+          const cachedProfile = cached.profile;
+          setUserProfile(cachedProfile);
+
+          // Set income data from cache to remove delay
+          if (cachedProfile.income && cachedProfile.incomeFrequency && cachedProfile.nextPayDate) {
+            const cachedIncomeData = {
+              income: cachedProfile.income,
+              monthlyIncome: cachedProfile.income,
+              setupComplete: cachedProfile.setupComplete,
+              frequency: cachedProfile.incomeFrequency,
+              nextPayDate: cachedProfile.nextPayDate,
+            };
+            setIncomeData(cachedIncomeData);
+          }
+
+          // If cache is fresh, we're done
+          if (!cached.isStale) {
+            return;
+          }
+        }
+      }
+
       // 🌍 Check and update timezone for existing UTC users (one-time fix)
       try {
         const timezoneUpdate = await AuthService.updateTimezoneIfNeeded();
@@ -297,6 +329,7 @@ const HomeContainer = ({navigation}) => {
         // Don't fail the entire profile load if timezone update fails
       }
 
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
       const profile = await TrendAPIService.getUserProfile();
       console.log('👤 Profile received from backend:', {
         platform: Platform.OS,
@@ -306,6 +339,11 @@ const HomeContainer = ({navigation}) => {
         nextPayDate: profile?.nextPayDate,
         setupComplete: profile?.setupComplete,
       });
+
+      // Update cache with fresh data
+      if (currentUserId) {
+        await UserProfileCache.set(profile, currentUserId);
+      }
 
       setUserProfile(profile);
 
@@ -422,7 +460,13 @@ const HomeContainer = ({navigation}) => {
       console.log('📂 loadCategories START - Platform:', Platform.OS);
 
       // 🔄 CACHE-FIRST: Load from cache immediately
-      const cached = await CategoryCache.get();
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (!currentUserId) {
+        console.warn('📂 No user ID available for category cache');
+        return;
+      }
+
+      const cached = await CategoryCache.get(currentUserId);
       if (cached && cached.data) {
         console.log('📂 Using cached categories:', {
           count: cached.data.length,
@@ -452,7 +496,7 @@ const HomeContainer = ({navigation}) => {
           console.log('📂 Setting categories from API and updating cache');
 
           // Update cache in background
-          CategoryCache.set(backendCategories);
+          CategoryCache.set(backendCategories, currentUserId);
 
           // Update state with transformed categories
           const transformedCategories =
@@ -1553,8 +1597,13 @@ const HomeContainer = ({navigation}) => {
     try {
       console.log('📂 Reloading categories and invalidating cache...');
 
+      // Get current user ID for cache invalidation
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       // Invalidate cache to force fresh data
-      await CategoryCache.invalidate();
+      if (currentUserId) {
+        await CategoryCache.invalidate(currentUserId);
+      }
 
       // Load categories (will fetch from API since cache is now stale)
       await loadCategories();
@@ -1571,14 +1620,41 @@ const HomeContainer = ({navigation}) => {
       window.debugShowAddTransactionSpotlight =
         onboarding.debugShowAddTransactionSpotlight;
       window.debugResetOnboarding = onboarding.debugResetOnboarding;
+      window.debugCategories = async () => {
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          const stats = await CategoryCache.getStats(currentUserId);
+          const cached = await CategoryCache.get(currentUserId);
+          console.log('📂 Category Debug Stats:', stats);
+          console.log('📂 Raw cached data:', cached?.data);
+          console.log('📂 Transformed categories state:', categories);
+          console.log('📂 Looking for Shopping category and its subcategories...');
+          const shopping = categories.find(c => c.name.toLowerCase().includes('shopping'));
+          if (shopping) {
+            console.log('📂 Shopping category found:', shopping);
+            console.log('📂 Shopping subcategories:', shopping.subcategories);
+            const sporting = shopping.subcategories?.find(s => s.name.toLowerCase().includes('sporting'));
+            if (sporting) {
+              console.log('📂 ✅ Sporting subcategory found in state:', sporting);
+            } else {
+              console.log('📂 ❌ Sporting subcategory NOT found in transformed state');
+            }
+          } else {
+            console.log('📂 ❌ Shopping category not found');
+          }
+          return {stats, cached: cached?.data, transformed: categories};
+        }
+        return null;
+      };
       console.log(
-        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
+        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugCategories(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
       );
     }
     return () => {
       if (typeof window !== 'undefined') {
         delete window.reloadTournaments;
         delete window.reloadCategories;
+        delete window.debugCategories;
         delete window.debugShowAddTransactionSpotlight;
         delete window.debugResetOnboarding;
       }
