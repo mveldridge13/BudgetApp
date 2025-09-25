@@ -1,5 +1,6 @@
 import TrendAPI from './TrendAPIService';
 import DateService from './DateService';
+import CurrencyService from './CurrencyService';
 
 /**
  * Authentication Service
@@ -81,6 +82,9 @@ class AuthService {
       // Auto-detect user's timezone for new registrations
       const detectedTimezone = DateService.detectUserTimezone();
 
+      // Auto-detect user's currency based on timezone/region
+      const detectedCurrency = CurrencyService.detectUserCurrency();
+
       const result = await TrendAPI.register({
         firstName: userData.firstName,
         lastName: userData.lastName,
@@ -88,6 +92,8 @@ class AuthService {
         password: userData.password,
         // Use provided timezone from onboarding, or auto-detect as fallback
         timezone: userData.timezone || detectedTimezone,
+        // Use provided currency from onboarding, or auto-detect as fallback
+        currency: userData.currency || detectedCurrency,
       });
 
       if (result.success) {
