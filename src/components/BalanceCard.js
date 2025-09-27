@@ -285,7 +285,22 @@ const BalanceCard = ({
 
   const daysUntilNextPay = getDaysUntilNextPay();
   const dailyBudget = adjustedLeftToSpend / daysUntilNextPay;
-  const weeklyBudget = dailyBudget * 7;
+
+  // Calculate weekly budget based on pay frequency
+  const weeklyBudget = (() => {
+    const frequency = incomeData?.frequency?.toLowerCase();
+
+    if (frequency === 'weekly') {
+      // For weekly pay: weekly budget is the current remaining amount
+      return adjustedLeftToSpend;
+    } else if (frequency === 'fortnightly') {
+      // For fortnightly pay: calculate weekly portion of remaining budget
+      return dailyBudget * Math.min(7, daysUntilNextPay);
+    } else {
+      // For monthly or other frequencies: standard 7-day calculation
+      return dailyBudget * 7;
+    }
+  })();
 
   const isOverBudget = leftToSpend < 0;
   const isCloseToLimit = percentageRemaining < 20 && percentageRemaining >= 0;
