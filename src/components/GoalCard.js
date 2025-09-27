@@ -25,6 +25,7 @@ const GoalCard = ({
   getGoalProgress,
   isOverdue = false,
   formatCurrency,
+  onExpand, // Callback when card expands for input
 }) => {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
@@ -166,6 +167,7 @@ const GoalCard = ({
   // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
     console.log('🔍 BUTTON PRESSED: Custom amount submit');
+
     const amount = parseFloat(customAmount);
 
     if (isNaN(amount) || amount <= 0) {
@@ -217,6 +219,7 @@ const GoalCard = ({
     setPaymentSource('income');
     setTransactionType('add');
     setShowProgressUpdate(false);
+    // Keyboard will dismiss naturally when input loses focus
   };
 
   const getProgressColor = () => {
@@ -493,6 +496,10 @@ const GoalCard = ({
               placeholder="0.00"
               keyboardType="numeric"
               autoFocus={true}
+              returnKeyType="done"
+              onSubmitEditing={handleCustomAmountSubmit}
+              selectTextOnFocus={true}
+              enablesReturnKeyAutomatically={true}
             />
             <View style={styles.customAmountButtons}>
               <TouchableOpacity
@@ -525,6 +532,10 @@ const GoalCard = ({
                 onPress={() => {
                   setTransactionType('add');
                   setShowProgressUpdate(true);
+                  // Scroll to show expanded card after a short delay
+                  setTimeout(() => {
+                    onExpand && onExpand();
+                  }, 100);
                 }}
                 activeOpacity={0.8}>
                 <Icon name="plus" size={16} color={colors.textWhite} />
@@ -538,6 +549,10 @@ const GoalCard = ({
                   onPress={() => {
                     setTransactionType('withdraw');
                     setShowProgressUpdate(true);
+                    // Scroll to show expanded card after a short delay
+                    setTimeout(() => {
+                      onExpand && onExpand();
+                    }, 100);
                   }}
                   activeOpacity={0.8}>
                   <Icon name="minus" size={16} color={colors.danger} />
@@ -550,7 +565,13 @@ const GoalCard = ({
           {safeGoal.type === 'debt' && (
             <TouchableOpacity
               style={[styles.primaryButton, {backgroundColor: goalColor}]}
-              onPress={() => setShowProgressUpdate(true)}
+              onPress={() => {
+                setShowProgressUpdate(true);
+                // Scroll to show expanded card after a short delay
+                setTimeout(() => {
+                  onExpand && onExpand();
+                }, 100);
+              }}
               activeOpacity={0.8}>
               <Text style={styles.primaryButtonText}>Make Payment</Text>
             </TouchableOpacity>
