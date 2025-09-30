@@ -29,15 +29,6 @@ const GoalsScreen = ({route, navigation}) => {
   const rolloverParams = route?.params || {};
   const {fromRollover, rolloverAmount, rolloverFrequency} = rolloverParams;
 
-  // Debug logging for rollover parameters
-  console.log('🔍 GOALS_SCREEN: Navigation params received:', {
-    hasParams: !!route?.params,
-    rolloverParams,
-    fromRollover,
-    rolloverAmount,
-    rolloverFrequency,
-  });
-
   // Get currency setting from context
   const {appSettings} = useAppSettings();
   const currency = appSettings?.currency || 'AUD';
@@ -168,16 +159,10 @@ const GoalsScreen = ({route, navigation}) => {
   // Only reload on focus if data is stale (debounced)
   useFocusEffect(
     useCallback(() => {
-      // Remove the delay - load immediately but silently
       if (isMountedRef.current && !isLoadingRef.current) {
         // Don't reload if we just updated goals (within 10 seconds)
         const timeSinceUpdate = Date.now() - lastUpdateTime.current;
         if (timeSinceUpdate < 10000) {
-          console.log(
-            '🔍 GOALS_SCREEN: Skipping reload - recent update within',
-            timeSinceUpdate,
-            'ms',
-          );
           return;
         }
 
@@ -187,20 +172,7 @@ const GoalsScreen = ({route, navigation}) => {
           !hasLoadedOnce.current ||
           (currentGoalsLength === 0 && !incomeData)
         ) {
-          console.log(
-            '🔍 GOALS_SCREEN: Loading data (hasLoadedOnce:',
-            hasLoadedOnce.current,
-            'goals.length:',
-            currentGoalsLength,
-            ')',
-          );
           loadAllData();
-        } else {
-          console.log(
-            '🔍 GOALS_SCREEN: Skipping reload - already loaded with',
-            currentGoalsLength,
-            'goals',
-          );
         }
       }
     }, [loadAllData, incomeData, goals.length]),
@@ -208,16 +180,6 @@ const GoalsScreen = ({route, navigation}) => {
 
   // Handle rollover flow - automatically open Add Goal modal when coming from rollover
   useEffect(() => {
-    console.log('🔍 GOALS_SCREEN: Rollover effect triggered with state:', {
-      fromRollover,
-      rolloverAmount,
-      rolloverFrequency,
-      showAddGoal,
-      hasProcessedRollover,
-      pendingRolloverAllocation,
-      rolloverCompleted,
-    });
-
     // Only open modal if we have fresh rollover params and haven't completed the rollover process
     if (
       fromRollover &&
@@ -227,17 +189,8 @@ const GoalsScreen = ({route, navigation}) => {
       !pendingRolloverAllocation &&
       !rolloverCompleted
     ) {
-      console.log('🔄 GoalsScreen: Opening Add Goal modal for rollover flow:', {
-        rolloverAmount,
-        rolloverFrequency,
-      });
-
       // Store rollover data for later allocation
       setPendingRolloverAllocation({
-        amount: rolloverAmount,
-        frequency: rolloverFrequency,
-      });
-      console.log('🔍 GOALS_SCREEN: Set pendingRolloverAllocation:', {
         amount: rolloverAmount,
         frequency: rolloverFrequency,
       });
@@ -248,8 +201,6 @@ const GoalsScreen = ({route, navigation}) => {
       // Automatically open Add Goal modal
       clearEditingGoal();
       setShowAddGoal(true);
-    } else {
-      console.log('🔍 GOALS_SCREEN: Rollover effect conditions not met');
     }
   }, [
     fromRollover,
@@ -293,31 +244,14 @@ const GoalsScreen = ({route, navigation}) => {
   const handleSaveGoal = useCallback(
     async goalData => {
       try {
-        console.log('🔍 GOALS_SCREEN: Saving goal with data:', {
-          title: goalData.title,
-          type: goalData.type,
-          category: goalData.category,
-          target: goalData.target,
-        });
-
         const result = await saveGoal(goalData);
 
         if (result && result.success) {
-          console.log('🔍 GOALS_SCREEN: Goal saved successfully:', {
-            id: result.goal?.id,
-            type: result.goal?.type,
-            category: result.goal?.category,
-          });
-
           setShowAddGoal(false);
           clearEditingGoal();
 
           // Navigate back to Home immediately if this came from rollover flow
           if (fromRollover && navigation) {
-            console.log(
-              '🔄 GOALS_SCREEN: Goal created from rollover, navigating back to Home',
-            );
-
             // Mark rollover as completed to prevent any further modal openings
             setRolloverCompleted(true);
 
@@ -326,31 +260,12 @@ const GoalsScreen = ({route, navigation}) => {
           }
 
           // Handle rollover allocation if this goal was created from rollover flow
-          console.log('🔍 GOALS_SCREEN: Checking rollover allocation:', {
-            hasPendingRolloverAllocation: !!pendingRolloverAllocation,
-            pendingRolloverAllocation,
-            hasGoalId: !!result.goal?.id,
-            goalId: result.goal?.id,
-          });
-
           if (pendingRolloverAllocation && result.goal?.id) {
             try {
-              console.log(
-                '🔄 GOALS_SCREEN: Allocating rollover funds to new goal:',
-                {
-                  goalId: result.goal.id,
-                  amount: pendingRolloverAllocation.amount,
-                  frequency: pendingRolloverAllocation.frequency,
-                },
-              );
-
               // Wait a bit for goal to be fully persisted, then reload goals
               await new Promise(resolve => setTimeout(resolve, 1000));
               if (loadGoalsRef.current) {
                 await loadGoalsRef.current(true);
-                console.log(
-                  '🔄 GOALS_SCREEN: Goals reloaded before contribution',
-                );
               }
 
               const contributionData = {
@@ -373,14 +288,8 @@ const GoalsScreen = ({route, navigation}) => {
                   amount: pendingRolloverAllocation.amount,
                   type: 'ROLLOVER',
                 });
-                console.log(
-                  '🔍 GOALS_SCREEN: Emitted goalIncomePaymentMade event for ROLLOVER',
-                );
               } catch (eventError) {
-                console.error(
-                  '🔍 GOALS_SCREEN: Failed to emit goalIncomePaymentMade event:',
-                  eventError,
-                );
+                console.error('Failed to emit goalIncomePaymentMade event:', eventError);
               }
 
               // Process rollover completion on backend
@@ -391,80 +300,46 @@ const GoalsScreen = ({route, navigation}) => {
               // Clear pending rollover allocation
               setPendingRolloverAllocation(null);
 
-              console.log(
-                `✅ Goal created and funded: ${formatCurrencySync(
-                  pendingRolloverAllocation.amount,
-                  currency,
-                )} allocated to "${result.goal.title}"`,
-              );
-
               // Force reload goals to show updated contribution amount
               if (loadGoalsRef.current) {
-                console.log(
-                  '🔄 GOALS_SCREEN: Force reloading goals to show contribution...',
-                );
                 // Small delay to ensure backend has processed the contribution
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                await loadGoalsRef.current(true); // Force reload
-                console.log(
-                  '🔄 GOALS_SCREEN: Goals reloaded after contribution',
-                );
+                await loadGoalsRef.current(true);
               }
             } catch (rolloverError) {
-              console.error(
-                '🔄 GOALS_SCREEN: Failed to allocate rollover funds:',
-                rolloverError,
-              );
-              console.log(
-                `⚠️ Goal created but funding failed: "${result.goal.title}". Add rollover funds manually if needed.`,
-              );
+              console.error('Failed to allocate rollover funds:', rolloverError);
               // Clear pending rollover allocation even on error
               setPendingRolloverAllocation(null);
             }
 
             // Final reload to ensure UI is up to date
-            console.log(
-              '🔍 GOALS_SCREEN: Final reload after rollover allocation...',
-            );
             try {
               if (loadGoalsRef.current) {
                 await loadGoalsRef.current(true);
-                console.log('🔍 GOALS_SCREEN: Final goals reload successful');
               }
             } catch (reloadError) {
-              console.error(
-                '🔍 GOALS_SCREEN: Final reload error:',
-                reloadError,
-              );
+              console.error('Final reload error:', reloadError);
             }
           } else {
             // No rollover allocation, just close modal and reload goals
-            console.log(
-              '🔍 GOALS_SCREEN: No rollover allocation, reloading goals...',
-            );
             try {
               if (loadGoalsRef.current) {
                 await loadGoalsRef.current(true);
-                console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
               }
             } catch (reloadError) {
-              console.error(
-                '🔍 GOALS_SCREEN: Failed to reload goals:',
-                reloadError,
-              );
+              console.error('Failed to reload goals:', reloadError);
             }
           }
 
           return {success: true, goal: result.goal};
         } else {
-          console.error('🔍 GOALS_SCREEN: Goal save failed:', result?.error);
           return {
             success: false,
             error: result?.error || 'Failed to save goal. Please try again.',
           };
         }
       } catch (error) {
-        console.error('🔍 GOALS_SCREEN: Goal save error:', error);
+        console.error('Goal save error:', error);
         return {
           success: false,
           error:
@@ -479,7 +354,7 @@ const GoalsScreen = ({route, navigation}) => {
       currency,
       fromRollover,
       navigation,
-    ], // ✅ FIXED: Added missing dependencies
+    ],
   );
 
   const handleDeleteGoal = useCallback(
@@ -496,20 +371,7 @@ const GoalsScreen = ({route, navigation}) => {
   const handleToggleBalanceDisplay = useCallback(
     async goalId => {
       try {
-        console.log(
-          '🎯 GoalsScreen: Toggling balance display for goal:',
-          goalId,
-        );
-        const result = await toggleGoalBalanceDisplay(goalId);
-        console.log('🎯 GoalsScreen: Toggle result:', result);
-
-        // Log the updated goals state
-        const updatedGoal = goals.find(g => g.id === goalId);
-        console.log('🎯 GoalsScreen: Updated goal state:', {
-          id: updatedGoal?.id,
-          title: updatedGoal?.title,
-          showOnBalanceCard: updatedGoal?.showOnBalanceCard,
-        });
+        await toggleGoalBalanceDisplay(goalId);
       } catch (error) {
         console.warn('Error toggling balance display:', error);
       }
@@ -521,8 +383,7 @@ const GoalsScreen = ({route, navigation}) => {
     async (goalId, amount, paymentSource = 'income') => {
       try {
         await updateGoalProgress(goalId, amount, paymentSource);
-        lastUpdateTime.current = Date.now(); // Mark when we updated
-        console.log('🔍 GOALS_SCREEN: Goal progress updated successfully');
+        lastUpdateTime.current = Date.now();
       } catch (error) {
         console.warn('Error updating progress:', error);
         Alert.alert(
