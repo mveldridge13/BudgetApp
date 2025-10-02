@@ -268,6 +268,21 @@ const GoalCard = ({
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.actionButton}
+              onPress={() => {
+                setLocalShowOnBalanceCard(!localShowOnBalanceCard);
+                if (onToggleBalanceDisplay) {
+                  onToggleBalanceDisplay(safeGoal.id);
+                }
+              }}
+              activeOpacity={0.7}>
+              <Icon
+                name={localShowOnBalanceCard ? "eye" : "eye-off"}
+                size={16}
+                color={localShowOnBalanceCard ? colors.primary : colors.textSecondary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
               onPress={() => onEdit && onEdit(goal)}
               activeOpacity={0.7}>
               <Icon name="edit-3" size={16} color={colors.textSecondary} />
@@ -349,50 +364,7 @@ const GoalCard = ({
         </View>
       )}
 
-      {/* Balance Card Toggle */}
-      {!isCompleted && (
-        <View style={styles.balanceCardToggle}>
-          <View style={styles.toggleInfo}>
-            <Icon name="eye" size={16} color={colors.primary} />
-            <Text style={styles.toggleLabel}>Show on Balance Card</Text>
-          </View>
-          <Switch
-            value={localShowOnBalanceCard}
-            onValueChange={(newValue) => {
-              setLocalShowOnBalanceCard(newValue);
-
-              // Call parent handler to persist the change
-              if (onToggleBalanceDisplay) {
-                onToggleBalanceDisplay(safeGoal.id);
-              }
-            }}
-            trackColor={{
-              false: colors.border,
-              true: colors.primary,
-            }}
-            thumbColor={
-              localShowOnBalanceCard
-                ? colors.textWhite
-                : colors.textSecondary
-            }
-            ios_backgroundColor={colors.border}
-          />
-        </View>
-      )}
-
-      {localShowOnBalanceCard && !isCompleted && (
-        <Text style={styles.toggleFeedback}>
-          ✓ This goal will appear on your main balance card
-        </Text>
-      )}
-
-      {!localShowOnBalanceCard && !isCompleted && (
-        <Text style={styles.toggleHelp}>
-          Toggle on to track this goal on your main balance card
-        </Text>
-      )}
-
-      {/* NEW: Custom Amount Input Section */}
+      {/* Custom Amount Input Section */}
       {showProgressUpdate && !isCompleted && (
         <View style={styles.customAmountContainer}>
           <Text style={styles.customAmountTitle}>
@@ -780,43 +752,7 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.text,
   },
-  balanceCardToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  toggleInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.primary,
-  },
-  toggleFeedback: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.primary,
-    marginBottom: 16,
-  },
-  toggleHelp: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  // NEW: Custom Amount Input Styles
+  // Custom Amount Input Styles
   customAmountContainer: {
     backgroundColor: colors.background,
     borderRadius: 8,
