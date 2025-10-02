@@ -409,6 +409,19 @@ const GoalsScreen = ({route, navigation}) => {
     return grouped;
   }, [activeGoals]);
 
+  // Filter non-debt active goals for Active tab (exclude debt goals)
+  const nonDebtActiveGoals = React.useMemo(() => {
+    return activeGoals.filter(goal => goal.type !== 'debt');
+  }, [activeGoals]);
+
+  // Get only debt goals
+  const debtGoals = React.useMemo(() => {
+    return groupedActiveGoals.debt;
+  }, [groupedActiveGoals.debt]);
+
+  // Check if we should show the Debt Goals tab
+  const hasDebtGoals = debtGoals.length > 0;
+
   // Render goal cards for a specific type
   const renderGoalsByType = (typeGoals, type) => {
     if (typeGoals.length === 0) {
@@ -498,9 +511,23 @@ const GoalsScreen = ({route, navigation}) => {
               styles.tabText,
               activeTab === 'active' && styles.activeTabText,
             ]}>
-            Active Goals ({activeGoals.length})
+            Active ({nonDebtActiveGoals.length})
           </Text>
         </TouchableOpacity>
+
+        {hasDebtGoals && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'debt' && styles.activeTab]}
+            onPress={() => setActiveTab('debt')}>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'debt' && styles.activeTabText,
+              ]}>
+              Debt Goals ({debtGoals.length})
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
@@ -537,7 +564,7 @@ const GoalsScreen = ({route, navigation}) => {
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Active Goals</Text>
-                <Text style={styles.statValue}>{activeGoals.length}</Text>
+                <Text style={styles.statValue}>{nonDebtActiveGoals.length}</Text>
               </View>
 
               <View style={styles.statCard}>
@@ -553,11 +580,10 @@ const GoalsScreen = ({route, navigation}) => {
               </View>
             </View>
 
-            {/* Active Goals - Grouped by Type */}
-            {activeGoals.length > 0 ? (
+            {/* Active Goals - Grouped by Type (excluding debt) */}
+            {nonDebtActiveGoals.length > 0 ? (
               <View style={styles.goalsSection}>
                 {renderGoalsByType(groupedActiveGoals.spending, 'spending')}
-                {renderGoalsByType(groupedActiveGoals.debt, 'debt')}
                 {renderGoalsByType(groupedActiveGoals.savings, 'savings')}
               </View>
             ) : (
@@ -575,6 +601,29 @@ const GoalsScreen = ({route, navigation}) => {
               </View>
             )}
           </>
+        )}
+
+        {activeTab === 'debt' && (
+          <View style={styles.goalsSection}>
+            {debtGoals.length > 0 ? (
+              <>
+                {renderGoalsByType(debtGoals, 'debt')}
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon
+                  name="trending-down"
+                  size={48}
+                  color={colors.textSecondary}
+                  style={styles.emptyIcon}
+                />
+                <Text style={styles.emptyTitle}>No Debt Goals</Text>
+                <Text style={styles.emptySubtitle}>
+                  Create a debt goal to track loan or credit card payments
+                </Text>
+              </View>
+            )}
+          </View>
         )}
 
         {activeTab === 'completed' && (
