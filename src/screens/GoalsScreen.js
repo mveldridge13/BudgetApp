@@ -16,18 +16,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
+import useRolloverAllocation from '../hooks/useRolloverAllocation';
 import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
 import {formatCurrencySync} from '../utils/currencyHelper';
 import {useAppSettings} from '../contexts/AppSettingsContext';
-import TrendAPIService from '../services/TrendAPIService';
 
 const GoalsScreen = ({route, navigation}) => {
   const insets = useSafeAreaInsets();
 
   // Extract rollover parameters from route
   const rolloverParams = route?.params || {};
-  const {fromRollover, rolloverAmount, rolloverFrequency} = rolloverParams;
+  const {fromRollover} = rolloverParams;
 
   // Get currency setting from context
   const {appSettings} = useAppSettings();
@@ -37,10 +37,6 @@ const GoalsScreen = ({route, navigation}) => {
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [incomeData, setIncomeData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [pendingRolloverAllocation, setPendingRolloverAllocation] =
-    useState(null);
-  const [hasProcessedRollover, setHasProcessedRollover] = useState(false);
-  const [rolloverCompleted, setRolloverCompleted] = useState(false);
 
   // Refs to prevent multiple simultaneous loads
   const isLoadingRef = useRef(false);
@@ -66,6 +62,14 @@ const GoalsScreen = ({route, navigation}) => {
     isGoalOverdue,
     completeGoal,
   } = useGoals();
+
+  // Rollover allocation hook
+  const {
+    shouldShowModal: shouldShowRolloverModal,
+    allocateToGoal,
+    cancelRollover,
+    resetRollover,
+  } = useRolloverAllocation(rolloverParams, loadGoals);
 
   // Use ref to store loadGoals to prevent dependency loops
   const loadGoalsRef = useRef();
@@ -128,11 +132,9 @@ const GoalsScreen = ({route, navigation}) => {
     return () => {
       isMountedRef.current = false;
       // Clean up rollover state when component unmounts
-      setPendingRolloverAllocation(null);
-      setHasProcessedRollover(false);
-      setRolloverCompleted(false);
+      resetRollover();
     };
-  }, [loadAllData]);
+  }, [loadAllData, resetRollover]);
 
   // Monitor app state changes for automatic refresh
   useEffect(() => {
@@ -180,38 +182,11 @@ const GoalsScreen = ({route, navigation}) => {
 
   // Handle rollover flow - automatically open Add Goal modal when coming from rollover
   useEffect(() => {
-    // Only open modal if we have fresh rollover params and haven't completed the rollover process
-    if (
-      fromRollover &&
-      rolloverAmount &&
-      !showAddGoal &&
-      !hasProcessedRollover &&
-      !pendingRolloverAllocation &&
-      !rolloverCompleted
-    ) {
-      // Store rollover data for later allocation
-      setPendingRolloverAllocation({
-        amount: rolloverAmount,
-        frequency: rolloverFrequency,
-      });
-
-      // Mark as processed to prevent loops
-      setHasProcessedRollover(true);
-
-      // Automatically open Add Goal modal
+    if (shouldShowRolloverModal && !showAddGoal) {
       clearEditingGoal();
       setShowAddGoal(true);
     }
-  }, [
-    fromRollover,
-    rolloverAmount,
-    rolloverFrequency,
-    showAddGoal,
-    hasProcessedRollover,
-    pendingRolloverAllocation,
-    rolloverCompleted,
-    clearEditingGoal,
-  ]);
+  }, [shouldShowRolloverModal, showAddGoal, clearEditingGoal]);
 
   // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
@@ -250,78 +225,21 @@ const GoalsScreen = ({route, navigation}) => {
           setShowAddGoal(false);
           clearEditingGoal();
 
-          // Navigate back to Home immediately if this came from rollover flow
-          if (fromRollover && navigation) {
-            // Mark rollover as completed to prevent any further modal openings
-            setRolloverCompleted(true);
-
-            // Navigate back and reset the Goals screen to clear rollover params
-            navigation.navigate('Home');
-          }
-
           // Handle rollover allocation if this goal was created from rollover flow
-          if (pendingRolloverAllocation && result.goal?.id) {
-            try {
-              // Wait a bit for goal to be fully persisted, then reload goals
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              if (loadGoalsRef.current) {
-                await loadGoalsRef.current(true);
-              }
+          if (shouldShowRolloverModal && result.goal?.id) {
+            const rolloverResult = await allocateToGoal(result.goal.id);
 
-              const contributionData = {
-                amount: pendingRolloverAllocation.amount,
-                type: 'ROLLOVER',
-                description: `Rollover allocation from ${pendingRolloverAllocation.frequency} period`,
-                date: new Date().toISOString(),
-              };
-
-              await TrendAPIService.addGoalContribution(
-                result.goal.id,
-                contributionData,
+            if (!rolloverResult.success) {
+              // Show error but don't fail the goal creation
+              Alert.alert(
+                'Rollover Allocation Failed',
+                rolloverResult.error ||
+                  'Failed to allocate rollover funds to goal. You can add them manually.',
+                [{text: 'OK', style: 'default'}],
               );
-
-              // Emit event to notify HomeContainer to reload income payments
-              try {
-                const {DeviceEventEmitter} = require('react-native');
-                DeviceEventEmitter.emit('goalIncomePaymentMade', {
-                  goalId: result.goal.id,
-                  amount: pendingRolloverAllocation.amount,
-                  type: 'ROLLOVER',
-                });
-              } catch (eventError) {
-                console.error('Failed to emit goalIncomePaymentMade event:', eventError);
-              }
-
-              // Process rollover completion on backend
-              await TrendAPIService.processRollover({
-                amount: 0, // Set to 0 since funds were allocated to goal
-              });
-
-              // Clear pending rollover allocation
-              setPendingRolloverAllocation(null);
-
-              // Force reload goals to show updated contribution amount
-              if (loadGoalsRef.current) {
-                // Small delay to ensure backend has processed the contribution
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                await loadGoalsRef.current(true);
-              }
-            } catch (rolloverError) {
-              console.error('Failed to allocate rollover funds:', rolloverError);
-              // Clear pending rollover allocation even on error
-              setPendingRolloverAllocation(null);
-            }
-
-            // Final reload to ensure UI is up to date
-            try {
-              if (loadGoalsRef.current) {
-                await loadGoalsRef.current(true);
-              }
-            } catch (reloadError) {
-              console.error('Final reload error:', reloadError);
             }
           } else {
-            // No rollover allocation, just close modal and reload goals
+            // No rollover allocation, just reload goals
             try {
               if (loadGoalsRef.current) {
                 await loadGoalsRef.current(true);
@@ -329,6 +247,11 @@ const GoalsScreen = ({route, navigation}) => {
             } catch (reloadError) {
               console.error('Failed to reload goals:', reloadError);
             }
+          }
+
+          // Navigate back to Home if this came from rollover flow
+          if (fromRollover && navigation) {
+            navigation.navigate('Home');
           }
 
           return {success: true, goal: result.goal};
@@ -350,8 +273,8 @@ const GoalsScreen = ({route, navigation}) => {
     [
       saveGoal,
       clearEditingGoal,
-      pendingRolloverAllocation,
-      currency,
+      shouldShowRolloverModal,
+      allocateToGoal,
       fromRollover,
       navigation,
     ],
@@ -376,7 +299,7 @@ const GoalsScreen = ({route, navigation}) => {
         console.warn('Error toggling balance display:', error);
       }
     },
-    [toggleGoalBalanceDisplay, goals],
+    [toggleGoalBalanceDisplay],
   );
 
   const handleUpdateProgress = useCallback(
@@ -414,16 +337,14 @@ const GoalsScreen = ({route, navigation}) => {
   );
 
   const handleCloseAddGoal = useCallback(() => {
-    // If user cancels goal creation during rollover flow, just reset everything quietly
-    if (pendingRolloverAllocation) {
-      setPendingRolloverAllocation(null);
-      setHasProcessedRollover(false);
-      setRolloverCompleted(true); // Mark as completed to prevent reopening
+    // If user cancels goal creation during rollover flow, cancel the rollover
+    if (shouldShowRolloverModal) {
+      cancelRollover();
     }
 
     setShowAddGoal(false);
     clearEditingGoal();
-  }, [clearEditingGoal, pendingRolloverAllocation]);
+  }, [clearEditingGoal, shouldShowRolloverModal, cancelRollover]);
 
   const formatCurrency = useCallback(
     amount => {
@@ -704,21 +625,10 @@ const GoalsScreen = ({route, navigation}) => {
   );
 };
 
-// Styles remain the same...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: 'System',
-    fontWeight: '400',
-    color: colors.textSecondary,
   },
   header: {
     backgroundColor: colors.primary,

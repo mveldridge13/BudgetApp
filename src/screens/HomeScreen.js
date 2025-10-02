@@ -233,22 +233,16 @@ const HomeScreen = ({
           />
         )}
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading transactions...</Text>
-          </View>
-        ) : (
-          <TransactionList
-            transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
-            selectedDate={selectedDate}
-            onDeleteTransaction={onDeleteTransaction}
-            onEditTransaction={handleEditTransaction}
-            onSwipeStart={handleSwipeStart}
-            onSwipeEnd={handleSwipeEnd}
-            transactionRef={onboarding?.transactionRef}
-            onTransactionLayout={() => {}} // Handled by onboarding hook
-          />
-        )}
+        <TransactionList
+          transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
+          selectedDate={selectedDate}
+          onDeleteTransaction={onDeleteTransaction}
+          onEditTransaction={handleEditTransaction}
+          onSwipeStart={handleSwipeStart}
+          onSwipeEnd={handleSwipeEnd}
+          transactionRef={onboarding?.transactionRef}
+          onTransactionLayout={() => {}} // Handled by onboarding hook
+        />
       </ScrollView>
 
       {/* ==============================================
@@ -282,34 +276,29 @@ const HomeScreen = ({
 
       {/* ==============================================
           ONBOARDING OVERLAYS
+          Always mounted to allow fade-out animations
           ============================================== */}
-      {onboarding?.showBalanceCardSpotlight && (
-        <BalanceCardSpotlight
-          visible={onboarding.showBalanceCardSpotlight}
-          onNext={handleBalanceCardSpotlightNext}
-          onSkip={handleBalanceCardSpotlightSkip}
-          balanceCardLayout={onboarding.balanceCardLayout}
-          incomeData={incomeData}
-        />
-      )}
+      <BalanceCardSpotlight
+        visible={onboarding?.showBalanceCardSpotlight || false}
+        onNext={handleBalanceCardSpotlightNext}
+        onSkip={handleBalanceCardSpotlightSkip}
+        balanceCardLayout={onboarding?.balanceCardLayout}
+        incomeData={incomeData}
+      />
 
-      {onboarding?.showAddTransactionSpotlight && (
-        <AddTransactionSpotlight
-          visible={onboarding.showAddTransactionSpotlight}
-          onNext={handleAddTransactionSpotlightNext}
-          onSkip={handleAddTransactionSpotlightSkip}
-          floatingButtonLayout={onboarding.floatingButtonLayout}
-        />
-      )}
+      <AddTransactionSpotlight
+        visible={onboarding?.showAddTransactionSpotlight || false}
+        onNext={handleAddTransactionSpotlightNext}
+        onSkip={handleAddTransactionSpotlightSkip}
+        floatingButtonLayout={onboarding?.floatingButtonLayout}
+      />
 
-      {onboarding?.showTransactionSwipeSpotlight && (
-        <TransactionSwipeSpotlight
-          visible={onboarding.showTransactionSwipeSpotlight}
-          onNext={handleTransactionSwipeSpotlightNext}
-          onSkip={handleTransactionSwipeSpotlightSkip}
-          transactionLayout={onboarding.transactionLayout}
-        />
-      )}
+      <TransactionSwipeSpotlight
+        visible={onboarding?.showTransactionSwipeSpotlight || false}
+        onNext={handleTransactionSwipeSpotlightNext}
+        onSkip={handleTransactionSwipeSpotlightSkip}
+        transactionLayout={onboarding?.transactionLayout}
+      />
     </View>
   );
 };

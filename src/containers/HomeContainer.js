@@ -37,7 +37,7 @@ const HomeContainer = ({navigation}) => {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false - show cached data immediately
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [lastActiveDate, setLastActiveDate] = useState(
     new Date().toDateString(),
@@ -1085,6 +1085,9 @@ const HomeContainer = ({navigation}) => {
       // This ensures we get the latest rollover state after goal creation
       loadRolloverAmount();
 
+      // Reload rollover banner to show updated amount after partial allocations
+      loadRolloverBanner();
+
       // Also reload goals to ensure we have the latest goal data (including contributions)
       if (loadGoalsRef.current) {
         loadGoalsRef.current();
@@ -1095,7 +1098,7 @@ const HomeContainer = ({navigation}) => {
     });
 
     return unsubscribe;
-  }, [navigation, loadRolloverAmount, loadTransactions]);
+  }, [navigation, loadRolloverAmount, loadRolloverBanner, loadTransactions]);
 
   // ==============================================
   // PAY PERIOD TRANSITION DETECTION
@@ -1671,7 +1674,8 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const transactionsWithCategories = useMemo(() => {
     // Don't render transactions until categories are loaded to prevent flicker
-    if (loading || categories.length === 0) {
+    // Categories are cached and load instantly, so this prevents initial render issues only
+    if (categories.length === 0) {
       return [];
     }
 
@@ -1688,7 +1692,6 @@ const HomeContainer = ({navigation}) => {
 
     return processTransactionsWithCategories(transactions);
   }, [
-    loading,
     transactions,
     categories,
     processTransactionsWithCategories,
@@ -1714,35 +1717,31 @@ const HomeContainer = ({navigation}) => {
   // LIFECYCLE
   // ==============================================
 
-  // Initial data loading
+  // Initial data loading - Cache-first approach (no loading block)
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        setLoading(true);
-
         if (!AuthService.isAuthenticated()) {
           navigation.navigate('Auth');
           return;
         }
 
-        // Load categories first to ensure categoryMap is available for transaction processing
-        await loadCategories();
-
-        // Then load everything else in parallel
+        // Load all data in parallel - cache-first pattern ensures instant display
+        // No blocking loading state - show cached data immediately, sync in background
         await Promise.all([
+          loadCategories(),
           loadUserProfile(),
           loadTransactions(),
           loadGoals(),
           loadTournaments(),
           loadCurrencySetting(),
         ]);
+
+        // Set loading to false after initial data is loaded (for first-time scenarios)
+        setLoading(false);
       } catch (error) {
         console.error('HomeContainer: Error in loadInitialData:', error);
-      } finally {
-        // Delay setting loading to false to ensure smooth transition
-        setTimeout(() => {
-          setLoading(false);
-        }, 100);
+        setLoading(false);
       }
     };
 
@@ -1791,7 +1790,7 @@ const HomeContainer = ({navigation}) => {
     onboarding.loading,
     onboarding.onboardingStatus,
     incomeData,
-    transactions,
+    transactions.length, // Use length instead of full array to prevent unnecessary re-renders
   ]);
 
   // App state monitoring for date changes
@@ -2272,7 +2271,7 @@ const HomeContainer = ({navigation}) => {
         categories={categories}
         goals={goals}
         editingTransaction={editingTransaction}
-        loading={loading || onboarding.loading}
+        loading={loading}
         selectedDate={selectedDate}
         totalExpenses={totalExpenses}
         totalIncomePayments={totalIncomePayments}
