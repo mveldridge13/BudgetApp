@@ -282,7 +282,6 @@ const AddGoalModal = ({
         category: formData.category,
         priority: formData.priority,
         deadline: formData.deadline,
-        current: parseNumberSafely(formData.current, 0),
         isActive: true,
       };
 
@@ -291,6 +290,11 @@ const AddGoalModal = ({
         // For debt goals, use originalAmount as the target amount
         goalData.originalAmount = parseNumberSafely(formData.originalAmount, 0);
         goalData.target = goalData.originalAmount; // Backend expects targetAmount
+        // For NEW debt goals, current should start at originalAmount (full debt)
+        // For EDITING, use the existing current value
+        goalData.current = editingGoal
+          ? parseNumberSafely(formData.current, goalData.originalAmount)
+          : goalData.originalAmount;
         console.log('🔍 MODAL - Debt goal processed:');
         console.log(
           '🔍 MODAL - originalAmount:',
@@ -302,7 +306,14 @@ const AddGoalModal = ({
           goalData.target,
           typeof goalData.target,
         );
+        console.log(
+          '🔍 MODAL - current:',
+          goalData.current,
+          typeof goalData.current,
+        );
       } else {
+        // For savings/spending goals, use current from form
+        goalData.current = parseNumberSafely(formData.current, 0);
         // For savings/spending goals, use target
         goalData.target = parseNumberSafely(formData.target, 0);
         console.log('🔍 MODAL - Non-debt goal processed:');

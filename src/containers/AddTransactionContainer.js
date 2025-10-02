@@ -5,6 +5,7 @@ import CategoryCache from '../services/CategoryCache';
 import AddTransactionModal from '../components/AddTransactionModal';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import DateService from '../services/DateService';
+import useGoals from '../hooks/useGoals';
 
 const recurrenceOptions = [
   {id: 'none', name: 'Does not repeat'},
@@ -81,6 +82,7 @@ const AddTransactionContainer = ({
 
   // Get module settings from context
   const {moduleSettings} = useAppSettings();
+  const {saveGoal} = useGoals();
   const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
 
   // Check if we're in edit mode
@@ -938,23 +940,55 @@ const AddTransactionContainer = ({
 
   const handleDebtPaymentSave = useCallback(async (debtData) => {
     try {
-      // Business logic: Create debt goal using existing goal infrastructure
-      // TODO: Integrate with useGoals hook to create debt goal
-      // For now, close overlay (functionality to be implemented)
-      console.log('Debt payment data:', debtData);
+      console.log('🔍 DEBT_PAYMENT: Creating debt goal with data:', debtData);
 
+      // Transform debt payment form data to goal format
+      const goalData = {
+        title: debtData.name, // "Credit Card"
+        type: 'debt',
+        target: debtData.totalAmount, // Total debt amount
+        current: debtData.totalAmount, // Start at full debt (will decrease as payments made)
+        originalAmount: debtData.totalAmount, // Store original debt amount
+        deadline: debtData.dueDate, // Optional due date
+        category: 'Debt', // Use 'Debt' category
+        priority: 'high', // Debt goals are typically high priority
+        autoContribute: debtData.paymentAmount || 0, // Optional monthly payment
+        isActive: true,
+      };
+
+      console.log('🔍 DEBT_PAYMENT: Transformed goal data:', goalData);
+
+      // Use the saveGoal hook which handles:
+      // - Cache-first: Saves to local cache immediately
+      // - Background sync: Syncs to backend when online
+      // - Validation: Validates goal data
+      // - Transformation: Transforms to backend format
+      const result = await saveGoal(goalData);
+
+      console.log('🔍 DEBT_PAYMENT: Save result:', result);
+
+      if (result.success) {
+        // Close overlay
+        setOverlayMode(null);
+
+        // Show success message
+        Alert.alert(
+          'Debt Goal Created',
+          `Your ${debtData.name} debt goal has been created successfully!`,
+          [{text: 'OK'}]
+        );
+      } else {
+        throw new Error(result.error || 'Failed to create debt goal');
+      }
+    } catch (error) {
+      console.error('Error creating debt goal:', error);
       Alert.alert(
-        'Coming Soon',
-        'Debt payment functionality will be implemented next.',
+        'Error',
+        `Failed to create debt goal: ${error.message}`,
         [{text: 'OK'}]
       );
-
-      setOverlayMode(null);
-    } catch (error) {
-      console.error('Error creating debt payment:', error);
-      Alert.alert('Error', 'Failed to create debt payment');
     }
-  }, []);
+  }, [saveGoal]);
 
   const handleDebtPaymentClose = useCallback(() => {
     setOverlayMode(null);
