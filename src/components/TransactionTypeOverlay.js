@@ -95,6 +95,19 @@ const TransactionTypeOverlay = ({
               A transaction that repeats over time
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.typeButton}
+            onPress={() => onTypeSelect('debt')}
+            activeOpacity={0.7}>
+            <View style={[styles.typeIconContainer, styles.debtIcon]}>
+              <Icon name="trending-down-outline" size={32} color="#FF6B85" />
+            </View>
+            <Text style={styles.typeTitle}>Debt Payment</Text>
+            <Text style={styles.typeDescription}>
+              Pay down a loan or credit card
+            </Text>
+          </TouchableOpacity>
         </View>
       </Animated.View>
     </Animated.View>
@@ -185,6 +198,9 @@ const styles = StyleSheet.create({
   },
   recurringIcon: {
     backgroundColor: '#4CAF5026',
+  },
+  debtIcon: {
+    backgroundColor: '#FF6B8526',
   },
   typeTitle: {
     fontSize: 18,

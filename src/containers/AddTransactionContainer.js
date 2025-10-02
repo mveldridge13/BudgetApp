@@ -1,5 +1,5 @@
 import React, {useState, useCallback, useEffect} from 'react';
-import {Alert} from 'react-native';
+import {Alert, Keyboard} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import CategoryCache from '../services/CategoryCache';
 import AddTransactionModal from '../components/AddTransactionModal';
@@ -906,6 +906,9 @@ const AddTransactionContainer = ({
     setIsRecurringTransaction(type === 'recurring');
     if (type === 'recurring') {
       setOverlayMode('recurrence');
+    } else if (type === 'debt') {
+      // Show debt payment overlay
+      setOverlayMode('debt');
     } else {
       setOverlayMode('quick');
     }
@@ -929,6 +932,36 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleRecurrenceOverlayDueDatePress = useCallback(() => {
+    setShowCalendar(true);
+    setCalendarMode('dueDate');
+  }, []);
+
+  const handleDebtPaymentSave = useCallback(async (debtData) => {
+    try {
+      // Business logic: Create debt goal using existing goal infrastructure
+      // TODO: Integrate with useGoals hook to create debt goal
+      // For now, close overlay (functionality to be implemented)
+      console.log('Debt payment data:', debtData);
+
+      Alert.alert(
+        'Coming Soon',
+        'Debt payment functionality will be implemented next.',
+        [{text: 'OK'}]
+      );
+
+      setOverlayMode(null);
+    } catch (error) {
+      console.error('Error creating debt payment:', error);
+      Alert.alert('Error', 'Failed to create debt payment');
+    }
+  }, []);
+
+  const handleDebtPaymentClose = useCallback(() => {
+    setOverlayMode(null);
+  }, []);
+
+  const handleDebtPaymentDueDatePress = useCallback(() => {
+    Keyboard.dismiss();
     setShowCalendar(true);
     setCalendarMode('dueDate');
   }, []);
@@ -1284,6 +1317,10 @@ const AddTransactionContainer = ({
         handleRecurrenceOverlayRecurrenceSelect
       }
       onRecurrenceOverlayDueDatePress={handleRecurrenceOverlayDueDatePress}
+      // Debt payment overlay props
+      onDebtPaymentSave={handleDebtPaymentSave}
+      onDebtPaymentClose={handleDebtPaymentClose}
+      onDebtPaymentDueDatePress={handleDebtPaymentDueDatePress}
       // Tournament props
       showTournamentModal={showTournamentModal}
       tournamentName={tournamentName}

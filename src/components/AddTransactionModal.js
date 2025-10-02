@@ -23,6 +23,7 @@ import QuickAddOverlay from './QuickAddOverlay';
 import CategorySelectionOverlay from './CategorySelectionOverlay';
 import SubcategorySelectionOverlay from './SubcategorySelectionOverlay';
 import AmountEntryOverlay from './AmountEntryOverlay';
+import DebtPaymentOverlay from './DebtPaymentOverlay';
 
 const {width: screenWidth} = Dimensions.get('window');
 
@@ -104,6 +105,11 @@ const AddTransactionModal = ({
   onRecurrenceOverlayContinue,
   onRecurrenceOverlayRecurrenceSelect,
   onRecurrenceOverlayDueDatePress,
+
+  // Debt payment overlay props
+  onDebtPaymentSave,
+  onDebtPaymentClose,
+  onDebtPaymentDueDatePress,
 
   // Tournament props (simplified for container)
   showTournamentModal,
@@ -954,6 +960,17 @@ const AddTransactionModal = ({
           onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
           onDueDatePress={onRecurrenceOverlayDueDatePress}
           recurrenceOptions={recurrenceOptions}
+        />
+      )}
+
+      {/* Debt Payment Overlay */}
+      {overlayMode === 'debt' && (
+        <DebtPaymentOverlay
+          visible={true}
+          onClose={onDebtPaymentClose}
+          onSave={onDebtPaymentSave}
+          onDueDatePress={onDebtPaymentDueDatePress}
+          selectedDueDate={selectedDueDate}
         />
       )}
 
