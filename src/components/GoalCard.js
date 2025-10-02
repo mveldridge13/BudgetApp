@@ -1,18 +1,22 @@
 // components/GoalCard.js
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Switch,
   TextInput,
   ActionSheetIOS,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+
+const SWIPE_THRESHOLD = 120;
+const ACTIVATION_THRESHOLD = 15;
 
 const GoalCard = ({
   goal,
@@ -32,6 +36,12 @@ const GoalCard = ({
   const [paymentSource, setPaymentSource] = useState('income');
   const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(() => goal?.showOnBalanceCard ?? false);
   const [transactionType, setTransactionType] = useState('add'); // 'add' or 'withdraw'
+
+  // Swipe gesture animation values (only for debt goals)
+  const translateX = useRef(new Animated.Value(0)).current;
+  const makePaymentOpacity = useRef(new Animated.Value(0)).current;
+  const paymentHistoryOpacity = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
 
   // FIXED: Add safe formatCurrency function
   const safeCurrency = amount => {
@@ -241,10 +251,159 @@ const GoalCard = ({
     return goalColor;
   };
 
+  // Swipe gesture functions (only for debt goals)
+  const resetPosition = () => {
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 120,
+        friction: 8,
+      }),
+      Animated.timing(makePaymentOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(paymentHistoryOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const performMakePayment = () => {
+    // Trigger the make payment action
+    setShowProgressUpdate(true);
+    setTimeout(() => {
+      onExpand && onExpand();
+    }, 100);
+    resetPosition();
+  };
+
+  const performPaymentHistory = () => {
+    // TODO: Open payment history modal
+    Alert.alert('Payment History', 'Payment history feature coming soon!');
+    resetPosition();
+  };
+
+  // Pan responder for swipe gestures (only for debt goals)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only enable swipes for debt goals
+        if (!isDebtGoal) return false;
+
+        const isHorizontal =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const hasMinMovement = Math.abs(gestureState.dx) > ACTIVATION_THRESHOLD;
+
+        return isHorizontal && hasMinMovement;
+      },
+      onPanResponderGrant: (evt, gestureState) => {
+        Animated.spring(cardScale, {
+          toValue: 0.98,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 7,
+        }).start();
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const newTranslateX = gestureState.dx;
+        translateX.setValue(newTranslateX);
+
+        if (newTranslateX > 0) {
+          // Right swipe - Make Payment (green)
+          const progress = Math.min(1, newTranslateX / SWIPE_THRESHOLD);
+          makePaymentOpacity.setValue(progress);
+          paymentHistoryOpacity.setValue(0);
+        } else if (newTranslateX < 0) {
+          // Left swipe - Payment History (blue)
+          const progress = Math.min(
+            1,
+            Math.abs(newTranslateX) / SWIPE_THRESHOLD,
+          );
+          paymentHistoryOpacity.setValue(progress);
+          makePaymentOpacity.setValue(0);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const swipeDistance = gestureState.dx;
+        const swipeVelocity = gestureState.vx;
+
+        Animated.spring(cardScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 7,
+        }).start();
+
+        if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
+          // Right swipe - Make Payment
+          performMakePayment();
+        } else if (swipeDistance < -SWIPE_THRESHOLD || swipeVelocity < -0.5) {
+          // Left swipe - Payment History
+          performPaymentHistory();
+        } else {
+          resetPosition();
+        }
+      },
+      onPanResponderTerminate: () => {
+        resetPosition();
+      },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+    }),
+  ).current;
+
   return (
-    <View style={[styles.container, isCompleted && styles.completedContainer]}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.outerContainer}>
+      {isDebtGoal && (
+        <>
+          {/* Make Payment Background (Right Swipe - Green) */}
+          <Animated.View
+            style={[
+              styles.makePaymentBackground,
+              {
+                opacity: makePaymentOpacity,
+              },
+            ]}>
+            <View style={styles.makePaymentContent}>
+              <Icon name="dollar-sign" size={24} color="#FFFFFF" />
+              <Text style={styles.swipeActionText}>Make Payment</Text>
+            </View>
+          </Animated.View>
+
+          {/* Payment History Background (Left Swipe - Blue) */}
+          <Animated.View
+            style={[
+              styles.paymentHistoryBackground,
+              {
+                opacity: paymentHistoryOpacity,
+              },
+            ]}>
+            <View style={styles.paymentHistoryContent}>
+              <Icon name="list" size={24} color="#FFFFFF" />
+              <Text style={styles.swipeActionText}>Payment History</Text>
+            </View>
+          </Animated.View>
+        </>
+      )}
+
+      {/* Main Card */}
+      <Animated.View
+        style={[
+          {
+            transform: isDebtGoal ? [{translateX: translateX}, {scale: cardScale}] : [],
+          },
+        ]}>
+        <View
+          style={[styles.container, isCompleted && styles.completedContainer]}
+          {...(isDebtGoal ? panResponder.panHandlers : {})}>
+          {/* Header */}
+          <View style={styles.header}>
         <View style={styles.goalInfo}>
           <View style={styles.titleRow}>
             <Text style={styles.goalTitle}>{safeGoal.title}</Text>
@@ -324,9 +483,16 @@ const GoalCard = ({
         </View>
 
         <View style={styles.progressDetails}>
-          <Text style={styles.progressText}>
-            {(progress || 0).toFixed(0)}% {isDebtGoal ? 'paid off' : 'complete'}
-          </Text>
+          <View style={styles.progressLeftInfo}>
+            <Text style={styles.progressText}>
+              {(progress || 0).toFixed(0)}% {isDebtGoal ? 'paid off' : 'complete'}
+            </Text>
+            {!isCompleted && !isSpendingGoal && monthlyNeeded > 0 && (
+              <Text style={styles.monthlyNeededText}>
+                • {safeCurrency(monthlyNeeded)}/mo
+              </Text>
+            )}
+          </View>
           {!isCompleted && daysLeft !== null && (
             <Text
               style={[
@@ -343,26 +509,6 @@ const GoalCard = ({
           )}
         </View>
       </View>
-
-      {/* Progress Insights - UPDATED: Hidden for spending goals */}
-      {!isCompleted && !isSpendingGoal && (
-        <View style={styles.insightsContainer}>
-          <View style={styles.insightRow}>
-            <Text style={styles.insightLabel}>Monthly needed:</Text>
-            <Text style={styles.insightValue}>
-              {safeCurrency(monthlyNeeded)}
-            </Text>
-          </View>
-          {safeGoal.autoContribute > 0 && (
-            <View style={styles.insightRow}>
-              <Text style={styles.insightLabel}>Auto-contributing:</Text>
-              <Text style={[styles.insightValue, {color: colors.success}]}>
-                {safeCurrency(safeGoal.autoContribute)}
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
 
       {/* Custom Amount Input Section */}
       {showProgressUpdate && !isCompleted && (
@@ -534,20 +680,6 @@ const GoalCard = ({
             </>
           )}
 
-          {safeGoal.type === 'debt' && (
-            <TouchableOpacity
-              style={[styles.primaryButton, {backgroundColor: goalColor}]}
-              onPress={() => {
-                setShowProgressUpdate(true);
-                // Scroll to show expanded card after a short delay
-                setTimeout(() => {
-                  onExpand && onExpand();
-                }, 100);
-              }}
-              activeOpacity={0.8}>
-              <Text style={styles.primaryButtonText}>Make Payment</Text>
-            </TouchableOpacity>
-          )}
 
           {/* UPDATED: Improved spending budget alert */}
           {safeGoal.type === 'spending' &&
@@ -594,6 +726,8 @@ const GoalCard = ({
           <Text style={styles.completeButtonText}>Mark as Complete</Text>
         </TouchableOpacity>
       )}
+        </View>
+      </Animated.View>
     </View>
   );
 };
@@ -603,7 +737,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
@@ -710,9 +843,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  progressLeftInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   progressText: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  monthlyNeededText: {
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
   },
@@ -727,30 +871,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.success,
-  },
-  insightsContainer: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  insightRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  insightLabel: {
-    fontSize: 12,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-  },
-  insightValue: {
-    fontSize: 12,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.text,
   },
   // Custom Amount Input Styles
   customAmountContainer: {
@@ -946,6 +1066,51 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
+  },
+  // Swipe gesture styles
+  outerContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  makePaymentBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#52C788',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 30,
+  },
+  makePaymentContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  paymentHistoryBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#64B5F6',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 30,
+  },
+  paymentHistoryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  swipeActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: '#FFFFFF',
   },
 });
 
