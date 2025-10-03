@@ -226,7 +226,7 @@ const useGoals = () => {
   );
 
   const updateGoalProgress = useCallback(
-    async (goalId, amount, paymentSource = 'income') => {
+    async (goalId, amount, paymentSource = 'income', contributionType = 'MANUAL') => {
       console.log(
         '🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress',
       );
@@ -236,6 +236,7 @@ const useGoals = () => {
         paymentSource,
         goals,
         setGoals,
+        contributionType,
       );
     },
     [goalDataModule, goals, setGoals],
@@ -638,7 +639,7 @@ const useGoals = () => {
   );
 
   const addGoalContribution = useCallback(
-    async (goalId, amount) => {
+    async (goalId, amount, contributionType = 'MANUAL') => {
       try {
         if (!goalId) {
           throw new Error('Goal ID is required');
@@ -673,8 +674,8 @@ const useGoals = () => {
           }
         }
 
-        // Update progress locally
-        return await updateGoalProgress(goalId, parsedAmount);
+        // Update progress locally with contribution type
+        return await updateGoalProgress(goalId, parsedAmount, 'income', contributionType);
       } catch (error) {
         console.error('Error adding goal contribution:', error);
         return {success: false, error: error.message};

@@ -452,7 +452,7 @@ const useGoalData = checkNetworkConnectivity => {
 
   // Update goal progress
   const updateGoalProgress = useCallback(
-    async (goalId, amount, paymentSource = 'income', goals, setGoals) => {
+    async (goalId, amount, paymentSource = 'income', goals, setGoals, contributionType = 'MANUAL') => {
       try {
         console.log(
           '🔍 GOAL_DATA: Starting updateGoalProgress for goal:',
@@ -461,6 +461,8 @@ const useGoalData = checkNetworkConnectivity => {
           amount,
           'source:',
           paymentSource,
+          'type:',
+          contributionType,
         );
 
         if (!goalId) {
@@ -622,8 +624,10 @@ const useGoalData = checkNetworkConnectivity => {
                 currency: 'AUD',
                 description: isWithdrawal
                   ? `Withdrawal from ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`
+                  : contributionType === 'ROLLOVER'
+                  ? `Rollover allocation to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`
                   : `Income payment to ${updatedGoals.find(g => g.id === goalId)?.title || 'goal'}`,
-                type: isWithdrawal ? 'WITHDRAWAL' : 'MANUAL', // Different types for withdrawals vs additions
+                type: isWithdrawal ? 'WITHDRAWAL' : contributionType, // Use provided contribution type (MANUAL or ROLLOVER)
                 date: updateTimestamp,
               };
 

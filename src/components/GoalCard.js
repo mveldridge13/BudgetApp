@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+import PaymentHistoryOverlay from './PaymentHistoryOverlay';
+import TrendAPIService from '../services/TrendAPIService';
 
 const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
@@ -34,8 +36,13 @@ const GoalCard = ({
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [paymentSource, setPaymentSource] = useState('income');
-  const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(() => goal?.showOnBalanceCard ?? false);
+  const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(
+    () => goal?.showOnBalanceCard ?? false,
+  );
   const [transactionType, setTransactionType] = useState('add'); // 'add' or 'withdraw'
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [contributions, setContributions] = useState([]);
+  const [loadingContributions, setLoadingContributions] = useState(false);
 
   // Swipe gesture animation values (only for debt goals)
   const translateX = useRef(new Animated.Value(0)).current;
@@ -56,7 +63,6 @@ const GoalCard = ({
       return `$${(amount || 0).toFixed(2)}`;
     }
   };
-
 
   // Debug logging to track prop changes - TEMPORARILY DISABLED
   // React.useEffect(() => {
@@ -173,7 +179,6 @@ const GoalCard = ({
     ]);
   };
 
-
   // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
     console.log('🔍 BUTTON PRESSED: Custom amount submit');
@@ -192,19 +197,33 @@ const GoalCard = ({
     if (transactionType === 'withdraw' && amount > safeGoal.current) {
       Alert.alert(
         'Invalid Amount',
-        `You can only withdraw up to ${safeCurrency(safeGoal.current)} from this goal.`,
+        `You can only withdraw up to ${safeCurrency(
+          safeGoal.current,
+        )} from this goal.`,
       );
       return;
     }
 
     const isWithdrawal = transactionType === 'withdraw';
-    const actionText = isDebtGoal ? 'Pay' : (isWithdrawal ? 'Withdraw' : 'Add');
-    const prepositionText = isDebtGoal ? 'toward' : (isWithdrawal ? 'from' : 'to');
-    const sourceText = isWithdrawal ? '' : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
+    const actionText = isDebtGoal ? 'Pay' : isWithdrawal ? 'Withdraw' : 'Add';
+    const prepositionText = isDebtGoal
+      ? 'toward'
+      : isWithdrawal
+      ? 'from'
+      : 'to';
+    const sourceText = isWithdrawal
+      ? ''
+      : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
 
     Alert.alert(
-      isDebtGoal ? 'Make Payment' : (isWithdrawal ? 'Withdraw Money' : 'Add Contribution'),
-      `${actionText} ${safeCurrency(amount)} ${prepositionText} ${safeGoal.title} ${sourceText}?`,
+      isDebtGoal
+        ? 'Make Payment'
+        : isWithdrawal
+        ? 'Withdraw Money'
+        : 'Add Contribution',
+      `${actionText} ${safeCurrency(amount)} ${prepositionText} ${
+        safeGoal.title
+      } ${sourceText}?`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
@@ -212,7 +231,8 @@ const GoalCard = ({
           onPress: () => {
             // For withdrawals, pass negative amount
             const finalAmount = isWithdrawal ? -amount : amount;
-            onUpdateProgress && onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
+            onUpdateProgress &&
+              onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
             setCustomAmount('');
             setPaymentSource('income');
             setTransactionType('add');
@@ -282,10 +302,43 @@ const GoalCard = ({
     resetPosition();
   };
 
-  const performPaymentHistory = () => {
-    // TODO: Open payment history modal
-    Alert.alert('Payment History', 'Payment history feature coming soon!');
+  const performPaymentHistory = async () => {
     resetPosition();
+
+    // Open the payment history overlay
+    setShowPaymentHistory(true);
+
+    // Fetch contributions from API
+    setLoadingContributions(true);
+    try {
+      // Only fetch for backend goals (not local goals)
+      if (!safeGoal.id.startsWith('local_')) {
+        console.log(
+          '🔍 GOAL_CARD: Fetching contributions for goal',
+          safeGoal.id,
+        );
+        const response = await TrendAPIService.getGoalContributions(
+          safeGoal.id,
+        );
+        console.log('🔍 GOAL_CARD: Received contributions:', response);
+
+        // Handle both array response and object with contributions property
+        const contributionsData = Array.isArray(response)
+          ? response
+          : response?.contributions || [];
+
+        setContributions(contributionsData);
+      } else {
+        // Local goals don't have backend contributions yet
+        console.log('🔍 GOAL_CARD: Local goal, no contributions available');
+        setContributions([]);
+      }
+    } catch (error) {
+      console.error('Failed to load payment history:', error);
+      setContributions([]);
+    } finally {
+      setLoadingContributions(false);
+    }
   };
 
   // Pan responder for swipe gestures (only for debt goals)
@@ -294,7 +347,9 @@ const GoalCard = ({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
         // Only enable swipes for debt goals
-        if (!isDebtGoal) return false;
+        if (!isDebtGoal) {
+          return false;
+        }
 
         const isHorizontal =
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
@@ -316,16 +371,16 @@ const GoalCard = ({
 
         if (newTranslateX > 0) {
           // Right swipe - Make Payment (green)
-          const progress = Math.min(1, newTranslateX / SWIPE_THRESHOLD);
-          makePaymentOpacity.setValue(progress);
+          const swipeProgress = Math.min(1, newTranslateX / SWIPE_THRESHOLD);
+          makePaymentOpacity.setValue(swipeProgress);
           paymentHistoryOpacity.setValue(0);
         } else if (newTranslateX < 0) {
           // Left swipe - Payment History (blue)
-          const progress = Math.min(
+          const swipeProgress = Math.min(
             1,
             Math.abs(newTranslateX) / SWIPE_THRESHOLD,
           );
-          paymentHistoryOpacity.setValue(progress);
+          paymentHistoryOpacity.setValue(swipeProgress);
           makePaymentOpacity.setValue(0);
         }
       },
@@ -396,7 +451,9 @@ const GoalCard = ({
       <Animated.View
         style={[
           {
-            transform: isDebtGoal ? [{translateX: translateX}, {scale: cardScale}] : [],
+            transform: isDebtGoal
+              ? [{translateX: translateX}, {scale: cardScale}]
+              : [],
           },
         ]}>
         <View
@@ -404,330 +461,380 @@ const GoalCard = ({
           {...(isDebtGoal ? panResponder.panHandlers : {})}>
           {/* Header */}
           <View style={styles.header}>
-        <View style={styles.goalInfo}>
-          <View style={styles.titleRow}>
-            <Text style={styles.goalTitle}>{safeGoal.title}</Text>
-            {safeGoal.priority === 'high' && !isCompleted && (
+            <View style={styles.goalInfo}>
+              <View style={styles.titleRow}>
+                <Text style={styles.goalTitle}>{safeGoal.title}</Text>
+                {safeGoal.priority === 'high' && !isCompleted && (
+                  <View
+                    style={[
+                      styles.priorityBadge,
+                      {backgroundColor: getPriorityColor()},
+                    ]}>
+                    <Text style={styles.priorityText}>High Priority</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.goalCategory}>{safeGoal.category}</Text>
+              {isOverdue && !isCompleted && (
+                <Text style={styles.overdueText}>⚠️ Overdue</Text>
+              )}
+            </View>
+
+            {!isCompleted && (
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => {
+                    setLocalShowOnBalanceCard(!localShowOnBalanceCard);
+                    if (onToggleBalanceDisplay) {
+                      onToggleBalanceDisplay(safeGoal.id);
+                    }
+                  }}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name={localShowOnBalanceCard ? 'eye' : 'eye-off'}
+                    size={16}
+                    color={
+                      localShowOnBalanceCard
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => onEdit && onEdit(goal)}
+                  activeOpacity={0.7}>
+                  <Icon name="edit-3" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleDeletePress}
+                  activeOpacity={0.7}>
+                  <Icon name="trash-2" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* Progress Section */}
+          <View style={styles.progressSection}>
+            <View style={styles.amountRow}>
+              <Text style={styles.currentAmount}>
+                {safeCurrency(safeGoal.current)}
+              </Text>
+              <Text style={styles.targetAmount}>
+                {isDebtGoal
+                  ? `of ${safeCurrency(safeGoal.originalAmount)} debt`
+                  : `of ${safeCurrency(safeGoal.target)}`}
+              </Text>
+            </View>
+
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
               <View
                 style={[
-                  styles.priorityBadge,
-                  {backgroundColor: getPriorityColor()},
-                ]}>
-                <Text style={styles.priorityText}>High Priority</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.goalCategory}>{safeGoal.category}</Text>
-          {isOverdue && !isCompleted && (
-            <Text style={styles.overdueText}>⚠️ Overdue</Text>
-          )}
-        </View>
-
-        {!isCompleted && (
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                setLocalShowOnBalanceCard(!localShowOnBalanceCard);
-                if (onToggleBalanceDisplay) {
-                  onToggleBalanceDisplay(safeGoal.id);
-                }
-              }}
-              activeOpacity={0.7}>
-              <Icon
-                name={localShowOnBalanceCard ? "eye" : "eye-off"}
-                size={16}
-                color={localShowOnBalanceCard ? colors.primary : colors.textSecondary}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => onEdit && onEdit(goal)}
-              activeOpacity={0.7}>
-              <Icon name="edit-3" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleDeletePress}
-              activeOpacity={0.7}>
-              <Icon name="trash-2" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Progress Section */}
-      <View style={styles.progressSection}>
-        <View style={styles.amountRow}>
-          <Text style={styles.currentAmount}>
-            {safeCurrency(safeGoal.current)}
-          </Text>
-          <Text style={styles.targetAmount}>
-            {isDebtGoal
-              ? `of ${safeCurrency(safeGoal.originalAmount)} debt`
-              : `of ${safeCurrency(safeGoal.target)}`}
-          </Text>
-        </View>
-
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              {
-                width: `${Math.min(Math.max(progress || 0, 0), 100)}%`,
-                backgroundColor: getProgressColor(),
-              },
-            ]}
-          />
-        </View>
-
-        <View style={styles.progressDetails}>
-          <View style={styles.progressLeftInfo}>
-            <Text style={styles.progressText}>
-              {(progress || 0).toFixed(0)}% {isDebtGoal ? 'paid off' : 'complete'}
-            </Text>
-            {!isCompleted && !isSpendingGoal && monthlyNeeded > 0 && (
-              <Text style={styles.monthlyNeededText}>
-                • {safeCurrency(monthlyNeeded)}/mo
-              </Text>
-            )}
-          </View>
-          {!isCompleted && daysLeft !== null && (
-            <Text
-              style={[
-                styles.daysLeftText,
-                daysLeft < 30 && {color: colors.danger},
-              ]}>
-              {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
-            </Text>
-          )}
-          {isCompleted && safeGoal.completedDate && (
-            <Text style={styles.completedDate}>
-              Completed {new Date(safeGoal.completedDate).toLocaleDateString()}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {/* Custom Amount Input Section */}
-      {showProgressUpdate && !isCompleted && (
-        <View style={styles.customAmountContainer}>
-          <Text style={styles.customAmountTitle}>
-            {isDebtGoal ? 'Enter Payment Amount' :
-             (transactionType === 'withdraw' ? 'Enter Withdrawal Amount' : 'Enter Contribution Amount')}
-          </Text>
-
-          {/* Transaction Type Selection for Savings Goals */}
-          {!isDebtGoal && (
-            <View style={styles.transactionTypeContainer}>
-              <Text style={styles.sourceSelectionLabel}>Transaction Type</Text>
-              <View style={styles.transactionTypeButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.transactionTypeButton,
-                    transactionType === 'add' && styles.transactionTypeButtonActive,
-                  ]}
-                  onPress={() => setTransactionType('add')}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="plus"
-                    size={16}
-                    color={transactionType === 'add' ? colors.textWhite : colors.primary}
-                  />
-                  <Text style={[
-                    styles.transactionTypeButtonText,
-                    transactionType === 'add' && styles.transactionTypeButtonTextActive,
-                  ]}>
-                    Add Money
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.transactionTypeButton,
-                    transactionType === 'withdraw' && styles.transactionTypeButtonActive,
-                  ]}
-                  onPress={() => setTransactionType('withdraw')}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="minus"
-                    size={16}
-                    color={transactionType === 'withdraw' ? colors.textWhite : colors.danger}
-                  />
-                  <Text style={[
-                    styles.transactionTypeButtonText,
-                    transactionType === 'withdraw' && styles.transactionTypeButtonTextActive,
-                  ]}>
-                    Withdraw
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Payment Source Selection - only show for additions or debt payments */}
-          {(transactionType === 'add' || isDebtGoal) && (
-            <View style={styles.sourceSelectionContainer}>
-              <Text style={styles.sourceSelectionLabel}>
-                Payment Source
-              </Text>
-            <TouchableOpacity
-              style={styles.sourceSelectionButton}
-              onPress={() => {
-                if (Platform.OS === 'ios') {
-                  ActionSheetIOS.showActionSheetWithOptions(
-                    {
-                      options: ['Cancel', 'Income'],
-                      cancelButtonIndex: 0,
-                    },
-                    (buttonIndex) => {
-                      if (buttonIndex === 1) {
-                        setPaymentSource('income');
-                      }
-                    }
-                  );
-                } else {
-                  Alert.alert(
-                    'Select Payment Source',
-                    '',
-                    [
-                      {text: 'Cancel', style: 'cancel'},
-                      {text: 'Income', onPress: () => setPaymentSource('income')},
-                    ]
-                  );
-                }
-              }}
-              activeOpacity={0.7}>
-              <Text style={styles.sourceSelectionText}>
-                {paymentSource === 'income' ? 'Income' : 'Select Source'}
-              </Text>
-              <Icon name="chevron-down" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.customAmountInputRow}>
-            <TextInput
-              style={styles.customAmountInput}
-              value={customAmount}
-              onChangeText={setCustomAmount}
-              placeholder="0.00"
-              keyboardType="numeric"
-              autoFocus={true}
-              returnKeyType="done"
-              onSubmitEditing={handleCustomAmountSubmit}
-              selectTextOnFocus={true}
-              enablesReturnKeyAutomatically={true}
-            />
-            <View style={styles.customAmountButtons}>
-              <TouchableOpacity
-                style={styles.customAmountCancelButton}
-                onPress={handleCancelCustomAmount}
-                activeOpacity={0.8}>
-                <Icon name="x" size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.customAmountSubmitButton,
-                  {backgroundColor: goalColor},
+                  styles.progressBar,
+                  {
+                    width: `${Math.min(Math.max(progress || 0, 0), 100)}%`,
+                    backgroundColor: getProgressColor(),
+                  },
                 ]}
-                onPress={handleCustomAmountSubmit}
-                activeOpacity={0.8}>
-                <Icon name="check" size={16} color={colors.textWhite} />
-              </TouchableOpacity>
+              />
+            </View>
+
+            <View style={styles.progressDetails}>
+              <View style={styles.progressLeftInfo}>
+                <Text style={styles.progressText}>
+                  {(progress || 0).toFixed(0)}%{' '}
+                  {isDebtGoal ? 'paid off' : 'complete'}
+                </Text>
+                {!isCompleted && !isSpendingGoal && monthlyNeeded > 0 && (
+                  <Text style={styles.monthlyNeededText}>
+                    • {safeCurrency(monthlyNeeded)}/mo
+                  </Text>
+                )}
+              </View>
+              {!isCompleted && daysLeft !== null && (
+                <Text
+                  style={[
+                    styles.daysLeftText,
+                    daysLeft < 30 && {color: colors.danger},
+                  ]}>
+                  {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
+                </Text>
+              )}
+              {isCompleted && safeGoal.completedDate && (
+                <Text style={styles.completedDate}>
+                  Completed{' '}
+                  {new Date(safeGoal.completedDate).toLocaleDateString()}
+                </Text>
+              )}
             </View>
           </View>
-        </View>
-      )}
 
-      {/* Action Buttons */}
-      {!isCompleted && !showProgressUpdate && (
-        <View style={styles.actionButtonsContainer}>
-          {safeGoal.type === 'savings' && (
-            <>
-              <TouchableOpacity
-                style={[styles.primaryButton, {backgroundColor: goalColor}]}
-                onPress={() => {
-                  setTransactionType('add');
-                  setShowProgressUpdate(true);
-                  // Scroll to show expanded card after a short delay
-                  setTimeout(() => {
-                    onExpand && onExpand();
-                  }, 100);
-                }}
-                activeOpacity={0.8}>
-                <Icon name="plus" size={16} color={colors.textWhite} />
-                <Text style={styles.primaryButtonText}>Add Money</Text>
-              </TouchableOpacity>
+          {/* Custom Amount Input Section */}
+          {showProgressUpdate && !isCompleted && (
+            <View style={styles.customAmountContainer}>
+              <Text style={styles.customAmountTitle}>
+                {isDebtGoal
+                  ? 'Enter Payment Amount'
+                  : transactionType === 'withdraw'
+                  ? 'Enter Withdrawal Amount'
+                  : 'Enter Contribution Amount'}
+              </Text>
 
-              {/* Only show withdraw if there's money in the goal */}
-              {safeGoal.current > 0 && (
-                <TouchableOpacity
-                  style={[styles.secondaryButton, {borderColor: colors.danger}]}
-                  onPress={() => {
-                    setTransactionType('withdraw');
-                    setShowProgressUpdate(true);
-                    // Scroll to show expanded card after a short delay
-                    setTimeout(() => {
-                      onExpand && onExpand();
-                    }, 100);
-                  }}
-                  activeOpacity={0.8}>
-                  <Icon name="minus" size={16} color={colors.danger} />
-                  <Text style={[styles.secondaryButtonText, {color: colors.danger}]}>Withdraw</Text>
-                </TouchableOpacity>
+              {/* Transaction Type Selection for Savings Goals */}
+              {!isDebtGoal && (
+                <View style={styles.transactionTypeContainer}>
+                  <Text style={styles.sourceSelectionLabel}>
+                    Transaction Type
+                  </Text>
+                  <View style={styles.transactionTypeButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.transactionTypeButton,
+                        transactionType === 'add' &&
+                          styles.transactionTypeButtonActive,
+                      ]}
+                      onPress={() => setTransactionType('add')}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="plus"
+                        size={16}
+                        color={
+                          transactionType === 'add'
+                            ? colors.textWhite
+                            : colors.primary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.transactionTypeButtonText,
+                          transactionType === 'add' &&
+                            styles.transactionTypeButtonTextActive,
+                        ]}>
+                        Add Money
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.transactionTypeButton,
+                        transactionType === 'withdraw' &&
+                          styles.transactionTypeButtonActive,
+                      ]}
+                      onPress={() => setTransactionType('withdraw')}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="minus"
+                        size={16}
+                        color={
+                          transactionType === 'withdraw'
+                            ? colors.textWhite
+                            : colors.danger
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.transactionTypeButtonText,
+                          transactionType === 'withdraw' &&
+                            styles.transactionTypeButtonTextActive,
+                        ]}>
+                        Withdraw
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               )}
-            </>
+
+              {/* Payment Source Selection - only show for additions or debt payments */}
+              {(transactionType === 'add' || isDebtGoal) && (
+                <View style={styles.sourceSelectionContainer}>
+                  <Text style={styles.sourceSelectionLabel}>
+                    Payment Source
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.sourceSelectionButton}
+                    onPress={() => {
+                      if (Platform.OS === 'ios') {
+                        ActionSheetIOS.showActionSheetWithOptions(
+                          {
+                            options: ['Cancel', 'Income'],
+                            cancelButtonIndex: 0,
+                          },
+                          buttonIndex => {
+                            if (buttonIndex === 1) {
+                              setPaymentSource('income');
+                            }
+                          },
+                        );
+                      } else {
+                        Alert.alert('Select Payment Source', '', [
+                          {text: 'Cancel', style: 'cancel'},
+                          {
+                            text: 'Income',
+                            onPress: () => setPaymentSource('income'),
+                          },
+                        ]);
+                      }
+                    }}
+                    activeOpacity={0.7}>
+                    <Text style={styles.sourceSelectionText}>
+                      {paymentSource === 'income' ? 'Income' : 'Select Source'}
+                    </Text>
+                    <Icon
+                      name="chevron-down"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.customAmountInputRow}>
+                <TextInput
+                  style={styles.customAmountInput}
+                  value={customAmount}
+                  onChangeText={setCustomAmount}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  autoFocus={true}
+                  returnKeyType="done"
+                  onSubmitEditing={handleCustomAmountSubmit}
+                  selectTextOnFocus={true}
+                  enablesReturnKeyAutomatically={true}
+                />
+                <View style={styles.customAmountButtons}>
+                  <TouchableOpacity
+                    style={styles.customAmountCancelButton}
+                    onPress={handleCancelCustomAmount}
+                    activeOpacity={0.8}>
+                    <Icon name="x" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.customAmountSubmitButton,
+                      {backgroundColor: goalColor},
+                    ]}
+                    onPress={handleCustomAmountSubmit}
+                    activeOpacity={0.8}>
+                    <Icon name="check" size={16} color={colors.textWhite} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
           )}
 
+          {/* Action Buttons */}
+          {!isCompleted && !showProgressUpdate && (
+            <View style={styles.actionButtonsContainer}>
+              {safeGoal.type === 'savings' && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.primaryButton, {backgroundColor: goalColor}]}
+                    onPress={() => {
+                      setTransactionType('add');
+                      setShowProgressUpdate(true);
+                      // Scroll to show expanded card after a short delay
+                      setTimeout(() => {
+                        onExpand && onExpand();
+                      }, 100);
+                    }}
+                    activeOpacity={0.8}>
+                    <Icon name="plus" size={16} color={colors.textWhite} />
+                    <Text style={styles.primaryButtonText}>Add Money</Text>
+                  </TouchableOpacity>
 
-          {/* UPDATED: Improved spending budget alert */}
-          {safeGoal.type === 'spending' &&
-            (() => {
-              const remaining = safeGoal.target - safeGoal.current;
-              const isOverBudget = remaining < 0;
-              const overBudgetAmount = Math.abs(remaining);
+                  {/* Only show withdraw if there's money in the goal */}
+                  {safeGoal.current > 0 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.secondaryButton,
+                        {borderColor: colors.danger},
+                      ]}
+                      onPress={() => {
+                        setTransactionType('withdraw');
+                        setShowProgressUpdate(true);
+                        // Scroll to show expanded card after a short delay
+                        setTimeout(() => {
+                          onExpand && onExpand();
+                        }, 100);
+                      }}
+                      activeOpacity={0.8}>
+                      <Icon name="minus" size={16} color={colors.danger} />
+                      <Text
+                        style={[
+                          styles.secondaryButtonText,
+                          {color: colors.danger},
+                        ]}>
+                        Withdraw
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
 
-              return (
-                <View
-                  style={[
-                    styles.spendingAlert,
-                    isOverBudget && styles.spendingAlertOverBudget,
-                  ]}>
-                  <Icon
-                    name={isOverBudget ? 'alert-triangle' : 'alert-circle'}
-                    size={16}
-                    color={isOverBudget ? colors.danger : colors.warning}
-                  />
-                  <Text
-                    style={[
-                      styles.spendingAlertText,
-                      isOverBudget && styles.spendingAlertTextOverBudget,
-                    ]}>
-                    {isOverBudget
-                      ? `${safeCurrency(
-                          overBudgetAmount,
-                        )} over budget this month`
-                      : `${safeCurrency(remaining)} remaining this month`}
-                  </Text>
-                </View>
-              );
-            })()}
-        </View>
-      )}
+              {/* UPDATED: Improved spending budget alert */}
+              {safeGoal.type === 'spending' &&
+                (() => {
+                  const remaining = safeGoal.target - safeGoal.current;
+                  const isOverBudget = remaining < 0;
+                  const overBudgetAmount = Math.abs(remaining);
 
-      {/* Complete Goal Button */}
-      {!isCompleted && progress >= 100 && (
-        <TouchableOpacity
-          style={[styles.completeButton, {backgroundColor: colors.success}]}
-          onPress={handleCompletePress}
-          activeOpacity={0.8}>
-          <Icon name="check-circle" size={16} color={colors.textWhite} />
-          <Text style={styles.completeButtonText}>Mark as Complete</Text>
-        </TouchableOpacity>
-      )}
+                  return (
+                    <View
+                      style={[
+                        styles.spendingAlert,
+                        isOverBudget && styles.spendingAlertOverBudget,
+                      ]}>
+                      <Icon
+                        name={isOverBudget ? 'alert-triangle' : 'alert-circle'}
+                        size={16}
+                        color={isOverBudget ? colors.danger : colors.warning}
+                      />
+                      <Text
+                        style={[
+                          styles.spendingAlertText,
+                          isOverBudget && styles.spendingAlertTextOverBudget,
+                        ]}>
+                        {isOverBudget
+                          ? `${safeCurrency(
+                              overBudgetAmount,
+                            )} over budget this month`
+                          : `${safeCurrency(remaining)} remaining this month`}
+                      </Text>
+                    </View>
+                  );
+                })()}
+            </View>
+          )}
+
+          {/* Complete Goal Button */}
+          {!isCompleted && progress >= 100 && (
+            <TouchableOpacity
+              style={[styles.completeButton, {backgroundColor: colors.success}]}
+              onPress={handleCompletePress}
+              activeOpacity={0.8}>
+              <Icon name="check-circle" size={16} color={colors.textWhite} />
+              <Text style={styles.completeButtonText}>Mark as Complete</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </Animated.View>
+
+      {/* Payment History Overlay */}
+      {isDebtGoal && (
+        <PaymentHistoryOverlay
+          visible={showPaymentHistory}
+          onClose={() => setShowPaymentHistory(false)}
+          goal={safeGoal}
+          contributions={contributions}
+          loading={loadingContributions}
+          onLoadMore={() => {
+            // TODO: Implement pagination
+          }}
+        />
+      )}
     </View>
   );
 };

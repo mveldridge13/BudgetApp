@@ -100,13 +100,13 @@ const SubcategorySelectionOverlay = ({
     categoryData: categoryData ? {
       id: categoryData.id,
       name: categoryData.name,
-      subcategoriesCount: categoryData.subcategories?.length || 0
+      subcategoriesCount: categoryData.subcategories?.length || 0,
     } : null,
     rawSubcategories: rawSubcategories.map(sub => ({
       id: sub.id,
       name: sub.name,
-      parentId: sub.parentId
-    }))
+      parentId: sub.parentId,
+    })),
   });
 
   // Deduplicate subcategories by name (keep the first occurrence)
@@ -119,8 +119,8 @@ const SubcategorySelectionOverlay = ({
     deduplicatedCount: subcategories.length,
     subcategories: subcategories.map(sub => ({
       id: sub.id,
-      name: sub.name
-    }))
+      name: sub.name,
+    })),
   });
 
 

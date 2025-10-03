@@ -10,6 +10,7 @@ import {
   Keyboard,
   Platform,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
@@ -321,7 +322,7 @@ const GoalAllocationModal = ({
         </View>
 
         {/* Goals List - Scrollable */}
-        <View style={styles.goalsContainer}>
+        <ScrollView style={styles.goalsContainer} showsVerticalScrollIndicator={false}>
           {activeGoals.length > 0 ? (
             <>
               {selectedGoals.size === 0 && (
@@ -329,7 +330,7 @@ const GoalAllocationModal = ({
                   Tap goals to select them
                 </Text>
               )}
-              {activeGoals.slice(0, 2).map(goal => renderGoalItem(goal))}
+              {activeGoals.map(goal => renderGoalItem(goal))}
               {selectedGoals.size > 1 && (
                 <TouchableOpacity
                   style={styles.evenSplitButton}
@@ -354,7 +355,20 @@ const GoalAllocationModal = ({
               </Text>
             </TouchableOpacity>
           )}
-        </View>
+
+          {/* Create New Goal Button - Always visible when there are existing goals */}
+          {activeGoals.length > 0 && onCreateGoal && (
+            <TouchableOpacity
+              style={styles.createGoalButton}
+              onPress={() => {
+                onCreateGoal();
+              }}
+              activeOpacity={0.7}>
+              <Icon name="plus-circle" size={20} color={colors.primary} />
+              <Text style={styles.createGoalText}>Create New Goal</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
 
         {/* Confirm Button */}
         {selectedGoals.size > 0 && totalAllocated > 0 && (
@@ -595,6 +609,26 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  createGoalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+  },
+  createGoalText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+    marginLeft: 8,
   },
 });
 

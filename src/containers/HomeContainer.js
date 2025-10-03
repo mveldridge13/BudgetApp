@@ -1673,12 +1673,6 @@ const HomeContainer = ({navigation}) => {
   // CALCULATED VALUES WITH CATEGORY RESOLUTION (STABLE MEMOIZED TO PREVENT FLICKER)
   // ==============================================
   const transactionsWithCategories = useMemo(() => {
-    // Don't render transactions until categories are loaded to prevent flicker
-    // Categories are cached and load instantly, so this prevents initial render issues only
-    if (categories.length === 0) {
-      return [];
-    }
-
     // If transactions already have categoryData, use them as-is to prevent re-processing
     const hasResolvedCategories = transactions.some(t => t.categoryData);
     if (hasResolvedCategories) {
@@ -1690,6 +1684,7 @@ const HomeContainer = ({navigation}) => {
       }));
     }
 
+    // Process transactions with categories (uses fallback if categories not loaded yet)
     return processTransactionsWithCategories(transactions);
   }, [
     transactions,
@@ -2018,11 +2013,8 @@ const HomeContainer = ({navigation}) => {
               const incomeTotal = currentPeriodContributions.reduce(
                 (sum, contrib) => {
                   let newSum = sum;
-                  if (
-                    contrib.type === 'MANUAL' ||
-                    contrib.type === 'ROLLOVER'
-                  ) {
-                    // MANUAL and ROLLOVER contributions subtract from income (money going to goals)
+                  if (contrib.type === 'MANUAL') {
+                    // MANUAL contributions subtract from income (money going to goals from current income)
                     newSum = sum + (contrib.amount || 0);
                     console.log(
                       `🔍 HOME_CONTAINER: Adding ${contrib.type} contribution:`,
@@ -2030,6 +2022,16 @@ const HomeContainer = ({navigation}) => {
                         amount: contrib.amount,
                         previousSum: sum,
                         newSum,
+                      },
+                    );
+                  } else if (contrib.type === 'ROLLOVER') {
+                    // ROLLOVER contributions are already accounted for in rolloverAmount
+                    // Don't add to totalIncomePayments to avoid double-counting
+                    console.log(
+                      '🔍 HOME_CONTAINER: Ignoring ROLLOVER contribution (already in rolloverAmount):',
+                      {
+                        amount: contrib.amount,
+                        type: contrib.type,
                       },
                     );
                   } else if (contrib.type === 'WITHDRAWAL') {
@@ -2241,6 +2243,7 @@ const HomeContainer = ({navigation}) => {
           rolloverAmount,
           totalExpenses,
           totalExpensesType: typeof totalExpenses,
+          totalIncomePayments,
           goalsCount: goals.length,
           goals: goals.map(g => ({
             id: g.id,
@@ -2248,7 +2251,31 @@ const HomeContainer = ({navigation}) => {
             autoContribute: g.autoContribute || 0,
           })),
           rolloverBanner,
+          leftToSpendCalculation: {
+            income: incomeData?.income || 0,
+            rollover: rolloverAmount,
+            totalIncome: (incomeData?.income || 0) + rolloverAmount,
+            expenses: totalExpenses,
+            incomePayments: totalIncomePayments,
+            expectedLeftToSpend: (incomeData?.income || 0) + rolloverAmount - totalExpenses - totalIncomePayments,
+          },
         });
+      };
+
+      global.debugCheckContributions = async () => {
+        console.log('🔧 DEBUG: Checking all goal contributions...');
+        for (const goal of goals) {
+          if (!goal.id.startsWith('local_')) {
+            const contribs = await TrendAPIService.getGoalContributions(goal.id);
+            console.log(`🔧 Goal "${goal.title}" contributions:`, contribs.map(c => ({
+              id: c.id,
+              type: c.type,
+              amount: c.amount,
+              date: c.date,
+              description: c.description,
+            })));
+          }
+        }
       };
 
       console.log('🔧 DEBUG: Global debug functions available:');
@@ -2256,6 +2283,7 @@ const HomeContainer = ({navigation}) => {
       console.log('  - debugClearAllRolloverCaches()');
       console.log('  - debugTestAutoRollover()');
       console.log('  - debugLogCurrentState()');
+      console.log('  - debugCheckContributions()');
     }
   }, [incomeData, rolloverAmount, totalExpenses, goals, rolloverBanner]);
 
@@ -2286,6 +2314,8 @@ const HomeContainer = ({navigation}) => {
           const result = await RolloverService.confirmRolloverBanner();
           if (result.success) {
             setRolloverBanner(null);
+            // Reload rollover amount to ensure UI reflects current backend state
+            await loadRolloverAmount();
             console.log('🔄 HomeContainer: Rollover confirmed by user');
           } else {
             console.error(
@@ -2346,11 +2376,30 @@ const HomeContainer = ({navigation}) => {
             // Use RolloverService to process goal allocations with optimistic updates
             const result = await RolloverService.processGoalAllocations(
               allocation.goalAllocations,
-              addGoalContribution
+              addGoalContribution,
+              rolloverAmount
             );
 
             if (result.success) {
               console.log('🎯 HomeContainer: Goal allocations processed successfully');
+              // Update rollover amount to reflect the reduction
+              setRolloverAmount(result.newRolloverAmount);
+
+              // Update banner to reflect remaining rollover amount
+              if (result.newRolloverAmount > 0) {
+                // Update banner with new amount
+                const updatedBanner = {
+                  ...rolloverBanner,
+                  amount: result.newRolloverAmount,
+                };
+                setRolloverBanner(updatedBanner);
+                await RolloverService.setRolloverBanner(updatedBanner);
+              } else {
+                // Clear banner if no rollover remaining
+                setRolloverBanner(null);
+                await RolloverService.confirmRolloverBanner();
+              }
+
               setShowGoalAllocationModal(false);
             } else {
               console.error('🔄 HomeContainer: Goal allocation failed:', result.error);

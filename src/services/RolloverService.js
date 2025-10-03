@@ -267,34 +267,40 @@ class RolloverService {
 
   /**
    * Process goal allocations from rollover funds with optimistic updates
-   * LESSON LEARNED: Simply reset rollover to 0, don't try to track contributions
-   * This matches the createGoal path and avoids the contribution date field issues
+   * Reduces rollover by allocated amount (supports partial allocations)
    */
   static async processGoalAllocations(
     goalAllocations,
     addGoalContribution,
+    currentRolloverAmount,
   ) {
     try {
+      const totalAllocated = goalAllocations.reduce(
+        (sum, alloc) => sum + alloc.amount,
+        0,
+      );
+
       console.log('🎯 RolloverService: Processing goal allocations:', {
         totalAllocations: goalAllocations.length,
-        totalAllocated: goalAllocations.reduce(
-          (sum, alloc) => sum + alloc.amount,
-          0,
-        ),
+        totalAllocated,
+        currentRolloverAmount,
       });
 
-      // Optimistic update - reset rollover amount to 0 immediately
-      await RolloverCache.updateRolloverAmount(0, new Date().toISOString());
+      // Calculate new rollover amount (reduce by allocated amount)
+      const newRolloverAmount = Math.max(0, currentRolloverAmount - totalAllocated);
 
-      // Add contributions to selected goals
+      // Optimistic update - reduce rollover amount by allocated amount
+      await RolloverCache.updateRolloverAmount(newRolloverAmount, new Date().toISOString());
+
+      // Add contributions to selected goals with ROLLOVER type
       const goalPromises = goalAllocations.map(async allocation => {
         try {
-          // LESSON LEARNED: addGoalContribution only takes goalId and amount
-          await addGoalContribution(allocation.goalId, allocation.amount);
+          // Pass 'ROLLOVER' as the contribution type to avoid double-counting in totalIncomePayments
+          await addGoalContribution(allocation.goalId, allocation.amount, 'ROLLOVER');
           console.log(
             `🎯 RolloverService: Added $${allocation.amount.toFixed(
               2,
-            )} to goal: ${allocation.goal.title}`,
+            )} rollover allocation to goal: ${allocation.goal.title}`,
           );
           return true;
         } catch (goalError) {
@@ -306,33 +312,33 @@ class RolloverService {
         }
       });
 
-      // Background sync - reset rollover amount on backend
+      // Background sync - update rollover amount on backend
       const [goalResults] = await Promise.all([
         Promise.all(goalPromises),
         TrendAPIService.processRollover({
-          amount: 0,
+          amount: newRolloverAmount,
         }),
       ]);
 
       // Update cache with confirmed data
       await RolloverCache.setRolloverAmount({
-        rolloverAmount: 0,
+        rolloverAmount: newRolloverAmount,
         lastRolloverDate: new Date().toISOString(),
       });
 
-      console.log('🎯 RolloverService: Rollover amount reset to 0 successfully');
+      console.log('🎯 RolloverService: Rollover amount reduced successfully:', {
+        previousAmount: currentRolloverAmount,
+        totalAllocated,
+        newAmount: newRolloverAmount,
+      });
 
-      const totalAllocated = goalAllocations.reduce(
-        (sum, alloc) => sum + alloc.amount,
-        0,
-      );
       const allocatedGoalsCount = goalAllocations.length;
       const successfulAllocations = goalResults.filter(result => result === true).length;
 
       const result = {
         success: true,
-        newRolloverAmount: 0, // Always 0 since we reset rollover when allocating to goals
-        shouldMarkProcessed: true, // Always mark as processed since rollover is reset
+        newRolloverAmount,
+        shouldMarkProcessed: newRolloverAmount === 0, // Only mark as processed if fully allocated
         message: `$${totalAllocated.toFixed(
           2,
         )} allocated to ${successfulAllocations}/${allocatedGoalsCount} goal${
@@ -347,6 +353,8 @@ class RolloverService {
         '🔄 RolloverService: Error processing goal allocations:',
         error,
       );
+      // Rollback optimistic update on error
+      await RolloverCache.updateRolloverAmount(currentRolloverAmount);
       throw error;
     }
   }

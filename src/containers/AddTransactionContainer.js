@@ -43,7 +43,9 @@ const AddTransactionContainer = ({
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(() => DateService.createTodayInTimezone());
+  const [selectedDate, setSelectedDate] = useState(() =>
+    DateService.createTodayInTimezone(),
+  );
   const [selectedDueDate, setSelectedDueDate] = useState(null);
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
   const [selectedTransactionType, setSelectedTransactionType] =
@@ -98,8 +100,6 @@ const AddTransactionContainer = ({
         return [];
       }
 
-
-
       // 🔧 HANDLE NESTED SUBCATEGORIES: Flatten if subcategories are nested inside parent categories
       let flattenedCategories = [];
       let mainCategories = [];
@@ -117,7 +117,6 @@ const AddTransactionContainer = ({
 
           // Check if this category has nested subcategories
           if (cat.subcategories && Array.isArray(cat.subcategories)) {
-
             // Flatten nested subcategories and add parentId
             cat.subcategories.forEach(subcat => {
               const flatSubcat = {
@@ -136,13 +135,14 @@ const AddTransactionContainer = ({
       });
 
       // Deduplicate by ID to avoid duplicate keys in React
-      const uniqueMainCategories = mainCategories.filter((category, index, array) =>
-        array.findIndex(c => c.id === category.id) === index
+      const uniqueMainCategories = mainCategories.filter(
+        (category, index, array) =>
+          array.findIndex(c => c.id === category.id) === index,
       );
-      const uniqueSubcategories = subcategories.filter((category, index, array) =>
-        array.findIndex(c => c.id === category.id) === index
+      const uniqueSubcategories = subcategories.filter(
+        (category, index, array) =>
+          array.findIndex(c => c.id === category.id) === index,
       );
-
 
       // Update the arrays with deduplicated versions
       mainCategories = uniqueMainCategories;
@@ -183,7 +183,6 @@ const AddTransactionContainer = ({
         return map;
       }, {});
 
-
       // Transform main categories and attach their subcategories
       let result = mainCategories.map(category => {
         const transformed = {
@@ -212,7 +211,6 @@ const AddTransactionContainer = ({
           category => category.name.toLowerCase() === 'income',
         );
       }
-
 
       // Sort main categories with custom order: Other comes after Transport
       return result.sort((a, b) => {
@@ -258,8 +256,8 @@ const AddTransactionContainer = ({
     setCategories(prevCategories => {
       const cleanedCategories = prevCategories.map(category => ({
         ...category,
-        subcategories: category.subcategories.filter(sub =>
-          !sub.id.toString().startsWith('temp_')
+        subcategories: category.subcategories.filter(
+          sub => !sub.id.toString().startsWith('temp_'),
         ),
       }));
 
@@ -326,7 +324,9 @@ const AddTransactionContainer = ({
       try {
         const currentUserId = TrendAPIService.getCurrentUserId();
         if (!currentUserId) {
-          console.warn('➕ AddTransactionContainer: No user ID available for category cache');
+          console.warn(
+            '➕ AddTransactionContainer: No user ID available for category cache',
+          );
           return;
         }
 
@@ -413,7 +413,10 @@ const AddTransactionContainer = ({
       setDescription(editingTransaction.description || '');
       setSelectedCategory(editingTransaction.categoryId);
       setSelectedSubcategory(editingTransaction.subcategoryId || null);
-      setSelectedDate(DateService.parseInTimezone(editingTransaction.date) || DateService.createTodayInTimezone());
+      setSelectedDate(
+        DateService.parseInTimezone(editingTransaction.date) ||
+          DateService.createTodayInTimezone(),
+      );
       setSelectedDueDate(
         editingTransaction.dueDate
           ? DateService.parseInTimezone(editingTransaction.dueDate)
@@ -472,33 +475,38 @@ const AddTransactionContainer = ({
 
       // Optimistic update: Add to cache immediately
       const optimisticSubcategory = {
-          id: `temp_${Date.now()}`, // Temporary ID
-          name: subcategoryPayload.name,
-          icon: subcategoryPayload.icon,
-          color: subcategoryPayload.color,
-          isCustom: true,
-          parentId: subcategoryPayload.parentId,
-          type: subcategoryPayload.type,
-        };
+        id: `temp_${Date.now()}`, // Temporary ID
+        name: subcategoryPayload.name,
+        icon: subcategoryPayload.icon,
+        color: subcategoryPayload.color,
+        isCustom: true,
+        parentId: subcategoryPayload.parentId,
+        type: subcategoryPayload.type,
+      };
 
       // Get current user ID
       const currentUserId = TrendAPIService.getCurrentUserId();
 
       try {
-
         // Update cache optimistically
         if (currentUserId) {
-          await CategoryCache.upsertCategory(optimisticSubcategory, currentUserId);
+          await CategoryCache.upsertCategory(
+            optimisticSubcategory,
+            currentUserId,
+          );
         }
 
         // Update UI state immediately (cache-first)
-        const updateCategories = (prevCategories) => {
+        const updateCategories = prevCategories => {
           return prevCategories.map(category => {
             if (category.id === parentCategoryId) {
               return {
                 ...category,
                 hasSubcategories: true,
-                subcategories: [...(category.subcategories || []), optimisticSubcategory],
+                subcategories: [
+                  ...(category.subcategories || []),
+                  optimisticSubcategory,
+                ],
               };
             }
             return category;
@@ -512,7 +520,10 @@ const AddTransactionContainer = ({
           setCurrentSubcategoryData(prev => ({
             ...prev,
             hasSubcategories: true,
-            subcategories: [...(prev.subcategories || []), optimisticSubcategory],
+            subcategories: [
+              ...(prev.subcategories || []),
+              optimisticSubcategory,
+            ],
           }));
         }
 
@@ -547,7 +558,7 @@ const AddTransactionContainer = ({
                 return {
                   ...category,
                   subcategories: category.subcategories.map(sub =>
-                    sub.id === optimisticSubcategory.id ? realSubcategory : sub
+                    sub.id === optimisticSubcategory.id ? realSubcategory : sub,
                   ),
                 };
               }
@@ -560,7 +571,7 @@ const AddTransactionContainer = ({
             setCurrentSubcategoryData(prev => ({
               ...prev,
               subcategories: prev.subcategories.map(sub =>
-                sub.id === optimisticSubcategory.id ? realSubcategory : sub
+                sub.id === optimisticSubcategory.id ? realSubcategory : sub,
               ),
             }));
           }
@@ -572,7 +583,6 @@ const AddTransactionContainer = ({
 
           // Return the real subcategory data
           return realSubcategory;
-
         } catch (syncError) {
           console.error(
             '➕ AddTransactionContainer: Background sync failed:',
@@ -585,7 +595,6 @@ const AddTransactionContainer = ({
           // Return optimistic data
           return optimisticSubcategory;
         }
-
       } catch (creationError) {
         console.error(
           '➕ AddTransactionContainer: Error creating subcategory:',
@@ -594,7 +603,10 @@ const AddTransactionContainer = ({
 
         // Remove optimistic update on failure
         if (currentUserId) {
-          await CategoryCache.removeCategory(optimisticSubcategory.id, currentUserId);
+          await CategoryCache.removeCategory(
+            optimisticSubcategory.id,
+            currentUserId,
+          );
         }
 
         // Revert UI state
@@ -604,7 +616,7 @@ const AddTransactionContainer = ({
               return {
                 ...category,
                 subcategories: category.subcategories.filter(
-                  sub => sub.id !== optimisticSubcategory.id
+                  sub => sub.id !== optimisticSubcategory.id,
                 ),
               };
             }
@@ -613,9 +625,11 @@ const AddTransactionContainer = ({
         });
 
         // Show specific error message based on error type
-        const errorMessage = creationError.message?.includes('already exists') || creationError.message?.includes('duplicate')
-          ? 'A subcategory with this name already exists.'
-          : 'Failed to create subcategory. Please try again.';
+        const errorMessage =
+          creationError.message?.includes('already exists') ||
+          creationError.message?.includes('duplicate')
+            ? 'A subcategory with this name already exists.'
+            : 'Failed to create subcategory. Please try again.';
 
         Alert.alert('Error', errorMessage);
         return null;
@@ -635,9 +649,19 @@ const AddTransactionContainer = ({
     }
 
     // Check if subcategory is still being created (has temporary ID)
-    if (selectedSubcategory && typeof selectedSubcategory === 'string' && selectedSubcategory.startsWith('temp_')) {
-      console.log('🚫 AddTransactionContainer: Preventing save with temporary subcategory ID:', selectedSubcategory);
-      Alert.alert('Please wait', 'Subcategory is being created. Please wait a moment and try again.');
+    if (
+      selectedSubcategory &&
+      typeof selectedSubcategory === 'string' &&
+      selectedSubcategory.startsWith('temp_')
+    ) {
+      console.log(
+        '🚫 AddTransactionContainer: Preventing save with temporary subcategory ID:',
+        selectedSubcategory,
+      );
+      Alert.alert(
+        'Please wait',
+        'Subcategory is being created. Please wait a moment and try again.',
+      );
       return;
     }
 
@@ -657,8 +681,12 @@ const AddTransactionContainer = ({
       recurrence: selectedRecurrence,
       type: selectedTransactionType,
       status: selectedPaymentStatus,
-      createdAt: isEditMode ? editingTransaction.createdAt : DateService.prepareForBackend(new Date()),
-      updatedAt: isEditMode ? DateService.prepareForBackend(new Date()) : undefined,
+      createdAt: isEditMode
+        ? editingTransaction.createdAt
+        : DateService.prepareForBackend(new Date()),
+      updatedAt: isEditMode
+        ? DateService.prepareForBackend(new Date())
+        : undefined,
     };
 
     try {
@@ -938,57 +966,66 @@ const AddTransactionContainer = ({
     setCalendarMode('dueDate');
   }, []);
 
-  const handleDebtPaymentSave = useCallback(async (debtData) => {
-    try {
-      console.log('🔍 DEBT_PAYMENT: Creating debt goal with data:', debtData);
+  const handleDebtPaymentSave = useCallback(
+    async debtData => {
+      try {
+        console.log('🔍 DEBT_PAYMENT: Creating debt goal with data:', debtData);
 
-      // Transform debt payment form data to goal format
-      const goalData = {
-        title: debtData.name, // "Credit Card"
-        type: 'debt',
-        target: debtData.totalAmount, // Total debt amount
-        current: debtData.totalAmount, // Start at full debt (will decrease as payments made)
-        originalAmount: debtData.totalAmount, // Store original debt amount
-        deadline: debtData.dueDate, // Optional due date
-        category: 'Debt', // Use 'Debt' category
-        priority: 'high', // Debt goals are typically high priority
-        autoContribute: debtData.paymentAmount || 0, // Optional monthly payment
-        isActive: true,
-      };
+        // Transform debt payment form data to goal format
+        const goalData = {
+          title: debtData.name, // "Credit Card"
+          type: 'debt',
+          target: debtData.totalAmount, // Total debt amount
+          current: debtData.totalAmount, // Start at full debt (will decrease as payments made)
+          originalAmount: debtData.totalAmount, // Store original debt amount
+          deadline: debtData.dueDate, // Optional due date
+          category: 'Debt', // Use 'Debt' category
+          priority: 'high', // Debt goals are typically high priority
+          autoContribute: debtData.paymentAmount || 0, // Optional monthly payment
+          isActive: true,
+        };
 
-      console.log('🔍 DEBT_PAYMENT: Transformed goal data:', goalData);
+        console.log('🔍 DEBT_PAYMENT: Transformed goal data:', goalData);
 
-      // Use the saveGoal hook which handles:
-      // - Cache-first: Saves to local cache immediately
-      // - Background sync: Syncs to backend when online
-      // - Validation: Validates goal data
-      // - Transformation: Transforms to backend format
-      const result = await saveGoal(goalData);
+        // Use the saveGoal hook which handles:
+        // - Cache-first: Saves to local cache immediately
+        // - Background sync: Syncs to backend when online
+        // - Validation: Validates goal data
+        // - Transformation: Transforms to backend format
+        const result = await saveGoal(goalData);
 
-      console.log('🔍 DEBT_PAYMENT: Save result:', result);
+        console.log('🔍 DEBT_PAYMENT: Save result:', result);
 
-      if (result.success) {
-        // Close overlay
-        setOverlayMode(null);
+        if (result.success) {
+          // Close overlay
+          setOverlayMode(null);
 
-        // Show success message
-        Alert.alert(
-          'Debt Goal Created',
-          `Your ${debtData.name} debt goal has been created successfully!`,
-          [{text: 'OK'}]
-        );
-      } else {
-        throw new Error(result.error || 'Failed to create debt goal');
+          // Show success message and navigate to HomeScreen on OK
+          Alert.alert(
+            'Debt Goal Created',
+            `Your ${debtData.name} debt goal has been created successfully!`,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  // Close the transaction modal and navigate to HomeScreen
+                  onClose();
+                },
+              },
+            ],
+          );
+        } else {
+          throw new Error(result.error || 'Failed to create debt goal');
+        }
+      } catch (error) {
+        console.error('Error creating debt goal:', error);
+        Alert.alert('Error', `Failed to create debt goal: ${error.message}`, [
+          {text: 'OK'},
+        ]);
       }
-    } catch (error) {
-      console.error('Error creating debt goal:', error);
-      Alert.alert(
-        'Error',
-        `Failed to create debt goal: ${error.message}`,
-        [{text: 'OK'}]
-      );
-    }
-  }, [saveGoal]);
+    },
+    [saveGoal, onClose],
+  );
 
   const handleDebtPaymentClose = useCallback(() => {
     setOverlayMode(null);
@@ -1225,35 +1262,66 @@ const AddTransactionContainer = ({
         cleanupTemporarySubcategories();
       }, 100);
     }
-  }, [selectedTransactionType, allCategories, transformCategoriesForUI, cleanupTemporarySubcategories]);
+  }, [
+    selectedTransactionType,
+    allCategories,
+    transformCategoriesForUI,
+    cleanupTemporarySubcategories,
+  ]);
 
   // Effect to update selected subcategory ID when temporary ID gets replaced with real ID
   useEffect(() => {
-    if (selectedSubcategory && typeof selectedSubcategory === 'string' && selectedSubcategory.startsWith('temp_') && categories.length > 0) {
-      console.log('🔍 AddTransactionContainer: Checking for temp ID replacement. Temp ID:', selectedSubcategory);
-
-      // Find the category containing our temporary subcategory
-      const parentCategory = categories.find(cat =>
-        cat.subcategories && cat.subcategories.some(sub => sub.id === selectedSubcategory)
+    if (
+      selectedSubcategory &&
+      typeof selectedSubcategory === 'string' &&
+      selectedSubcategory.startsWith('temp_') &&
+      categories.length > 0
+    ) {
+      console.log(
+        '🔍 AddTransactionContainer: Checking for temp ID replacement. Temp ID:',
+        selectedSubcategory,
       );
 
-      console.log('🔍 Parent category found:', parentCategory?.name, 'Subcategories:', parentCategory?.subcategories?.map(s => `${s.name}(${s.id})`));
+      // Find the category containing our temporary subcategory
+      const parentCategory = categories.find(
+        cat =>
+          cat.subcategories &&
+          cat.subcategories.some(sub => sub.id === selectedSubcategory),
+      );
+
+      console.log(
+        '🔍 Parent category found:',
+        parentCategory?.name,
+        'Subcategories:',
+        parentCategory?.subcategories?.map(s => `${s.name}(${s.id})`),
+      );
 
       if (parentCategory) {
-        const tempSubcategory = parentCategory.subcategories.find(sub => sub.id === selectedSubcategory);
+        const tempSubcategory = parentCategory.subcategories.find(
+          sub => sub.id === selectedSubcategory,
+        );
 
         // Look for a real subcategory with the same name that was just created
-        const realSubcategory = parentCategory.subcategories.find(sub =>
-          sub.name === tempSubcategory?.name && !sub.id.startsWith('temp_')
+        const realSubcategory = parentCategory.subcategories.find(
+          sub =>
+            sub.name === tempSubcategory?.name && !sub.id.startsWith('temp_'),
         );
 
         if (realSubcategory) {
-          console.log('🔄 AddTransactionContainer: Updating selected subcategory from temp ID to real ID:', realSubcategory.id);
+          console.log(
+            '🔄 AddTransactionContainer: Updating selected subcategory from temp ID to real ID:',
+            realSubcategory.id,
+          );
           setSelectedSubcategory(realSubcategory.id);
         } else {
-          console.log('⚠️ AddTransactionContainer: No real subcategory found with name:', tempSubcategory?.name);
+          console.log(
+            '⚠️ AddTransactionContainer: No real subcategory found with name:',
+            tempSubcategory?.name,
+          );
           // Clear the temp ID if no real subcategory is found (creation likely failed)
-          console.log('🧹 AddTransactionContainer: Clearing temporary subcategory ID and invalidating cache');
+          console.log(
+            '🧹 AddTransactionContainer: Clearing temporary subcategory ID and invalidating cache',
+          );
           setSelectedSubcategory(null);
           // Clear cache to force refresh from backend
           const currentUserId = TrendAPIService.getCurrentUserId();
@@ -1263,7 +1331,9 @@ const AddTransactionContainer = ({
           loadCategories();
         }
       } else {
-        console.log('⚠️ AddTransactionContainer: No parent category found for temp ID, clearing selection');
+        console.log(
+          '⚠️ AddTransactionContainer: No parent category found for temp ID, clearing selection',
+        );
         setSelectedSubcategory(null);
         // Clear cache to force refresh from backend
         const currentUserId = TrendAPIService.getCurrentUserId();
