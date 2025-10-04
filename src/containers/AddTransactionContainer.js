@@ -452,8 +452,10 @@ const AddTransactionContainer = ({
 
       // For edit mode, skip overlay flow and go straight to full form
       setOverlayMode(null);
+    } else if (!editingTransaction && visible) {
+      // For new transactions, reset overlay mode to transactionType
+      setOverlayMode('transactionType');
     }
-    // Remove the resetForm() call for new transactions - let user set their own transaction type
   }, [editingTransaction, visible, getCategoryById, getCategoryDisplayName]);
 
   // ==============================================
