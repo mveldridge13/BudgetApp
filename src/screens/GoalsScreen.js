@@ -162,17 +162,17 @@ const GoalsScreen = ({route, navigation}) => {
   useFocusEffect(
     useCallback(() => {
       if (isMountedRef.current && !isLoadingRef.current) {
-        // Don't reload if we just updated goals (within 10 seconds)
         const timeSinceUpdate = Date.now() - lastUpdateTime.current;
-        if (timeSinceUpdate < 10000) {
-          return;
-        }
-
-        // Only reload if goals are empty OR if we've never loaded before
         const currentGoalsLength = goals.length;
+
+        // Always reload if:
+        // 1. We've never loaded before
+        // 2. Goals are empty and we have no income data
+        // 3. We haven't updated in the last 3 seconds (reduced from 10 to catch quick navigations)
         if (
           !hasLoadedOnce.current ||
-          (currentGoalsLength === 0 && !incomeData)
+          (currentGoalsLength === 0 && !incomeData) ||
+          timeSinceUpdate >= 3000
         ) {
           loadAllData();
         }
@@ -248,6 +248,9 @@ const GoalsScreen = ({route, navigation}) => {
               console.error('Failed to reload goals:', reloadError);
             }
           }
+
+          // Update timestamp to indicate goals were just modified
+          lastUpdateTime.current = Date.now();
 
           // Navigate back to Home if this came from rollover flow
           if (fromRollover && navigation) {
