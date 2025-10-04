@@ -161,6 +161,19 @@ const useGoalData = checkNetworkConnectivity => {
               };
             });
 
+            // CRITICAL: Preserve newly created goals that aren't in API response yet
+            // Check if cache has goals that API doesn't have (recently created locally)
+            if (cachedResult.success) {
+              const apiGoalIds = new Set(result.goals.map(g => g.id));
+              const localOnlyGoals = cachedResult.goals.filter(
+                cachedGoal => !apiGoalIds.has(cachedGoal.id),
+              );
+
+              if (localOnlyGoals.length > 0) {
+                mergedGoals.push(...localOnlyGoals);
+              }
+            }
+
             // Save merged results and update state
             await saveGoalsToCache(mergedGoals, currentUserId);
             setGoals(mergedGoals);
@@ -253,21 +266,25 @@ const useGoalData = checkNetworkConnectivity => {
                 backendGoalData,
               );
             } else {
-              console.log(
-                '🔍 SAVE_GOAL: Calling TrendAPIService.createGoal with data:',
-                backendGoalData,
-              );
               result = await TrendAPIService.createGoal(backendGoalData);
-              console.log('🔍 SAVE_GOAL: API createGoal result:', result);
             }
 
             if (result) {
-              console.log(
-                '🔍 SAVE_GOAL: API success, transforming back from backend...',
-              );
               // Transform back from backend format
               const transformedGoal = transformBackendGoal(result);
-              console.log('🔍 SAVE_GOAL: Transformed goal:', transformedGoal);
+              // CRITICAL: Update state immediately so UI reflects the new goal
+              const updatedGoals = isEdit
+                ? goals.map(g => g.id === transformedGoal.id ? transformedGoal : g)
+                : [...goals, transformedGoal];
+
+              setGoals(updatedGoals);
+
+              // Save to cache
+              const currentUserId = TrendAPIService.getCurrentUserId();
+              if (currentUserId) {
+                await saveGoalsToCache(updatedGoals, currentUserId, false);
+              }
+
               return {
                 success: true,
                 goal: transformedGoal,

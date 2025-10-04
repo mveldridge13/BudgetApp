@@ -37,7 +37,9 @@ const useGoals = () => {
   // Subscribe to global state changes
   useEffect(() => {
     const listener = newGoals => {
-      setGoalsLocal(newGoals);
+      // Create a new array reference to ensure React detects the change
+      // This is critical when multiple components share the same global state
+      setGoalsLocal([...newGoals]);
     };
     globalGoalsListeners.add(listener);
 

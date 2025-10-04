@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
@@ -35,7 +34,6 @@ const GoalsScreen = ({route, navigation}) => {
 
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
-  const [incomeData, setIncomeData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Refs to prevent multiple simultaneous loads
@@ -87,16 +85,9 @@ const GoalsScreen = ({route, navigation}) => {
       isLoadingRef.current = true;
 
       try {
-        // Load goals and income data in parallel
-        const [, incomeResult] = await Promise.all([
-          loadGoalsRef.current
-            ? loadGoalsRef.current(force)
-            : Promise.resolve(), // Use ref to prevent dependency loop
-          loadIncomeData(),
-        ]);
-
-        if (isMountedRef.current && incomeResult) {
-          setIncomeData(incomeResult);
+        // Load goals
+        if (loadGoalsRef.current) {
+          await loadGoalsRef.current(force);
         }
 
         hasLoadedOnce.current = true;
@@ -108,21 +99,8 @@ const GoalsScreen = ({route, navigation}) => {
         }
       }
     },
-    [loadIncomeData], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
+    [], // ✅ FIXED: No dependencies to prevent infinite loops
   );
-
-  const loadIncomeData = useCallback(async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('userSetup');
-      if (storedData) {
-        return JSON.parse(storedData);
-      }
-      return null;
-    } catch (error) {
-      console.warn('Error loading income data:', error);
-      return null;
-    }
-  }, []);
 
   // Initial load on mount
   useEffect(() => {
@@ -163,21 +141,16 @@ const GoalsScreen = ({route, navigation}) => {
     useCallback(() => {
       if (isMountedRef.current && !isLoadingRef.current) {
         const timeSinceUpdate = Date.now() - lastUpdateTime.current;
-        const currentGoalsLength = goals.length;
 
         // Always reload if:
         // 1. We've never loaded before
-        // 2. Goals are empty and we have no income data
-        // 3. We haven't updated in the last 3 seconds (reduced from 10 to catch quick navigations)
-        if (
-          !hasLoadedOnce.current ||
-          (currentGoalsLength === 0 && !incomeData) ||
-          timeSinceUpdate >= 3000
-        ) {
+        // 2. We haven't updated in the last 3 seconds (reduced from 10 to catch quick navigations)
+        if (!hasLoadedOnce.current || timeSinceUpdate >= 3000) {
           loadAllData();
         }
       }
-    }, [loadAllData, incomeData, goals.length]),
+      // Note: goals.length removed from deps to prevent infinite loop when global state updates
+    }, [loadAllData]),
   );
 
   // Handle rollover flow - automatically open Add Goal modal when coming from rollover
@@ -238,18 +211,12 @@ const GoalsScreen = ({route, navigation}) => {
                 [{text: 'OK', style: 'default'}],
               );
             }
-          } else {
-            // No rollover allocation, just reload goals
-            try {
-              if (loadGoalsRef.current) {
-                await loadGoalsRef.current(true);
-              }
-            } catch (reloadError) {
-              console.error('Failed to reload goals:', reloadError);
-            }
           }
 
-          // Update timestamp to indicate goals were just modified
+          // No need to reload goals here - the global state listener already updated them
+          // Reloading causes a visible flash/flicker when the modal closes
+
+          // Update timestamp to prevent useFocusEffect from reloading unnecessarily
           lastUpdateTime.current = Date.now();
 
           // Navigate back to Home if this came from rollover flow
@@ -567,7 +534,9 @@ const GoalsScreen = ({route, navigation}) => {
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Active Goals</Text>
-                <Text style={styles.statValue}>{nonDebtActiveGoals.length}</Text>
+                <Text style={styles.statValue}>
+                  {nonDebtActiveGoals.length}
+                </Text>
               </View>
 
               <View style={styles.statCard}>
@@ -609,9 +578,7 @@ const GoalsScreen = ({route, navigation}) => {
         {activeTab === 'debt' && (
           <View style={styles.goalsSection}>
             {debtGoals.length > 0 ? (
-              <>
-                {renderGoalsByType(debtGoals, 'debt')}
-              </>
+              <>{renderGoalsByType(debtGoals, 'debt')}</>
             ) : (
               <View style={styles.emptyState}>
                 <Icon
