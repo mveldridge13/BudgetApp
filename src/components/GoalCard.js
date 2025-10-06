@@ -341,13 +341,13 @@ const GoalCard = ({
     }
   };
 
-  // Pan responder for swipe gestures (only for debt goals)
+  // Pan responder for swipe gestures (for debt and savings goals)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Only enable swipes for debt goals
-        if (!isDebtGoal) {
+        // Enable swipes for debt and savings goals
+        if (!isDebtGoal && safeGoal.type !== 'savings') {
           return false;
         }
 
@@ -370,7 +370,7 @@ const GoalCard = ({
         translateX.setValue(newTranslateX);
 
         if (newTranslateX > 0) {
-          // Right swipe - Make Payment (green)
+          // Right swipe - Make Payment/Add Money (green) - for both debt and savings goals
           const swipeProgress = Math.min(1, newTranslateX / SWIPE_THRESHOLD);
           makePaymentOpacity.setValue(swipeProgress);
           paymentHistoryOpacity.setValue(0);
@@ -396,10 +396,10 @@ const GoalCard = ({
         }).start();
 
         if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
-          // Right swipe - Make Payment
+          // Right swipe - Make Payment/Add Money (for both debt and savings goals)
           performMakePayment();
         } else if (swipeDistance < -SWIPE_THRESHOLD || swipeVelocity < -0.5) {
-          // Left swipe - Payment History
+          // Left swipe - Payment History (for both debt and savings goals)
           performPaymentHistory();
         } else {
           resetPosition();
@@ -415,50 +415,55 @@ const GoalCard = ({
 
   return (
     <View style={styles.outerContainer}>
-      {isDebtGoal && (
-        <>
-          {/* Make Payment Background (Right Swipe - Green) */}
-          <Animated.View
-            style={[
-              styles.makePaymentBackground,
-              {
-                opacity: makePaymentOpacity,
-              },
-            ]}>
-            <View style={styles.makePaymentContent}>
-              <Icon name="dollar-sign" size={24} color="#FFFFFF" />
-              <Text style={styles.swipeActionText}>Make Payment</Text>
-            </View>
-          </Animated.View>
+      {/* Make Payment/Add Money Background (Right Swipe - Green) - For both debt and savings goals */}
+      {(isDebtGoal || safeGoal.type === 'savings') && (
+        <Animated.View
+          style={[
+            styles.makePaymentBackground,
+            {
+              opacity: makePaymentOpacity,
+            },
+          ]}>
+          <View style={styles.makePaymentContent}>
+            <Icon name="dollar-sign" size={24} color="#FFFFFF" />
+            <Text style={styles.swipeActionText}>
+              {isDebtGoal ? 'Make Payment' : 'Add/Withdraw'}
+            </Text>
+          </View>
+        </Animated.View>
+      )}
 
-          {/* Payment History Background (Left Swipe - Blue) */}
-          <Animated.View
-            style={[
-              styles.paymentHistoryBackground,
-              {
-                opacity: paymentHistoryOpacity,
-              },
-            ]}>
-            <View style={styles.paymentHistoryContent}>
-              <Icon name="list" size={24} color="#FFFFFF" />
-              <Text style={styles.swipeActionText}>Payment History</Text>
-            </View>
-          </Animated.View>
-        </>
+      {/* Payment History Background (Left Swipe - Blue) - For both debt and savings goals */}
+      {(isDebtGoal || safeGoal.type === 'savings') && (
+        <Animated.View
+          style={[
+            styles.paymentHistoryBackground,
+            {
+              opacity: paymentHistoryOpacity,
+            },
+          ]}>
+          <View style={styles.paymentHistoryContent}>
+            <Icon name="list" size={24} color="#FFFFFF" />
+            <Text style={styles.swipeActionText}>Payment History</Text>
+          </View>
+        </Animated.View>
       )}
 
       {/* Main Card */}
       <Animated.View
         style={[
           {
-            transform: isDebtGoal
-              ? [{translateX: translateX}, {scale: cardScale}]
-              : [],
+            transform:
+              isDebtGoal || safeGoal.type === 'savings'
+                ? [{translateX: translateX}, {scale: cardScale}]
+                : [],
           },
         ]}>
         <View
           style={[styles.container, isCompleted && styles.completedContainer]}
-          {...(isDebtGoal ? panResponder.panHandlers : {})}>
+          {...(isDebtGoal || safeGoal.type === 'savings'
+            ? panResponder.panHandlers
+            : {})}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.goalInfo}>
@@ -725,54 +730,9 @@ const GoalCard = ({
             </View>
           )}
 
-          {/* Action Buttons */}
+          {/* Spending goal alert - shown when not in progress update mode */}
           {!isCompleted && !showProgressUpdate && (
             <View style={styles.actionButtonsContainer}>
-              {safeGoal.type === 'savings' && (
-                <>
-                  <TouchableOpacity
-                    style={[styles.primaryButton, {backgroundColor: goalColor}]}
-                    onPress={() => {
-                      setTransactionType('add');
-                      setShowProgressUpdate(true);
-                      // Scroll to show expanded card after a short delay
-                      setTimeout(() => {
-                        onExpand && onExpand();
-                      }, 100);
-                    }}
-                    activeOpacity={0.8}>
-                    <Icon name="plus" size={16} color={colors.textWhite} />
-                    <Text style={styles.primaryButtonText}>Add Money</Text>
-                  </TouchableOpacity>
-
-                  {/* Only show withdraw if there's money in the goal */}
-                  {safeGoal.current > 0 && (
-                    <TouchableOpacity
-                      style={[
-                        styles.secondaryButton,
-                        {borderColor: colors.danger},
-                      ]}
-                      onPress={() => {
-                        setTransactionType('withdraw');
-                        setShowProgressUpdate(true);
-                        // Scroll to show expanded card after a short delay
-                        setTimeout(() => {
-                          onExpand && onExpand();
-                        }, 100);
-                      }}
-                      activeOpacity={0.8}>
-                      <Icon name="minus" size={16} color={colors.danger} />
-                      <Text
-                        style={[
-                          styles.secondaryButtonText,
-                          {color: colors.danger},
-                        ]}>
-                        Withdraw
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </>
-              )}
 
               {/* UPDATED: Improved spending budget alert */}
               {safeGoal.type === 'spending' &&
@@ -823,7 +783,7 @@ const GoalCard = ({
       </Animated.View>
 
       {/* Payment History Overlay */}
-      {isDebtGoal && (
+      {(isDebtGoal || safeGoal.type === 'savings') && (
         <PaymentHistoryOverlay
           visible={showPaymentHistory}
           onClose={() => setShowPaymentHistory(false)}
