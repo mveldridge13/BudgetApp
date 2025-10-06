@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import PaymentHistoryOverlay from './PaymentHistoryOverlay';
 import TrendAPIService from '../services/TrendAPIService';
+import ContributionCache from '../services/ContributionCache';
 
 const SWIPE_THRESHOLD = 120;
 const ACTIVATION_THRESHOLD = 15;
@@ -233,6 +234,12 @@ const GoalCard = ({
             const finalAmount = isWithdrawal ? -amount : amount;
             onUpdateProgress &&
               onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
+
+            // Invalidate contribution cache since we added a new contribution
+            ContributionCache.invalidate(safeGoal.id).catch(err => {
+              console.warn('📊 GOAL_CARD: Failed to invalidate contribution cache:', err);
+            });
+
             setCustomAmount('');
             setPaymentSource('income');
             setTransactionType('add');
@@ -294,12 +301,14 @@ const GoalCard = ({
   };
 
   const performMakePayment = () => {
-    // Trigger the make payment action
-    setShowProgressUpdate(true);
-    setTimeout(() => {
-      onExpand && onExpand();
-    }, 100);
+    // Reset position first with smooth animation
     resetPosition();
+
+    // Then trigger the make payment action after animation completes
+    setTimeout(() => {
+      setShowProgressUpdate(true);
+      onExpand && onExpand();
+    }, 200); // Delay to let the reset animation finish smoothly
   };
 
   const performPaymentHistory = async () => {
@@ -308,34 +317,74 @@ const GoalCard = ({
     // Open the payment history overlay
     setShowPaymentHistory(true);
 
-    // Fetch contributions from API
+    // 🔄 CACHE-FIRST: Load from cache immediately
+    try {
+      const cached = await ContributionCache.get(safeGoal.id);
+      if (cached && cached.data) {
+        console.log(
+          '📊 GOAL_CARD: Using cached contributions for goal',
+          safeGoal.id,
+        );
+        setContributions(cached.data);
+        setLoadingContributions(false);
+
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          console.log('📊 GOAL_CARD: Cache is fresh, skipping API call');
+          return;
+        }
+
+        console.log(
+          '📊 GOAL_CARD: Cache is stale, fetching fresh data in background',
+        );
+      }
+    } catch (cacheError) {
+      console.warn('📊 GOAL_CARD: Cache read failed:', cacheError);
+    }
+
+    // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
     setLoadingContributions(true);
     try {
       // Only fetch for backend goals (not local goals)
       if (!safeGoal.id.startsWith('local_')) {
         console.log(
-          '🔍 GOAL_CARD: Fetching contributions for goal',
+          '📊 GOAL_CARD: Fetching contributions from API for goal',
           safeGoal.id,
         );
+
         const response = await TrendAPIService.getGoalContributions(
           safeGoal.id,
         );
-        console.log('🔍 GOAL_CARD: Received contributions:', response);
+        console.log('📊 GOAL_CARD: Received contributions from API:', response);
 
         // Handle both array response and object with contributions property
         const contributionsData = Array.isArray(response)
           ? response
           : response?.contributions || [];
 
+        // Update cache in background (don't block on this)
+        ContributionCache.set(safeGoal.id, contributionsData).catch(err => {
+          console.warn('📊 GOAL_CARD: Failed to update contributions cache:', err);
+        });
+
+        // Update state with fresh data
         setContributions(contributionsData);
+        console.log(
+          '📊 GOAL_CARD: Updated contributions state with',
+          contributionsData.length,
+          'items',
+        );
       } else {
         // Local goals don't have backend contributions yet
-        console.log('🔍 GOAL_CARD: Local goal, no contributions available');
+        console.log('📊 GOAL_CARD: Local goal, no contributions available');
         setContributions([]);
       }
     } catch (error) {
-      console.error('Failed to load payment history:', error);
-      setContributions([]);
+      console.error('📊 GOAL_CARD: Failed to load payment history from API:', error);
+      // Keep cached data if available (already set above), otherwise empty array
+      if (!contributions || contributions.length === 0) {
+        setContributions([]);
+      }
     } finally {
       setLoadingContributions(false);
     }
@@ -480,9 +529,6 @@ const GoalCard = ({
                 )}
               </View>
               <Text style={styles.goalCategory}>{safeGoal.category}</Text>
-              {isOverdue && !isCompleted && (
-                <Text style={styles.overdueText}>⚠️ Overdue</Text>
-              )}
             </View>
 
             {!isCompleted && (
@@ -730,44 +776,6 @@ const GoalCard = ({
             </View>
           )}
 
-          {/* Spending goal alert - shown when not in progress update mode */}
-          {!isCompleted && !showProgressUpdate && (
-            <View style={styles.actionButtonsContainer}>
-
-              {/* UPDATED: Improved spending budget alert */}
-              {safeGoal.type === 'spending' &&
-                (() => {
-                  const remaining = safeGoal.target - safeGoal.current;
-                  const isOverBudget = remaining < 0;
-                  const overBudgetAmount = Math.abs(remaining);
-
-                  return (
-                    <View
-                      style={[
-                        styles.spendingAlert,
-                        isOverBudget && styles.spendingAlertOverBudget,
-                      ]}>
-                      <Icon
-                        name={isOverBudget ? 'alert-triangle' : 'alert-circle'}
-                        size={16}
-                        color={isOverBudget ? colors.danger : colors.warning}
-                      />
-                      <Text
-                        style={[
-                          styles.spendingAlertText,
-                          isOverBudget && styles.spendingAlertTextOverBudget,
-                        ]}>
-                        {isOverBudget
-                          ? `${safeCurrency(
-                              overBudgetAmount,
-                            )} over budget this month`
-                          : `${safeCurrency(remaining)} remaining this month`}
-                      </Text>
-                    </View>
-                  );
-                })()}
-            </View>
-          )}
 
           {/* Complete Goal Button */}
           {!isCompleted && progress >= 100 && (
