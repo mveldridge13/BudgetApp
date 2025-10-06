@@ -23,6 +23,7 @@ import AddGoalModal from '../components/AddGoalModal';
 import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
 import UserProfileCache from '../services/UserProfileCache';
+import TransactionCache from '../services/TransactionCache';
 import PayPeriodService from '../services/PayPeriodService';
 import RolloverService from '../services/RolloverService';
 import {useAppSettings} from '../contexts/AppSettingsContext';
@@ -64,7 +65,13 @@ const HomeContainer = ({navigation}) => {
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
-  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals, saveGoal, addGoalContribution} = useGoals();
+  const {
+    goals,
+    loadGoals: loadGoalsFromHook,
+    updateSpendingGoals,
+    saveGoal,
+    addGoalContribution,
+  } = useGoals();
   const {moduleSettings} = useAppSettings();
 
   // Get poker module setting
@@ -294,7 +301,11 @@ const HomeContainer = ({navigation}) => {
           setUserProfile(cachedProfile);
 
           // Set income data from cache to remove delay
-          if (cachedProfile.income && cachedProfile.incomeFrequency && cachedProfile.nextPayDate) {
+          if (
+            cachedProfile.income &&
+            cachedProfile.incomeFrequency &&
+            cachedProfile.nextPayDate
+          ) {
             const cachedIncomeData = {
               income: cachedProfile.income,
               monthlyIncome: cachedProfile.income,
@@ -416,34 +427,81 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      const response = await TrendAPIService.getTransactions({
-        limit: 1000, // Get all transactions for accurate balance calculations
-      });
-      const backendTransactions = response?.transactions || [];
-      const sortedTransactions = sortTransactionsByDate(backendTransactions);
+      // 🔄 CACHE-FIRST: Load from cache immediately
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      const cached = await TransactionCache.get(currentUserId);
 
-      console.log('💳 Transactions loaded:', {
-        platform: Platform.OS,
-        count: sortedTransactions.length,
-        sampleTransactions: sortedTransactions.slice(0, 3).map(t => ({
-          id: t.id,
-          amount: t.amount,
-          type: t.type,
-          date: t.date,
-          description: t.description,
-        })),
-      });
+      if (cached && cached.data) {
+        console.log('💳 Using cached transactions:', {
+          count: cached.data.length,
+          age: Math.round(cached.age / 1000), // seconds
+          isStale: cached.isStale,
+        });
 
-      setTransactions(sortedTransactions);
+        const sortedCached = sortTransactionsByDate(cached.data);
+        setTransactions(sortedCached);
+
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          console.log('💳 Cache is fresh, skipping API call');
+          return;
+        }
+
+        console.log('💳 Cache is stale, fetching fresh data in background');
+      }
+
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      try {
+        const response = await TrendAPIService.getTransactions({
+          limit: 1000, // Get all transactions for accurate balance calculations
+        });
+        const backendTransactions = response?.transactions || [];
+        const sortedTransactions = sortTransactionsByDate(backendTransactions);
+
+        console.log('💳 Transactions loaded from API:', {
+          platform: Platform.OS,
+          count: sortedTransactions.length,
+          sampleTransactions: sortedTransactions.slice(0, 3).map(t => ({
+            id: t.id,
+            amount: t.amount,
+            type: t.type,
+            date: t.date,
+            description: t.description,
+          })),
+        });
+
+        // Update cache in background (don't block on this)
+        TransactionCache.set(currentUserId, sortedTransactions).catch(err => {
+          console.warn('💳 Failed to update transaction cache:', err);
+        });
+
+        // Update state with fresh data
+        setTransactions(sortedTransactions);
+      } catch (apiError) {
+        console.error('HomeContainer: Error loading transactions from API:', apiError);
+
+        // If API fails but we have cached data, keep using cached data
+        if (!cached && transactions.length === 0) {
+          // Only clear if we have no cache AND no existing UI data
+          Alert.alert(
+            'Connection Issue',
+            'Unable to load transactions. Please check your connection.',
+            [{text: 'OK'}],
+          );
+          setTransactions([]);
+        } else {
+          console.log('💳 Using cached/existing data due to API failure');
+        }
+      }
     } catch (error) {
-      console.error('HomeContainer: Error loading transactions:', error);
+      console.error('HomeContainer: Error in loadTransactions:', error);
       Alert.alert(
         'Connection Issue',
         'Unable to load transactions. Please check your connection.',
         [{text: 'OK'}],
       );
     }
-  }, [userActiveOperations]);
+  }, [userActiveOperations, sortTransactionsByDate]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -627,6 +685,7 @@ const HomeContainer = ({navigation}) => {
       const isEditing = transaction.id && !transaction.id?.startsWith('temp_');
       let tempId = null;
       let optimisticTransaction = null;
+      const currentUserId = TrendAPIService.getCurrentUserId(); // Declare outside try block for access in catch
 
       try {
         if (!AuthService.isAuthenticated()) {
@@ -636,7 +695,8 @@ const HomeContainer = ({navigation}) => {
         // 🎯 TRACK USER ACTIVITY: Prevent API hydration overwrites
         setUserActiveOperations(prev => prev + 1);
 
-        // 🎯 CACHE-FIRST: Immediate optimistic update
+        // 🎯 CACHE-FIRST: Immediate optimistic update (UI + Cache)
+
         if (isEditing) {
           optimisticTransaction = {
             ...transaction,
@@ -655,6 +715,11 @@ const HomeContainer = ({navigation}) => {
               ),
             );
             return updated;
+          });
+
+          // Update cache immediately for optimistic update
+          TransactionCache.upsertTransaction(currentUserId, optimisticTransaction).catch(err => {
+            console.warn('💳 Failed to update transaction in cache:', err);
           });
         } else {
           tempId = `temp_${Date.now()}_${Math.random()}`;
@@ -676,6 +741,11 @@ const HomeContainer = ({navigation}) => {
               ...prev,
             ]);
             return updated;
+          });
+
+          // Update cache immediately for optimistic update
+          TransactionCache.upsertTransaction(currentUserId, optimisticTransaction).catch(err => {
+            console.warn('💳 Failed to add transaction to cache:', err);
           });
         }
 
@@ -742,6 +812,13 @@ const HomeContainer = ({navigation}) => {
                 }
                 return prev;
               });
+
+              // Update cache with server response (prevent cache staleness)
+              if (currentUserId) {
+                TransactionCache.upsertTransaction(currentUserId, savedTransaction).catch(err => {
+                  console.warn('💳 Failed to update transaction in cache after sync:', err);
+                });
+              }
             } catch (syncError) {
             } finally {
               setBackgroundSyncCount(prev => Math.max(0, prev - 1));
@@ -760,6 +837,11 @@ const HomeContainer = ({navigation}) => {
                 t.id === tempId ? savedTransaction : t,
               );
               return sortTransactionsByDate(updated);
+            });
+
+            // Replace temp transaction in cache with real one
+            TransactionCache.replaceTempTransaction(currentUserId, tempId, savedTransaction).catch(err => {
+              console.warn('💳 Failed to replace temp transaction in cache:', err);
             });
 
             optimisticTransaction = savedTransaction; // Update for return value
@@ -790,15 +872,52 @@ const HomeContainer = ({navigation}) => {
       } catch (error) {
         console.error('HomeContainer: Transaction save failed:', error);
 
-        // Rollback optimistic changes
+        // Rollback optimistic changes (UI + Cache)
         if (isEditing) {
           setEditingTransaction(transaction);
-          await loadTransactions();
+
+          // Restore original transaction from cache first
+          if (currentUserId) {
+            try {
+              const cached = await TransactionCache.get(currentUserId);
+              if (cached?.data) {
+                // Find the original transaction in cache (before optimistic update)
+                const originalFromCache = cached.data.find(t => t.id === transaction.id);
+                if (originalFromCache) {
+                  // Restore from cache in UI
+                  setTransactions(prev =>
+                    sortTransactionsByDate(
+                      prev.map(t => (t.id === transaction.id ? originalFromCache : t)),
+                    ),
+                  );
+                } else {
+                  // Cache doesn't have it, reload from server
+                  await loadTransactions();
+                }
+              } else {
+                // No cache, reload from server
+                await loadTransactions();
+              }
+            } catch (cacheError) {
+              console.warn('💳 Failed to restore from cache, reloading from server:', cacheError);
+              await loadTransactions();
+            }
+          } else {
+            // No userId, fallback to server reload
+            await loadTransactions();
+          }
         } else {
           setTransactions(prev => {
             const updated = prev.filter(t => t.id !== tempId);
             return updated;
           });
+
+          // Remove temp transaction from cache
+          if (currentUserId) {
+            TransactionCache.removeTransaction(currentUserId, tempId).catch(err => {
+              console.warn('💳 Failed to remove temp transaction from cache:', err);
+            });
+          }
         }
 
         throw error;
@@ -814,17 +933,28 @@ const HomeContainer = ({navigation}) => {
 
   const deleteTransaction = useCallback(async transactionId => {
     let deletedTransaction = null;
+    const currentUserId = TrendAPIService.getCurrentUserId();
 
     try {
       if (!AuthService.isAuthenticated()) {
         throw new Error('User not authenticated');
       }
 
-      // Optimistic removal
+      if (!currentUserId) {
+        throw new Error('User ID not available');
+      }
+
+      // Optimistic removal (UI + Cache)
+
       setTransactions(prev => {
         deletedTransaction = prev.find(t => t.id === transactionId);
         const updated = prev.filter(t => t.id !== transactionId);
         return updated;
+      });
+
+      // Remove from cache immediately
+      TransactionCache.removeTransaction(currentUserId, transactionId).catch(err => {
+        console.warn('💳 Failed to remove transaction from cache:', err);
       });
 
       // Delete on server
@@ -863,12 +993,21 @@ const HomeContainer = ({navigation}) => {
     } catch (error) {
       console.error('HomeContainer: Transaction delete failed:', error);
 
-      // Rollback
+      // Rollback (UI + Cache)
       if (deletedTransaction) {
         setTransactions(prev => {
           const updated = sortTransactionsByDate([deletedTransaction, ...prev]);
           return updated;
         });
+
+        // Re-add to cache (currentUserId already fetched at function start)
+        if (currentUserId) {
+          TransactionCache.upsertTransaction(currentUserId, deletedTransaction).catch(err => {
+            console.warn('💳 Failed to rollback transaction in cache:', err);
+          });
+        } else {
+          console.warn('💳 Cannot rollback transaction in cache - no user ID available');
+        }
       }
 
       throw error;
@@ -1631,16 +1770,27 @@ const HomeContainer = ({navigation}) => {
           console.log('📂 Category Debug Stats:', stats);
           console.log('📂 Raw cached data:', cached?.data);
           console.log('📂 Transformed categories state:', categories);
-          console.log('📂 Looking for Shopping category and its subcategories...');
-          const shopping = categories.find(c => c.name.toLowerCase().includes('shopping'));
+          console.log(
+            '📂 Looking for Shopping category and its subcategories...',
+          );
+          const shopping = categories.find(c =>
+            c.name.toLowerCase().includes('shopping'),
+          );
           if (shopping) {
             console.log('📂 Shopping category found:', shopping);
             console.log('📂 Shopping subcategories:', shopping.subcategories);
-            const sporting = shopping.subcategories?.find(s => s.name.toLowerCase().includes('sporting'));
+            const sporting = shopping.subcategories?.find(s =>
+              s.name.toLowerCase().includes('sporting'),
+            );
             if (sporting) {
-              console.log('📂 ✅ Sporting subcategory found in state:', sporting);
+              console.log(
+                '📂 ✅ Sporting subcategory found in state:',
+                sporting,
+              );
             } else {
-              console.log('📂 ❌ Sporting subcategory NOT found in transformed state');
+              console.log(
+                '📂 ❌ Sporting subcategory NOT found in transformed state',
+              );
             }
           } else {
             console.log('📂 ❌ Shopping category not found');
@@ -2257,7 +2407,11 @@ const HomeContainer = ({navigation}) => {
             totalIncome: (incomeData?.income || 0) + rolloverAmount,
             expenses: totalExpenses,
             incomePayments: totalIncomePayments,
-            expectedLeftToSpend: (incomeData?.income || 0) + rolloverAmount - totalExpenses - totalIncomePayments,
+            expectedLeftToSpend:
+              (incomeData?.income || 0) +
+              rolloverAmount -
+              totalExpenses -
+              totalIncomePayments,
           },
         });
       };
@@ -2266,14 +2420,19 @@ const HomeContainer = ({navigation}) => {
         console.log('🔧 DEBUG: Checking all goal contributions...');
         for (const goal of goals) {
           if (!goal.id.startsWith('local_')) {
-            const contribs = await TrendAPIService.getGoalContributions(goal.id);
-            console.log(`🔧 Goal "${goal.title}" contributions:`, contribs.map(c => ({
-              id: c.id,
-              type: c.type,
-              amount: c.amount,
-              date: c.date,
-              description: c.description,
-            })));
+            const contribs = await TrendAPIService.getGoalContributions(
+              goal.id,
+            );
+            console.log(
+              `🔧 Goal "${goal.title}" contributions:`,
+              contribs.map(c => ({
+                id: c.id,
+                type: c.type,
+                amount: c.amount,
+                date: c.date,
+                description: c.description,
+              })),
+            );
           }
         }
       };
@@ -2370,18 +2529,23 @@ const HomeContainer = ({navigation}) => {
         key={`goal-allocation-${goals.length}-${showGoalAllocationModal}`}
         visible={showGoalAllocationModal}
         onClose={() => setShowGoalAllocationModal(false)}
-        onConfirm={async (allocation) => {
+        onConfirm={async allocation => {
           try {
-            console.log('🔄 HomeContainer: Goal allocation confirmed:', allocation);
+            console.log(
+              '🔄 HomeContainer: Goal allocation confirmed:',
+              allocation,
+            );
             // Use RolloverService to process goal allocations with optimistic updates
             const result = await RolloverService.processGoalAllocations(
               allocation.goalAllocations,
               addGoalContribution,
-              rolloverAmount
+              rolloverAmount,
             );
 
             if (result.success) {
-              console.log('🎯 HomeContainer: Goal allocations processed successfully');
+              console.log(
+                '🎯 HomeContainer: Goal allocations processed successfully',
+              );
               // Update rollover amount to reflect the reduction
               setRolloverAmount(result.newRolloverAmount);
 
@@ -2402,12 +2566,24 @@ const HomeContainer = ({navigation}) => {
 
               setShowGoalAllocationModal(false);
             } else {
-              console.error('🔄 HomeContainer: Goal allocation failed:', result.error);
-              Alert.alert('Error', result.error || 'Failed to allocate funds to goals');
+              console.error(
+                '🔄 HomeContainer: Goal allocation failed:',
+                result.error,
+              );
+              Alert.alert(
+                'Error',
+                result.error || 'Failed to allocate funds to goals',
+              );
             }
           } catch (error) {
-            console.error('🔄 HomeContainer: Error processing goal allocations:', error);
-            Alert.alert('Error', 'An unexpected error occurred while allocating funds');
+            console.error(
+              '🔄 HomeContainer: Error processing goal allocations:',
+              error,
+            );
+            Alert.alert(
+              'Error',
+              'An unexpected error occurred while allocating funds',
+            );
           }
         }}
         onCreateGoal={() => {
@@ -2423,7 +2599,7 @@ const HomeContainer = ({navigation}) => {
       <AddGoalModal
         visible={showAddGoalModal}
         onClose={() => setShowAddGoalModal(false)}
-        onSave={async (goalData) => {
+        onSave={async goalData => {
           try {
             // Actually save the goal using the useGoals hook
             const result = await saveGoal(goalData);
@@ -2434,11 +2610,20 @@ const HomeContainer = ({navigation}) => {
               await loadGoals();
               return {success: true};
             } else {
-              return {success: false, error: result?.error || 'Failed to save goal'};
+              return {
+                success: false,
+                error: result?.error || 'Failed to save goal',
+              };
             }
           } catch (error) {
-            console.error('HomeContainer: Error saving goal from overlay:', error);
-            return {success: false, error: error.message || 'Failed to save goal'};
+            console.error(
+              'HomeContainer: Error saving goal from overlay:',
+              error,
+            );
+            return {
+              success: false,
+              error: error.message || 'Failed to save goal',
+            };
           }
         }}
         navigation={navigation}

@@ -145,9 +145,11 @@ class AuthService {
         if (currentUserId) {
           const UserProfileCache = require('./UserProfileCache').default;
           const CategoryCache = require('./CategoryCache').default;
+          const TransactionCache = require('./TransactionCache').default;
 
           await UserProfileCache.clear(currentUserId);
           await CategoryCache.clear(currentUserId);
+          await TransactionCache.clear(currentUserId);
 
           // Clear user-specific goals cache
           await AsyncStorage.removeItem(`goals_${currentUserId}`);
