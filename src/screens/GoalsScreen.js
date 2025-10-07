@@ -35,6 +35,7 @@ const GoalsScreen = ({route, navigation}) => {
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showDebtGestureBanner, setShowDebtGestureBanner] = useState(true);
 
   // Refs to prevent multiple simultaneous loads
   const isLoadingRef = useRef(false);
@@ -577,6 +578,31 @@ const GoalsScreen = ({route, navigation}) => {
 
         {activeTab === 'debt' && (
           <View style={styles.goalsSection}>
+            {/* Swipe Gesture Banner */}
+            {showDebtGestureBanner && debtGoals.length > 0 && (
+              <View style={styles.gestureBanner}>
+                <View style={styles.gestureBannerContent}>
+                  <Icon
+                    name="info"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.gestureBannerIcon}
+                  />
+                  <View style={styles.gestureBannerTextContainer}>
+                    <Text style={styles.gestureBannerTitle}>Swipe Gestures</Text>
+                    <Text style={styles.gestureBannerText}>
+                      Swipe left to see Payment History • Swipe right to Make a Payment
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowDebtGestureBanner(false)}
+                    style={styles.gestureBannerClose}>
+                    <Icon name="x" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
             {debtGoals.length > 0 ? (
               <>{renderGoalsByType(debtGoals, 'debt')}</>
             ) : (
@@ -848,6 +874,41 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  gestureBanner: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  gestureBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  gestureBannerIcon: {
+    marginRight: 12,
+  },
+  gestureBannerTextContainer: {
+    flex: 1,
+  },
+  gestureBannerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  gestureBannerText: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  gestureBannerClose: {
+    padding: 4,
+    marginLeft: 8,
   },
 });
 
