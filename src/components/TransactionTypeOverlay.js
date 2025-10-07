@@ -40,15 +40,31 @@ const TransactionTypeOverlay = ({
     }
   }, [visible, slideAnim, fadeAnim]);
 
-  if (!visible) {
-    return null;
-  }
+  const handleClose = () => {
+    // Animate out before closing
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 300,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
 
+  // Always render - visibility is controlled by parent's conditional rendering
+  // When visible becomes false, we want to stay mounted so we can slide out with the parent modal
   return (
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
       <TouchableOpacity
         style={styles.backdrop}
-        onPress={onClose}
+        onPress={handleClose}
         activeOpacity={1}
       />
 

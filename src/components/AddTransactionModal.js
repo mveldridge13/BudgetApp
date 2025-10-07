@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   TextInput,
   ScrollView,
   Animated,
@@ -80,8 +79,10 @@ const AddTransactionModal = ({
   // Overlay props
   overlayMode,
   onQuickAddClose,
+  onQuickAddUseFullForm,
   onQuickAddCategoryPress,
   onQuickAddDatePress,
+  onQuickAddTransactionTypeChange,
   onCategoryOverlayClose,
   onCategoryOverlayBack,
   onCategoryOverlaySelect,
@@ -119,14 +120,14 @@ const AddTransactionModal = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-  // Animation values
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const modalAnim = useRef(new Animated.Value(screenWidth)).current;
+  // Animation values - slide up from bottom
+  const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   // Modal states
   const [showPaymentStatusModal, setShowPaymentStatusModal] = useState(false);
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // ==============================================
   // ANIMATION HANDLING
@@ -134,121 +135,66 @@ const AddTransactionModal = ({
 
   useEffect(() => {
     if (visible) {
-      // Reset animations to starting positions
-      slideAnim.setValue(0);
-      modalAnim.setValue(screenWidth);
-      fadeAnim.setValue(0);
-
-      // Animate modal in from right with fade
+      // Animate modal in from bottom with fade
       Animated.parallel([
-        Animated.timing(modalAnim, {
+        Animated.timing(slideAnim, {
           toValue: 0,
-          duration: 300,
+          duration: 400,
           useNativeDriver: true,
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 300,
+          duration: 400,
           useNativeDriver: true,
         }),
       ]).start();
     } else {
       // Reset positions when modal is closed
-      slideAnim.setValue(0);
-      modalAnim.setValue(screenWidth);
+      slideAnim.setValue(300);
       fadeAnim.setValue(0);
     }
-  }, [visible, slideAnim, modalAnim, fadeAnim]);
-
+  }, [visible, slideAnim, fadeAnim]);
 
   // ==============================================
   // UI EVENT HANDLERS
   // ==============================================
 
   const handleSave = () => {
-    const currentValue = slideAnim._value;
-
-    if (currentValue === 0) {
-      Animated.parallel([
-        Animated.timing(modalAnim, {
-          toValue: screenWidth,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        onSave();
-      });
-    } else {
+    // Animate out before saving
+    Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
+        toValue: 300,
+        duration: 400,
         useNativeDriver: true,
-      }).start(() => {
-        Animated.parallel([
-          Animated.timing(modalAnim, {
-            toValue: screenWidth,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          onSave();
-        });
-      });
-    }
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onSave();
+    });
   };
 
   const handleClose = () => {
-    const currentValue = slideAnim._value;
-
-    if (currentValue === 0) {
-      // Already in transaction view, animate modal out then close
-      Animated.parallel([
-        Animated.timing(modalAnim, {
-          toValue: screenWidth,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        onClose();
-      });
-    } else {
-      // Animate back to transaction view first, then animate modal out
+    // Start animating out
+    setIsAnimating(true);
+    Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
+        toValue: 300,
+        duration: 400,
         useNativeDriver: true,
-      }).start(() => {
-        Animated.parallel([
-          Animated.timing(modalAnim, {
-            toValue: screenWidth,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          onClose();
-        });
-      });
-    }
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsAnimating(false);
+      onClose();
+    });
   };
 
   // Navigation functions
@@ -462,589 +408,578 @@ const AddTransactionModal = ({
   // RENDER
   // ==============================================
 
-  if (!visible) {
+  // Don't unmount when not visible if we're animating
+  // This allows the exit animation to complete before unmounting
+  if (!visible && !isAnimating) {
     return null;
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="none"
-      onRequestClose={handleClose}>
+    <View style={styles.modalOverlay} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View
         style={[
-          styles.modalOverlay,
+          styles.backdrop,
           {
             opacity: fadeAnim,
           },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.modalContent,
+          {
+            transform: [{translateY: slideAnim}],
+            opacity: fadeAnim,
+          },
         ]}>
-        <Animated.View
-          style={[
-            styles.modalContent,
-            {
-              transform: [{translateX: modalAnim}],
-            },
-          ]}>
-          {/* Container for all views */}
-          <Animated.View
-            style={[
-              styles.viewContainer,
-              {
-                transform: [{translateX: slideAnim}],
-              },
-            ]}>
-            {/* Transaction View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={handleClose}
-                  style={styles.cancelButton}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>
-                  {isEditMode
-                    ? `Edit ${getTransactionTypeDisplayName()}`
-                    : 'Add Transaction'}
-                </Text>
-                <TouchableOpacity
-                  onPress={handleSave}
+        {/* Container for all views */}
+        <View style={styles.viewContainer}>
+          {/* Transaction View */}
+          <View style={styles.view}>
+            <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.cancelButton}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {isEditMode
+                  ? `Edit ${getTransactionTypeDisplayName()}`
+                  : 'Add Transaction'}
+              </Text>
+              <TouchableOpacity
+                onPress={handleSave}
+                style={[
+                  styles.saveButton,
+                  (!amount || !selectedCategory) && styles.saveButtonDisabled,
+                ]}
+                disabled={!amount || !selectedCategory}
+                activeOpacity={0.7}>
+                <Text
                   style={[
-                    styles.saveButton,
-                    (!amount || !selectedCategory) && styles.saveButtonDisabled,
+                    styles.saveText,
+                    (!amount || !selectedCategory) && styles.saveTextDisabled,
+                  ]}>
+                  {isEditMode ? 'Update' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.formContainer}>
+              {/* Transaction Type Selector */}
+              <View style={styles.transactionTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.transactionTypeButton,
+                    styles.transactionTypeButtonExpense,
+                    selectedTransactionType === 'EXPENSE' &&
+                      styles.transactionTypeButtonActiveExpense,
                   ]}
-                  disabled={!amount || !selectedCategory}
+                  onPress={() => handleTransactionTypeSelect('EXPENSE')}
                   activeOpacity={0.7}>
+                  <Icon
+                    name="trending-down"
+                    size={18}
+                    color={
+                      selectedTransactionType === 'EXPENSE'
+                        ? colors.textWhite || '#FFFFFF'
+                        : colors.textSecondary
+                    }
+                    style={styles.transactionTypeIcon}
+                  />
                   <Text
                     style={[
-                      styles.saveText,
-                      (!amount || !selectedCategory) && styles.saveTextDisabled,
+                      styles.transactionTypeText,
+                      selectedTransactionType === 'EXPENSE' &&
+                        styles.transactionTypeTextActive,
                     ]}>
-                    {isEditMode ? 'Update' : 'Save'}
+                    Expense
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.transactionTypeButton,
+                    styles.transactionTypeButtonIncome,
+                    selectedTransactionType === 'INCOME' &&
+                      styles.transactionTypeButtonActiveIncome,
+                  ]}
+                  onPress={() => handleTransactionTypeSelect('INCOME')}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name="trending-up"
+                    size={18}
+                    color={
+                      selectedTransactionType === 'INCOME'
+                        ? colors.textWhite || '#FFFFFF'
+                        : colors.textSecondary
+                    }
+                    style={styles.transactionTypeIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.transactionTypeText,
+                      selectedTransactionType === 'INCOME' &&
+                        styles.transactionTypeTextActive,
+                    ]}>
+                    Income
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.formContainer}>
-                {/* Transaction Type Selector */}
-                <View style={styles.transactionTypeContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.transactionTypeButton,
-                      styles.transactionTypeButtonExpense,
-                      selectedTransactionType === 'EXPENSE' &&
-                        styles.transactionTypeButtonActiveExpense,
-                    ]}
-                    onPress={() => handleTransactionTypeSelect('EXPENSE')}
-                    activeOpacity={0.7}>
-                    <Icon
-                      name="trending-down"
-                      size={18}
-                      color={
-                        selectedTransactionType === 'EXPENSE'
-                          ? colors.textWhite || '#FFFFFF'
-                          : colors.textSecondary
-                      }
-                      style={styles.transactionTypeIcon}
-                    />
-                    <Text
-                      style={[
-                        styles.transactionTypeText,
-                        selectedTransactionType === 'EXPENSE' &&
-                          styles.transactionTypeTextActive,
-                      ]}>
-                      Expense
-                    </Text>
-                  </TouchableOpacity>
+              {/* Date Field */}
+              <TouchableOpacity
+                style={styles.dateField}
+                onPress={onShowCalendar}
+                activeOpacity={0.7}>
+                <Icon
+                  name="calendar-outline"
+                  size={18}
+                  color="#007AFF"
+                  style={styles.dateIcon}
+                />
+                <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
+              </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.transactionTypeButton,
-                      styles.transactionTypeButtonIncome,
-                      selectedTransactionType === 'INCOME' &&
-                        styles.transactionTypeButtonActiveIncome,
-                    ]}
-                    onPress={() => handleTransactionTypeSelect('INCOME')}
-                    activeOpacity={0.7}>
-                    <Icon
-                      name="trending-up"
-                      size={18}
-                      color={
-                        selectedTransactionType === 'INCOME'
-                          ? colors.textWhite || '#FFFFFF'
-                          : colors.textSecondary
-                      }
-                      style={styles.transactionTypeIcon}
-                    />
-                    <Text
-                      style={[
-                        styles.transactionTypeText,
-                        selectedTransactionType === 'INCOME' &&
-                          styles.transactionTypeTextActive,
-                      ]}>
-                      Income
-                    </Text>
-                  </TouchableOpacity>
+              {/* Amount Field */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.currencySymbol}>$</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={amount}
+                  onChangeText={onAmountChange}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="numeric"
+                />
+              </View>
 
+              {/* Description Field */}
+              <TextInput
+                style={styles.descriptionInput}
+                value={description}
+                onChangeText={onDescriptionChange}
+                placeholder="Description (optional)"
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              {/* Category Field */}
+              <TouchableOpacity
+                style={styles.categoryField}
+                onPress={showCategoryPicker}
+                activeOpacity={0.7}>
+                <View style={styles.categoryLeft}>
+                  {selectedCategory ? (
+                    <>
+                      <View
+                        style={getCategoryIconStyle(
+                          getCategoryById(selectedCategory)?.color,
+                        )}>
+                        <Icon
+                          name={getCategoryFieldIcon()}
+                          size={18}
+                          color={getCategoryById(selectedCategory)?.color}
+                        />
+                      </View>
+                      <Text style={styles.categoryText}>
+                        {getCategoryFieldDisplayName()}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.categoryIconPlaceholder}>
+                        <Icon
+                          name="albums-outline"
+                          size={18}
+                          color={colors.textSecondary}
+                        />
+                      </View>
+                      <Text style={styles.categoryPlaceholder}>Category</Text>
+                    </>
+                  )}
                 </View>
+                <Icon
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
 
-                {/* Date Field */}
-                <TouchableOpacity
-                  style={styles.dateField}
-                  onPress={onShowCalendar}
-                  activeOpacity={0.7}>
+              {/* Recurrence Field */}
+              <TouchableOpacity
+                style={styles.recurrenceField}
+                onPress={showRecurrencePicker}
+                activeOpacity={0.7}>
+                <View style={styles.recurrenceLeft}>
+                  <Icon
+                    name={getRecurrenceIcon()}
+                    size={18}
+                    color={getRecurrenceColor()}
+                    style={styles.recurrenceIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.recurrenceText,
+                      selectedRecurrence !== 'none' &&
+                        styles.recurrenceActiveText,
+                    ]}>
+                    {getRecurrenceById(selectedRecurrence)?.name}
+                  </Text>
+                </View>
+                <Icon
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {/* Due Date Field */}
+              <TouchableOpacity
+                style={styles.dueDateField}
+                onPress={() => onShowCalendar('dueDate')}
+                activeOpacity={0.7}>
+                <View style={styles.dueDateLeft}>
                   <Icon
                     name="calendar-outline"
                     size={18}
-                    color="#007AFF"
-                    style={styles.dateIcon}
+                    color={
+                      selectedDueDate ? colors.primary : colors.textSecondary
+                    }
+                    style={styles.dueDateIcon}
                   />
-                  <Text style={styles.dateText}>
-                    {formatDate(selectedDate)}
+                  <Text
+                    style={[
+                      styles.dueDateText,
+                      selectedDueDate && styles.dueDateActiveText,
+                    ]}>
+                    {selectedDueDate
+                      ? selectedDueDate.toLocaleDateString('en-AU', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                        })
+                      : 'Due Date (Optional)'}
                   </Text>
-                </TouchableOpacity>
-
-
-                {/* Amount Field */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={styles.amountInput}
-                    value={amount}
-                    onChangeText={onAmountChange}
-                    placeholder="0.00"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
                 </View>
-
-                {/* Description Field */}
-                <TextInput
-                  style={styles.descriptionInput}
-                  value={description}
-                  onChangeText={onDescriptionChange}
-                  placeholder="Description (optional)"
-                  placeholderTextColor={colors.textSecondary}
+                <Icon
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
                 />
+              </TouchableOpacity>
 
-                {/* Category Field */}
-                <TouchableOpacity
-                    style={styles.categoryField}
-                    onPress={showCategoryPicker}
-                    activeOpacity={0.7}>
-                    <View style={styles.categoryLeft}>
-                      {selectedCategory ? (
-                        <>
-                          <View
-                            style={getCategoryIconStyle(
-                              getCategoryById(selectedCategory)?.color,
-                            )}>
-                            <Icon
-                              name={getCategoryFieldIcon()}
-                              size={18}
-                              color={getCategoryById(selectedCategory)?.color}
-                            />
-                          </View>
-                          <Text style={styles.categoryText}>
-                            {getCategoryFieldDisplayName()}
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <View style={styles.categoryIconPlaceholder}>
-                            <Icon
-                              name="albums-outline"
-                              size={18}
-                              color={colors.textSecondary}
-                            />
-                          </View>
-                          <Text style={styles.categoryPlaceholder}>
-                            Category
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                    <Icon
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
+              {/* Payment Status Field */}
+              <TouchableOpacity
+                style={styles.paymentStatusField}
+                onPress={showPaymentStatusPicker}
+                activeOpacity={0.7}>
+                <View style={styles.paymentStatusLeft}>
+                  <Icon
+                    name={getPaymentStatusIcon()}
+                    size={18}
+                    color={getPaymentStatusColor()}
+                    style={styles.paymentStatusIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.paymentStatusText,
+                      selectedPaymentStatus && styles.paymentStatusActiveText,
+                    ]}>
+                    {getPaymentStatusDisplayName()}
+                  </Text>
+                </View>
+                <Icon
+                  name="chevron-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
 
-                {/* Recurrence Field */}
-                <TouchableOpacity
-                    style={styles.recurrenceField}
-                    onPress={showRecurrencePicker}
-                    activeOpacity={0.7}>
-                    <View style={styles.recurrenceLeft}>
-                      <Icon
-                        name={getRecurrenceIcon()}
-                        size={18}
-                        color={getRecurrenceColor()}
-                        style={styles.recurrenceIcon}
-                      />
-                      <Text
-                        style={[
-                          styles.recurrenceText,
-                          selectedRecurrence !== 'none' &&
-                            styles.recurrenceActiveText,
-                        ]}>
-                        {getRecurrenceById(selectedRecurrence)?.name}
-                      </Text>
-                    </View>
-                    <Icon
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-
-                {/* Due Date Field */}
-                <TouchableOpacity
-                    style={styles.dueDateField}
-                    onPress={() => onShowCalendar('dueDate')}
-                    activeOpacity={0.7}>
-                    <View style={styles.dueDateLeft}>
-                      <Icon
-                        name="calendar-outline"
-                        size={18}
-                        color={
-                          selectedDueDate
-                            ? colors.primary
-                            : colors.textSecondary
-                        }
-                        style={styles.dueDateIcon}
-                      />
-                      <Text
-                        style={[
-                          styles.dueDateText,
-                          selectedDueDate && styles.dueDateActiveText,
-                        ]}>
-                        {selectedDueDate
-                          ? selectedDueDate.toLocaleDateString('en-AU', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                            })
-                          : 'Due Date (Optional)'}
-                      </Text>
-                    </View>
-                    <Icon
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-
-                {/* Payment Status Field */}
-                <TouchableOpacity
-                    style={styles.paymentStatusField}
-                    onPress={showPaymentStatusPicker}
-                    activeOpacity={0.7}>
-                    <View style={styles.paymentStatusLeft}>
-                      <Icon
-                        name={getPaymentStatusIcon()}
-                        size={18}
-                        color={getPaymentStatusColor()}
-                        style={styles.paymentStatusIcon}
-                      />
-                      <Text
-                        style={[
-                          styles.paymentStatusText,
-                          selectedPaymentStatus &&
-                            styles.paymentStatusActiveText,
-                        ]}>
-                        {getPaymentStatusDisplayName()}
-                      </Text>
-                    </View>
-                    <Icon
-                      name="chevron-forward"
-                      size={20}
-                      color={colors.textSecondary}
-                    />
-                  </TouchableOpacity>
-              </ScrollView>
+          {/* Category Picker View */}
+          <View style={styles.view}>
+            <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+              <TouchableOpacity
+                onPress={hideCategoryPicker}
+                style={styles.cancelButton}>
+                <Icon name="chevron-back" size={24} color={colors.textWhite} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Select Category</Text>
+              <View style={styles.placeholder} />
             </View>
 
-            {/* Category Picker View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hideCategoryPicker}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Select Category</Text>
-                <View style={styles.placeholder} />
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {isLoading ? (
-                  <View style={styles.loadingContainer}>
-                    <Text style={styles.loadingText}>
-                      Loading categories...
-                    </Text>
-                  </View>
-                ) : (
-                  <>
-                    {categories.map(category => (
-                      <TouchableOpacity
-                        key={category.id}
-                        style={[
-                          styles.categoryOption,
-                          selectedCategory === category.id &&
-                            styles.selectedOption,
-                        ]}
-                        onPress={() => handleCategorySelect(category.id)}
-                        activeOpacity={0.7}>
-                        <View style={styles.categoryLeft}>
-                          <View style={getCategoryIconStyle(category.color)}>
-                            <Icon
-                              name={category.icon}
-                              size={20}
-                              color={category.color}
-                            />
-                          </View>
-                          <View style={styles.categoryInfo}>
-                            <Text style={styles.categoryName}>
-                              {category.name}
-                            </Text>
-                            {category.isCustom && (
-                              <Text style={styles.customLabel}>Custom</Text>
-                            )}
-                          </View>
+            <ScrollView
+              style={styles.formContainer}
+              showsVerticalScrollIndicator={false}>
+              {isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading categories...</Text>
+                </View>
+              ) : (
+                <>
+                  {categories.map(category => (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={[
+                        styles.categoryOption,
+                        selectedCategory === category.id &&
+                          styles.selectedOption,
+                      ]}
+                      onPress={() => handleCategorySelect(category.id)}
+                      activeOpacity={0.7}>
+                      <View style={styles.categoryLeft}>
+                        <View style={getCategoryIconStyle(category.color)}>
+                          <Icon
+                            name={category.icon}
+                            size={20}
+                            color={category.color}
+                          />
                         </View>
-                        <View style={styles.categoryRight}>
-                          {selectedCategory === category.id &&
-                            !category.hasSubcategories && (
-                              <Icon
-                                name="checkmark"
-                                size={20}
-                                color={colors.primary}
-                              />
-                            )}
-                          {category.hasSubcategories && (
-                            <Icon
-                              name="chevron-forward"
-                              size={20}
-                              color={colors.textSecondary}
-                            />
+                        <View style={styles.categoryInfo}>
+                          <Text style={styles.categoryName}>
+                            {category.name}
+                          </Text>
+                          {category.isCustom && (
+                            <Text style={styles.customLabel}>Custom</Text>
                           )}
                         </View>
-                      </TouchableOpacity>
-                    ))}
-                  </>
-                )}
-              </ScrollView>
-            </View>
-
-            {/* Subcategory Picker View */}
-            <View style={styles.view}>
-              <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
-                <TouchableOpacity
-                  onPress={hideSubcategoryPicker}
-                  style={styles.cancelButton}>
-                  <Icon
-                    name="chevron-back"
-                    size={24}
-                    color={colors.textWhite}
-                  />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>
-                  {currentSubcategoryData?.name || 'Select Subcategory'}
-                </Text>
-                <View style={styles.placeholder} />
-              </View>
-
-              <ScrollView
-                style={styles.formContainer}
-                showsVerticalScrollIndicator={false}>
-                {/* Subcategories */}
-                {currentSubcategoryData?.subcategories?.map(subcategory => (
-                  <TouchableOpacity
-                    key={subcategory.id}
-                    style={[
-                      styles.categoryOption,
-                      selectedSubcategory === subcategory.id &&
-                        styles.selectedOption,
-                    ]}
-                    onPress={() => handleSubcategorySelect(subcategory.id)}
-                    activeOpacity={0.7}>
-                    <View style={styles.categoryLeft}>
-                      <View
-                        style={getCategoryIconStyle(
-                          currentSubcategoryData.color,
-                        )}>
-                        <Icon
-                          name={subcategory.icon}
-                          size={20}
-                          color={currentSubcategoryData.color}
-                        />
                       </View>
-                      <View style={styles.categoryInfo}>
-                        <Text style={styles.categoryName}>
-                          {subcategory.name}
-                        </Text>
-                        {subcategory.isCustom && (
-                          <Text style={styles.customLabel}>Custom</Text>
+                      <View style={styles.categoryRight}>
+                        {selectedCategory === category.id &&
+                          !category.hasSubcategories && (
+                            <Icon
+                              name="checkmark"
+                              size={20}
+                              color={colors.primary}
+                            />
+                          )}
+                        {category.hasSubcategories && (
+                          <Icon
+                            name="chevron-forward"
+                            size={20}
+                            color={colors.textSecondary}
+                          />
                         )}
                       </View>
-                    </View>
-                    {selectedSubcategory === subcategory.id && (
-                      <Icon name="checkmark" size={20} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+            </ScrollView>
+          </View>
+
+          {/* Subcategory Picker View */}
+          <View style={styles.view}>
+            <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+              <TouchableOpacity
+                onPress={hideSubcategoryPicker}
+                style={styles.cancelButton}>
+                <Icon name="chevron-back" size={24} color={colors.textWhite} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {currentSubcategoryData?.name || 'Select Subcategory'}
+              </Text>
+              <View style={styles.placeholder} />
             </View>
-          </Animated.View>
-        </Animated.View>
-      </Animated.View>
 
-      {/* Calendar Modal */}
-      <CalendarModal
-        visible={showCalendar}
-        onClose={onHideCalendar}
-        selectedDate={selectedDate}
-        onDateChange={onDateChange}
-      />
+            <ScrollView
+              style={styles.formContainer}
+              showsVerticalScrollIndicator={false}>
+              {/* Subcategories */}
+              {currentSubcategoryData?.subcategories?.map(subcategory => (
+                <TouchableOpacity
+                  key={subcategory.id}
+                  style={[
+                    styles.categoryOption,
+                    selectedSubcategory === subcategory.id &&
+                      styles.selectedOption,
+                  ]}
+                  onPress={() => handleSubcategorySelect(subcategory.id)}
+                  activeOpacity={0.7}>
+                  <View style={styles.categoryLeft}>
+                    <View
+                      style={getCategoryIconStyle(
+                        currentSubcategoryData.color,
+                      )}>
+                      <Icon
+                        name={subcategory.icon}
+                        size={20}
+                        color={currentSubcategoryData.color}
+                      />
+                    </View>
+                    <View style={styles.categoryInfo}>
+                      <Text style={styles.categoryName}>
+                        {subcategory.name}
+                      </Text>
+                      {subcategory.isCustom && (
+                        <Text style={styles.customLabel}>Custom</Text>
+                      )}
+                    </View>
+                  </View>
+                  {selectedSubcategory === subcategory.id && (
+                    <Icon name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
 
-      {/* Payment Status Modal */}
-      <PaymentStatusModal
-        visible={showPaymentStatusModal}
-        onClose={() => setShowPaymentStatusModal(false)}
-        selectedPaymentStatus={selectedPaymentStatus}
-        onPaymentStatusSelect={handlePaymentStatusSelect}
-        paymentStatusOptions={paymentStatusOptions}
-      />
-
-      {/* Recurrence Modal */}
-      <RecurrenceModal
-        visible={showRecurrenceModal}
-        onClose={() => setShowRecurrenceModal(false)}
-        selectedRecurrence={selectedRecurrence}
-        onRecurrenceSelect={handleRecurrenceSelect}
-        recurrenceOptions={recurrenceOptions}
-      />
-
-      {/* Tournament Modal */}
-      <AddTournamentContainer
-        visible={showTournamentModal}
-        onClose={onTournamentModalClose}
-        onSave={onTournamentSave}
-      />
-
-      {/* Transaction Type Overlay */}
-      {overlayMode === 'transactionType' && (
-        <TransactionTypeOverlay
-          visible={true}
-          onClose={onTransactionTypeClose}
-          onTypeSelect={onTransactionTypeSelect}
+        {/* Calendar Modal */}
+        <CalendarModal
+          visible={showCalendar}
+          onClose={onHideCalendar}
+          selectedDate={selectedDate}
+          onDateChange={onDateChange}
         />
-      )}
 
-      {/* Recurrence Overlay */}
-      {overlayMode === 'recurrence' && (
-        <RecurrenceOverlay
-          visible={true}
-          onClose={onRecurrenceOverlayClose}
-          onContinue={onRecurrenceOverlayContinue}
+        {/* Payment Status Modal */}
+        <PaymentStatusModal
+          visible={showPaymentStatusModal}
+          onClose={() => setShowPaymentStatusModal(false)}
+          selectedPaymentStatus={selectedPaymentStatus}
+          onPaymentStatusSelect={handlePaymentStatusSelect}
+          paymentStatusOptions={paymentStatusOptions}
+        />
+
+        {/* Recurrence Modal */}
+        <RecurrenceModal
+          visible={showRecurrenceModal}
+          onClose={() => setShowRecurrenceModal(false)}
           selectedRecurrence={selectedRecurrence}
-          selectedDueDate={selectedDueDate}
-          onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
-          onDueDatePress={onRecurrenceOverlayDueDatePress}
+          onRecurrenceSelect={handleRecurrenceSelect}
           recurrenceOptions={recurrenceOptions}
         />
-      )}
 
-      {/* Debt Payment Overlay */}
-      {overlayMode === 'debt' && (
-        <DebtPaymentOverlay
-          visible={true}
-          onClose={onDebtPaymentClose}
-          onSave={onDebtPaymentSave}
-          onDueDatePress={onDebtPaymentDueDatePress}
-          selectedDueDate={selectedDueDate}
+        {/* Tournament Modal */}
+        <AddTournamentContainer
+          visible={showTournamentModal}
+          onClose={onTournamentModalClose}
+          onSave={onTournamentSave}
         />
-      )}
 
-      {/* Quick Add Overlay */}
-      {overlayMode === 'quick' && (
-        <QuickAddOverlay
-          visible={true}
-          onClose={onQuickAddClose}
-          onCategoryPress={onQuickAddCategoryPress}
-          onDatePress={onQuickAddDatePress}
-          selectedDate={selectedDate}
-          description={description}
-          onDescriptionChange={onDescriptionChange}
-          selectedCategory={selectedCategory}
-          getCategoryById={getCategoryById}
-        />
-      )}
+        {/* Transaction Type Overlay */}
+        {overlayMode === 'transactionType' && (
+          <TransactionTypeOverlay
+            visible={true}
+            onClose={onTransactionTypeClose}
+            onTypeSelect={onTransactionTypeSelect}
+          />
+        )}
 
-      {/* Category Selection Overlay */}
-      {overlayMode === 'category' && (
-        <CategorySelectionOverlay
-          visible={true}
-          onClose={onCategoryOverlayClose}
-          onBack={onCategoryOverlayBack}
-          onCategorySelect={onCategoryOverlaySelect}
-          allCategories={allCategories}
-          transformCategoriesForUI={transformCategoriesForUI}
-          selectedTransactionType={selectedTransactionType}
-          onTransactionTypeChange={onTransactionTypeChange}
-          selectedCategory={selectedCategory}
-          isLoading={isLoading}
-        />
-      )}
+        {/* Recurrence Overlay */}
+        {overlayMode === 'recurrence' && (
+          <RecurrenceOverlay
+            visible={true}
+            onClose={onRecurrenceOverlayClose}
+            onContinue={onRecurrenceOverlayContinue}
+            selectedRecurrence={selectedRecurrence}
+            selectedDueDate={selectedDueDate}
+            onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
+            onDueDatePress={onRecurrenceOverlayDueDatePress}
+            recurrenceOptions={recurrenceOptions}
+          />
+        )}
 
-      {/* Subcategory Selection Overlay */}
-      {overlayMode === 'subcategory' && (
-        <SubcategorySelectionOverlay
-          visible={true}
-          onClose={onSubcategoryOverlayClose}
-          onBack={onSubcategoryOverlayBack}
-          onSubcategorySelect={onSubcategoryOverlaySelect}
-          selectedCategory={currentSubcategoryData?.id}
-          selectedSubcategory={selectedSubcategory}
-          getCategoryById={getCategoryById}
-          isLoading={isLoading}
-          onAddSubcategory={onAddSubcategory}
-        />
-      )}
+        {/* Debt Payment Overlay */}
+        {overlayMode === 'debt' && (
+          <DebtPaymentOverlay
+            visible={true}
+            onClose={onDebtPaymentClose}
+            onSave={onDebtPaymentSave}
+            onDueDatePress={onDebtPaymentDueDatePress}
+            selectedDueDate={selectedDueDate}
+          />
+        )}
 
-      {/* Amount Entry Overlay */}
-      {overlayMode === 'amount' && (
-        <AmountEntryOverlay
-          visible={true}
-          onClose={onAmountOverlayClose}
-          onBack={onAmountOverlayBack}
-          onSave={onAmountOverlaySave}
-          amount={amount}
-          onAmountChange={onAmountChange}
-          description={description}
-          selectedCategory={selectedCategory}
-          selectedSubcategory={selectedSubcategory}
-          getCategoryById={getCategoryById}
-          selectedDate={selectedDate}
-          selectedTransactionType={selectedTransactionType}
-        />
-      )}
+        {/* Quick Add Overlay */}
+        {overlayMode === 'quick' && (
+          <QuickAddOverlay
+            visible={true}
+            onClose={onQuickAddClose}
+            onUseFullForm={onQuickAddUseFullForm}
+            onCategoryPress={onQuickAddCategoryPress}
+            onDatePress={onQuickAddDatePress}
+            selectedDate={selectedDate}
+            description={description}
+            onDescriptionChange={onDescriptionChange}
+            selectedCategory={selectedCategory}
+            getCategoryById={getCategoryById}
+            selectedTransactionType={selectedTransactionType}
+            onTransactionTypeChange={onQuickAddTransactionTypeChange}
+          />
+        )}
 
-    </Modal>
+        {/* Category Selection Overlay */}
+        {overlayMode === 'category' && (
+          <CategorySelectionOverlay
+            visible={true}
+            onClose={onCategoryOverlayClose}
+            onBack={onCategoryOverlayBack}
+            onCategorySelect={onCategoryOverlaySelect}
+            allCategories={allCategories}
+            transformCategoriesForUI={transformCategoriesForUI}
+            selectedTransactionType={selectedTransactionType}
+            onTransactionTypeChange={onTransactionTypeChange}
+            selectedCategory={selectedCategory}
+            isLoading={isLoading}
+          />
+        )}
+
+        {/* Subcategory Selection Overlay */}
+        {overlayMode === 'subcategory' && (
+          <SubcategorySelectionOverlay
+            visible={true}
+            onClose={onSubcategoryOverlayClose}
+            onBack={onSubcategoryOverlayBack}
+            onSubcategorySelect={onSubcategoryOverlaySelect}
+            selectedCategory={currentSubcategoryData?.id}
+            selectedSubcategory={selectedSubcategory}
+            getCategoryById={getCategoryById}
+            isLoading={isLoading}
+            onAddSubcategory={onAddSubcategory}
+          />
+        )}
+
+        {/* Amount Entry Overlay */}
+        {overlayMode === 'amount' && (
+          <AmountEntryOverlay
+            visible={true}
+            onClose={onAmountOverlayClose}
+            onBack={onAmountOverlayBack}
+            onSave={onAmountOverlaySave}
+            amount={amount}
+            onAmountChange={onAmountChange}
+            description={description}
+            selectedCategory={selectedCategory}
+            selectedSubcategory={selectedSubcategory}
+            getCategoryById={getCategoryById}
+            selectedDate={selectedDate}
+            selectedTransactionType={selectedTransactionType}
+          />
+        )}
+      </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   modalOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {

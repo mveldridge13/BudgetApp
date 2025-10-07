@@ -84,6 +84,24 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
     };
   }, [keyboardAnim]);
 
+  const handleClose = () => {
+    // Animate out before closing
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 300,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
   if (!visible) {
     return null;
   }
@@ -132,7 +150,7 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
       <TouchableOpacity
         style={styles.backdrop}
-        onPress={onClose}
+        onPress={handleClose}
         activeOpacity={1}
       />
 
@@ -154,7 +172,7 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
           <Text style={styles.title}>
             {step === 1 ? 'Debt Details' : 'Payment Amounts'}
           </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Icon name="close" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -281,7 +299,7 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
 
             <TouchableOpacity
               style={styles.skipButton}
-              onPress={onClose}
+              onPress={handleClose}
               activeOpacity={0.7}>
               <Text style={styles.skipButtonText}>Cancel</Text>
             </TouchableOpacity>

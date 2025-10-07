@@ -18,6 +18,7 @@ const {width: screenWidth} = Dimensions.get('window');
 const QuickAddOverlay = ({
   visible,
   onClose,
+  onUseFullForm,
   onCategoryPress,
   onDatePress,
   selectedDate,
@@ -25,6 +26,8 @@ const QuickAddOverlay = ({
   onDescriptionChange,
   selectedCategory,
   getCategoryById,
+  selectedTransactionType,
+  onTransactionTypeChange,
 }) => {
   const slideAnim = useRef(new Animated.Value(300)).current; // Start 300px below screen
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -83,6 +86,42 @@ const QuickAddOverlay = ({
     };
   }, [keyboardAnim]);
 
+  const handleClose = () => {
+    // Animate out before closing (goes back to TransactionTypeOverlay)
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 300,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
+  const handleUseFullForm = () => {
+    // Animate out before showing full form
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 300,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onUseFullForm();
+    });
+  };
+
   if (!visible) {
     return null;
   }
@@ -116,7 +155,7 @@ const QuickAddOverlay = ({
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
       <TouchableOpacity
         style={styles.backdrop}
-        onPress={onClose}
+        onPress={handleClose}
         activeOpacity={1}
       />
 
@@ -135,12 +174,57 @@ const QuickAddOverlay = ({
             <Icon name="calendar-outline" size={24} color={colors.primary} />
           </TouchableOpacity>
           <Text style={styles.title}>Quick Add</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Icon name="close" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
+          {/* Transaction Type Buttons */}
+          <View style={styles.transactionTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.transactionTypeButton,
+                selectedTransactionType === 'EXPENSE' && styles.transactionTypeButtonActive,
+              ]}
+              onPress={() => onTransactionTypeChange('EXPENSE')}
+              activeOpacity={0.7}>
+              <Icon
+                name="trending-down"
+                size={18}
+                color={selectedTransactionType === 'EXPENSE' ? '#FFFFFF' : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.transactionTypeText,
+                  selectedTransactionType === 'EXPENSE' && styles.transactionTypeTextActive,
+                ]}>
+                Expense
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.transactionTypeButton,
+                selectedTransactionType === 'INCOME' && styles.transactionTypeButtonActive,
+              ]}
+              onPress={() => onTransactionTypeChange('INCOME')}
+              activeOpacity={0.7}>
+              <Icon
+                name="trending-up"
+                size={18}
+                color={selectedTransactionType === 'INCOME' ? '#FFFFFF' : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.transactionTypeText,
+                  selectedTransactionType === 'INCOME' && styles.transactionTypeTextActive,
+                ]}>
+                Income
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Description Field */}
           <View style={[styles.field, styles.descriptionField]}>
             <View style={styles.fieldLeft}>
@@ -198,7 +282,7 @@ const QuickAddOverlay = ({
 
         <TouchableOpacity
           style={styles.skipButton}
-          onPress={onClose}
+          onPress={handleUseFullForm}
           activeOpacity={0.7}>
           <Text style={styles.skipButtonText}>Use full form instead</Text>
         </TouchableOpacity>
@@ -265,6 +349,34 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 20,
+  },
+  transactionTypeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  transactionTypeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    gap: 8,
+  },
+  transactionTypeButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  transactionTypeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  transactionTypeTextActive: {
+    color: '#FFFFFF',
   },
   field: {
     flexDirection: 'row',

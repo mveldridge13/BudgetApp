@@ -46,6 +46,24 @@ const RecurrenceOverlay = ({
     }
   }, [visible, slideAnim, fadeAnim]);
 
+  const handleClose = () => {
+    // Animate out before closing
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 300,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
   if (!visible) {
     return null;
   }
@@ -64,7 +82,7 @@ const RecurrenceOverlay = ({
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
       <TouchableOpacity
         style={styles.backdrop}
-        onPress={onClose}
+        onPress={handleClose}
         activeOpacity={1}
       />
 
@@ -77,7 +95,7 @@ const RecurrenceOverlay = ({
         ]}>
         <View style={styles.header}>
           <Text style={styles.title}>Recurring Transaction</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Icon name="close" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
@@ -206,9 +224,9 @@ const RecurrenceOverlay = ({
 
           <TouchableOpacity
             style={styles.skipButton}
-            onPress={onClose}
+            onPress={handleClose}
             activeOpacity={0.7}>
-            <Text style={styles.skipButtonText}>Skip recurring setup</Text>
+            <Text style={styles.skipButtonText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -411,7 +429,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   continueButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FF6B85',
   },
   continueButtonText: {
     fontSize: 16,

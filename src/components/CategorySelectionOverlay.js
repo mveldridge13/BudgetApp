@@ -93,6 +93,24 @@ const CategorySelectionOverlay = ({
     return transformCategoriesForUI(allCategories, selectedTransactionType);
   }, [allCategories, transformCategoriesForUI, selectedTransactionType]);
 
+  const handleClose = () => {
+    // Animate out before closing
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 300,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onClose();
+    });
+  };
+
   if (!visible) {
     return null;
   }
@@ -162,7 +180,7 @@ const CategorySelectionOverlay = ({
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
       <TouchableOpacity
         style={styles.backdrop}
-        onPress={onClose}
+        onPress={handleClose}
         activeOpacity={1}
       />
 
@@ -176,7 +194,7 @@ const CategorySelectionOverlay = ({
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={onBack || onClose}
+            onPress={onBack || handleClose}
             activeOpacity={0.7}>
             <Icon name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>

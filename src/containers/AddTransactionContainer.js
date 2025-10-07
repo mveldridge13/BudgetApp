@@ -454,9 +454,11 @@ const AddTransactionContainer = ({
       setOverlayMode(null);
     } else if (!editingTransaction && visible) {
       // For new transactions, reset overlay mode to transactionType
+      // Only do this when modal first opens (visible changes from false to true)
       setOverlayMode('transactionType');
     }
-  }, [editingTransaction, visible, getCategoryById, getCategoryDisplayName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingTransaction, visible]); // Intentionally not including getCategoryById and getCategoryDisplayName to avoid resetting overlayMode on category changes
 
   // ==============================================
   // SUBCATEGORY CREATION
@@ -844,12 +846,40 @@ const AddTransactionContainer = ({
   // ==============================================
 
   const handleQuickAddClose = useCallback(() => {
+    // Go back to transaction type selection
+    setOverlayMode('transactionType');
+  }, []);
+
+  const handleQuickAddUseFullForm = useCallback(() => {
+    // Show the full AddTransactionModal form
     setOverlayMode(null);
   }, []);
 
   const handleQuickAddCategoryPress = useCallback(() => {
     setOverlayMode('category');
   }, []);
+
+  const handleQuickAddTransactionTypeChange = useCallback(
+    type => {
+      // Just change the type and clear category - stay in quick add overlay
+      setSelectedTransactionType(type);
+      setSelectedCategory(null);
+      setSelectedSubcategory(null);
+      setCurrentSubcategoryData(null);
+
+      // Clear description if it was auto-generated
+      const descriptionMatchesCategory = categories.some(
+        cat =>
+          cat.name === description.trim() ||
+          (cat.subcategories &&
+            cat.subcategories.some(sub => sub.name === description.trim())),
+      );
+      if (descriptionMatchesCategory) {
+        setDescription('');
+      }
+    },
+    [categories, description],
+  );
 
   const handleCategoryOverlayClose = useCallback(() => {
     setOverlayMode(null);
@@ -947,12 +977,14 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleTransactionTypeClose = useCallback(() => {
-    setOverlayMode(null);
-  }, []);
+    // Close the entire modal immediately - the modal's handleClose will animate everything out together
+    // Don't call resetForm here - let the modal's onClose handler do it
+    onClose();
+  }, [onClose]);
 
   const handleRecurrenceOverlayClose = useCallback(() => {
-    setOverlayMode(null);
-    setCurrentSubcategoryData(null);
+    // Go back to transaction type selection
+    setOverlayMode('transactionType');
   }, []);
 
   const handleRecurrenceOverlayContinue = useCallback(() => {
@@ -1030,7 +1062,8 @@ const AddTransactionContainer = ({
   );
 
   const handleDebtPaymentClose = useCallback(() => {
-    setOverlayMode(null);
+    // Go back to transaction type selection
+    setOverlayMode('transactionType');
   }, []);
 
   const handleDebtPaymentDueDatePress = useCallback(() => {
@@ -1398,8 +1431,10 @@ const AddTransactionContainer = ({
       // Overlay props
       overlayMode={overlayMode}
       onQuickAddClose={handleQuickAddClose}
+      onQuickAddUseFullForm={handleQuickAddUseFullForm}
       onQuickAddCategoryPress={handleQuickAddCategoryPress}
       onQuickAddDatePress={handleQuickAddDatePress}
+      onQuickAddTransactionTypeChange={handleQuickAddTransactionTypeChange}
       onCategoryOverlayClose={handleCategoryOverlayClose}
       onCategoryOverlayBack={handleCategoryOverlayBack}
       onCategoryOverlaySelect={handleCategoryOverlaySelect}
