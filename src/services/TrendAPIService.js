@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.61:3001/api/v1', // Updated with correct IP
+  baseURL: 'http://trend-alb-1755058843.ap-southeast-2.elb.amazonaws.com/api/v1', // AWS Production Backend
   timeout: 30000, // Increased timeout for mobile devices
 };
 
