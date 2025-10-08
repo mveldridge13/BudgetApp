@@ -528,41 +528,41 @@ const AddGoalModal = ({
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled">
-              {/* Goal Type Selection */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Goal Type</Text>
-                <View style={styles.typeGrid}>
+              {/* Goal Type Selection - Tabbed Design */}
+              <View style={styles.tabSection}>
+                <View style={styles.tabContainer}>
                   {GOAL_TYPES.map(type => (
                     <TouchableOpacity
                       key={type.id}
                       style={[
-                        styles.typeCard,
-                        formData.type === type.id && styles.typeCardActive,
+                        styles.tabButton,
+                        formData.type === type.id && styles.tabButtonActive,
                       ]}
                       onPress={() => updateFormData('type', type.id)}
                       activeOpacity={0.7}>
                       <Icon
                         name={type.icon}
-                        size={20}
+                        size={16}
                         color={
                           formData.type === type.id
-                            ? colors.primary
+                            ? colors.textWhite
                             : colors.textSecondary
                         }
+                        style={styles.tabIcon}
                       />
                       <Text
                         style={[
-                          styles.typeLabel,
-                          formData.type === type.id && styles.typeLabelActive,
+                          styles.tabText,
+                          formData.type === type.id && styles.tabTextActive,
                         ]}>
                         {type.label}
-                      </Text>
-                      <Text style={styles.typeDescription}>
-                        {type.description}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+                <Text style={styles.typeHint}>
+                  {GOAL_TYPES.find(t => t.id === formData.type)?.description}
+                </Text>
               </View>
 
               {/* Goal Title */}
@@ -1037,39 +1037,65 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     letterSpacing: -0.2,
   },
-  typeGrid: {
-    gap: 12,
+  tabSection: {
+    marginBottom: 24,
+    marginHorizontal: -20,
+    marginTop: -20,
   },
-  typeCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: colors.border,
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    gap: 6,
   },
-  typeCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+  tabButtonActive: {
+    backgroundColor: colors.primary,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  typeLabel: {
-    fontSize: 14,
+  tabIcon: {
+    marginRight: 0,
+  },
+  tabText: {
+    fontSize: 13,
     fontWeight: '500',
     fontFamily: 'System',
-    color: colors.text,
-    marginTop: 8,
-    marginBottom: 4,
+    color: colors.textSecondary,
   },
-  typeLabelActive: {
-    color: colors.primary,
+  tabTextActive: {
+    color: colors.textWhite,
+    fontWeight: '600',
   },
-  typeDescription: {
+  typeHint: {
     fontSize: 12,
-    fontWeight: '300',
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
-    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 8,
     lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   textInput: {
     backgroundColor: colors.surface,
