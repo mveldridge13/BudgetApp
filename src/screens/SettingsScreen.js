@@ -187,9 +187,11 @@ const SettingsScreen = ({navigation}) => {
 
   const handleEditProfile = useCallback(async () => {
     // Clear cache before editing to ensure fresh data when returning
-    await UserProfileCache.clear();
+    if (userProfile?.id) {
+      await UserProfileCache.clear(userProfile.id);
+    }
     navigation.navigate('IncomeSetup', {editMode: true});
-  }, [navigation]);
+  }, [navigation, userProfile]);
 
   const handleCurrencySelection = useCallback(() => {
     const currencies = [
