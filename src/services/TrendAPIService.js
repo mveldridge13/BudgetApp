@@ -316,6 +316,25 @@ class TrendAPIService {
     });
   }
 
+  async deleteAccount() {
+    return this.makeRequest('/users/account', {
+      method: 'DELETE',
+    });
+  }
+
+  async changePassword(passwordData) {
+    return this.makeRequest('/auth/change-password', {
+      method: 'POST',
+      body: passwordData,
+    });
+  }
+
+  async exportUserData() {
+    return this.makeRequest('/users/export-data', {
+      method: 'POST',
+    });
+  }
+
   // ============================================================================
   // TRANSACTION METHODS
   // ============================================================================

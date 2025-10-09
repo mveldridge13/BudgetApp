@@ -17,7 +17,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import TrendAPIService from '../services/TrendAPIService';
-import UserProfileCache from '../services/UserProfileCache';
 import BiometricAuth from '../services/BiometricAuth';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import {formatCurrencySync} from '../utils/currencyHelper';
@@ -185,12 +184,10 @@ const SettingsScreen = ({navigation}) => {
     [appSettings, updateAppSettings, toggleAppSetting],
   );
 
-  const handleEditProfile = useCallback(async () => {
-    // Clear cache before editing to ensure fresh data when returning
-    if (userProfile?.id) {
-      await UserProfileCache.clear(userProfile.id);
-    }
-    navigation.navigate('IncomeSetup', {editMode: true});
+  const handleEditProfile = useCallback(() => {
+    navigation.navigate('ProfileDetails', {
+      userProfile: userProfile,
+    });
   }, [navigation, userProfile]);
 
   const handleCurrencySelection = useCallback(() => {

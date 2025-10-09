@@ -12,6 +12,7 @@ import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import 
 import AnalyticsContainer from '../containers/AnalyticsContainer'; // ✅ CHANGED: Import AnalyticsContainer instead of AnalyticsScreen
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ProfileDetailsScreen from '../screens/ProfileDetailsScreen';
 import ModulesScreen from '../screens/ModulesScreen';
 import BiometricWrapper from '../components/BiometricWrapper';
 import TournamentDetailsContainer from '../containers/TournamentDetailsContainer';
@@ -244,6 +245,13 @@ export default function AppNavigator() {
         component={MainTabs}
         options={{
           gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="ProfileDetails"
+        component={ProfileDetailsScreen}
+        options={{
+          gestureEnabled: true,
         }}
       />
       <Stack.Screen
