@@ -419,6 +419,8 @@ class RolloverCache {
         age: Math.round(age / 1000 / 60 / 60), // hours
         ageInDays: Math.round(age / 1000 / 60 / 60 / 24), // days
         isStale,
+        bannerTTLDays: BANNER_TTL / 1000 / 60 / 60 / 24,
+        ageVsTTL: `${age}ms vs ${BANNER_TTL}ms`,
         banner: data,
       });
 

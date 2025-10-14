@@ -639,18 +639,17 @@ class RolloverService {
       // Try to get from cache first
       const cached = await RolloverCache.getRolloverBanner();
 
-      if (cached && !cached.isStale) {
-        // Cache hit and fresh - return cached data
-        console.log('🔄 RolloverService: Using fresh cached rollover banner');
-        return cached.data;
-      }
-
-      // For banner, we don't fetch from API - it's only set by auto-rollover
-      // If cache is stale (older than 3 days), auto-confirm the rollover
-      if (cached?.isStale) {
+      // Check if cache exists and is stale (older than 3 days)
+      if (cached && cached.isStale) {
         console.log(
           '🔄 RolloverService: Rollover banner expired after 3 days - auto-confirming rollover',
         );
+        console.log('🔄 RolloverService: Banner age:', {
+          ageInDays: Math.round(cached.age / 1000 / 60 / 60 / 24),
+          ageInHours: Math.round(cached.age / 1000 / 60 / 60),
+          timestamp: cached.timestamp,
+        });
+
         await RolloverCache.clearRolloverBanner();
 
         // Auto-expiry means user implicitly accepts rollover by not interacting
@@ -658,8 +657,22 @@ class RolloverService {
         console.log(
           '🔄 RolloverService: Rollover auto-confirmed via 3-day expiry',
         );
+
+        return null;
       }
 
+      // Cache hit and fresh - return cached data
+      if (cached && !cached.isStale) {
+        console.log('🔄 RolloverService: Using fresh cached rollover banner');
+        console.log('🔄 RolloverService: Banner age:', {
+          ageInDays: Math.round(cached.age / 1000 / 60 / 60 / 24),
+          ageInHours: Math.round(cached.age / 1000 / 60 / 60),
+          timestamp: cached.timestamp,
+        });
+        return cached.data;
+      }
+
+      // No cached banner found
       return null;
     } catch (error) {
       console.error(
