@@ -63,7 +63,7 @@ const AmountEntryOverlay = ({
       event => {
         const keyboardHeight = event.endCoordinates.height;
         Animated.timing(keyboardAnim, {
-          toValue: -keyboardHeight + 50,
+          toValue: -keyboardHeight + 90,
           duration: Platform.OS === 'ios' ? event.duration : 300,
           useNativeDriver: true,
         }).start();
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     paddingTop: 24,
-    paddingBottom: 60,
+    paddingBottom: 90,
     paddingHorizontal: 24,
     width: screenWidth,
     shadowColor: '#000',

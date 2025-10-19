@@ -60,7 +60,7 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
       event => {
         const height = event.endCoordinates.height;
         Animated.timing(keyboardAnim, {
-          toValue: -height + 50, // Move up by keyboard height minus 50px gap
+          toValue: -height + 90, // Move up less - leave 90px gap
           duration: Platform.OS === 'ios' ? event.duration : 300,
           useNativeDriver: true,
         }).start();
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 90,
     width: screenWidth,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -4},
