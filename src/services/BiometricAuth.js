@@ -15,7 +15,7 @@ class BiometricAuthService {
   constructor() {
     this.isLocked = false;
     this.lastActiveTime = null; // Don't set this until we load from cache
-    this.lockTimeout = 30 * 1000; // 30 seconds for testing (change to 5 * 60 * 1000 for production)
+    this.lockTimeout = 5 * 60 * 1000; // 5 minutes (production value)
     this.appStateSubscription = null;
     this.biometricsInstance = null;
     this.isInitialized = false;
