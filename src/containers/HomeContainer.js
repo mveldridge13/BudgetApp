@@ -553,6 +553,45 @@ const HomeContainer = ({navigation}) => {
         if (backendCategories && Array.isArray(backendCategories)) {
           console.log('📂 Setting categories from API and updating cache');
 
+          // Check if "Other" category exists
+          const otherCategory = backendCategories.find(
+            c => c.name?.toLowerCase() === 'other' && !c.parentId
+          );
+
+          if (!otherCategory) {
+            console.log('📂 "Other" category missing, creating it...');
+            try {
+              // Create "Other" main category
+              const createdOther = await TrendAPIService.createCategory({
+                name: 'Other',
+                description: 'Other financial activities',
+                type: 'EXPENSE',
+                icon: 'ellipsis-horizontal-outline',
+                color: '#A8A8A8',
+              });
+              console.log('📂 Created "Other" category:', createdOther);
+
+              // Create "Debt Payment" subcategory
+              const createdDebtPayment = await TrendAPIService.createCategory({
+                name: 'Debt Payment',
+                description: 'Loan payments, credit cards',
+                type: 'EXPENSE',
+                icon: 'card-outline',
+                color: '#A8A8A8',
+                parentId: createdOther.id,
+              });
+              console.log('📂 Created "Debt Payment" subcategory:', createdDebtPayment);
+
+              // Add to backend categories array
+              backendCategories.push(createdOther);
+
+              // Invalidate cache to force refresh on next load
+              await CategoryCache.invalidate(currentUserId);
+            } catch (createError) {
+              console.error('📂 Failed to create "Other" category:', createError);
+            }
+          }
+
           // Update cache in background
           CategoryCache.set(backendCategories, currentUserId);
 
@@ -2311,6 +2350,77 @@ const HomeContainer = ({navigation}) => {
       }
     };
   }, []); // Now safe to use empty dependency - handler uses ref
+
+  // Ensure "Other" category exists on app load
+  const hasCheckedOtherCategory = useRef(false);
+  useEffect(() => {
+    const ensureOtherCategory = async () => {
+      if (!categories || categories.length === 0) {
+        return; // Wait for categories to load first
+      }
+
+      if (hasCheckedOtherCategory.current) {
+        return; // Already checked, don't loop
+      }
+
+      const otherCategory = categories.find(
+        c => c.name?.toLowerCase() === 'other' && !c.parentId
+      );
+
+      if (!otherCategory) {
+        console.log('📂 HOME_CONTAINER: "Other" category missing, triggering reload to create it');
+        hasCheckedOtherCategory.current = true;
+        await reloadCategories();
+      } else {
+        hasCheckedOtherCategory.current = true;
+      }
+    };
+
+    ensureOtherCategory();
+  }, [categories, reloadCategories]);
+
+  // Listen for transaction changes (e.g., from debt payments) to reload transactions
+  useEffect(() => {
+    const handleTransactionsChanged = () => {
+      console.log(
+        '💳 HOME_CONTAINER: Transactions changed, reloading transactions',
+      );
+      loadTransactions();
+    };
+
+    // Use React Native DeviceEventEmitter for cross-platform compatibility
+    let subscription;
+    try {
+      const {DeviceEventEmitter} = require('react-native');
+      subscription = DeviceEventEmitter.addListener(
+        'transactionsChanged',
+        handleTransactionsChanged,
+      );
+      console.log(
+        '💳 HOME_CONTAINER: Listening for transactionsChanged events',
+      );
+    } catch (e) {
+      console.warn('DeviceEventEmitter not available, trying web events:', e);
+      // Fallback to web browser events if available
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener(
+          'transactionsChanged',
+          handleTransactionsChanged,
+        );
+      }
+    }
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      } else if (typeof window !== 'undefined' && window.removeEventListener) {
+        window.removeEventListener(
+          'transactionsChanged',
+          handleTransactionsChanged,
+        );
+      }
+    };
+  }, [loadTransactions]);
 
   // Debug: Log tournaments state
   useEffect(() => {

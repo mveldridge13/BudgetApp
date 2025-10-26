@@ -230,8 +230,13 @@ const useGoals = () => {
   const updateGoalProgress = useCallback(
     async (goalId, amount, paymentSource = 'income', contributionType = 'MANUAL') => {
       console.log(
-        '🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress',
+        '🔍 USE_GOALS: ===== updateGoalProgress CALLED =====',
       );
+      console.log('🔍 USE_GOALS: goalId:', goalId);
+      console.log('🔍 USE_GOALS: amount:', amount);
+      console.log('🔍 USE_GOALS: paymentSource:', paymentSource);
+      console.log('🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress');
+
       return goalDataModule.updateGoalProgress(
         goalId,
         amount,

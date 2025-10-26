@@ -1,6 +1,7 @@
 // hooks/goal-services/useGoalData.js
 import {useCallback, useState, useRef} from 'react';
 import TrendAPIService from '../../services/TrendAPIService';
+import transactionCache from '../../services/TransactionCache';
 import useGoalTransformers from './useGoalTransformers';
 import useGoalValidation from './useGoalValidation';
 import useGoalCache from './useGoalCache';
@@ -471,16 +472,6 @@ const useGoalData = checkNetworkConnectivity => {
   const updateGoalProgress = useCallback(
     async (goalId, amount, paymentSource = 'income', goals, setGoals, contributionType = 'MANUAL') => {
       try {
-        console.log(
-          '🔍 GOAL_DATA: Starting updateGoalProgress for goal:',
-          goalId,
-          'amount:',
-          amount,
-          'source:',
-          paymentSource,
-          'type:',
-          contributionType,
-        );
 
         if (!goalId) {
           throw new Error('Goal ID is required');
@@ -505,13 +496,11 @@ const useGoalData = checkNetworkConnectivity => {
 
           // Prevent payments within 3 seconds of each other for same goal/amount/type
           if (now - lastPayment < 3000) {
-            console.log('🔍 GOAL_DATA: Duplicate payment detected, ignoring');
             throw new Error('Please wait before making another payment');
           }
 
           // Check if payment is already processing
           if (processingPayments.has(paymentKey)) {
-            console.log('🔍 GOAL_DATA: Payment already in progress');
             throw new Error('Payment already in progress');
           }
 
@@ -531,10 +520,6 @@ const useGoalData = checkNetworkConnectivity => {
 
           // For income payments, backend addContribution handles the amount update
           if (paymentSource === 'income') {
-            console.log(
-              '🔍 GOAL_DATA: Income payment - letting backend handle amount update for goal',
-              goalId,
-            );
             return {
               ...currentGoal,
               lastUpdated: updateTimestamp,
@@ -556,15 +541,6 @@ const useGoalData = checkNetworkConnectivity => {
             newCurrent = Math.max(0, newCurrent);
           }
 
-          console.log(
-            '🔍 GOAL_DATA: Updated goal',
-            goalId,
-            'from',
-            currentGoal.current,
-            'to',
-            newCurrent,
-          );
-
           return {
             ...currentGoal,
             current: newCurrent,
@@ -574,7 +550,6 @@ const useGoalData = checkNetworkConnectivity => {
         });
 
         // Update state immediately with optimistic update
-        console.log('🔍 GOAL_DATA: Setting goals with updated progress');
         setGoals(updatedGoals);
 
         // Save to cache first (for offline support)
@@ -605,10 +580,8 @@ const useGoalData = checkNetworkConnectivity => {
             targetGoal
           ) {
             try {
-              console.log('🔍 GOAL_DATA: Syncing goal update to backend');
               const backendGoalData = transformFrontendGoal(targetGoal);
               await TrendAPIService.updateGoal(goalId, backendGoalData);
-              console.log('🔍 GOAL_DATA: Successfully synced goal to backend');
             } catch (backendSyncError) {
               console.error(
                 '🔍 GOAL_DATA: Failed to sync goal to backend:',
@@ -617,20 +590,10 @@ const useGoalData = checkNetworkConnectivity => {
               // Don't fail the goal update if backend sync fails
             }
           }
-        } else {
-          console.log(
-            '🔍 GOAL_DATA: Skipping goal sync for income payment - backend handles it',
-          );
         }
 
         // Create backend goal contribution if payment source is income and goal is on backend
         if (paymentSource === 'income') {
-          console.log(
-            '🔍 GOAL_DATA: Processing income payment of',
-            parsedAmount,
-            'for goal',
-            goalId,
-          );
 
           // Only create backend contribution for backend goals (not local goals)
           if (!goalId.startsWith('local_')) {
@@ -648,21 +611,126 @@ const useGoalData = checkNetworkConnectivity => {
                 date: updateTimestamp,
               };
 
-              console.log(
-                '🔍 GOAL_DATA: Creating backend contribution for backend goal',
-                goalId,
-                'type:',
-                updatedGoals.find(g => g.id === goalId)?.type,
-              );
               const contributionResult =
                 await TrendAPIService.addGoalContribution(
                   goalId,
                   contributionData,
                 );
-              console.log(
-                '🔍 GOAL_DATA: Successfully created backend goal contribution',
-                contributionResult,
-              );
+
+              // Create a transaction for the payment to show in transaction list
+              try {
+                const targetGoal = updatedGoals.find(g => g.id === goalId);
+
+                // Create transactions for debt payments OR non-withdrawal contributions to savings goals
+                if (targetGoal && (targetGoal.type === 'debt' || !isWithdrawal)) {
+                  // Fetch categories to find the appropriate categoryId and subcategoryId
+                  let categoryId = null;
+                  let subcategoryId = null;
+
+                  try {
+                    const response = await TrendAPIService.getCategories();
+
+                    // Handle response - might be wrapped or direct array
+                    const categories = Array.isArray(response) ? response : response?.categories;
+
+                    if (Array.isArray(categories)) {
+                      // Look for "Other" category first (which contains "Debt Payment" subcategory)
+                      let otherCategory = categories.find(
+                        c => c.name?.toLowerCase() === 'other'
+                      );
+
+                      // If "Other" category doesn't exist, create it
+                      if (!otherCategory) {
+                        try {
+                          const createdCategory = await TrendAPIService.createCategory({
+                            name: 'Other',
+                            description: 'Other financial activities',
+                            type: 'EXPENSE',
+                            icon: 'ellipsis-horizontal-outline',
+                            color: '#A8A8A8',
+                          });
+                          otherCategory = createdCategory;
+                        } catch (createError) {
+                          console.error('🔍 GOAL_DATA: Failed to create "Other" category:', createError);
+                        }
+                      }
+
+                      // Try to find the "Debt Payment" subcategory under "Other"
+                      let debtPaymentSubcategory = null;
+                      if (otherCategory?.subcategories) {
+                        debtPaymentSubcategory = otherCategory.subcategories.find(
+                          sub => sub.name?.toLowerCase().includes('debt')
+                        );
+                      }
+
+                      // If "Debt Payment" subcategory doesn't exist, create it
+                      if (otherCategory && !debtPaymentSubcategory) {
+                        try {
+                          const createdSubcategory = await TrendAPIService.createCategory({
+                            name: 'Debt Payment',
+                            description: 'Loan payments, credit cards',
+                            type: 'EXPENSE',
+                            icon: 'card-outline',
+                            color: '#A8A8A8',
+                            parentId: otherCategory.id,
+                          });
+                          debtPaymentSubcategory = createdSubcategory;
+                        } catch (createError) {
+                          console.error('🔍 GOAL_DATA: Failed to create "Debt Payment" subcategory:', createError);
+                        }
+                      }
+
+                      // Fallback options
+                      const billsCategory = categories.find(
+                        c => c.name?.toLowerCase().includes('bill')
+                      );
+                      const fallbackCategory = categories.find(c => c.type === 'EXPENSE') || categories[0];
+
+                      // Prefer "Other" category (which has Debt Payment subcategory)
+                      const selectedCategory = otherCategory || billsCategory || fallbackCategory;
+                      const selectedSubcategory = debtPaymentSubcategory;
+
+                      categoryId = selectedCategory?.id || null;
+                      subcategoryId = selectedSubcategory?.id || null;
+                    } else {
+                      console.warn('🔍 GOAL_DATA: Categories is not an array:', typeof categories);
+                    }
+                  } catch (catError) {
+                    console.warn('🔍 GOAL_DATA: Failed to fetch categories:', catError);
+                  }
+
+                  const transactionData = {
+                    amount: Math.abs(parsedAmount).toFixed(2),
+                    categoryId: categoryId, // Use resolved category ID
+                    subcategoryId: subcategoryId, // Use resolved subcategory ID for "Debt Payment"
+                    category: targetGoal.category || 'Debt', // Use goal's category for display
+                    description: `Payment to ${targetGoal.title}`,
+                    type: 'EXPENSE',
+                    date: updateTimestamp,
+                    recurrence: 'none', // Must be 'none' (lowercase) to appear in daily transactions
+                    status: 'PAID', // Mark as paid since debt payment was made
+                  };
+
+                  await TrendAPIService.createTransaction(transactionData);
+
+                  // Invalidate transaction cache to trigger reload
+                  await transactionCache.invalidate(currentUserId);
+
+                  // Emit event to trigger transaction reload in HomeContainer
+                  try {
+                    const {DeviceEventEmitter} = require('react-native');
+                    DeviceEventEmitter.emit('transactionsChanged');
+                  } catch (e) {
+                    console.warn('DeviceEventEmitter not available:', e);
+                  }
+                }
+              } catch (transactionError) {
+                console.error(
+                  '🔍 GOAL_DATA: Failed to create transaction for debt payment:',
+                  transactionError,
+                );
+                // Don't throw - contribution was successful, transaction is supplementary
+              }
             } catch (contributionError) {
               console.error(
                 '🔍 GOAL_DATA: Failed to create goal contribution:',
@@ -676,9 +744,6 @@ const useGoalData = checkNetworkConnectivity => {
               );
             }
           } else {
-            console.log(
-              '🔍 GOAL_DATA: Skipping backend contribution for local goal',
-            );
             // For local goals, we'll track income payments locally until they're synced
             // Update the local goal with income payment tracking
             const localGoalIndex = updatedGoals.findIndex(g => g.id === goalId);
@@ -708,7 +773,6 @@ const useGoalData = checkNetworkConnectivity => {
               goalId: goalId,
               amount: parsedAmount,
             });
-            console.log('🔍 GOAL_DATA: Emitted goalIncomePaymentMade event');
           } catch (e) {
             console.warn('DeviceEventEmitter not available:', e);
             // Fallback: try web browser events if available
@@ -731,9 +795,6 @@ const useGoalData = checkNetworkConnectivity => {
 
         // For income payments, reload goals from backend to get updated amounts
         if (paymentSource === 'income') {
-          console.log(
-            '🔍 GOAL_DATA: Reloading goals from backend after income payment',
-          );
           try {
             // Preserve showOnBalanceCard preferences before reloading
             const currentPreferences = {};
@@ -762,7 +823,6 @@ const useGoalData = checkNetworkConnectivity => {
           }
         }
 
-        console.log('🔍 GOAL_DATA: Progress update completed successfully');
         return {success: true, updateTimestamp};
       } catch (error) {
         console.error('🔍 GOAL_DATA: Error updating goal progress:', error);

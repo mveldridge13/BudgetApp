@@ -293,6 +293,12 @@ const TransactionCard = ({
   const isRecurring =
     transaction.recurrence && transaction.recurrence !== 'none';
 
+  // Check if this is a debt goal payment transaction
+  const isDebtPayment =
+    transaction.description?.startsWith('Payment to ') ||
+    transaction.category === 'Debt' ||
+    categoryData?.name?.toLowerCase().includes('debt');
+
   if (isDeleting) {
     return null;
   }
@@ -345,8 +351,12 @@ const TransactionCard = ({
             },
           ]}>
           <View
-            style={[styles.card, isRecurring && styles.recurringCard]}
-            {...panResponder.panHandlers}>
+            style={[
+              styles.card,
+              isRecurring && styles.recurringCard,
+              isDebtPayment && styles.debtPaymentCard,
+            ]}
+            {...(!isDebtPayment && panResponder.panHandlers)}>
             <View style={styles.iconContainer}>
               <View
                 style={[
@@ -429,6 +439,10 @@ const styles = StyleSheet.create({
   recurringCard: {
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,
+  },
+  debtPaymentCard: {
+    borderWidth: 2,
+    borderColor: 'rgba(255, 107, 133, 0.3)',
   },
   editBackground: {
     position: 'absolute',

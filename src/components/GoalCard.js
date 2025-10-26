@@ -182,7 +182,11 @@ const GoalCard = ({
 
   // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
-    console.log('🔍 BUTTON PRESSED: Custom amount submit');
+    console.log('🔍 GOAL_CARD: ===== Custom amount submit PRESSED =====');
+    console.log('🔍 GOAL_CARD: customAmount:', customAmount);
+    console.log('🔍 GOAL_CARD: paymentSource:', paymentSource);
+    console.log('🔍 GOAL_CARD: transactionType:', transactionType);
+    console.log('🔍 GOAL_CARD: goalId:', safeGoal.id);
 
     const amount = parseFloat(customAmount);
 
@@ -230,10 +234,23 @@ const GoalCard = ({
         {
           text: actionText,
           onPress: () => {
+            console.log('🔍 GOAL_CARD: ===== Alert confirmed, executing payment =====');
+            console.log('🔍 GOAL_CARD: goalId:', safeGoal.id);
+            console.log('🔍 GOAL_CARD: amount:', amount);
+            console.log('🔍 GOAL_CARD: isWithdrawal:', isWithdrawal);
+            console.log('🔍 GOAL_CARD: paymentSource:', paymentSource);
+            console.log('🔍 GOAL_CARD: onUpdateProgress exists?', !!onUpdateProgress);
+
             // For withdrawals, pass negative amount
             const finalAmount = isWithdrawal ? -amount : amount;
-            onUpdateProgress &&
+
+            console.log('🔍 GOAL_CARD: Calling onUpdateProgress with finalAmount:', finalAmount);
+
+            if (onUpdateProgress) {
               onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
+            } else {
+              console.error('🔍 GOAL_CARD: ERROR - onUpdateProgress is not defined!');
+            }
 
             // Invalidate contribution cache since we added a new contribution
             ContributionCache.invalidate(safeGoal.id).catch(err => {

@@ -275,6 +275,11 @@ const GoalsScreen = ({route, navigation}) => {
 
   const handleUpdateProgress = useCallback(
     async (goalId, amount, paymentSource = 'income') => {
+      console.log('🔍 GOALS_SCREEN: ===== handleUpdateProgress CALLED =====');
+      console.log('🔍 GOALS_SCREEN: goalId:', goalId);
+      console.log('🔍 GOALS_SCREEN: amount:', amount);
+      console.log('🔍 GOALS_SCREEN: paymentSource:', paymentSource);
+
       try {
         await updateGoalProgress(goalId, amount, paymentSource);
         lastUpdateTime.current = Date.now();
