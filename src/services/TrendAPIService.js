@@ -181,12 +181,6 @@ class TrendAPIService {
         this.loginAttempts = 0;
       }
 
-      console.log('🔐 Login attempt:', {
-        baseURL: this.baseURL,
-        email: email.trim(),
-        timestamp: new Date().toISOString(),
-      });
-
       const response = await this.makeRequest('/auth/login', {
         method: 'POST',
         body: {
@@ -194,12 +188,6 @@ class TrendAPIService {
           password: password,
         },
         requiresAuth: false,
-      });
-
-      console.log('🔐 Login response received:', {
-        hasResponse: !!response,
-        hasAccessToken: !!(response && response.access_token),
-        hasUser: !!(response && response.user),
       });
 
       if (response && response.access_token) {
@@ -212,20 +200,9 @@ class TrendAPIService {
           token: response.access_token,
         };
       } else {
-        console.error('🔐 Invalid response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('🔐 Login request failed:', {
-        message: error.message,
-        name: error.name,
-        baseURL: this.baseURL,
-        isNetworkError:
-          error.message.includes('fetch') ||
-          error.message.includes('Network') ||
-          error.message.includes('timeout'),
-      });
-
       // Provide more user-friendly error messages
       let userMessage = error.message;
       if (
