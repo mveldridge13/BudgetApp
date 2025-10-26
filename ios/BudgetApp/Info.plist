@@ -37,8 +37,6 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
 	<!-- Camera and Photo Library Permissions for Receipt Photos -->
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos of receipts to attach to your expenses</string>
