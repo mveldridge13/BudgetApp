@@ -109,15 +109,12 @@ class TrendAPIService {
       clearTimeout(timeoutId);
 
       if (response.status === 401) {
-        console.log('🚨 401 UNAUTHORIZED - Token invalid/expired');
-        console.log('🚨 Response body:', await response.text());
         await this.clearToken();
         throw new Error('Authentication required');
       }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`API Error ${response.status}:`, errorText);
         throw new Error(`API Error ${response.status}: ${errorText}`);
       }
 
@@ -131,17 +128,6 @@ class TrendAPIService {
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error(`🌐 API Request failed: ${method} ${url}`, {
-        errorMessage: error.message,
-        errorName: error.name,
-        stack: error.stack,
-        url: url,
-        method: method,
-        isNetworkError:
-          error.name === 'TypeError' && error.message.includes('fetch'),
-        isTimeoutError:
-          error.name === 'AbortError' || error.message.includes('timeout'),
-      });
 
       // Enhance error message for better debugging
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -257,11 +243,9 @@ class TrendAPIService {
           token: response.access_token,
         };
       } else {
-        console.error('Invalid registration response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('Registration request failed:', error.message);
       return {
         success: false,
         error: error.message,
@@ -275,7 +259,7 @@ class TrendAPIService {
         method: 'POST',
       });
     } catch (error) {
-      console.warn('Logout API call failed:', error);
+      // Logout failed, but still clear local state
     } finally {
       await this.clearToken();
     }
@@ -367,7 +351,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected create response format:', response);
       return response;
     }
   }
@@ -404,7 +387,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected getById response format:', response);
       return response;
     }
   }
@@ -553,8 +535,6 @@ class TrendAPIService {
   }
 
   async createGoal(goalData) {
-    console.log('🔍 CREATE_GOAL: Starting with data:', goalData);
-
     // Create a clean copy to avoid mutating the input
     const cleanGoalData = {...goalData};
 
@@ -570,11 +550,6 @@ class TrendAPIService {
       isNaN(cleanGoalData.targetAmount) ||
       cleanGoalData.targetAmount <= 0
     ) {
-      console.error('🔍 CREATE_GOAL: Invalid targetAmount:', {
-        original: goalData.targetAmount,
-        cleaned: cleanGoalData.targetAmount,
-        type: typeof cleanGoalData.targetAmount,
-      });
       throw new Error(
         'Invalid targetAmount: must be a valid number greater than 0',
       );
@@ -591,22 +566,10 @@ class TrendAPIService {
       cleanGoalData.currentAmount = 0;
     }
 
-    console.log('🔍 CREATE_GOAL: Cleaned data:', {
-      targetAmount: cleanGoalData.targetAmount,
-      currentAmount: cleanGoalData.currentAmount,
-      name: cleanGoalData.name,
-    });
-
     try {
-      console.log(
-        '🔍 CREATE_GOAL: Making API request to:',
-        `${this.baseURL}/goals`,
-      );
-
       // Add a custom timeout for goal creation (shorter than default)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('🔍 CREATE_GOAL: Request timed out after 5 seconds');
         controller.abort();
       }, 5000); // 5 second timeout
 
@@ -617,7 +580,6 @@ class TrendAPIService {
       });
 
       clearTimeout(timeoutId);
-      console.log('🔍 CREATE_GOAL: API response received:', response);
 
       // Handle different possible response formats
       if (response?.goal) {
@@ -627,11 +589,9 @@ class TrendAPIService {
       } else if (response && typeof response === 'object' && response.id) {
         return response;
       } else {
-        console.warn('Unexpected create goal response format:', response);
         return response;
       }
     } catch (error) {
-      console.error('CreateGoal API error:', error.message);
       throw error;
     }
   }
@@ -646,23 +606,12 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected getGoalById response format:', response);
       return response;
     }
   }
 
   async updateGoal(id, goalData) {
     // FIXED: Better validation with proper error handling
-    console.log('🔍 UPDATE_GOAL: Starting with data:', {
-      id,
-      targetAmount: goalData.targetAmount,
-      currentAmount: goalData.currentAmount,
-      types: {
-        targetAmount: typeof goalData.targetAmount,
-        currentAmount: typeof goalData.currentAmount,
-      },
-    });
-
     // Create a clean copy to avoid mutating the input
     const cleanGoalData = {...goalData};
 
@@ -678,10 +627,6 @@ class TrendAPIService {
         !isFinite(cleanGoalData.targetAmount) ||
         cleanGoalData.targetAmount <= 0
       ) {
-        console.error(
-          '🔍 ❌ CRITICAL: Invalid targetAmount:',
-          goalData.targetAmount,
-        );
         throw new Error(
           'Invalid targetAmount: must be a valid number greater than 0',
         );
@@ -700,25 +645,14 @@ class TrendAPIService {
         !isFinite(cleanGoalData.currentAmount) ||
         cleanGoalData.currentAmount < 0
       ) {
-        console.warn(
-          '🔍 ⚠️ Invalid currentAmount, setting to 0:',
-          goalData.currentAmount,
-        );
         cleanGoalData.currentAmount = 0;
       }
     }
-
-    console.log('🔍 UPDATE_GOAL: Cleaned data:', {
-      targetAmount: cleanGoalData.targetAmount,
-      currentAmount: cleanGoalData.currentAmount,
-    });
 
     const response = await this.makeRequest(`/goals/${id}`, {
       method: 'PUT',
       body: cleanGoalData,
     });
-
-    console.log('🔍 UPDATE_GOAL: Backend response:', response);
 
     if (response?.goal) {
       return response.goal;
@@ -727,7 +661,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected updateGoal response format:', response);
       return response || {id, ...cleanGoalData};
     }
   }
@@ -739,18 +672,11 @@ class TrendAPIService {
   }
 
   async addGoalContribution(goalId, contributionData) {
-    console.log(
-      '🔍 TREND_API: Adding goal contribution for goal',
-      goalId,
-      'data:',
-      contributionData,
-    );
     const response = await this.makeRequest(`/goals/${goalId}/contributions`, {
       method: 'POST',
       body: contributionData,
     });
 
-    console.log('🔍 TREND_API: Goal contribution response:', response);
     if (response?.contribution) {
       return response.contribution;
     } else if (response?.data) {
@@ -773,9 +699,6 @@ class TrendAPIService {
         error.message?.includes('404') ||
         error.message?.includes('Goal not found')
       ) {
-        console.log(
-          `🔍 TREND_API: Goal ${goalId} not found when fetching contributions (likely deleted)`,
-        );
         return []; // Return empty array instead of throwing error
       }
       // Re-throw other errors
@@ -1011,7 +934,6 @@ class TrendAPIService {
       } else if (response && typeof response === 'object' && response.id) {
         return response;
       } else {
-        console.warn('Unexpected create tournament response format:', response);
         return response;
       }
     } catch (error) {
@@ -1038,7 +960,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected getTournamentById response format:', response);
       return response;
     }
   }
@@ -1106,7 +1027,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected updateTournament response format:', response);
       return response || {id, ...mappedData};
     }
   }
@@ -1191,7 +1111,6 @@ class TrendAPIService {
       } else if (response && typeof response === 'object' && response.id) {
         return response;
       } else {
-        console.warn('Unexpected create event response format:', response);
         return response;
       }
     } catch (error) {
@@ -1306,7 +1225,6 @@ class TrendAPIService {
   }
 
   async createRolloverEntry(rolloverEntryData) {
-    console.log('🔄 TREND_API: Creating rollover entry:', rolloverEntryData);
     return this.makeRequest('/users/rollover/entries', {
       method: 'POST',
       body: rolloverEntryData,
@@ -1350,7 +1268,6 @@ class TrendAPIService {
       // Decode JWT token to get user ID
       const tokenParts = this.token.split('.');
       if (tokenParts.length !== 3) {
-        console.error('Invalid JWT token format');
         return null;
       }
 
@@ -1367,7 +1284,6 @@ class TrendAPIService {
 
       return payloadObj.sub || payloadObj.id || payloadObj.userId || null;
     } catch (error) {
-      console.error('Failed to decode JWT token:', error);
       return null;
     }
   }

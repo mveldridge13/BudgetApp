@@ -155,7 +155,6 @@ class AuthService {
           await AsyncStorage.removeItem(`goals_${currentUserId}`);
         }
 
-        console.log('🔄 AuthService: Cleared all cache data to prevent user contamination');
       } catch (cacheError) {
         console.warn('🔄 AuthService: Error clearing caches:', cacheError);
       }
@@ -186,7 +185,6 @@ class AuthService {
       const userProfile = await TrendAPI.getUserProfile();
 
       if (userProfile?.timezone === 'UTC') {
-        console.log('🌍 AuthService: Found UTC user, updating to detected timezone');
 
         // Detect user's actual timezone
         const detectedTimezone = DateService.detectUserTimezone();
@@ -200,7 +198,6 @@ class AuthService {
           // Update DateService with new timezone immediately
           DateService.setTimezone(detectedTimezone);
 
-          console.log(`🌍 AuthService: Successfully updated user timezone from UTC to ${detectedTimezone}`);
 
           return {
             success: true,
@@ -213,7 +210,6 @@ class AuthService {
           return {success: false, error: updateResult.error};
         }
       } else {
-        console.log(`🌍 AuthService: User timezone is already set to: ${userProfile?.timezone || 'unknown'}`);
         return {
           success: true,
           alreadySet: true,
