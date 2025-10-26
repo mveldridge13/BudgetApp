@@ -10,6 +10,11 @@ class TrendAPIService {
   constructor() {
     this.baseURL = API_CONFIG.baseURL;
     this.token = null;
+    // Login rate limiting
+    this.loginAttempts = 0;
+    this.lastFailedAttempt = 0;
+    this.lockoutDuration = 5 * 60 * 1000; // 5 minutes
+    this.maxAttempts = 3; // Maximum login attempts before lockout
   }
 
   async initialize() {
@@ -162,6 +167,20 @@ class TrendAPIService {
 
   async login(email, password) {
     try {
+      // Check if user is locked out due to too many failed attempts
+      const now = Date.now();
+      const timeSinceLastAttempt = now - this.lastFailedAttempt;
+
+      if (this.loginAttempts >= this.maxAttempts && timeSinceLastAttempt < this.lockoutDuration) {
+        const remainingTime = Math.ceil((this.lockoutDuration - timeSinceLastAttempt) / 60000);
+        throw new Error(`Too many login attempts. Please try again in ${remainingTime} minute(s).`);
+      }
+
+      // Reset attempts if lockout period has passed
+      if (timeSinceLastAttempt >= this.lockoutDuration) {
+        this.loginAttempts = 0;
+      }
+
       console.log('🔐 Login attempt:', {
         baseURL: this.baseURL,
         email: email.trim(),
@@ -185,6 +204,8 @@ class TrendAPIService {
 
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
+        // Reset login attempts on successful login
+        this.loginAttempts = 0;
         return {
           success: true,
           user: response.user,
@@ -220,6 +241,12 @@ class TrendAPIService {
         error.message.includes('Unauthorized')
       ) {
         userMessage = 'Invalid email or password.';
+      }
+
+      // Increment login attempts on failed login (except for rate limit errors)
+      if (!error.message.includes('Too many login attempts')) {
+        this.loginAttempts++;
+        this.lastFailedAttempt = Date.now();
       }
 
       return {
