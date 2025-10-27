@@ -1,5 +1,6 @@
 // services/TrendAPIService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import sanitizeInput from '../utils/sanitizer';
 
 const API_CONFIG = {
   baseURL: 'http://trend-alb-1755058843.ap-southeast-2.elb.amazonaws.com/api/v1', // AWS Production Backend
@@ -224,11 +225,11 @@ class TrendAPIService {
       const response = await this.makeRequest('/auth/register', {
         method: 'POST',
         body: {
-          firstName: userData.firstName.trim(),
-          lastName: userData.lastName.trim(),
-          email: userData.email.trim(),
-          password: userData.password,
-          username: userData.username?.trim(),
+          firstName: sanitizeInput.name(userData.firstName),
+          lastName: sanitizeInput.name(userData.lastName),
+          email: sanitizeInput.email(userData.email),
+          password: userData.password, // Don't sanitize password
+          username: userData.username ? sanitizeInput.text(userData.username) : undefined,
           currency: userData.currency || 'USD',
           timezone: userData.timezone || 'UTC',
         },
@@ -270,9 +271,23 @@ class TrendAPIService {
   }
 
   async updateUserProfile(profileData) {
+    // Create a sanitized copy
+    const sanitizedData = {...profileData};
+
+    // Sanitize text fields if present
+    if (sanitizedData.firstName) {
+      sanitizedData.firstName = sanitizeInput.name(sanitizedData.firstName);
+    }
+    if (sanitizedData.lastName) {
+      sanitizedData.lastName = sanitizeInput.name(sanitizedData.lastName);
+    }
+    if (sanitizedData.email) {
+      sanitizedData.email = sanitizeInput.email(sanitizedData.email);
+    }
+
     return this.makeRequest('/auth/profile', {
       method: 'PUT',
-      body: profileData,
+      body: sanitizedData,
     });
   }
 
@@ -338,6 +353,14 @@ class TrendAPIService {
   async createTransaction(transactionData) {
     const {category, ...cleanedData} = transactionData;
 
+    // Sanitize text fields
+    if (cleanedData.description) {
+      cleanedData.description = sanitizeInput.text(cleanedData.description);
+    }
+    if (cleanedData.notes) {
+      cleanedData.notes = sanitizeInput.description(cleanedData.notes);
+    }
+
     const response = await this.makeRequest('/transactions', {
       method: 'POST',
       body: cleanedData,
@@ -357,6 +380,14 @@ class TrendAPIService {
 
   async updateTransaction(id, transactionData) {
     const {category, ...cleanedData} = transactionData;
+
+    // Sanitize text fields
+    if (cleanedData.description) {
+      cleanedData.description = sanitizeInput.text(cleanedData.description);
+    }
+    if (cleanedData.notes) {
+      cleanedData.notes = sanitizeInput.description(cleanedData.notes);
+    }
 
     const response = await this.makeRequest(`/transactions/${id}`, {
       method: 'PATCH',
@@ -538,6 +569,17 @@ class TrendAPIService {
     // Create a clean copy to avoid mutating the input
     const cleanGoalData = {...goalData};
 
+    // Sanitize text fields
+    if (cleanGoalData.name) {
+      cleanGoalData.name = sanitizeInput.text(cleanGoalData.name);
+    }
+    if (cleanGoalData.description) {
+      cleanGoalData.description = sanitizeInput.description(cleanGoalData.description);
+    }
+    if (cleanGoalData.notes) {
+      cleanGoalData.notes = sanitizeInput.description(cleanGoalData.notes);
+    }
+
     // Convert string targetAmount to number if needed
     if (typeof cleanGoalData.targetAmount === 'string') {
       cleanGoalData.targetAmount = parseFloat(cleanGoalData.targetAmount);
@@ -614,6 +656,17 @@ class TrendAPIService {
     // FIXED: Better validation with proper error handling
     // Create a clean copy to avoid mutating the input
     const cleanGoalData = {...goalData};
+
+    // Sanitize text fields
+    if (cleanGoalData.name) {
+      cleanGoalData.name = sanitizeInput.text(cleanGoalData.name);
+    }
+    if (cleanGoalData.description) {
+      cleanGoalData.description = sanitizeInput.description(cleanGoalData.description);
+    }
+    if (cleanGoalData.notes) {
+      cleanGoalData.notes = sanitizeInput.description(cleanGoalData.notes);
+    }
 
     // FIXED: Convert and validate targetAmount
     if (cleanGoalData.targetAmount !== undefined) {
@@ -882,9 +935,9 @@ class TrendAPIService {
 
     // Map frontend field names to backend expected names
     const mappedData = {
-      name: cleanTournamentData.name,
-      location: cleanTournamentData.location,
-      venue: cleanTournamentData.venue || null,
+      name: sanitizeInput.text(cleanTournamentData.name),
+      location: sanitizeInput.text(cleanTournamentData.location),
+      venue: cleanTournamentData.venue ? sanitizeInput.text(cleanTournamentData.venue) : null,
       dateStart: cleanTournamentData.dateStart || cleanTournamentData.startDate,
       dateEnd:
         cleanTournamentData.dateEnd || cleanTournamentData.endDate || null,
@@ -897,7 +950,7 @@ class TrendAPIService {
         cleanTournamentData.foodBudget || cleanTournamentData.food || 0,
       ),
       otherExpenses: parseFloat(cleanTournamentData.otherExpenses || 0),
-      notes: cleanTournamentData.notes || null,
+      notes: cleanTournamentData.notes ? sanitizeInput.description(cleanTournamentData.notes) : null,
     };
 
     // Validate required fields
@@ -971,13 +1024,13 @@ class TrendAPIService {
     const mappedData = {};
 
     if (cleanTournamentData.name !== undefined) {
-      mappedData.name = cleanTournamentData.name;
+      mappedData.name = sanitizeInput.text(cleanTournamentData.name);
     }
     if (cleanTournamentData.location !== undefined) {
-      mappedData.location = cleanTournamentData.location;
+      mappedData.location = sanitizeInput.text(cleanTournamentData.location);
     }
     if (cleanTournamentData.venue !== undefined) {
-      mappedData.venue = cleanTournamentData.venue;
+      mappedData.venue = sanitizeInput.text(cleanTournamentData.venue);
     }
     if (cleanTournamentData.dateStart || cleanTournamentData.startDate) {
       mappedData.dateStart =
@@ -1012,7 +1065,7 @@ class TrendAPIService {
       );
     }
     if (cleanTournamentData.notes !== undefined) {
-      mappedData.notes = cleanTournamentData.notes;
+      mappedData.notes = sanitizeInput.description(cleanTournamentData.notes);
     }
 
     const response = await this.makeRequest(`/poker/tournaments/${id}`, {
