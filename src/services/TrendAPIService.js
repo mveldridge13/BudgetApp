@@ -1,5 +1,6 @@
 // services/TrendAPIService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
 import sanitizeInput from '../utils/sanitizer';
 
 const API_CONFIG = {
@@ -20,7 +21,35 @@ class TrendAPIService {
 
   async initialize() {
     try {
-      this.token = await AsyncStorage.getItem('trend_auth_token');
+      // 🔐 SECURE: Try loading token from Keychain first (new secure location)
+      const credentials = await Keychain.getGenericPassword({
+        service: 'com.trendbudget.auth',
+      });
+
+      if (credentials) {
+        this.token = credentials.password;
+        console.log('🔐 Token loaded from secure Keychain');
+        return true;
+      }
+
+      // 🔄 MIGRATION: Check old AsyncStorage location for existing users
+      const oldToken = await AsyncStorage.getItem('trend_auth_token');
+      if (oldToken) {
+        console.log('🔄 Migrating token from AsyncStorage to secure Keychain');
+
+        // Save to Keychain
+        await this.saveToken(oldToken);
+
+        // Remove from old insecure location
+        await AsyncStorage.removeItem('trend_auth_token');
+
+        this.token = oldToken;
+        console.log('✅ Token migration completed successfully');
+        return true;
+      }
+
+      // No token found in either location
+      console.log('No authentication token found');
       return true;
     } catch (error) {
       console.error('Failed to initialize API service:', error);
@@ -31,7 +60,14 @@ class TrendAPIService {
   async saveToken(token) {
     try {
       this.token = token;
-      await AsyncStorage.setItem('trend_auth_token', token);
+
+      // 🔐 SECURE: Save token to iOS Keychain (hardware-encrypted)
+      await Keychain.setGenericPassword('trend_user', token, {
+        service: 'com.trendbudget.auth',
+        accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+      });
+
+      console.log('🔐 Token saved to secure Keychain');
       return true;
     } catch (error) {
       console.error('Failed to save token:', error);
@@ -42,7 +78,16 @@ class TrendAPIService {
   async clearToken() {
     try {
       this.token = null;
+
+      // 🔐 SECURE: Remove token from Keychain
+      await Keychain.resetGenericPassword({
+        service: 'com.trendbudget.auth',
+      });
+
+      // 🔄 CLEANUP: Also remove from old AsyncStorage location (if it exists)
       await AsyncStorage.removeItem('trend_auth_token');
+
+      console.log('🔐 Token cleared from secure storage');
       return true;
     } catch (error) {
       console.error('Failed to clear token:', error);
