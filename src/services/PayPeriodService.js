@@ -293,6 +293,18 @@ class PayPeriodService {
         const inPeriod =
           transactionDate >= periodStart && transactionDate <= periodEnd;
 
+        // Exclude ROLLOVER transactions - they show in transaction list but don't count as expenses
+        // ROLLOVER transactions represent moving rollover funds to goals, not actual spending
+        if (transaction.type === 'ROLLOVER') {
+          return false;
+        }
+
+        // Exclude TRANSFER transactions - they show in transaction list but don't count as expenses
+        // TRANSFER transactions represent moving funds to savings goals (already counted in totalIncomePayments)
+        if (transaction.type === 'TRANSFER') {
+          return false;
+        }
+
         // If transaction type filter is specified, apply it
         if (transactionType) {
           const matchesType =
@@ -411,7 +423,11 @@ class PayPeriodService {
         );
 
         // Only include expense transactions (or transactions without type specified)
-        const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
+        // Exclude ROLLOVER and TRANSFER types as they don't represent actual expenses
+        const isExpense =
+          (transaction.type === 'EXPENSE' || !transaction.type) &&
+          transaction.type !== 'ROLLOVER' &&
+          transaction.type !== 'TRANSFER';
 
         const included = inPreviousPeriod && isExpense;
 

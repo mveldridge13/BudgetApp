@@ -2202,6 +2202,19 @@ const HomeContainer = ({navigation}) => {
               const incomeTotal = currentPeriodContributions.reduce(
                 (sum, contrib) => {
                   let newSum = sum;
+
+                  // Enhanced logging for debugging rollover issue
+                  console.log(
+                    `🔍 HOME_CONTAINER: Processing contribution for goal ${goal.id}:`,
+                    {
+                      contributionId: contrib.id,
+                      type: contrib.type,
+                      amount: contrib.amount,
+                      date: contrib.date,
+                      description: contrib.description,
+                    },
+                  );
+
                   if (contrib.type === 'MANUAL') {
                     // MANUAL contributions subtract from income (money going to goals from current income)
                     newSum = sum + (contrib.amount || 0);
@@ -2217,10 +2230,11 @@ const HomeContainer = ({navigation}) => {
                     // ROLLOVER contributions are already accounted for in rolloverAmount
                     // Don't add to totalIncomePayments to avoid double-counting
                     console.log(
-                      '🔍 HOME_CONTAINER: Ignoring ROLLOVER contribution (already in rolloverAmount):',
+                      '🔍 HOME_CONTAINER: ✓ SKIPPING ROLLOVER contribution (already in rolloverAmount):',
                       {
                         amount: contrib.amount,
                         type: contrib.type,
+                        description: contrib.description,
                       },
                     );
                   } else if (contrib.type === 'WITHDRAWAL') {
@@ -2245,6 +2259,10 @@ const HomeContainer = ({navigation}) => {
                   return newSum;
                 },
                 0,
+              );
+
+              console.log(
+                `🔍 HOME_CONTAINER: Goal ${goal.id} (${goal.title}) income total from ${currentPeriodContributions.length} contributions: ${incomeTotal}`,
               );
 
               totalPayments += incomeTotal;
@@ -2547,14 +2565,62 @@ const HomeContainer = ({navigation}) => {
         }
       };
 
+      global.debugFixRolloverTransaction = async () => {
+        console.log('🔧 DEBUG: Fixing ROLLOVER transaction...');
+        try {
+          // Find transactions that match "Payment to" pattern and are EXPENSE type
+          const potentialRolloverTransactions = transactions.filter(t =>
+            t.description?.startsWith('Payment to ') &&
+            t.type === 'EXPENSE'
+          );
+
+          console.log(`🔧 Found ${potentialRolloverTransactions.length} potential ROLLOVER transactions to check:`, potentialRolloverTransactions);
+
+          for (const transaction of potentialRolloverTransactions) {
+            // Check if this transaction matches a ROLLOVER contribution by amount and date
+            for (const goal of goals) {
+              if (!goal.id.startsWith('local_')) {
+                const contribs = await TrendAPIService.getGoalContributions(goal.id);
+                const rolloverContrib = contribs.find(c =>
+                  c.type === 'ROLLOVER' &&
+                  parseFloat(c.amount) === parseFloat(transaction.amount) &&
+                  new Date(c.date).toDateString() === new Date(transaction.date).toDateString()
+                );
+
+                if (rolloverContrib) {
+                  console.log(`🔧 Found matching ROLLOVER contribution for transaction ${transaction.id}:`, rolloverContrib);
+                  console.log('🔧 Updating transaction type from EXPENSE to ROLLOVER...');
+
+                  await TrendAPIService.updateTransaction(transaction.id, {
+                    ...transaction,
+                    type: 'ROLLOVER', // Change type from EXPENSE to ROLLOVER
+                  });
+
+                  console.log('✅ Transaction updated successfully!');
+                  console.log('🔄 Reloading transactions...');
+                  await loadTransactions();
+                  console.log('✅ Done! Your Left to Spend should now be correct.');
+                  return;
+                }
+              }
+            }
+          }
+
+          console.log('❌ No matching ROLLOVER transactions found to fix.');
+        } catch (error) {
+          console.error('🔧 DEBUG: Error fixing ROLLOVER transaction:', error);
+        }
+      };
+
       console.log('🔧 DEBUG: Global debug functions available:');
       console.log('  - debugClearRolloverBanner()');
       console.log('  - debugClearAllRolloverCaches()');
       console.log('  - debugTestAutoRollover()');
       console.log('  - debugLogCurrentState()');
       console.log('  - debugCheckContributions()');
+      console.log('  - debugFixRolloverTransaction() - Fix existing ROLLOVER transaction');
     }
-  }, [incomeData, rolloverAmount, totalExpenses, goals, rolloverBanner]);
+  }, [incomeData, rolloverAmount, totalExpenses, goals, rolloverBanner, transactions, loadTransactions]);
 
   // ==============================================
   // RENDER

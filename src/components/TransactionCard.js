@@ -293,11 +293,9 @@ const TransactionCard = ({
   const isRecurring =
     transaction.recurrence && transaction.recurrence !== 'none';
 
-  // Check if this is a debt goal payment transaction
-  const isDebtPayment =
-    transaction.description?.startsWith('Payment to ') ||
-    transaction.category === 'Debt' ||
-    categoryData?.name?.toLowerCase().includes('debt');
+  // Check if this is a non-editable transaction (TRANSFER or ROLLOVER)
+  const isNonEditable =
+    transaction.type === 'TRANSFER' || transaction.type === 'ROLLOVER';
 
   if (isDeleting) {
     return null;
@@ -354,9 +352,8 @@ const TransactionCard = ({
             style={[
               styles.card,
               isRecurring && styles.recurringCard,
-              isDebtPayment && styles.debtPaymentCard,
             ]}
-            {...(!isDebtPayment && panResponder.panHandlers)}>
+            {...(!isNonEditable && panResponder.panHandlers)}>
             <View style={styles.iconContainer}>
               <View
                 style={[
@@ -401,9 +398,19 @@ const TransactionCard = ({
               )}
             </View>
 
-            <Text style={[styles.amount, {color: getAmountColor()}]}>
-              {getAmountDisplay()}
-            </Text>
+            <View style={styles.amountContainer}>
+              {isNonEditable && (
+                <Icon
+                  name="lock-closed"
+                  size={14}
+                  color={colors.textSecondary}
+                  style={styles.lockIcon}
+                />
+              )}
+              <Text style={[styles.amount, {color: getAmountColor()}]}>
+                {getAmountDisplay()}
+              </Text>
+            </View>
           </View>
         </Animated.View>
       </View>
@@ -439,10 +446,6 @@ const styles = StyleSheet.create({
   recurringCard: {
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,
-  },
-  debtPaymentCard: {
-    borderWidth: 2,
-    borderColor: 'rgba(255, 107, 133, 0.3)',
   },
   editBackground: {
     position: 'absolute',
@@ -549,6 +552,14 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: -0.1,
     marginTop: 2,
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockIcon: {
+    marginRight: 2,
   },
   amount: {
     fontSize: 16,

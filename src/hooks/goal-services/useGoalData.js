@@ -621,8 +621,12 @@ const useGoalData = checkNetworkConnectivity => {
               try {
                 const targetGoal = updatedGoals.find(g => g.id === goalId);
 
-                // Create transactions for debt payments OR non-withdrawal contributions to savings goals
-                if (targetGoal && (targetGoal.type === 'debt' || !isWithdrawal)) {
+                // Create transactions ONLY for MANUAL contributions (not ROLLOVER)
+                // Use different transaction types to prevent double-counting:
+                // - Debt payments: 'EXPENSE' (counted in totalExpenses)
+                // - MANUAL savings contributions: 'TRANSFER' (not counted in expenses, already in totalIncomePayments)
+                // - ROLLOVER contributions: NO transaction (already tracked elsewhere)
+                if (targetGoal && !isWithdrawal && contributionType === 'MANUAL') {
                   // Fetch categories to find the appropriate categoryId and subcategoryId
                   let categoryId = null;
                   let subcategoryId = null;
@@ -699,16 +703,21 @@ const useGoalData = checkNetworkConnectivity => {
                     console.warn('🔍 GOAL_DATA: Failed to fetch categories:', catError);
                   }
 
+                  // Use TRANSFER type for all MANUAL goal contributions (both debt and savings)
+                  // TRANSFER transactions are visible in transaction list but not counted in expenses
+                  // because they're already counted in totalIncomePayments via goal contributions
+                  const transactionType = 'TRANSFER';
+
                   const transactionData = {
                     amount: Math.abs(parsedAmount).toFixed(2),
                     categoryId: categoryId, // Use resolved category ID
                     subcategoryId: subcategoryId, // Use resolved subcategory ID for "Debt Payment"
-                    category: targetGoal.category || 'Debt', // Use goal's category for display
+                    category: targetGoal.category || 'Savings', // Use goal's category for display
                     description: `Payment to ${targetGoal.title}`,
-                    type: 'EXPENSE',
+                    type: transactionType,
                     date: updateTimestamp,
                     recurrence: 'none', // Must be 'none' (lowercase) to appear in daily transactions
-                    status: 'PAID', // Mark as paid since debt payment was made
+                    status: 'PAID', // Mark as paid since payment was made
                   };
 
                   await TrendAPIService.createTransaction(transactionData);
@@ -748,14 +757,20 @@ const useGoalData = checkNetworkConnectivity => {
             // Update the local goal with income payment tracking
             const localGoalIndex = updatedGoals.findIndex(g => g.id === goalId);
             if (localGoalIndex !== -1) {
+              // Only add to totalIncomePayments for MANUAL contributions
+              // ROLLOVER contributions are already accounted for in rolloverAmount
+              const shouldUpdateTotalIncomePayments = contributionType !== 'ROLLOVER';
+
               updatedGoals[localGoalIndex] = {
                 ...updatedGoals[localGoalIndex],
-                totalIncomePayments:
-                  (updatedGoals[localGoalIndex].totalIncomePayments || 0) +
-                  parsedAmount,
+                totalIncomePayments: shouldUpdateTotalIncomePayments
+                  ? (updatedGoals[localGoalIndex].totalIncomePayments || 0) +
+                    parsedAmount
+                  : (updatedGoals[localGoalIndex].totalIncomePayments || 0),
                 lastIncomePayment: {
                   amount: parsedAmount,
                   date: updateTimestamp,
+                  type: contributionType, // Track contribution type for debugging
                 },
               };
 

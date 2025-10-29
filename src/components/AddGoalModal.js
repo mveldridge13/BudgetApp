@@ -213,17 +213,32 @@ const AddGoalModal = ({
       }
     }
 
-    if (!formData.deadline) {
-      newErrors.deadline = 'Deadline is required';
-    } else {
-      // Better date comparison to avoid timezone issues
-      const deadlineDate = new Date(formData.deadline);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Reset time to start of day
-      deadlineDate.setHours(0, 0, 0, 0); // Reset time to start of day
+    // Deadline validation - required for debt goals, optional for savings
+    if (formData.type === 'debt') {
+      if (!formData.deadline) {
+        newErrors.deadline = 'Deadline is required for debt goals';
+      } else {
+        // Better date comparison to avoid timezone issues
+        const deadlineDate = new Date(formData.deadline);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        deadlineDate.setHours(0, 0, 0, 0); // Reset time to start of day
 
-      if (deadlineDate <= today) {
-        newErrors.deadline = 'Deadline must be in the future';
+        if (deadlineDate <= today) {
+          newErrors.deadline = 'Deadline must be in the future';
+        }
+      }
+    } else {
+      // For savings goals, deadline is optional but if provided must be valid
+      if (formData.deadline) {
+        const deadlineDate = new Date(formData.deadline);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        deadlineDate.setHours(0, 0, 0, 0); // Reset time to start of day
+
+        if (deadlineDate <= today) {
+          newErrors.deadline = 'Deadline must be in the future';
+        }
       }
     }
 
@@ -686,7 +701,9 @@ const AddGoalModal = ({
 
               {/* Deadline */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Target Deadline</Text>
+                <Text style={styles.sectionTitle}>
+                  Target Deadline{formData.type !== 'debt' && ' (Optional)'}
+                </Text>
                 <TouchableOpacity
                   style={[
                     styles.dateInput,
