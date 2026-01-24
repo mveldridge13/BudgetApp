@@ -8,9 +8,15 @@ import {
   CreateRolloverEntryData,
   RolloverHistory,
   ExportDataResponse,
+  UserProfile,
 } from '@/types';
 
 class UserService {
+  // Profile
+  async getProfile(): Promise<UserProfile> {
+    return api.get<UserProfile>('/users/profile');
+  }
+
   // Income management
   async getIncome(): Promise<UserIncome> {
     return api.get<UserIncome>('/users/income');

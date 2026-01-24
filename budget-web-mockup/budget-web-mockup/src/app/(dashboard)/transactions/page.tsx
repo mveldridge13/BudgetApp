@@ -1,22 +1,68 @@
 'use client';
 
-import { useState } from 'react';
-import { useTransactions } from '@/hooks/useTransactions';
+import {useState} from 'react';
+import {useTransactions} from '@/hooks/useTransactions';
 import TransactionList from '@/components/transactions/TransactionList';
 import TransactionModal from '@/components/transactions/TransactionModal';
-import { Spinner } from '@/components/ui';
+import {Spinner} from '@/components/ui';
+import {Transaction} from '@/types';
 
 export default function TransactionsPage() {
-  const { transactions, summary, isLoading, error, createTransaction, refresh } = useTransactions();
+  const {
+    transactions,
+    summary,
+    isLoading,
+    error,
+    createTransaction,
+    updateTransaction,
+    deleteTransaction,
+    refresh,
+  } = useTransactions();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
 
   const handleSaveTransaction = async (data: unknown) => {
     try {
-      await createTransaction(data as Parameters<typeof createTransaction>[0]);
+      if (editingTransaction) {
+        await updateTransaction(
+          editingTransaction.id,
+          data as Parameters<typeof updateTransaction>[1],
+        );
+      } else {
+        await createTransaction(
+          data as Parameters<typeof createTransaction>[0],
+        );
+      }
       setIsModalOpen(false);
+      setEditingTransaction(null);
+      refresh();
     } catch (err) {
       console.error('Failed to save transaction:', err);
+      const errorMessage = (err as {message?: string | string[]})?.message || 'Unknown error';
+      alert(`Failed to save transaction: ${Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage}`);
     }
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (confirm('Are you sure you want to delete this transaction?')) {
+      try {
+        await deleteTransaction(id);
+        refresh();
+      } catch (err) {
+        console.error('Failed to delete transaction:', err);
+      }
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingTransaction(null);
   };
 
   return (
@@ -30,9 +76,12 @@ export default function TransactionsPage() {
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors">
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -49,8 +98,7 @@ export default function TransactionsPage() {
           <p>{error}</p>
           <button
             onClick={refresh}
-            className="mt-2 text-sm font-medium text-red-600 hover:text-red-500"
-          >
+            className="mt-2 text-sm font-medium text-red-600 hover:text-red-500">
             Retry
           </button>
         </div>
@@ -61,13 +109,20 @@ export default function TransactionsPage() {
           <Spinner size="lg" />
         </div>
       ) : (
-        <TransactionList transactions={transactions} summary={summary} />
+        <TransactionList
+          transactions={transactions}
+          summary={summary}
+          onEdit={handleEditTransaction}
+          onDelete={handleDeleteTransaction}
+        />
       )}
 
       <TransactionModal
         visible={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         onSave={handleSaveTransaction}
+        isEditMode={!!editingTransaction}
+        initialData={editingTransaction}
       />
     </div>
   );

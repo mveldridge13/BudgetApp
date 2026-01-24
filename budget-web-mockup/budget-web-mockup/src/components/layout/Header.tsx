@@ -3,11 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
-interface HeaderProps {
-  onAddTransaction?: () => void;
-}
-
-export default function Header({ onAddTransaction }: HeaderProps) {
+export default function Header() {
   const { user, logout } = useAuth();
   const router = useRouter();
 
@@ -27,29 +23,6 @@ export default function Header({ onAddTransaction }: HeaderProps) {
 
         {/* Right side */}
         <div className="flex items-center space-x-4">
-          {/* Add Transaction Button */}
-          {onAddTransaction && (
-            <button
-              onClick={onAddTransaction}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-              <span className="hidden sm:inline">Add Transaction</span>
-            </button>
-          )}
-
           {/* Notifications */}
           <button className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
             <svg

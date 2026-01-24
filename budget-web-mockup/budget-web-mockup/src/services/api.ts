@@ -85,6 +85,9 @@ class ApiClient {
       if (data.transaction) {
         return data.transaction as T;
       }
+      if (data.transactions !== undefined) {
+        return data.transactions as T;
+      }
       if (data.goals !== undefined) {
         return data.goals as T;
       }

@@ -1,26 +1,17 @@
 'use client';
 
-import { useState } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Header, Sidebar, MobileNav } from '@/components/layout';
-import TransactionModal from '@/components/transactions/TransactionModal';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-
-  const handleSaveTransaction = () => {
-    // TODO: Implement transaction save logic
-    setIsTransactionModalOpen(false);
-  };
-
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50">
-        <Header onAddTransaction={() => setIsTransactionModalOpen(true)} />
+        <Header />
 
         <div className="flex">
           {/* Desktop Sidebar */}
@@ -36,13 +27,6 @@ export default function DashboardLayout({
 
         {/* Mobile Navigation */}
         <MobileNav />
-
-        {/* Transaction Modal */}
-        <TransactionModal
-          visible={isTransactionModalOpen}
-          onClose={() => setIsTransactionModalOpen(false)}
-          onSave={handleSaveTransaction}
-        />
       </div>
     </ProtectedRoute>
   );

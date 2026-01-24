@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { Transaction, TransactionSummary } from '@/types';
-import { formatCurrency, formatDate, formatRecurrence } from '@/lib/formatters';
-import { TRANSACTION_TYPE_COLORS } from '@/lib/constants';
+import {useState} from 'react';
+import {Transaction, TransactionSummary} from '@/types';
+import {formatCurrency, formatDate} from '@/lib/formatters';
+
+interface CategoryObject {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+}
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -14,7 +20,6 @@ interface TransactionListProps {
 
 export default function TransactionList({
   transactions,
-  summary,
   onEdit,
   onDelete,
 }: TransactionListProps) {
@@ -24,72 +29,87 @@ export default function TransactionList({
   const [sortOrder, setSortOrder] = useState('Newest First');
 
   // Filter and sort transactions
-  const filteredTransactions = transactions.filter((transaction) => {
+  const filteredTransactions = transactions.filter(transaction => {
     const matchesSearch = transaction.description
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
+
+    const transactionCategoryName =
+      typeof transaction.categoryName === 'string'
+        ? transaction.categoryName
+        : (transaction.categoryName as unknown as CategoryObject)?.name;
+
     const matchesCategory =
       categoryFilter === 'All Categories' ||
-      transaction.categoryName === categoryFilter;
+      transactionCategoryName === categoryFilter;
     const matchesFrequency =
       frequencyFilter === 'All Frequencies' ||
-      formatRecurrence(transaction.isRecurring ? 'monthly' : 'none') === frequencyFilter;
+      getFrequencyLabel(transaction) === frequencyFilter;
     return matchesSearch && matchesCategory && matchesFrequency;
   });
 
   // Get unique categories
   const categories = [
     'All Categories',
-    ...new Set(transactions.map((t) => t.categoryName).filter(Boolean)),
+    ...new Set(
+      transactions
+        .map(t => {
+          if (typeof t.categoryName === 'string') {
+            return t.categoryName;
+          }
+          return (t.categoryName as unknown as CategoryObject)?.name;
+        })
+        .filter(Boolean),
+    ),
   ];
 
   const totalAmount = filteredTransactions.reduce(
     (sum, t) => sum + Math.abs(t.amount),
-    0
+    0,
   );
 
-  const getAmountDisplay = (transaction: Transaction) => {
-    if (transaction.type === 'INCOME') {
-      return `+${formatCurrency(Math.abs(transaction.amount))}`;
-    }
-    return `-${formatCurrency(Math.abs(transaction.amount))}`;
-  };
+  function getFrequencyLabel(transaction: Transaction): string {
+    if (!transaction.isRecurring) return 'One-time';
+    // You can extend this based on your transaction data structure
+    return 'Monthly';
+  }
 
-  const getAmountColor = (type: string) => {
-    return TRANSACTION_TYPE_COLORS[type as keyof typeof TRANSACTION_TYPE_COLORS] || '#6B7280';
-  };
-
-  const getLightBackgroundColor = (color: string) => {
-    const hex = color.replace('#', '');
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, 0.15)`;
-  };
+  function getCategoryColor(categoryName?: string): string {
+    const colorMap: Record<string, string> = {
+      'Food & Dining': '#10B981',
+      Transportation: '#3B82F6',
+      Entertainment: '#EC4899',
+      Housing: '#EF4444',
+      Groceries: '#10B981',
+      Fuel: '#3B82F6',
+      Movies: '#EC4899',
+      Rent: '#EF4444',
+    };
+    return colorMap[categoryName || ''] || '#6B7280';
+  }
 
   return (
     <div className="space-y-6">
       {/* Transaction Summary */}
-      {summary && (
-        <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Transaction Summary
-              </h2>
-              <p className="text-gray-600">
-                {summary.transactionCount} transactions
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-gray-900">
-                {formatCurrency(totalAmount)}
-              </p>
-              <p className="text-gray-600">Total Amount</p>
-            </div>
+      <div className="bg-white rounded-lg p-6 border border-gray-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Transaction Summary
+            </h2>
+            <p className="text-sm text-gray-600">
+              {filteredTransactions.length} transaction
+              {filteredTransactions.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-bold text-gray-900">
+              {formatCurrency(totalAmount)}
+            </p>
+            <p className="text-sm text-gray-600">Total Amount</p>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -99,8 +119,7 @@ export default function TransactionList({
               className="h-5 w-5 text-gray-400"
               fill="none"
               stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+              viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -113,24 +132,22 @@ export default function TransactionList({
             type="text"
             placeholder="Search transactions..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+            onChange={e => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white"
           />
         </div>
         <select
           value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-        >
-          {categories.map((cat) => (
+          onChange={e => setCategoryFilter(e.target.value)}
+          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
+          {categories.map(cat => (
             <option key={cat}>{cat}</option>
           ))}
         </select>
         <select
           value={frequencyFilter}
-          onChange={(e) => setFrequencyFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-        >
+          onChange={e => setFrequencyFilter(e.target.value)}
+          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
           <option>All Frequencies</option>
           <option>One-time</option>
           <option>Weekly</option>
@@ -139,9 +156,8 @@ export default function TransactionList({
         </select>
         <select
           value={sortOrder}
-          onChange={(e) => setSortOrder(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-        >
+          onChange={e => setSortOrder(e.target.value)}
+          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
           <option>Newest First</option>
           <option>Oldest First</option>
           <option>Highest Amount</option>
@@ -156,138 +172,86 @@ export default function TransactionList({
             <p>No transactions found</p>
           </div>
         ) : (
-          filteredTransactions.map((transaction) => (
-            <div
-              key={transaction.id}
-              className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
-              style={{
-                borderLeft: transaction.isRecurring ? '3px solid #6366f1' : 'none',
-              }}
-            >
-              <div className="flex items-center">
-                {/* Icon */}
-                <div className="mr-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{
-                      backgroundColor: getLightBackgroundColor(
-                        transaction.categoryColor || '#6B7280'
-                      ),
-                    }}
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke={transaction.categoryColor || '#6B7280'}
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                      />
-                    </svg>
-                  </div>
-                </div>
+          filteredTransactions.map(transaction => {
+            // Handle category data - could be string or object
+            let categoryName = 'Uncategorized';
+            let categoryColor = '#6B7280';
+            let categoryIcon = '💰';
 
-                {/* Transaction Info */}
-                <div className="flex-1">
-                  <div className="flex items-center mb-1">
-                    <h4 className="text-base font-light text-gray-900 flex-1">
+            if (typeof transaction.categoryName === 'string') {
+              categoryName = transaction.categoryName;
+              categoryColor = transaction.categoryColor || getCategoryColor(categoryName);
+              categoryIcon = transaction.categoryIcon || '💰';
+            } else if (transaction.categoryName) {
+              const categoryObj = transaction.categoryName as unknown as CategoryObject;
+              categoryName = categoryObj.name || 'Uncategorized';
+              categoryColor = categoryObj.color || getCategoryColor(categoryName);
+              categoryIcon = categoryObj.icon || '💰';
+            }
+
+            const subcategoryName =
+              typeof transaction.subcategory === 'string'
+                ? transaction.subcategory
+                : (transaction.subcategory as unknown as CategoryObject)?.name ||
+                  categoryName;
+
+            const frequency = getFrequencyLabel(transaction);
+
+            return (
+              <div
+                key={transaction.id}
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow">
+                <div className="flex items-center">
+                  {/* Circle Icon */}
+                  <div className="mr-4">
+                    <div
+                      className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-lg"
+                      style={{borderColor: categoryColor}}>
+                      {categoryIcon}
+                    </div>
+                  </div>
+
+                  {/* Transaction Info */}
+                  <div className="flex-1">
+                    <h4 className="text-base font-medium text-gray-900 mb-1">
                       {transaction.description}
                     </h4>
-                    {transaction.isRecurring && (
-                      <div className="ml-2 p-1">
-                        <svg
-                          className="w-3 h-3 text-blue-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                          />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs font-light text-gray-500">
-                    {transaction.categoryName || 'Uncategorized'} •{' '}
-                    {formatDate(transaction.date)}
-                  </p>
-                  {transaction.paymentStatus && transaction.paymentStatus !== 'PAID' && (
-                    <p
-                      className="text-xs font-medium mt-1"
-                      style={{
-                        color:
-                          transaction.paymentStatus === 'UPCOMING'
-                            ? '#007AFF'
-                            : transaction.paymentStatus === 'OVERDUE'
-                            ? '#F44336'
-                            : '#6B7280',
-                      }}
-                    >
-                      {transaction.paymentStatus === 'UPCOMING'
-                        ? 'Upcoming'
-                        : transaction.paymentStatus === 'OVERDUE'
-                        ? 'Overdue'
-                        : transaction.paymentStatus}
+                    <p className="text-sm text-gray-600">
+                      {categoryName} • {subcategoryName} • {frequency}
                     </p>
-                  )}
-                </div>
+                  </div>
 
-                {/* Amount */}
-                <div className="text-right ml-4">
-                  <p
-                    className="text-base font-light"
-                    style={{ color: getAmountColor(transaction.type) }}
-                  >
-                    {getAmountDisplay(transaction)}
-                  </p>
-                </div>
+                  {/* Amount and Date */}
+                  <div className="text-right mr-4">
+                    <p className="text-lg font-semibold text-gray-900">
+                      {formatCurrency(Math.abs(transaction.amount))}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      {formatDate(transaction.date)}
+                    </p>
+                  </div>
 
-                {/* Actions */}
-                {(onEdit || onDelete) && (
-                  <div className="ml-4 flex space-x-2">
+                  {/* Actions */}
+                  <div className="flex gap-3">
                     {onEdit && (
                       <button
                         onClick={() => onEdit(transaction)}
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                          />
-                        </svg>
+                        className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                        Edit
                       </button>
                     )}
                     {onDelete && (
                       <button
                         onClick={() => onDelete(transaction.id)}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
+                        className="text-red-600 hover:text-red-700 text-sm font-medium">
+                        Delete
                       </button>
                     )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

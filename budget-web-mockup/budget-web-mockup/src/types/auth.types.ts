@@ -41,6 +41,9 @@ export interface UserProfile {
   lastName: string;
   timezone: string;
   currency: string;
+  balance?: number;
+  leftToSpend?: number;
+  username?: string | null;
 }
 
 export interface UpdateProfileData {
