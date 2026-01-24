@@ -17,8 +17,10 @@ class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>('/auth/login', credentials);
 
-    if (response.token) {
-      tokenStorage.setToken(response.token);
+    // API returns access_token, not token
+    const token = response.access_token || response.token;
+    if (token) {
+      tokenStorage.setToken(token);
     }
 
     return response;

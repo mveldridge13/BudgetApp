@@ -4,3 +4,4 @@ export { useCategories } from './useCategories';
 export { useBudgets } from './useBudgets';
 export { useUser } from './useUser';
 export { useAnalytics } from './useAnalytics';
+export { useDashboardMetrics } from './useDashboardMetrics';

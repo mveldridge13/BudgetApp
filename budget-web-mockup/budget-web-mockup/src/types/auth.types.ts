@@ -13,7 +13,8 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
-  token: string;
+  token?: string;
+  access_token?: string; // API returns access_token
   user: User;
 }
 

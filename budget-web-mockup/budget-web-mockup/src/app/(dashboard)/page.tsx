@@ -1,59 +1,36 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useAnalytics } from '@/hooks/useAnalytics';
-import HeroSection from '@/components/dashboard/HeroSection';
-import StatsCards from '@/components/dashboard/StatsCards';
-import SpendSnapshot from '@/components/dashboard/SpendSnapshot';
-import TrendChart from '@/components/dashboard/TrendChart';
-import { Spinner } from '@/components/ui';
+import TotalSavings from '@/components/dashboard/TotalSavings';
+import ActiveGoals from '@/components/dashboard/ActiveGoals';
+import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 
 export default function DashboardPage() {
-  const { dashboardSummary, isLoading, error, fetchAll } = useAnalytics();
-
-  useEffect(() => {
-    fetchAll();
-  }, []);
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-          <p>Failed to load dashboard data. Please try again.</p>
-          <button
-            onClick={() => fetchAll()}
-            className="mt-2 text-sm font-medium text-red-600 hover:text-red-500"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const { totalSavings, activeGoalsCount, isLoading } = useDashboardMetrics();
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-1">Your financial overview at a glance</p>
       </div>
 
-      {isLoading && !dashboardSummary ? (
-        <div className="flex items-center justify-center py-12">
-          <Spinner size="lg" />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 auto-rows-fr">
+        <TotalSavings amount={totalSavings} isLoading={isLoading} />
+
+        {/* Placeholder Tile 2 */}
+        <div className="rounded-lg border border-gray-200 bg-white p-6 flex flex-col justify-center transition-shadow duration-200 hover:shadow-md cursor-pointer">
+          <p className="text-sm font-medium text-gray-500">Placeholder</p>
+          <p className="text-2xl font-bold text-gray-300 mt-1">--</p>
         </div>
-      ) : (
-        <>
-          <HeroSection summary={dashboardSummary} />
-          <StatsCards summary={dashboardSummary} />
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <SpendSnapshot />
-            <TrendChart />
-          </div>
-        </>
-      )}
+
+        <ActiveGoals count={activeGoalsCount} isLoading={isLoading} />
+
+        {/* Placeholder Tile 4 */}
+        <div className="rounded-lg border border-gray-200 bg-white p-6 flex flex-col justify-center transition-shadow duration-200 hover:shadow-md cursor-pointer">
+          <p className="text-sm font-medium text-gray-500">Placeholder</p>
+          <p className="text-2xl font-bold text-gray-300 mt-1">--</p>
+        </div>
+      </div>
     </div>
   );
 }

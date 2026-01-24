@@ -1,5 +1,7 @@
 export const API_CONFIG = {
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://trend-alb-1755058843.ap-southeast-2.elb.amazonaws.com/api/v1',
+  // Use local proxy in development to avoid CORS issues
+  // The proxy forwards requests to the real API server
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || '/api',
   timeout: 30000, // 30 seconds, matching mobile app
 
   // Cache TTLs (in milliseconds) - matching mobile app

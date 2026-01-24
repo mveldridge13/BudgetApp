@@ -52,49 +52,60 @@ class AnalyticsService {
         goalService.getGoalsSummary(filters),
       ]);
 
-    const totalExpenses = transactionAnalytics.totalExpenses;
-    const committedExpenses = discretionaryBreakdown.totalCommitted;
-    const discretionaryExpenses = discretionaryBreakdown.totalDiscretionary;
-    const budgetLimit = transactionAnalytics.totalIncome; // Or from budget settings
+    console.log('[Analytics] transactionAnalytics:', JSON.stringify(transactionAnalytics, null, 2));
+    console.log('[Analytics] billsAnalytics:', JSON.stringify(billsAnalytics, null, 2));
+    console.log('[Analytics] discretionaryBreakdown:', JSON.stringify(discretionaryBreakdown, null, 2));
+    console.log('[Analytics] goalsSummary:', JSON.stringify(goalsSummary, null, 2));
+
+    // Map API response fields to expected format
+    const totalExpenses = transactionAnalytics.totalExpenses || 0;
+    const discretionaryExpenses = discretionaryBreakdown.totalDiscretionaryAmount || 0;
+    const committedExpenses = totalExpenses - discretionaryExpenses; // Committed = total - discretionary
+    const budgetLimit = transactionAnalytics.totalIncome || 0;
     const leftToSpend = budgetLimit - totalExpenses;
 
     return {
-      startingBalance: transactionAnalytics.totalIncome,
-      totalIncome: transactionAnalytics.totalIncome,
+      startingBalance: transactionAnalytics.totalIncome || 0,
+      totalIncome: transactionAnalytics.totalIncome || 0,
       totalExpenses,
       committedExpenses,
       discretionaryExpenses,
       leftToSpend: Math.max(leftToSpend, 0),
       budgetLimit,
       percentageUsed: budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0,
-      upcomingBills: billsAnalytics.totalUpcoming,
-      overdueAmount: billsAnalytics.totalOverdue,
-      activeGoals: goalsSummary.activeGoals,
-      goalProgress: goalsSummary.overallProgress,
+      upcomingBills: billsAnalytics.unpaidAmount || 0,
+      overdueAmount: billsAnalytics.overdueAmount || 0,
+      activeGoals: goalsSummary.activeGoals || 0,
+      goalProgress: goalsSummary.overallProgress || 0,
     };
   }
 
   async getSpendingByCategory(filters?: DateRangeFilter): Promise<SpendingByCategory[]> {
     const analytics = await transactionService.getAnalytics(filters);
 
-    return analytics.categoryBreakdown.map((cat) => ({
+    const categoryBreakdown = analytics.categoryBreakdown || [];
+
+    return categoryBreakdown.map((cat: { categoryId: string; categoryName: string; categoryColor?: string; amount: number; percentage: number; transactionCount?: number }) => ({
       categoryId: cat.categoryId,
       categoryName: cat.categoryName,
-      categoryColor: '#6366F1', // Would come from category data
-      amount: cat.amount,
-      percentage: cat.percentage,
-      transactionCount: 0, // Would need additional data
+      categoryColor: cat.categoryColor || '#6366F1',
+      amount: cat.amount || 0,
+      percentage: cat.percentage || 0,
+      transactionCount: cat.transactionCount || 0,
     }));
   }
 
   async getSpendingTrend(filters?: DateRangeFilter): Promise<SpendingTrend[]> {
     const analytics = await transactionService.getAnalytics(filters);
 
-    return analytics.dailyTrend.map((day) => ({
-      date: day.date,
-      income: day.income,
-      expenses: day.expenses,
-      net: day.income - day.expenses,
+    // Use weeklyTrendWithLabels from dailyBurnRate since dailyTrend doesn't exist
+    const weeklyTrend = analytics.dailyBurnRate?.weeklyTrendWithLabels || [];
+
+    return weeklyTrend.map((day: { day: string; amount: number }) => ({
+      date: day.day,
+      income: 0, // API doesn't provide daily income
+      expenses: day.amount || 0,
+      net: -(day.amount || 0),
     }));
   }
 

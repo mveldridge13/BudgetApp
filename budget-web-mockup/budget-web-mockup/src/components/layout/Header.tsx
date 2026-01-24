@@ -20,11 +20,9 @@ export default function Header({ onAddTransaction }: HeaderProps) {
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="flex items-center justify-between px-6 py-4">
         {/* Logo */}
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">TB</span>
-          </div>
-          <span className="text-xl font-semibold text-gray-900">Trend Budget</span>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Trend</h1>
+          <p className="text-sm text-gray-600">Track smarter. Spend better. Save more.</p>
         </div>
 
         {/* Right side */}

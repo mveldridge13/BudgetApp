@@ -12,8 +12,8 @@ export default function DashboardLayout({
 }) {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
 
-  const handleSaveTransaction = (transactionData: unknown) => {
-    console.log('New transaction saved:', transactionData);
+  const handleSaveTransaction = () => {
+    // TODO: Implement transaction save logic
     setIsTransactionModalOpen(false);
   };
 
@@ -30,7 +30,7 @@ export default function DashboardLayout({
 
           {/* Main Content */}
           <main className="flex-1 pb-20 lg:pb-0">
-            <div className="p-6 lg:p-8 max-w-7xl">{children}</div>
+            <div className="p-6 lg:p-8">{children}</div>
           </main>
         </div>
 

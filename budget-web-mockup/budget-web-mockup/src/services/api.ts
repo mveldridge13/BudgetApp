@@ -40,6 +40,7 @@ class ApiClient {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
+      console.log(`[API] ${method} ${this.baseUrl}${endpoint}`);
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method,
         headers: requestHeaders,
@@ -48,9 +49,11 @@ class ApiClient {
       });
 
       clearTimeout(timeoutId);
+      console.log(`[API] Response status: ${response.status}`);
 
       if (!response.ok) {
         if (response.status === 401) {
+          console.log('[API] 401 received - clearing token and redirecting');
           // Token expired or invalid
           tokenStorage.removeToken();
           if (typeof window !== 'undefined') {
@@ -81,6 +84,9 @@ class ApiClient {
       }
       if (data.transaction) {
         return data.transaction as T;
+      }
+      if (data.goals !== undefined) {
+        return data.goals as T;
       }
       return data as T;
     } catch (error) {
