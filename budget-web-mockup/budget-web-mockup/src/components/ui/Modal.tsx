@@ -38,13 +38,21 @@ export default function Modal({
 
   useEffect(() => {
     if (isOpen) {
+      // Calculate scrollbar width before hiding it
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
       document.addEventListener('keydown', handleEscape);
       document.body.style.overflow = 'hidden';
+      // Add padding to prevent layout shift when scrollbar is hidden
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`;
+      }
     }
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = 'unset';
+      document.body.style.paddingRight = '';
     };
   }, [isOpen, handleEscape]);
 
