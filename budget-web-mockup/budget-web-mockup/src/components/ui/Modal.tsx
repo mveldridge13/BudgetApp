@@ -59,7 +59,7 @@ export default function Modal({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-25 transition-opacity"
+        className="fixed inset-0 bg-transparent transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />

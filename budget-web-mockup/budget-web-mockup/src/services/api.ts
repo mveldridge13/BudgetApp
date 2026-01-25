@@ -91,6 +91,9 @@ class ApiClient {
       if (data.goals !== undefined) {
         return data.goals as T;
       }
+      if (data.categories !== undefined) {
+        return data.categories as T;
+      }
       return data as T;
     } catch (error) {
       clearTimeout(timeoutId);

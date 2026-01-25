@@ -5,3 +5,4 @@ export { default as Card, CardHeader, CardTitle, CardDescription, CardContent, C
 export { default as Badge } from './Badge';
 export { default as ProgressBar } from './ProgressBar';
 export { default as Spinner } from './Spinner';
+export { default as CategoryIcon } from './CategoryIcon';

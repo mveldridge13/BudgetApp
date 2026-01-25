@@ -3,6 +3,7 @@
 import {useState, useEffect} from 'react';
 import {useCategories} from '@/hooks/useCategories';
 import {Modal, Button, Input} from '@/components/ui';
+import CategoryIcon from '@/components/ui/CategoryIcon';
 import {RECURRENCE_OPTIONS} from '@/lib/constants';
 import {formatISODate} from '@/lib/formatters';
 
@@ -33,7 +34,6 @@ export default function TransactionModal({
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [selectedDate, setSelectedDate] = useState(formatISODate(new Date()));
   const [recurrence, setRecurrence] = useState('none');
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   // Populate form when editing
   useEffect(() => {
@@ -203,100 +203,40 @@ export default function TransactionModal({
           placeholder="Description (optional)"
         />
 
-        {/* Category Picker */}
+        {/* Category */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Category
           </label>
-          <button
-            onClick={() => setShowCategoryPicker(!showCategoryPicker)}
-            className="w-full flex items-center justify-between px-4 py-3 border border-gray-300 rounded-lg text-left hover:bg-gray-50">
-            <div className="flex items-center">
-              {selectedCategoryData ? (
-                <>
-                  <div
-                    className="w-8 h-8 rounded-full mr-3 flex items-center justify-center"
-                    style={{
-                      backgroundColor: `${selectedCategoryData.color}20`,
-                    }}>
-                    <span style={{color: selectedCategoryData.color}}>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                        />
-                      </svg>
-                    </span>
-                  </div>
-                  <span className="text-gray-900">
-                    {selectedCategoryData.name}
-                  </span>
-                </>
-              ) : (
-                <span className="text-gray-500">Select a category</span>
-              )}
-            </div>
-            <svg
-              className="w-5 h-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
-
-          {showCategoryPicker && (
-            <div className="mt-2 border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
-              {categoriesLoading ? (
-                <div className="p-4 text-center text-gray-500">
-                  Loading categories...
+          <div className="relative">
+            {selectedCategoryData && (
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: `${selectedCategoryData.color}20`,
+                  }}>
+                  <CategoryIcon
+                    iconName={selectedCategoryData.icon}
+                    size={12}
+                    color={selectedCategoryData.color}
+                  />
                 </div>
-              ) : (
-                categoriesWithSubcategories.map(category => (
-                  <button
-                    key={category.id}
-                    onClick={() => {
-                      setSelectedCategory(category.id);
-                      setShowCategoryPicker(false);
-                    }}
-                    className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 ${
-                      selectedCategory === category.id ? 'bg-blue-50' : ''
-                    }`}>
-                    <div
-                      className="w-8 h-8 rounded-full mr-3 flex items-center justify-center"
-                      style={{backgroundColor: `${category.color}20`}}>
-                      <span style={{color: category.color}}>
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                          />
-                        </svg>
-                      </span>
-                    </div>
-                    <span className="text-gray-900">{category.name}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
+              </div>
+            )}
+            <select
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+              className={`w-full ${selectedCategoryData ? 'pl-12' : 'pl-4'} pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white`}
+              disabled={categoriesLoading}>
+              <option value="">Select a category</option>
+              {categoriesWithSubcategories.map(category => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Recurrence */}
