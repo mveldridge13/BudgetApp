@@ -43,16 +43,20 @@ export default function TransactionModal({
         amount?: number;
         description?: string;
         category?: string;
+        categoryId?: string;
         subcategory?: string;
+        subcategoryId?: string;
         date?: string;
+        recurrence?: string;
         isRecurring?: boolean;
         recurringPattern?: { type?: string };
       };
       setTransactionType(transaction.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
       setAmount(transaction.amount ? Math.abs(transaction.amount).toString() : '');
       setDescription(transaction.description || '');
-      setSelectedCategory(transaction.category || '');
-      setSelectedSubcategory(transaction.subcategory || '');
+      // Backend uses categoryId/subcategoryId
+      setSelectedCategory(transaction.categoryId || transaction.category || '');
+      setSelectedSubcategory(transaction.subcategoryId || transaction.subcategory || '');
 
       // Format date for HTML date input (yyyy-MM-dd)
       const dateValue = transaction.date
@@ -60,11 +64,8 @@ export default function TransactionModal({
         : formatISODate(new Date());
       setSelectedDate(dateValue);
 
-      setRecurrence(
-        transaction.isRecurring
-          ? transaction.recurringPattern?.type || 'monthly'
-          : 'none',
-      );
+      // Backend uses 'recurrence' field directly
+      setRecurrence(transaction.recurrence || 'none');
     } else if (!visible) {
       resetForm();
     }
@@ -74,23 +75,38 @@ export default function TransactionModal({
     c => c.id === selectedCategory,
   );
 
+  const selectedSubcategoryData = selectedCategoryData?.subcategories.find(
+    s => s.id === selectedSubcategory,
+  );
+
+  // Auto-fill description from subcategory when subcategory changes
+  useEffect(() => {
+    if (selectedSubcategoryData) {
+      setDescription(selectedSubcategoryData.name);
+    } else if (selectedCategory && !selectedSubcategory && !isEditMode) {
+      // Clear description if subcategory is cleared (only in add mode)
+      setDescription('');
+    }
+  }, [selectedSubcategory, selectedSubcategoryData, selectedCategory, isEditMode]);
+
   const handleSave = () => {
     if (!amount || !selectedCategory) {
       alert('Please fill in amount and category');
       return;
     }
 
+    // Convert date to ISO string like mobile app does
+    const dateISO = new Date(selectedDate).toISOString();
+
     const transactionData = {
       amount: Math.abs(parseFloat(amount)), // Backend expects positive amounts
       type: transactionType,
-      category: selectedCategory,
-      subcategory: selectedSubcategory || undefined,
+      categoryId: selectedCategory, // Backend expects categoryId, not category
+      ...(selectedSubcategory && { subcategoryId: selectedSubcategory }), // Backend expects subcategoryId
       description,
-      date: selectedDate,
-      isRecurring: recurrence !== 'none',
-      recurringPattern:
-        recurrence !== 'none' ? {type: recurrence, frequency: 1} : undefined,
-      paymentStatus: 'PAID',
+      date: dateISO, // Backend expects ISO string
+      recurrence: recurrence, // Send recurrence field directly
+      status: 'PAID', // Backend expects 'status', not 'paymentStatus'
     };
 
     onSave(transactionData);
@@ -226,7 +242,10 @@ export default function TransactionModal({
             )}
             <select
               value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
+              onChange={e => {
+                setSelectedCategory(e.target.value);
+                setSelectedSubcategory(''); // Reset subcategory when category changes
+              }}
               className={`w-full ${selectedCategoryData ? 'pl-12' : 'pl-4'} pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white`}
               disabled={categoriesLoading}>
               <option value="">Select a category</option>
@@ -238,6 +257,26 @@ export default function TransactionModal({
             </select>
           </div>
         </div>
+
+        {/* Subcategory - only show if selected category has subcategories */}
+        {selectedCategoryData && selectedCategoryData.subcategories.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Subcategory <span className="text-gray-400">(optional)</span>
+            </label>
+            <select
+              value={selectedSubcategory}
+              onChange={e => setSelectedSubcategory(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white">
+              <option value="">None</option>
+              {selectedCategoryData.subcategories.map(subcategory => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Recurrence */}
         <div>

@@ -3,6 +3,7 @@
 import {useState} from 'react';
 import {Transaction, TransactionSummary} from '@/types';
 import {formatCurrency, formatDate} from '@/lib/formatters';
+import {CategoryIcon} from '@/components/ui';
 
 interface CategoryObject {
   id: string;
@@ -29,24 +30,53 @@ export default function TransactionList({
   const [sortOrder, setSortOrder] = useState('Newest First');
 
   // Filter and sort transactions
-  const filteredTransactions = transactions.filter(transaction => {
-    const matchesSearch = transaction.description
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
+  const filteredTransactions = transactions
+    .filter(transaction => {
+      const matchesSearch = transaction.description
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-    const transactionCategoryName =
-      typeof transaction.categoryName === 'string'
-        ? transaction.categoryName
-        : (transaction.categoryName as unknown as CategoryObject)?.name;
+      const transactionCategoryName =
+        typeof transaction.categoryName === 'string'
+          ? transaction.categoryName
+          : (transaction.categoryName as unknown as CategoryObject)?.name;
 
-    const matchesCategory =
-      categoryFilter === 'All Categories' ||
-      transactionCategoryName === categoryFilter;
-    const matchesFrequency =
-      frequencyFilter === 'All Frequencies' ||
-      getFrequencyLabel(transaction) === frequencyFilter;
-    return matchesSearch && matchesCategory && matchesFrequency;
-  });
+      const matchesCategory =
+        categoryFilter === 'All Categories' ||
+        transactionCategoryName === categoryFilter;
+      const matchesFrequency =
+        frequencyFilter === 'All Frequencies' ||
+        getFrequencyLabel(transaction) === frequencyFilter;
+      return matchesSearch && matchesCategory && matchesFrequency;
+    })
+    .sort((a, b) => {
+      switch (sortOrder) {
+        case 'Newest First': {
+          // Sort by date first, then by createdAt as tiebreaker
+          const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+          if (dateCompare !== 0) return dateCompare;
+          // If dates are the same, use createdAt
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bCreated - aCreated;
+        }
+        case 'Oldest First': {
+          // Sort by date first, then by createdAt as tiebreaker
+          const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
+          if (dateCompare !== 0) return dateCompare;
+          // If dates are the same, use createdAt
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return aCreated - bCreated;
+        }
+        case 'Highest Amount':
+          return Math.abs(b.amount) - Math.abs(a.amount);
+        case 'Lowest Amount':
+          return Math.abs(a.amount) - Math.abs(b.amount);
+        default:
+          return 0;
+      }
+    });
 
   // Get unique categories
   const categories = [
@@ -69,9 +99,21 @@ export default function TransactionList({
   );
 
   function getFrequencyLabel(transaction: Transaction): string {
-    if (!transaction.isRecurring) return 'One-time';
-    // You can extend this based on your transaction data structure
-    return 'Monthly';
+    // Backend uses 'recurrence' field directly
+    const recurrence = transaction.recurrence || (transaction.isRecurring ? transaction.recurringPattern?.type : 'none');
+
+    if (!recurrence || recurrence === 'none') return 'One-time';
+
+    const frequencyMap: Record<string, string> = {
+      'none': 'One-time',
+      'weekly': 'Weekly',
+      'fortnightly': 'Fortnightly',
+      'monthly': 'Monthly',
+      'sixmonths': 'Every 6 months',
+      'yearly': 'Yearly',
+    };
+
+    return frequencyMap[recurrence] || 'Monthly';
   }
 
   function getCategoryColor(categoryName?: string): string {
@@ -176,24 +218,18 @@ export default function TransactionList({
             // Handle category data - could be string or object
             let categoryName = 'Uncategorized';
             let categoryColor = '#6B7280';
-            let categoryIcon = '💰';
+            let categoryIcon = 'help-circle-outline';
 
             if (typeof transaction.categoryName === 'string') {
               categoryName = transaction.categoryName;
               categoryColor = transaction.categoryColor || getCategoryColor(categoryName);
-              categoryIcon = transaction.categoryIcon || '💰';
+              categoryIcon = transaction.categoryIcon || 'help-circle-outline';
             } else if (transaction.categoryName) {
               const categoryObj = transaction.categoryName as unknown as CategoryObject;
               categoryName = categoryObj.name || 'Uncategorized';
               categoryColor = categoryObj.color || getCategoryColor(categoryName);
-              categoryIcon = categoryObj.icon || '💰';
+              categoryIcon = categoryObj.icon || 'help-circle-outline';
             }
-
-            const subcategoryName =
-              typeof transaction.subcategory === 'string'
-                ? transaction.subcategory
-                : (transaction.subcategory as unknown as CategoryObject)?.name ||
-                  categoryName;
 
             const frequency = getFrequencyLabel(transaction);
 
@@ -205,9 +241,13 @@ export default function TransactionList({
                   {/* Circle Icon */}
                   <div className="mr-4">
                     <div
-                      className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-lg"
-                      style={{borderColor: categoryColor}}>
-                      {categoryIcon}
+                      className="w-10 h-10 rounded-full flex items-center justify-center"
+                      style={{backgroundColor: `${categoryColor}20`}}>
+                      <CategoryIcon
+                        iconName={categoryIcon}
+                        size={20}
+                        color={categoryColor}
+                      />
                     </div>
                   </div>
 
@@ -217,7 +257,7 @@ export default function TransactionList({
                       {transaction.description}
                     </h4>
                     <p className="text-sm text-gray-600">
-                      {categoryName} • {subcategoryName} • {frequency}
+                      {categoryName} - {frequency}
                     </p>
                   </div>
 

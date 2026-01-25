@@ -13,18 +13,23 @@ export interface Transaction {
   id: string;
   amount: number;
   type: TransactionType;
-  category: string;
+  category?: string; // Legacy field for compatibility
+  categoryId?: string; // Primary field from backend
   categoryName?: string;
   categoryColor?: string;
   categoryIcon?: string;
-  subcategory?: string;
+  subcategory?: string; // Legacy field for compatibility
+  subcategoryId?: string; // Primary field from backend
+  subcategoryName?: string;
   description: string;
   notes?: string;
   date: string;
   dueDate?: string;
-  isRecurring: boolean;
-  recurringPattern?: RecurringPattern;
-  paymentStatus?: PaymentStatus;
+  recurrence?: RecurrenceType; // Backend uses this field
+  isRecurring?: boolean; // Legacy field
+  recurringPattern?: RecurringPattern; // Legacy field
+  status?: PaymentStatus; // Backend uses this field
+  paymentStatus?: PaymentStatus; // Legacy field
   budgetId?: string;
   location?: string;
   userId?: string;
@@ -35,15 +40,14 @@ export interface Transaction {
 export interface CreateTransactionData {
   amount: number;
   type: TransactionType;
-  category: string;
-  subcategory?: string;
+  categoryId: string; // Backend expects categoryId
+  subcategoryId?: string; // Backend expects subcategoryId
   description: string;
   notes?: string;
   date: string;
   dueDate?: string;
-  isRecurring?: boolean;
-  recurringPattern?: RecurringPattern;
-  paymentStatus?: PaymentStatus;
+  recurrence?: RecurrenceType; // Backend expects recurrence field
+  status?: PaymentStatus; // Backend expects status, not paymentStatus
   budgetId?: string;
   location?: string;
 }
@@ -51,14 +55,14 @@ export interface CreateTransactionData {
 export interface UpdateTransactionData {
   amount?: number;
   type?: TransactionType;
-  category?: string;
-  subcategory?: string;
+  categoryId?: string; // Backend expects categoryId
+  subcategoryId?: string; // Backend expects subcategoryId
   description?: string;
   notes?: string;
   date?: string;
   dueDate?: string;
-  isRecurring?: boolean;
-  recurringPattern?: RecurringPattern;
+  recurrence?: RecurrenceType; // Backend expects recurrence field
+  status?: PaymentStatus; // Backend expects status
   paymentStatus?: PaymentStatus;
   budgetId?: string;
   location?: string;
@@ -72,6 +76,7 @@ export interface TransactionFilters extends DateRangeFilter, PaginationParams {
   search?: string;
   sortBy?: 'date' | 'amount' | 'category';
   sortOrder?: 'asc' | 'desc';
+  [key: string]: unknown; // Allow index signature for compatibility with Record<string, unknown>
 }
 
 export interface TransactionSummary {

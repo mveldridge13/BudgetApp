@@ -34,8 +34,8 @@ export function useDashboardData(): DashboardData {
         setIsLoading(true);
         setError(null);
 
-        // Fetch income, rollover, goals and discretionary breakdown in parallel
-        const [incomeData, rolloverData, goalsData, discretionaryData] =
+        // Fetch income, rollover, goals and transaction summary in parallel
+        const [incomeData, rolloverData, goalsData, summaryData] =
           await Promise.all([
             userService.getIncome(),
             userService.getRollover().catch(() => ({
@@ -43,7 +43,7 @@ export function useDashboardData(): DashboardData {
               rolloverAmount: 0,
             })),
             goalService.getGoals(),
-            transactionService.getDiscretionaryBreakdown(),
+            transactionService.getSummary(), // Use summary endpoint instead
           ]);
 
         // Calculate balance: income + rollover (matching mobile app line 228)
@@ -59,13 +59,13 @@ export function useDashboardData(): DashboardData {
 
         setGoals(goalsArray);
 
-        // Extract discretionary breakdown for total expenses
-        const committed = discretionaryData.totalCommitted || 0;
-        const discretionary = discretionaryData.totalDiscretionary || 0;
-        const total = committed + discretionary;
+        // Use summary data for total expenses (should be filtered by pay period on backend)
+        const total = summaryData.totalExpenses || 0;
 
-        setCommittedExpenses(committed);
-        setDiscretionaryExpenses(discretionary);
+        // For now, set committed and discretionary to 0 until backend provides breakdown
+        // The mobile app calculates this client-side - we'll do the same later if needed
+        setCommittedExpenses(0);
+        setDiscretionaryExpenses(total); // Treat all as discretionary for now
         setTotalExpenses(total);
 
         // Calculate left to spend: balance - total expenses (matching mobile app line 229)
