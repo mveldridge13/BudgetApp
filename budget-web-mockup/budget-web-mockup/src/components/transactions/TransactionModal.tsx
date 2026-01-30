@@ -49,14 +49,18 @@ export default function TransactionModal({
         date?: string;
         recurrence?: string;
         isRecurring?: boolean;
-        recurringPattern?: { type?: string };
+        recurringPattern?: {type?: string};
       };
       setTransactionType(transaction.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
-      setAmount(transaction.amount ? Math.abs(transaction.amount).toString() : '');
+      setAmount(
+        transaction.amount ? Math.abs(transaction.amount).toString() : '',
+      );
       setDescription(transaction.description || '');
       // Backend uses categoryId/subcategoryId
       setSelectedCategory(transaction.categoryId || transaction.category || '');
-      setSelectedSubcategory(transaction.subcategoryId || transaction.subcategory || '');
+      setSelectedSubcategory(
+        transaction.subcategoryId || transaction.subcategory || '',
+      );
 
       // Format date for HTML date input (yyyy-MM-dd)
       const dateValue = transaction.date
@@ -80,14 +84,13 @@ export default function TransactionModal({
   );
 
   // Auto-fill description from subcategory when subcategory changes
+  // Only set description if it's currently empty
   useEffect(() => {
-    if (selectedSubcategoryData) {
+    if (selectedSubcategoryData && !description) {
       setDescription(selectedSubcategoryData.name);
-    } else if (selectedCategory && !selectedSubcategory && !isEditMode) {
-      // Clear description if subcategory is cleared (only in add mode)
-      setDescription('');
     }
-  }, [selectedSubcategory, selectedSubcategoryData, selectedCategory, isEditMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSubcategory, selectedSubcategoryData]);
 
   const handleSave = () => {
     if (!amount || !selectedCategory) {
@@ -102,7 +105,7 @@ export default function TransactionModal({
       amount: Math.abs(parseFloat(amount)), // Backend expects positive amounts
       type: transactionType,
       categoryId: selectedCategory, // Backend expects categoryId, not category
-      ...(selectedSubcategory && { subcategoryId: selectedSubcategory }), // Backend expects subcategoryId
+      ...(selectedSubcategory && {subcategoryId: selectedSubcategory}), // Backend expects subcategoryId
       description,
       date: dateISO, // Backend expects ISO string
       recurrence: recurrence, // Send recurrence field directly
@@ -246,7 +249,9 @@ export default function TransactionModal({
                 setSelectedCategory(e.target.value);
                 setSelectedSubcategory(''); // Reset subcategory when category changes
               }}
-              className={`w-full ${selectedCategoryData ? 'pl-12' : 'pl-4'} pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white`}
+              className={`w-full ${
+                selectedCategoryData ? 'pl-12' : 'pl-4'
+              } pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white`}
               disabled={categoriesLoading}>
               <option value="">Select a category</option>
               {categoriesWithSubcategories.map(category => (
@@ -258,25 +263,30 @@ export default function TransactionModal({
           </div>
         </div>
 
-        {/* Subcategory - only show if selected category has subcategories */}
-        {selectedCategoryData && selectedCategoryData.subcategories.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Subcategory <span className="text-gray-400">(optional)</span>
-            </label>
-            <select
-              value={selectedSubcategory}
-              onChange={e => setSelectedSubcategory(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white">
-              <option value="">None</option>
-              {selectedCategoryData.subcategories.map(subcategory => (
-                <option key={subcategory.id} value={subcategory.id}>
-                  {subcategory.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Subcategory */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Subcategory <span className="text-gray-400">(optional)</span>
+          </label>
+          <select
+            value={selectedSubcategory}
+            onChange={e => setSelectedSubcategory(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+            disabled={!selectedCategoryData || selectedCategoryData.subcategories.length === 0}>
+            <option value="">
+              {!selectedCategory
+                ? 'Select a category first'
+                : selectedCategoryData && selectedCategoryData.subcategories.length === 0
+                  ? 'No subcategories available'
+                  : 'None'}
+            </option>
+            {selectedCategoryData?.subcategories.map(subcategory => (
+              <option key={subcategory.id} value={subcategory.id}>
+                {subcategory.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Recurrence */}
         <div>

@@ -257,7 +257,8 @@ export default function TransactionList({
                       {transaction.description}
                     </h4>
                     <p className="text-sm text-gray-600">
-                      {categoryName} - {frequency}
+                      {categoryName}
+                      {transaction.subcategoryName && ` - ${transaction.subcategoryName}`} - {frequency}
                     </p>
                   </div>
 
