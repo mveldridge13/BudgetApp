@@ -4,6 +4,7 @@ import {useState} from 'react';
 import {Transaction, TransactionSummary} from '@/types';
 import {formatCurrency, formatDate} from '@/lib/formatters';
 import {CategoryIcon} from '@/components/ui';
+import TransactionSummaryTiles from './TransactionSummaryTiles';
 
 interface CategoryObject {
   id: string;
@@ -93,10 +94,6 @@ export default function TransactionList({
     ),
   ];
 
-  const totalAmount = filteredTransactions.reduce(
-    (sum, t) => sum + Math.abs(t.amount),
-    0,
-  );
 
   function getFrequencyLabel(transaction: Transaction): string {
     // Backend uses 'recurrence' field directly
@@ -121,37 +118,19 @@ export default function TransactionList({
       'Food & Dining': '#10B981',
       Transportation: '#3B82F6',
       Entertainment: '#EC4899',
-      Housing: '#EF4444',
+      Housing: '#F87171',
       Groceries: '#10B981',
       Fuel: '#3B82F6',
       Movies: '#EC4899',
-      Rent: '#EF4444',
+      Rent: '#F87171',
     };
     return colorMap[categoryName || ''] || '#6B7280';
   }
 
   return (
     <div className="space-y-6">
-      {/* Transaction Summary */}
-      <div className="bg-white rounded-lg p-6 border border-gray-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Transaction Summary
-            </h2>
-            <p className="text-sm text-gray-600">
-              {filteredTransactions.length} transaction
-              {filteredTransactions.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold text-gray-900">
-              {formatCurrency(totalAmount)}
-            </p>
-            <p className="text-sm text-gray-600">Total Amount</p>
-          </div>
-        </div>
-      </div>
+      {/* Transaction Summary Tiles */}
+      <TransactionSummaryTiles transactions={filteredTransactions} />
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
@@ -253,9 +232,27 @@ export default function TransactionList({
 
                   {/* Transaction Info */}
                   <div className="flex-1">
-                    <h4 className="text-base font-medium text-gray-900 mb-1">
-                      {transaction.description}
-                    </h4>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-base font-medium text-gray-900">
+                        {transaction.description}
+                      </h4>
+                      {frequency !== 'One-time' && (
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          style={{ color: '#4CAF50' }}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-600">
                       {categoryName}
                       {transaction.subcategoryName && ` - ${transaction.subcategoryName}`} - {frequency}
@@ -273,18 +270,19 @@ export default function TransactionList({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     {onEdit && (
                       <button
                         onClick={() => onEdit(transaction)}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                        className="px-3 py-1.5 text-sm font-medium border rounded-lg transition-all hover:bg-indigo-50"
+                        style={{ color: '#6366f1', borderColor: '#c7d2fe' }}>
                         Edit
                       </button>
                     )}
                     {onDelete && (
                       <button
                         onClick={() => onDelete(transaction.id)}
-                        className="text-red-600 hover:text-red-700 text-sm font-medium">
+                        className="px-3 py-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 text-sm font-medium border border-red-200 rounded-lg transition-colors">
                         Delete
                       </button>
                     )}

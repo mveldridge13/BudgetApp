@@ -10,15 +10,16 @@ export default function DashboardPage() {
     totalExpenses,
     committedExpenses,
     discretionaryExpenses,
-    activeGoal,
+    activeGoalsCount,
+    completedGoalsCount,
     isLoading,
   } = useDashboardData();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-1">Your financial overview at a glance</p>
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+        <p className="text-gray-500 mt-2">Your financial overview at a glance</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -32,8 +33,12 @@ export default function DashboardPage() {
           isLoading={isLoading}
         />
 
-        {/* Active Goal Card */}
-        <ActiveGoalCard goal={activeGoal} isLoading={isLoading} />
+        {/* Goals Overview Card */}
+        <ActiveGoalCard
+          activeGoalsCount={activeGoalsCount}
+          completedGoalsCount={completedGoalsCount}
+          isLoading={isLoading}
+        />
       </div>
     </div>
   );

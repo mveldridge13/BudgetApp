@@ -25,6 +25,8 @@ export default function TransactionModal({
   const {categoriesWithSubcategories, isLoading: categoriesLoading} =
     useCategories();
 
+  const [showTypeSelection, setShowTypeSelection] = useState(true);
+
   const [transactionType, setTransactionType] = useState<'EXPENSE' | 'INCOME'>(
     'EXPENSE',
   );
@@ -38,6 +40,9 @@ export default function TransactionModal({
   // Populate form when editing
   useEffect(() => {
     if (initialData && visible) {
+      // Skip type selection when editing
+      setShowTypeSelection(false);
+
       const transaction = initialData as {
         type?: string;
         amount?: number;
@@ -72,6 +77,9 @@ export default function TransactionModal({
       setRecurrence(transaction.recurrence || 'none');
     } else if (!visible) {
       resetForm();
+    } else if (visible && !initialData) {
+      // Show type selection for new transactions
+      setShowTypeSelection(true);
     }
   }, [initialData, visible]);
 
@@ -117,6 +125,7 @@ export default function TransactionModal({
   };
 
   const resetForm = () => {
+    setShowTypeSelection(true);
     setTransactionType('EXPENSE');
     setAmount('');
     setDescription('');
@@ -131,6 +140,20 @@ export default function TransactionModal({
     onClose();
   };
 
+  const handleTypeSelect = (type: 'oneoff' | 'recurring' | 'debt') => {
+    setShowTypeSelection(false);
+
+    // Set defaults based on type
+    if (type === 'recurring') {
+      setRecurrence('monthly'); // Default to monthly for recurring
+    } else if (type === 'debt') {
+      // Could set specific defaults for debt payments
+      setRecurrence('none');
+    } else {
+      setRecurrence('none');
+    }
+  };
+
   if (!visible) return null;
 
   return (
@@ -139,15 +162,102 @@ export default function TransactionModal({
       onClose={handleClose}
       title={isEditMode ? 'Edit Transaction' : 'Add Transaction'}
       size="lg">
-      <div className="p-4 space-y-4">
-        {/* Transaction Type Toggle */}
+      {showTypeSelection && !isEditMode ? (
+        /* Type Selection Screen */
+        <div className="p-8 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
+            What type of transaction would you like to add?
+          </h3>
+          <div className="space-y-4">
+            {/* One-off Transaction */}
+            <button
+              onClick={() => handleTypeSelect('oneoff')}
+              className="w-full p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+                  style={{ backgroundColor: 'rgba(0, 122, 255, 0.15)' }}>
+                  <svg
+                    className="w-8 h-8"
+                    style={{ color: '#007AFF' }}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-1">One-off</h4>
+                <p className="text-sm text-gray-600">A single transaction that happens once</p>
+              </div>
+            </button>
+
+            {/* Recurring Transaction */}
+            <button
+              onClick={() => handleTypeSelect('recurring')}
+              className="w-full p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+                  style={{ backgroundColor: 'rgba(76, 175, 80, 0.15)' }}>
+                  <svg
+                    className="w-8 h-8"
+                    style={{ color: '#4CAF50' }}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-1">Recurring</h4>
+                <p className="text-sm text-gray-600">A transaction that repeats over time</p>
+              </div>
+            </button>
+
+            {/* Debt Payment */}
+            <button
+              onClick={() => handleTypeSelect('debt')}
+              className="w-full p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+                  style={{ backgroundColor: 'rgba(255, 107, 133, 0.15)' }}>
+                  <svg
+                    className="w-8 h-8"
+                    style={{ color: '#FF6B85' }}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"
+                    />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-1">Debt Payment</h4>
+                <p className="text-sm text-gray-600">Pay down a loan or credit card</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-4 space-y-4">
+          {/* Transaction Type Toggle */}
         <div className="flex space-x-2">
           <button
             onClick={() => setTransactionType('EXPENSE')}
             className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg border-2 transition-colors ${
               transactionType === 'EXPENSE'
-                ? 'border-red-500 bg-red-500 text-white'
-                : 'border-gray-200 text-gray-600 hover:border-red-300 hover:bg-red-50'
+                ? 'border-red-400 bg-red-400 text-white'
+                : 'border-gray-200 text-gray-600 hover:border-red-200 hover:bg-red-50'
             }`}>
             <svg
               className="w-5 h-5 mr-2"
@@ -263,30 +373,25 @@ export default function TransactionModal({
           </div>
         </div>
 
-        {/* Subcategory */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Subcategory <span className="text-gray-400">(optional)</span>
-          </label>
-          <select
-            value={selectedSubcategory}
-            onChange={e => setSelectedSubcategory(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-            disabled={!selectedCategoryData || selectedCategoryData.subcategories.length === 0}>
-            <option value="">
-              {!selectedCategory
-                ? 'Select a category first'
-                : selectedCategoryData && selectedCategoryData.subcategories.length === 0
-                  ? 'No subcategories available'
-                  : 'None'}
-            </option>
-            {selectedCategoryData?.subcategories.map(subcategory => (
-              <option key={subcategory.id} value={subcategory.id}>
-                {subcategory.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Subcategory - only show if selected category has subcategories */}
+        {selectedCategoryData && selectedCategoryData.subcategories.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Subcategory <span className="text-gray-400">(optional)</span>
+            </label>
+            <select
+              value={selectedSubcategory}
+              onChange={e => setSelectedSubcategory(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white">
+              <option value="">None</option>
+              {selectedCategoryData.subcategories.map(subcategory => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Recurrence */}
         <div>
@@ -314,7 +419,8 @@ export default function TransactionModal({
             {isEditMode ? 'Update' : 'Save'}
           </Button>
         </div>
-      </div>
+        </div>
+      )}
     </Modal>
   );
 }

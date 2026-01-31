@@ -23,7 +23,7 @@ export function getPasswordStrength(password: string): {
   if (/[^a-zA-Z0-9]/.test(password)) score++;
 
   const labels = ['Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-  const colors = ['#EF4444', '#F59E0B', '#EAB308', '#22C55E', '#10B981'];
+  const colors = ['#F87171', '#F59E0B', '#EAB308', '#22C55E', '#10B981'];
 
   return {
     score,

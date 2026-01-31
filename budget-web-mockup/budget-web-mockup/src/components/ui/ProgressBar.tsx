@@ -25,7 +25,7 @@ export default function ProgressBar({
 
   // Determine color based on percentage if not provided
   const getDefaultColor = () => {
-    if (percentage > 80) return '#EF4444'; // Red
+    if (percentage > 80) return '#F87171'; // Lighter red
     if (percentage > 60) return '#F59E0B'; // Orange
     return '#10B981'; // Green
   };
@@ -39,9 +39,9 @@ export default function ProgressBar({
           <span className="text-sm font-medium text-gray-700">{Math.round(percentage)}%</span>
         </div>
       )}
-      <div className={`w-full bg-gray-200 rounded-full overflow-hidden ${sizeClasses[size]}`}>
+      <div className={`w-full bg-gray-100 rounded-full overflow-hidden ${sizeClasses[size]}`}>
         <div
-          className="h-full rounded-full transition-all duration-300"
+          className="h-full rounded-full transition-all duration-500 ease-out"
           style={{
             width: `${percentage}%`,
             backgroundColor: barColor,

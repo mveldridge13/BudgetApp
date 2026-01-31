@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import {goalService} from '@/services/goal.service';
 import {transactionService} from '@/services/transaction.service';
 import {userService} from '@/services/user.service';
-import {Goal} from '@/types';
+import {Goal, Transaction} from '@/types';
 
 interface DashboardData {
   balance: number;
@@ -13,6 +13,7 @@ interface DashboardData {
   activeGoal: Goal | null;
   totalSavings: number;
   activeGoalsCount: number;
+  completedGoalsCount: number;
   goals: Goal[];
   isLoading: boolean;
   error: Error | null;
@@ -34,8 +35,8 @@ export function useDashboardData(): DashboardData {
         setIsLoading(true);
         setError(null);
 
-        // Fetch income, rollover, goals and transaction summary in parallel
-        const [incomeData, rolloverData, goalsData, summaryData] =
+        // Fetch income, rollover, goals and transactions in parallel
+        const [incomeData, rolloverData, goalsData, transactions] =
           await Promise.all([
             userService.getIncome(),
             userService.getRollover().catch(() => ({
@@ -43,12 +44,13 @@ export function useDashboardData(): DashboardData {
               rolloverAmount: 0,
             })),
             goalService.getGoals(),
-            transactionService.getSummary(), // Use summary endpoint instead
+            transactionService.getTransactions(), // Fetch all transactions for breakdown
           ]);
 
         // Calculate balance: income + rollover (matching mobile app line 228)
         const income = (incomeData as {income?: number}).income || 0;
-        const rollover = (rolloverData as {rolloverAmount?: number}).rolloverAmount || 0;
+        const rollover =
+          (rolloverData as {rolloverAmount?: number}).rolloverAmount || 0;
         const calculatedBalance = income + rollover;
         setBalance(calculatedBalance);
 
@@ -59,13 +61,13 @@ export function useDashboardData(): DashboardData {
 
         setGoals(goalsArray);
 
-        // Use summary data for total expenses (should be filtered by pay period on backend)
-        const total = summaryData.totalExpenses || 0;
+        // Calculate committed (recurring) vs discretionary (one-time) from transactions
+        const {committed, discretionary} =
+          calculateCommittedVsDiscretionary(transactions);
 
-        // For now, set committed and discretionary to 0 until backend provides breakdown
-        // The mobile app calculates this client-side - we'll do the same later if needed
-        setCommittedExpenses(0);
-        setDiscretionaryExpenses(total); // Treat all as discretionary for now
+        const total = committed + discretionary;
+        setCommittedExpenses(committed);
+        setDiscretionaryExpenses(discretionary);
         setTotalExpenses(total);
 
         // Calculate left to spend: balance - total expenses (matching mobile app line 229)
@@ -92,6 +94,9 @@ export function useDashboardData(): DashboardData {
   // Calculate active goals count
   const activeGoalsCount = calculateActiveGoalsCount(goals);
 
+  // Calculate completed goals count
+  const completedGoalsCount = calculateCompletedGoalsCount(goals);
+
   // Get the first active goal for display
   const activeGoal =
     goals.find(goal =>
@@ -107,6 +112,7 @@ export function useDashboardData(): DashboardData {
     activeGoal,
     totalSavings,
     activeGoalsCount,
+    completedGoalsCount,
     goals,
     isLoading,
     error,
@@ -124,4 +130,35 @@ function calculateActiveGoalsCount(goals: Goal[]): number {
   return goalsArray.filter(goal => {
     return goal.status ? goal.status === 'ACTIVE' : goal.isActive;
   }).length;
+}
+
+function calculateCompletedGoalsCount(goals: Goal[]): number {
+  const goalsArray = Array.isArray(goals) ? goals : [];
+  return goalsArray.filter(goal => {
+    return goal.status === 'COMPLETED';
+  }).length;
+}
+
+function calculateCommittedVsDiscretionary(transactions: Transaction[]): {
+  committed: number;
+  discretionary: number;
+} {
+  let committed = 0;
+  let discretionary = 0;
+
+  transactions.forEach(transaction => {
+    const amount = Math.abs(transaction.amount);
+    const recurrence =
+      transaction.recurrence ||
+      (transaction.isRecurring ? transaction.recurringPattern?.type : 'none');
+
+    // Recurring transactions are committed, one-time are discretionary
+    if (recurrence && recurrence !== 'none') {
+      committed += amount;
+    } else {
+      discretionary += amount;
+    }
+  });
+
+  return {committed, discretionary};
 }
