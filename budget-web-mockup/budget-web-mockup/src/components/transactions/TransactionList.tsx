@@ -18,12 +18,14 @@ interface TransactionListProps {
   summary?: TransactionSummary | null;
   onEdit?: (transaction: Transaction) => void;
   onDelete?: (id: string) => void;
+  onMarkPaid?: (id: string) => void;
 }
 
 export default function TransactionList({
   transactions,
   onEdit,
   onDelete,
+  onMarkPaid,
 }: TransactionListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
@@ -212,6 +214,26 @@ export default function TransactionList({
 
             const frequency = getFrequencyLabel(transaction);
 
+            // Determine payment status
+            const getPaymentStatus = () => {
+              if (!transaction.dueDate || frequency === 'One-time') return null;
+
+              const dueDate = new Date(transaction.dueDate);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              dueDate.setHours(0, 0, 0, 0);
+
+              if (transaction.status === 'PAID') return null; // Don't show status if already paid
+
+              if (dueDate < today) {
+                return { label: 'Overdue', color: '#EF4444' };
+              } else {
+                return { label: 'Upcoming', color: '#3B82F6' };
+              }
+            };
+
+            const paymentStatus = getPaymentStatus();
+
             return (
               <div
                 key={transaction.id}
@@ -237,20 +259,33 @@ export default function TransactionList({
                         {transaction.description}
                       </h4>
                       {frequency !== 'One-time' && (
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          style={{ color: '#4CAF50' }}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                          />
-                        </svg>
+                        <>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            style={{ color: '#4CAF50' }}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                          {paymentStatus && (
+                            <span
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                              style={{
+                                color: paymentStatus.color,
+                                backgroundColor: `${paymentStatus.color}15`
+                              }}
+                            >
+                              {paymentStatus.label}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                     <p className="text-sm text-gray-600">
@@ -271,6 +306,19 @@ export default function TransactionList({
 
                   {/* Actions */}
                   <div className="flex gap-2">
+                    {frequency !== 'One-time' && onMarkPaid && (
+                      <button
+                        onClick={() => onMarkPaid(transaction.id)}
+                        disabled={transaction.status === 'PAID'}
+                        className={`px-3 py-1.5 text-sm font-medium border rounded-lg transition-all ${
+                          transaction.status === 'PAID'
+                            ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
+                            : 'hover:bg-green-50'
+                        }`}
+                        style={transaction.status === 'PAID' ? {} : { color: '#10B981', borderColor: '#a7f3d0' }}>
+                        {transaction.status === 'PAID' ? 'Paid ✓' : 'Paid'}
+                      </button>
+                    )}
                     {onEdit && (
                       <button
                         onClick={() => onEdit(transaction)}

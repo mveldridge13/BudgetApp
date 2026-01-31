@@ -60,6 +60,16 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleMarkPaid = async (id: string) => {
+    try {
+      await updateTransaction(id, { status: 'PAID' });
+      refresh();
+    } catch (err) {
+      console.error('Failed to mark transaction as paid:', err);
+      alert('Failed to mark transaction as paid. Please try again.');
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingTransaction(null);
@@ -115,6 +125,7 @@ export default function TransactionsPage() {
           summary={summary}
           onEdit={handleEditTransaction}
           onDelete={handleDeleteTransaction}
+          onMarkPaid={handleMarkPaid}
         />
       )}
 

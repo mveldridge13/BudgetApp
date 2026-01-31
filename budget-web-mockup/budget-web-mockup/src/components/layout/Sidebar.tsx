@@ -138,7 +138,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-65px)] sticky top-[65px]">
+    <aside className="w-64 min-h-[calc(100vh-65px)] sticky top-[65px]" style={{ backgroundColor: '#6366f1' }}>
       <div className="p-6">
         <nav className="space-y-1">
           {menuItems.map((item) => (
@@ -147,9 +147,20 @@ export default function Sidebar() {
               href={item.href}
               className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive(item.href)
-                  ? 'bg-blue-50 text-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'text-white'
+                  : 'text-white text-opacity-80'
               }`}
+              style={isActive(item.href) ? { backgroundColor: '#7c7ff5' } : {}}
+              onMouseEnter={(e) => {
+                if (!isActive(item.href)) {
+                  e.currentTarget.style.backgroundColor = '#5b5fc7';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive(item.href)) {
+                  e.currentTarget.style.backgroundColor = '';
+                }
+              }}
             >
               {item.icon}
               <span>{item.name}</span>
@@ -158,14 +169,20 @@ export default function Sidebar() {
         </nav>
 
         <div className="mt-8">
-          <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <h3 className="px-3 text-xs font-semibold text-white text-opacity-60 uppercase tracking-wider">
             QUICK ACTIONS
           </h3>
           <div className="mt-3 space-y-1">
             {quickActions.map((action) => (
               <button
                 key={action.id}
-                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white text-opacity-80 transition-colors"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#5b5fc7';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '';
+                }}
               >
                 {action.icon}
                 <span>{action.name}</span>
@@ -176,14 +193,25 @@ export default function Sidebar() {
       </div>
 
       {/* Settings link at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-gray-200">
+      <div className="absolute bottom-0 left-0 right-0 p-6 border-t" style={{ borderColor: '#7c7ff5' }}>
         <Link
           href="/settings"
           className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
             pathname.startsWith('/settings')
-              ? 'bg-blue-50 text-blue-600'
-              : 'text-gray-600 hover:bg-gray-50'
+              ? 'text-white'
+              : 'text-white text-opacity-80'
           }`}
+          style={pathname.startsWith('/settings') ? { backgroundColor: '#7c7ff5' } : {}}
+          onMouseEnter={(e) => {
+            if (!pathname.startsWith('/settings')) {
+              e.currentTarget.style.backgroundColor = '#5b5fc7';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!pathname.startsWith('/settings')) {
+              e.currentTarget.style.backgroundColor = '';
+            }
+          }}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

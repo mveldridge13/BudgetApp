@@ -20,6 +20,11 @@ const iconMap: Record<string, IconType> = {
   'home-outline': IoIcons.IoHomeOutline,
   'fitness-outline': IoIcons.IoFitnessOutline,
   'medkit-outline': IoIcons.IoMedkitOutline,
+  'medical-outline': IoIcons.IoMedkitOutline,
+  'health-outline': IoIcons.IoMedkitOutline,
+  'healthcare-outline': IoIcons.IoMedkitOutline,
+  'medkit': IoIcons.IoMedkitOutline,
+  'medical': IoIcons.IoMedkitOutline,
   'gift-outline': IoIcons.IoGiftOutline,
   'shirt-outline': IoIcons.IoShirtOutline,
   'book-outline': IoIcons.IoBookOutline,
@@ -69,6 +74,11 @@ const iconMap: Record<string, IconType> = {
 export default function CategoryIcon({ iconName, size = 20, color, className = '' }: CategoryIconProps) {
   // Get the icon component from the map
   const IconComponent = iconMap[iconName] || iconMap['help-circle-outline'];
+
+  // Log when fallback icon is used to help debug missing icons
+  if (!iconMap[iconName] && iconName) {
+    console.warn(`Icon not found: "${iconName}" - using fallback. Add this to iconMap in CategoryIcon.tsx`);
+  }
 
   return (
     <IconComponent

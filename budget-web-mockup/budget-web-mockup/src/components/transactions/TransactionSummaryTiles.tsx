@@ -64,8 +64,8 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
     0,
   );
 
-  // Use custom hook for month-over-month comparison
-  const { thisMonthTotal, percentageChange, isIncrease, isDecrease } = useMonthOverMonthComparison(transactions);
+  // Use custom hook for pay period comparison
+  const { currentPeriodTotal, previousPeriodTotal, percentageChange, isIncrease, isDecrease } = useMonthOverMonthComparison(transactions);
 
   // Use custom hook for recurring vs one-off comparison
   const { recurringPercentage, oneOffPercentage } = useRecurringVsOneOffComparison(transactions);
@@ -107,12 +107,12 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
         </p>
       </div>
 
-      {/* Month-over-Month Comparison */}
+      {/* Pay Period Comparison */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-shadow" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)' }}>
-        <p className="text-sm font-medium text-gray-500 mb-1">vs Last Month</p>
+        <p className="text-sm font-medium text-gray-500 mb-1">vs Last Pay Period</p>
         <div className="flex items-baseline gap-2 mb-1">
-          <p className="text-3xl font-bold text-gray-900">{formatCurrency(thisMonthTotal)}</p>
-          {percentageChange !== 0 && (
+          <p className="text-3xl font-bold text-gray-900">{formatCurrency(currentPeriodTotal)}</p>
+          {percentageChange !== 0 && previousPeriodTotal > 0 && currentPeriodTotal > 0 && (
             <div className="flex items-center gap-1">
               <svg
                 className="w-4 h-4"
@@ -135,7 +135,17 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
           )}
         </div>
         <p className="text-xs text-gray-400">
-          {isIncrease ? 'Higher' : isDecrease ? 'Lower' : 'Same'} than last month
+          {previousPeriodTotal === 0 && currentPeriodTotal === 0
+            ? 'No transactions yet'
+            : previousPeriodTotal === 0
+            ? 'No previous period data'
+            : currentPeriodTotal === 0
+            ? 'No transactions this period'
+            : isIncrease
+            ? 'Higher than last period'
+            : isDecrease
+            ? 'Lower than last period'
+            : 'Same as last period'}
         </p>
       </div>
 

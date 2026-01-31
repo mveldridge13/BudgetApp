@@ -2,11 +2,13 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
+import { useUser } from '@/hooks/useUser';
 import Link from 'next/link';
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { settings, updateSettings } = useAppSettings();
+  const { income, updateIncome } = useUser();
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -64,24 +66,36 @@ export default function SettingsPage() {
             </select>
           </div>
 
-          {/* Budget Period */}
+          {/* Pay Period (from backend income frequency) */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-gray-900">Budget Period</p>
-              <p className="text-sm text-gray-500">Default budgeting period</p>
+              <p className="font-medium text-gray-900">Pay Period</p>
+              <p className="text-sm text-gray-500">How often you get paid</p>
             </div>
             <select
-              value={settings.budgetPeriod}
-              onChange={(e) =>
-                updateSettings({
-                  budgetPeriod: e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY',
-                })
-              }
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              value={income?.frequency || 'MONTHLY'}
+              onChange={async (e) => {
+                const newFrequency = e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
+                if (income) {
+                  try {
+                    await updateIncome({
+                      amount: income.amount,
+                      frequency: newFrequency,
+                      source: income.source,
+                    });
+                  } catch (error) {
+                    console.error('Failed to update pay period:', error);
+                    alert('Failed to update pay period. Please try again.');
+                  }
+                }
+              }}
+              disabled={!income}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="WEEKLY">Weekly</option>
               <option value="FORTNIGHTLY">Fortnightly</option>
               <option value="MONTHLY">Monthly</option>
+              <option value="YEARLY">Yearly</option>
             </select>
           </div>
 
