@@ -3,8 +3,9 @@
 import {useState} from 'react';
 import {Transaction, TransactionSummary} from '@/types';
 import {formatCurrency, formatDate} from '@/lib/formatters';
-import {CategoryIcon} from '@/components/ui';
+import {CategoryIcon, CustomSelect} from '@/components/ui';
 import TransactionSummaryTiles from './TransactionSummaryTiles';
+import TransactionDetailPanel from './TransactionDetailPanel';
 
 interface CategoryObject {
   id: string;
@@ -17,6 +18,7 @@ interface TransactionListProps {
   transactions: Transaction[];
   summary?: TransactionSummary | null;
   onEdit?: (transaction: Transaction) => void;
+  onUpdate?: (id: string, data: Partial<Transaction>) => Promise<void>;
   onDelete?: (id: string) => void;
   onMarkPaid?: (id: string) => void;
 }
@@ -24,6 +26,7 @@ interface TransactionListProps {
 export default function TransactionList({
   transactions,
   onEdit,
+  onUpdate,
   onDelete,
   onMarkPaid,
 }: TransactionListProps) {
@@ -31,6 +34,7 @@ export default function TransactionList({
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
   const [frequencyFilter, setFrequencyFilter] = useState('All Frequencies');
   const [sortOrder, setSortOrder] = useState('Newest First');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
   // Filter and sort transactions
   const filteredTransactions = transactions
@@ -159,33 +163,41 @@ export default function TransactionList({
             className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={e => setCategoryFilter(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
-          {categories.map(cat => (
-            <option key={cat}>{cat}</option>
-          ))}
-        </select>
-        <select
-          value={frequencyFilter}
-          onChange={e => setFrequencyFilter(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
-          <option>All Frequencies</option>
-          <option>One-time</option>
-          <option>Weekly</option>
-          <option>Monthly</option>
-          <option>Yearly</option>
-        </select>
-        <select
-          value={sortOrder}
-          onChange={e => setSortOrder(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white">
-          <option>Newest First</option>
-          <option>Oldest First</option>
-          <option>Highest Amount</option>
-          <option>Lowest Amount</option>
-        </select>
+        <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white min-w-[180px]">
+          <CustomSelect
+            value={categoryFilter}
+            onChange={(value) => setCategoryFilter(value)}
+            options={categories.map(cat => ({ value: cat, label: cat }))}
+            placeholder="All Categories"
+          />
+        </div>
+        <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white min-w-[180px]">
+          <CustomSelect
+            value={frequencyFilter}
+            onChange={(value) => setFrequencyFilter(value)}
+            options={[
+              { value: 'All Frequencies', label: 'All Frequencies' },
+              { value: 'One-time', label: 'One-time' },
+              { value: 'Weekly', label: 'Weekly' },
+              { value: 'Monthly', label: 'Monthly' },
+              { value: 'Yearly', label: 'Yearly' },
+            ]}
+            placeholder="All Frequencies"
+          />
+        </div>
+        <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white min-w-[180px]">
+          <CustomSelect
+            value={sortOrder}
+            onChange={(value) => setSortOrder(value)}
+            options={[
+              { value: 'Newest First', label: 'Newest First' },
+              { value: 'Oldest First', label: 'Oldest First' },
+              { value: 'Highest Amount', label: 'Highest Amount' },
+              { value: 'Lowest Amount', label: 'Lowest Amount' },
+            ]}
+            placeholder="Sort by"
+          />
+        </div>
       </div>
 
       {/* Transaction List */}
@@ -237,16 +249,19 @@ export default function TransactionList({
             return (
               <div
                 key={transaction.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-shadow">
+                onClick={() => setSelectedTransaction(transaction)}
+                className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-lg hover:border-gray-200 transition-all cursor-pointer group"
+                style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)' }}
+              >
                 <div className="flex items-center">
                   {/* Circle Icon */}
                   <div className="mr-4">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center"
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform"
                       style={{backgroundColor: `${categoryColor}20`}}>
                       <CategoryIcon
                         iconName={categoryIcon}
-                        size={20}
+                        size={24}
                         color={categoryColor}
                       />
                     </div>
@@ -304,36 +319,27 @@ export default function TransactionList({
                     </p>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex gap-2">
+                  {/* Quick Actions */}
+                  <div className="flex items-center gap-3">
                     {frequency !== 'One-time' && onMarkPaid && (
-                      <button
-                        onClick={() => onMarkPaid(transaction.id)}
-                        disabled={transaction.status === 'PAID'}
-                        className={`px-3 py-1.5 text-sm font-medium border rounded-lg transition-all ${
-                          transaction.status === 'PAID'
-                            ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
-                            : 'hover:bg-green-50'
-                        }`}
-                        style={transaction.status === 'PAID' ? {} : { color: '#10B981', borderColor: '#a7f3d0' }}>
-                        {transaction.status === 'PAID' ? 'Paid ✓' : 'Paid'}
-                      </button>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => onMarkPaid(transaction.id)}
+                          disabled={transaction.status === 'PAID'}
+                          className={`px-3 py-1.5 text-sm font-medium border rounded-lg transition-all ${
+                            transaction.status === 'PAID'
+                              ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed'
+                              : 'hover:bg-green-50'
+                          }`}
+                          style={transaction.status === 'PAID' ? {} : { color: '#10B981', borderColor: '#a7f3d0' }}>
+                          {transaction.status === 'PAID' ? 'Paid ✓' : 'Paid'}
+                        </button>
+                      </div>
                     )}
-                    {onEdit && (
-                      <button
-                        onClick={() => onEdit(transaction)}
-                        className="px-3 py-1.5 text-sm font-medium border rounded-lg transition-all hover:bg-indigo-50"
-                        style={{ color: '#6366f1', borderColor: '#c7d2fe' }}>
-                        Edit
-                      </button>
-                    )}
-                    {onDelete && (
-                      <button
-                        onClick={() => onDelete(transaction.id)}
-                        className="px-3 py-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 text-sm font-medium border border-red-200 rounded-lg transition-colors">
-                        Delete
-                      </button>
-                    )}
+                    {/* Chevron indicator */}
+                    <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
                 </div>
               </div>
@@ -341,6 +347,17 @@ export default function TransactionList({
           })
         )}
       </div>
+
+      {/* Transaction Detail Panel */}
+      <TransactionDetailPanel
+        transaction={selectedTransaction}
+        isOpen={!!selectedTransaction}
+        onClose={() => setSelectedTransaction(null)}
+        onEdit={onEdit}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        onMarkPaid={onMarkPaid}
+      />
     </div>
   );
 }

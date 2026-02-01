@@ -111,8 +111,10 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
       <div className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-shadow" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)' }}>
         <p className="text-sm font-medium text-gray-500 mb-1">vs Last Pay Period</p>
         <div className="flex items-baseline gap-2 mb-1">
-          <p className="text-3xl font-bold text-gray-900">{formatCurrency(currentPeriodTotal)}</p>
-          {percentageChange !== 0 && previousPeriodTotal > 0 && currentPeriodTotal > 0 && (
+          <p className="text-3xl font-bold" style={{ color: previousPeriodTotal === 0 ? '#6B7280' : isIncrease ? '#F87171' : isDecrease ? '#10B981' : '#6B7280' }}>
+            {previousPeriodTotal === 0 ? '' : isIncrease ? '+' : isDecrease ? '-' : ''}{formatCurrency(Math.abs(currentPeriodTotal - previousPeriodTotal))}
+          </p>
+          {percentageChange !== 0 && previousPeriodTotal > 0 && (currentPeriodTotal > 0 || previousPeriodTotal > 0) && (
             <div className="flex items-center gap-1">
               <svg
                 className="w-4 h-4"
@@ -135,16 +137,16 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
           )}
         </div>
         <p className="text-xs text-gray-400">
-          {previousPeriodTotal === 0 && currentPeriodTotal === 0
+          {currentPeriodTotal === 0 && previousPeriodTotal === 0
             ? 'No transactions yet'
             : previousPeriodTotal === 0
-            ? 'No previous period data'
+            ? 'Baseline created'
             : currentPeriodTotal === 0
             ? 'No transactions this period'
             : isIncrease
-            ? 'Higher than last period'
+            ? 'More than last period'
             : isDecrease
-            ? 'Lower than last period'
+            ? 'Less than last period'
             : 'Same as last period'}
         </p>
       </div>

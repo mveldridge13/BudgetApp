@@ -4,6 +4,7 @@ export interface UserIncome {
   frequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
   source?: string;
   isActive: boolean;
+  nextPayDate?: string;
 }
 
 export interface UpdateIncomeData {

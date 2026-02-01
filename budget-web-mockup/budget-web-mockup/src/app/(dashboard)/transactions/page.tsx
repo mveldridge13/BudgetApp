@@ -124,6 +124,10 @@ export default function TransactionsPage() {
           transactions={transactions}
           summary={summary}
           onEdit={handleEditTransaction}
+          onUpdate={async (id, data) => {
+            await updateTransaction(id, data as any);
+            refresh();
+          }}
           onDelete={handleDeleteTransaction}
           onMarkPaid={handleMarkPaid}
         />
