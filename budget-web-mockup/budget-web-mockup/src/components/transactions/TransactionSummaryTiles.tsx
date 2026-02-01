@@ -65,7 +65,7 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
   );
 
   // Use custom hook for pay period comparison
-  const { currentPeriodTotal, previousPeriodTotal, percentageChange, isIncrease, isDecrease } = useMonthOverMonthComparison(transactions);
+  const { currentPeriodTotal, previousPeriodTotal, percentageChange, isIncrease, isDecrease, isLoading } = useMonthOverMonthComparison(transactions);
 
   // Use custom hook for recurring vs one-off comparison
   const { recurringPercentage, oneOffPercentage } = useRecurringVsOneOffComparison(transactions);
@@ -110,10 +110,19 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
       {/* Pay Period Comparison */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-shadow" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)' }}>
         <p className="text-sm font-medium text-gray-500 mb-1">vs Last Pay Period</p>
-        <div className="flex items-baseline gap-2 mb-1">
-          <p className="text-3xl font-bold" style={{ color: previousPeriodTotal === 0 ? '#6B7280' : isIncrease ? '#F87171' : isDecrease ? '#10B981' : '#6B7280' }}>
-            {previousPeriodTotal === 0 ? '' : isIncrease ? '+' : isDecrease ? '-' : ''}{formatCurrency(Math.abs(currentPeriodTotal - previousPeriodTotal))}
-          </p>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <svg className="animate-spin h-8 w-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-2 mb-1">
+              <p className="text-3xl font-bold" style={{ color: previousPeriodTotal === 0 ? '#6B7280' : isIncrease ? '#F87171' : isDecrease ? '#10B981' : '#6B7280' }}>
+                {previousPeriodTotal === 0 ? '' : isIncrease ? '+' : isDecrease ? '-' : ''}{formatCurrency(Math.abs(currentPeriodTotal - previousPeriodTotal))}
+              </p>
           {percentageChange !== 0 && previousPeriodTotal > 0 && (currentPeriodTotal > 0 || previousPeriodTotal > 0) && (
             <div className="flex items-center gap-1">
               <svg
@@ -135,20 +144,22 @@ export default function TransactionSummaryTiles({ transactions }: TransactionSum
               </span>
             </div>
           )}
-        </div>
-        <p className="text-xs text-gray-400">
-          {currentPeriodTotal === 0 && previousPeriodTotal === 0
-            ? 'No transactions yet'
-            : previousPeriodTotal === 0
-            ? 'Baseline created'
-            : currentPeriodTotal === 0
-            ? 'No transactions this period'
-            : isIncrease
-            ? 'More than last period'
-            : isDecrease
-            ? 'Less than last period'
-            : 'Same as last period'}
-        </p>
+            </div>
+            <p className="text-xs text-gray-400">
+              {currentPeriodTotal === 0 && previousPeriodTotal === 0
+                ? 'No transactions yet'
+                : previousPeriodTotal === 0
+                ? 'Baseline created'
+                : currentPeriodTotal === 0
+                ? 'No transactions this period'
+                : isIncrease
+                ? 'More than last period'
+                : isDecrease
+                ? 'Less than last period'
+                : 'Same as last period'}
+            </p>
+          </>
+        )}
       </div>
 
       {/* Recurring vs One-Off */}

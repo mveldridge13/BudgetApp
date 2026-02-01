@@ -8,10 +8,11 @@ interface PayPeriodComparison {
   percentageChange: number;
   isIncrease: boolean;
   isDecrease: boolean;
+  isLoading: boolean;
 }
 
 export function useMonthOverMonthComparison(transactions: Transaction[]): PayPeriodComparison {
-  const { income } = useUser();
+  const { income, isLoading: isUserLoading } = useUser();
 
   return useMemo(() => {
     const now = new Date();
@@ -160,6 +161,7 @@ export function useMonthOverMonthComparison(transactions: Transaction[]): PayPer
       percentageChange,
       isIncrease,
       isDecrease,
+      isLoading: isUserLoading || !income?.nextPayDate,
     };
-  }, [transactions, income?.frequency]);
+  }, [transactions, income?.frequency, income?.nextPayDate, isUserLoading]);
 }
