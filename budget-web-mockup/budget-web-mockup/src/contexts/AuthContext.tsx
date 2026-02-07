@@ -40,15 +40,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Check for existing session on mount
   useEffect(() => {
     const initAuth = async () => {
-      console.log('[AuthContext] initAuth called');
-      console.log('[AuthContext] hasToken:', tokenStorage.hasToken());
-      console.log('[AuthContext] token value:', tokenStorage.getToken()?.substring(0, 20) + '...');
-
       if (tokenStorage.hasToken()) {
         // Trust the token if it exists (matching mobile app behavior)
         // The token will be validated on actual API calls
         // If invalid, the API will return 401 and we'll redirect to login
-        console.log('[AuthContext] Token exists, setting isAuthenticated to true');
         setState({
           user: null, // Will be populated on first profile fetch
           isAuthenticated: true,
@@ -58,9 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Try to fetch profile in background (non-blocking)
         try {
-          console.log('[AuthContext] Fetching profile...');
           const profile = await authService.getProfile();
-          console.log('[AuthContext] Profile fetched:', profile);
           setState((prev) => ({
             ...prev,
             user: profile as User,
@@ -68,10 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           // Profile fetch failed, but keep user authenticated
           // They'll be logged out if API returns 401 on other calls
-          console.warn('[AuthContext] Profile fetch failed:', err);
         }
       } else {
-        console.log('[AuthContext] No token, setting isAuthenticated to false');
         setState({
           user: null,
           isAuthenticated: false,
@@ -85,22 +76,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    console.log('[AuthContext] login called');
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
       const response = await authService.login(credentials);
-      console.log('[AuthContext] login response:', response);
-      console.log('[AuthContext] token after login:', tokenStorage.getToken()?.substring(0, 20) + '...');
       setState({
         user: response.user,
         isAuthenticated: true,
         isLoading: false,
         error: null,
       });
-      console.log('[AuthContext] state set to authenticated');
     } catch (error) {
-      console.error('[AuthContext] login error:', error);
       const message = error instanceof Error ? error.message : 'Login failed';
       setState((prev) => ({
         ...prev,
@@ -153,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const updatedProfile = await authService.updateProfile(data);
+
       setState((prev) => ({
         ...prev,
         user: { ...prev.user!, ...updatedProfile },
@@ -170,7 +157,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (!state.isAuthenticated) return;
+    if (!state.isAuthenticated) {
+      return;
+    }
 
     try {
       const profile = await authService.getProfile();
@@ -179,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: profile as User,
       }));
     } catch (error) {
-      console.error('Failed to refresh profile:', error);
+      // Profile refresh failed silently
     }
   }, [state.isAuthenticated]);
 

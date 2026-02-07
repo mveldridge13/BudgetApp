@@ -47,7 +47,8 @@ export default function RegisterForm() {
 
     try {
       await register({ email, password, firstName, lastName });
-      router.push('/');
+      // Redirect to income setup (matching mobile app flow)
+      router.push('/income-setup');
     } catch {
       // Error is handled by auth context
     }

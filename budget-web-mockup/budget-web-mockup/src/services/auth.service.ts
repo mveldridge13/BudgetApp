@@ -37,8 +37,10 @@ class AuthService {
       currency,
     });
 
-    if (response.token) {
-      tokenStorage.setToken(response.token);
+    // API returns access_token, not token (same as login)
+    const token = response.access_token || response.token;
+    if (token) {
+      tokenStorage.setToken(token);
     }
 
     return response;
@@ -64,6 +66,16 @@ class AuthService {
 
   async updateProfile(data: UpdateProfileData): Promise<UserProfile> {
     const response = await api.put<UserProfile>('/auth/profile', data);
+    return response;
+  }
+
+  // Income-specific endpoints (matching mobile app)
+  async getIncomeProfile(): Promise<UserProfile> {
+    return api.get<UserProfile>('/users/income');
+  }
+
+  async updateIncomeProfile(incomeData: UpdateProfileData): Promise<UserProfile> {
+    const response = await api.put<UserProfile>('/users/income', incomeData);
     return response;
   }
 

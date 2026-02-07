@@ -30,6 +30,9 @@ export interface User {
   hasSeenTransactionSwipeTour: boolean;
   setupComplete: boolean;
   hasSeenWelcome: boolean;
+  income?: number;
+  incomeFrequency?: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY';
+  nextPayDate?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -51,6 +54,11 @@ export interface UpdateProfileData {
   lastName?: string;
   timezone?: string;
   currency?: string;
+  income?: number;
+  incomeFrequency?: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY';
+  nextPayDate?: string;
+  setupComplete?: boolean;
+  hasSeenWelcome?: boolean;
 }
 
 export interface ChangePasswordData {

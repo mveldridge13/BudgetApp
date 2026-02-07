@@ -6,3 +6,4 @@ export { useUser } from './useUser';
 export { useAnalytics } from './useAnalytics';
 export { useDashboardMetrics } from './useDashboardMetrics';
 export { useDashboardData } from './useDashboardData';
+export { useIncomeSetup } from './useIncomeSetup';
