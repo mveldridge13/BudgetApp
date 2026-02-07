@@ -60,6 +60,24 @@ const iconMap: Record<string, IconType> = {
   'rose-outline': IoIcons.IoRoseOutline,
   'tennisball-outline': IoIcons.IoTennisballOutline,
   'umbrella-outline': IoIcons.IoUmbrellaOutline,
+  'receipt-outline': IoIcons.IoReceiptOutline,
+  'wifi-outline': IoIcons.IoWifiOutline,
+  'call-outline': IoIcons.IoCallOutline,
+  'bag-outline': IoIcons.IoBagOutline,
+  'car-sport-outline': IoIcons.IoCarSportOutline,
+  'construct-outline': IoIcons.IoConstructOutline,
+  'document-text-outline': IoIcons.IoDocumentTextOutline,
+  'laptop-outline': IoIcons.IoLaptopOutline,
+  'location-outline': IoIcons.IoLocationOutline,
+  'person-outline': IoIcons.IoPersonOutline,
+  'restaurant': IoIcons.IoRestaurant,
+  'shield-checkmark-outline': IoIcons.IoShieldCheckmarkOutline,
+  'shield-outline': IoIcons.IoShieldOutline,
+  'sparkles-outline': IoIcons.IoSparklesOutline,
+  'ticket-outline': IoIcons.IoTicketOutline,
+  'time-outline': IoIcons.IoTimeOutline,
+  'train-outline': IoIcons.IoTrainOutline,
+  'trending-up-outline': IoIcons.IoTrendingUpOutline,
 
   // Navigation and utility icons
   'help-circle-outline': IoIcons.IoHelpCircleOutline,
@@ -74,11 +92,6 @@ const iconMap: Record<string, IconType> = {
 export default function CategoryIcon({ iconName, size = 20, color, className = '' }: CategoryIconProps) {
   // Get the icon component from the map
   const IconComponent = iconMap[iconName] || iconMap['help-circle-outline'];
-
-  // Log when fallback icon is used to help debug missing icons
-  if (!iconMap[iconName] && iconName) {
-    console.warn(`Icon not found: "${iconName}" - using fallback. Add this to iconMap in CategoryIcon.tsx`);
-  }
 
   return (
     <IconComponent
