@@ -3,9 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { goalService } from '@/services/goal.service';
 import {
-  Goal,
-  CreateGoalData,
-  UpdateGoalData,
+  GoalDisplay,
   GoalFilters,
   GoalsSummary,
   CreateContributionData,
@@ -13,22 +11,22 @@ import {
 } from '@/types';
 
 interface UseGoalsReturn {
-  goals: Goal[];
+  goals: GoalDisplay[];
   summary: GoalsSummary | null;
   isLoading: boolean;
   error: string | null;
   fetchGoals: (filters?: GoalFilters) => Promise<void>;
-  createGoal: (data: CreateGoalData) => Promise<Goal>;
-  updateGoal: (id: string, data: UpdateGoalData) => Promise<Goal>;
+  createGoal: (data: Partial<GoalDisplay>) => Promise<GoalDisplay>;
+  updateGoal: (id: string, data: Partial<GoalDisplay>) => Promise<GoalDisplay>;
   deleteGoal: (id: string) => Promise<void>;
   addContribution: (goalId: string, data: CreateContributionData) => Promise<GoalContribution>;
-  getProgress: (goal: Goal) => number;
+  getProgress: (goal: GoalDisplay) => number;
   getDaysRemaining: (targetDate: string) => number;
   refresh: () => Promise<void>;
 }
 
 export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goals, setGoals] = useState<GoalDisplay[]>([]);
   const [summary, setSummary] = useState<GoalsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +53,7 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
     }
   }, []);
 
-  const createGoal = useCallback(async (data: CreateGoalData): Promise<Goal> => {
+  const createGoal = useCallback(async (data: Partial<GoalDisplay>): Promise<GoalDisplay> => {
     setError(null);
 
     try {
@@ -72,7 +70,7 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
     }
   }, []);
 
-  const updateGoal = useCallback(async (id: string, data: UpdateGoalData): Promise<Goal> => {
+  const updateGoal = useCallback(async (id: string, data: Partial<GoalDisplay>): Promise<GoalDisplay> => {
     setError(null);
 
     try {
@@ -119,7 +117,7 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
       setGoals((prev) =>
         prev.map((g) =>
           g.id === goalId
-            ? { ...g, currentAmount: g.currentAmount + data.amount }
+            ? { ...g, current: g.current + Number(data.amount) }
             : g
         )
       );
@@ -132,7 +130,7 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
     }
   }, []);
 
-  const getProgress = useCallback((goal: Goal): number => {
+  const getProgress = useCallback((goal: GoalDisplay): number => {
     return goalService.calculateProgress(goal);
   }, []);
 
@@ -147,6 +145,7 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
   // Initial fetch
   useEffect(() => {
     fetchGoals(initialFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

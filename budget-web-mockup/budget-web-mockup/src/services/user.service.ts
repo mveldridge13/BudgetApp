@@ -40,7 +40,7 @@ class UserService {
   }
 
   async getRolloverHistory(filters?: { startDate?: string; endDate?: string }): Promise<RolloverHistory> {
-    return api.get<RolloverHistory>('/users/rollover/history', filters);
+    return api.get<RolloverHistory>('/users/rollover/history', filters as Record<string, unknown> | undefined);
   }
 
   // Account management

@@ -5,7 +5,7 @@ import {useTransactions} from '@/hooks/useTransactions';
 import TransactionList from '@/components/transactions/TransactionList';
 import TransactionModal from '@/components/transactions/TransactionModal';
 import {Spinner} from '@/components/ui';
-import {Transaction} from '@/types';
+import {Transaction, UpdateTransactionData} from '@/types';
 
 export default function TransactionsPage() {
   const {
@@ -125,7 +125,7 @@ export default function TransactionsPage() {
           summary={summary}
           onEdit={handleEditTransaction}
           onUpdate={async (id, data) => {
-            await updateTransaction(id, data as any);
+            await updateTransaction(id, data as UpdateTransactionData);
             refresh();
           }}
           onDelete={handleDeleteTransaction}

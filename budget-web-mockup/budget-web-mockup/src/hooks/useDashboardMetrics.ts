@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { goalService } from '@/services/goal.service';
-import { Goal } from '@/types';
+import { GoalDisplay } from '@/types';
 
 interface DashboardMetrics {
   totalSavings: number;
   activeGoalsCount: number;
-  goals: Goal[];
+  goals: GoalDisplay[];
   isLoading: boolean;
   error: Error | null;
 }
 
 export function useDashboardMetrics(): DashboardMetrics {
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goals, setGoals] = useState<GoalDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -21,13 +21,7 @@ export function useDashboardMetrics(): DashboardMetrics {
         setIsLoading(true);
         setError(null);
         const data = await goalService.getGoals();
-        // Handle response that wraps goals in an object
-        const goalsArray = Array.isArray(data)
-          ? data
-          : (data as any).goals
-            ? (data as any).goals
-            : [];
-        setGoals(goalsArray);
+        setGoals(data);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to fetch goals'));
         console.error('Failed to fetch goals:', err);
@@ -55,14 +49,12 @@ export function useDashboardMetrics(): DashboardMetrics {
 }
 
 // Business logic functions
-function calculateTotalSavings(goals: Goal[]): number {
+function calculateTotalSavings(goals: GoalDisplay[]): number {
   const goalsArray = Array.isArray(goals) ? goals : [];
-  return goalsArray.reduce((sum, goal) => sum + (goal.currentAmount || 0), 0);
+  return goalsArray.reduce((sum, goal) => sum + (goal.current || 0), 0);
 }
 
-function calculateActiveGoalsCount(goals: Goal[]): number {
+function calculateActiveGoalsCount(goals: GoalDisplay[]): number {
   const goalsArray = Array.isArray(goals) ? goals : [];
-  return goalsArray.filter(goal => {
-    return goal.status ? goal.status === 'ACTIVE' : goal.isActive;
-  }).length;
+  return goalsArray.filter(goal => goal.isActive).length;
 }

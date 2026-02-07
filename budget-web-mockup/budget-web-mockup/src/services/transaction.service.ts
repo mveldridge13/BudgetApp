@@ -12,7 +12,7 @@ import {
 
 class TransactionService {
   async getTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
-    return api.get<Transaction[]>('/transactions', filters);
+    return api.get<Transaction[]>('/transactions', filters as Record<string, unknown> | undefined);
   }
 
   async getTransaction(id: string): Promise<Transaction> {
@@ -42,7 +42,7 @@ class TransactionService {
     query: string,
     filters?: TransactionFilters,
   ): Promise<Transaction[]> {
-    return api.get<Transaction[]>('/transactions/search', {query, ...filters});
+    return api.get<Transaction[]>('/transactions/search', {query, ...(filters as Record<string, unknown> | undefined || {})});
   }
 
   async getTransactionsByCategory(
@@ -66,19 +66,19 @@ class TransactionService {
   }
 
   async getSummary(filters?: TransactionFilters): Promise<TransactionSummary> {
-    return api.get<TransactionSummary>('/transactions/summary', filters);
+    return api.get<TransactionSummary>('/transactions/summary', filters as Record<string, unknown> | undefined);
   }
 
   async getAnalytics(
     filters?: TransactionFilters,
   ): Promise<TransactionAnalytics> {
-    return api.get<TransactionAnalytics>('/transactions/analytics', filters);
+    return api.get<TransactionAnalytics>('/transactions/analytics', filters as Record<string, unknown> | undefined);
   }
 
   async getBillsAnalytics(
     filters?: TransactionFilters,
   ): Promise<BillsAnalytics> {
-    return api.get<BillsAnalytics>('/transactions/bills-analytics', filters);
+    return api.get<BillsAnalytics>('/transactions/bills-analytics', filters as Record<string, unknown> | undefined);
   }
 
   async getIncomeAnalytics(
@@ -100,7 +100,7 @@ class TransactionService {
   }
 
   async getDayTimePatterns(filters?: TransactionFilters): Promise<unknown> {
-    return api.get('/transactions/day-time-patterns', filters);
+    return api.get('/transactions/day-time-patterns', filters as Record<string, unknown> | undefined);
   }
 }
 

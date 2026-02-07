@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import {goalService} from '@/services/goal.service';
 import {transactionService} from '@/services/transaction.service';
 import {userService} from '@/services/user.service';
-import {Goal, Transaction} from '@/types';
+import {GoalDisplay, Transaction} from '@/types';
 
 interface DashboardData {
   balance: number;
@@ -10,17 +10,17 @@ interface DashboardData {
   totalExpenses: number;
   committedExpenses: number;
   discretionaryExpenses: number;
-  activeGoal: Goal | null;
+  activeGoal: GoalDisplay | null;
   totalSavings: number;
   activeGoalsCount: number;
   completedGoalsCount: number;
-  goals: Goal[];
+  goals: GoalDisplay[];
   isLoading: boolean;
   error: Error | null;
 }
 
 export function useDashboardData(): DashboardData {
-  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goals, setGoals] = useState<GoalDisplay[]>([]);
   const [balance, setBalance] = useState(0);
   const [leftToSpend, setLeftToSpend] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
@@ -57,7 +57,7 @@ export function useDashboardData(): DashboardData {
         // Handle response that wraps goals in an object
         const goalsArray = Array.isArray(goalsData)
           ? goalsData
-          : (goalsData as {goals?: Goal[]}).goals || [];
+          : (goalsData as {goals?: GoalDisplay[]}).goals || [];
 
         setGoals(goalsArray);
 
@@ -98,10 +98,7 @@ export function useDashboardData(): DashboardData {
   const completedGoalsCount = calculateCompletedGoalsCount(goals);
 
   // Get the first active goal for display
-  const activeGoal =
-    goals.find(goal =>
-      goal.status ? goal.status === 'ACTIVE' : goal.isActive,
-    ) || null;
+  const activeGoal = goals.find(goal => goal.isActive) || null;
 
   return {
     balance,
@@ -120,23 +117,19 @@ export function useDashboardData(): DashboardData {
 }
 
 // Business logic functions
-function calculateTotalSavings(goals: Goal[]): number {
+function calculateTotalSavings(goals: GoalDisplay[]): number {
   const goalsArray = Array.isArray(goals) ? goals : [];
-  return goalsArray.reduce((sum, goal) => sum + (goal.currentAmount || 0), 0);
+  return goalsArray.reduce((sum, goal) => sum + (goal.current || 0), 0);
 }
 
-function calculateActiveGoalsCount(goals: Goal[]): number {
+function calculateActiveGoalsCount(goals: GoalDisplay[]): number {
   const goalsArray = Array.isArray(goals) ? goals : [];
-  return goalsArray.filter(goal => {
-    return goal.status ? goal.status === 'ACTIVE' : goal.isActive;
-  }).length;
+  return goalsArray.filter(goal => goal.isActive).length;
 }
 
-function calculateCompletedGoalsCount(goals: Goal[]): number {
+function calculateCompletedGoalsCount(goals: GoalDisplay[]): number {
   const goalsArray = Array.isArray(goals) ? goals : [];
-  return goalsArray.filter(goal => {
-    return goal.status === 'COMPLETED';
-  }).length;
+  return goalsArray.filter(goal => !goal.isActive).length;
 }
 
 function calculateCommittedVsDiscretionary(transactions: Transaction[]): {

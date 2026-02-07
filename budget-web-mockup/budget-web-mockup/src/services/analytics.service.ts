@@ -9,6 +9,7 @@ import {
   GoalsSummary,
   BudgetAnalytics,
   DateRangeFilter,
+  TransactionFilters,
 } from '@/types';
 
 export interface DashboardSummary {
@@ -44,11 +45,12 @@ export interface SpendingTrend {
 
 class AnalyticsService {
   async getDashboardSummary(filters?: DateRangeFilter): Promise<DashboardSummary> {
+    const transactionFilters = filters as TransactionFilters | undefined;
     const [transactionAnalytics, billsAnalytics, discretionaryBreakdown, goalsSummary] =
       await Promise.all([
-        transactionService.getAnalytics(filters),
-        transactionService.getBillsAnalytics(filters),
-        transactionService.getDiscretionaryBreakdown(filters),
+        transactionService.getAnalytics(transactionFilters),
+        transactionService.getBillsAnalytics(transactionFilters),
+        transactionService.getDiscretionaryBreakdown(transactionFilters),
         goalService.getGoalsSummary(filters),
       ]);
 
@@ -59,7 +61,7 @@ class AnalyticsService {
 
     // Map API response fields to expected format
     const totalExpenses = transactionAnalytics.totalExpenses || 0;
-    const discretionaryExpenses = discretionaryBreakdown.totalDiscretionaryAmount || 0;
+    const discretionaryExpenses = discretionaryBreakdown.totalDiscretionary || 0;
     const committedExpenses = totalExpenses - discretionaryExpenses; // Committed = total - discretionary
     const budgetLimit = transactionAnalytics.totalIncome || 0;
     const leftToSpend = budgetLimit - totalExpenses;
@@ -73,15 +75,16 @@ class AnalyticsService {
       leftToSpend: Math.max(leftToSpend, 0),
       budgetLimit,
       percentageUsed: budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0,
-      upcomingBills: billsAnalytics.unpaidAmount || 0,
-      overdueAmount: billsAnalytics.overdueAmount || 0,
+      upcomingBills: billsAnalytics.totalUpcoming || 0,
+      overdueAmount: billsAnalytics.totalOverdue || 0,
       activeGoals: goalsSummary.activeGoals || 0,
       goalProgress: goalsSummary.overallProgress || 0,
     };
   }
 
   async getSpendingByCategory(filters?: DateRangeFilter): Promise<SpendingByCategory[]> {
-    const analytics = await transactionService.getAnalytics(filters);
+    const transactionFilters = filters as TransactionFilters | undefined;
+    const analytics = await transactionService.getAnalytics(transactionFilters);
 
     const categoryBreakdown = analytics.categoryBreakdown || [];
 
@@ -96,16 +99,17 @@ class AnalyticsService {
   }
 
   async getSpendingTrend(filters?: DateRangeFilter): Promise<SpendingTrend[]> {
-    const analytics = await transactionService.getAnalytics(filters);
+    const transactionFilters = filters as TransactionFilters | undefined;
+    const analytics = await transactionService.getAnalytics(transactionFilters);
 
-    // Use weeklyTrendWithLabels from dailyBurnRate since dailyTrend doesn't exist
-    const weeklyTrend = analytics.dailyBurnRate?.weeklyTrendWithLabels || [];
+    // Use dailyTrend from analytics
+    const dailyTrend = analytics.dailyTrend || [];
 
-    return weeklyTrend.map((day: { day: string; amount: number }) => ({
-      date: day.day,
-      income: 0, // API doesn't provide daily income
-      expenses: day.amount || 0,
-      net: -(day.amount || 0),
+    return dailyTrend.map((day) => ({
+      date: day.date,
+      income: day.income || 0,
+      expenses: day.expenses || 0,
+      net: (day.income || 0) - (day.expenses || 0),
     }));
   }
 
@@ -115,7 +119,8 @@ class AnalyticsService {
     savings: number;
     savingsRate: number;
   }> {
-    const analytics = await transactionService.getAnalytics(filters);
+    const transactionFilters = filters as TransactionFilters | undefined;
+    const analytics = await transactionService.getAnalytics(transactionFilters);
     const savings = analytics.totalIncome - analytics.totalExpenses;
     const savingsRate = analytics.totalIncome > 0
       ? Math.round((savings / analytics.totalIncome) * 100)

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Transaction } from '@/types';
+import { Transaction, RecurrenceType, PaymentStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { CategoryIcon, CustomSelect } from '@/components/ui';
 import { useCategories } from '@/hooks/useCategories';
@@ -270,7 +270,7 @@ export default function TransactionDetailPanel({
                   {isEditMode ? (
                     <CustomSelect
                       value={editedTransaction?.recurrence || 'none'}
-                      onChange={(value) => setEditedTransaction(prev => prev ? {...prev, recurrence: value as any} : prev)}
+                      onChange={(value) => setEditedTransaction(prev => prev ? {...prev, recurrence: value as RecurrenceType} : prev)}
                       options={[
                         { value: 'none', label: 'One-time' },
                         { value: 'weekly', label: 'Weekly' },
@@ -317,7 +317,7 @@ export default function TransactionDetailPanel({
                     {isEditMode ? (
                       <CustomSelect
                         value={editedTransaction?.status || 'UPCOMING'}
-                        onChange={(value) => setEditedTransaction(prev => prev ? {...prev, status: value as any} : prev)}
+                        onChange={(value) => setEditedTransaction(prev => prev ? {...prev, status: value as PaymentStatus} : prev)}
                         options={[
                           { value: 'UPCOMING', label: 'Upcoming' },
                           { value: 'PAID', label: 'Paid' },

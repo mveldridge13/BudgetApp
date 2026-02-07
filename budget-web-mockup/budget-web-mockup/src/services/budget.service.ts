@@ -10,7 +10,7 @@ import {
 
 class BudgetService {
   async getBudgets(filters?: BudgetFilters): Promise<Budget[]> {
-    return api.get<Budget[]>('/budgets', filters);
+    return api.get<Budget[]>('/budgets', filters as Record<string, unknown> | undefined);
   }
 
   async getBudget(id: string): Promise<Budget> {

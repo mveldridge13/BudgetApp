@@ -10,7 +10,7 @@ import {
 
 class CategoryService {
   async getCategories(filters?: CategoryFilters): Promise<Category[]> {
-    return api.get<Category[]>('/categories', filters);
+    return api.get<Category[]>('/categories', filters as Record<string, unknown> | undefined);
   }
 
   async getCategoriesWithSubcategories(): Promise<CategoryWithSubcategories[]> {
@@ -68,7 +68,7 @@ class CategoryService {
   }
 
   async getCategoryAnalytics(id: string, filters?: CategoryFilters): Promise<CategoryAnalytics> {
-    return api.get<CategoryAnalytics>(`/categories/${id}/analytics`, filters);
+    return api.get<CategoryAnalytics>(`/categories/${id}/analytics`, filters as Record<string, unknown> | undefined);
   }
 }
 

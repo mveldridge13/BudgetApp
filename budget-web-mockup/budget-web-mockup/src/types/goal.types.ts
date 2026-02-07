@@ -1,23 +1,68 @@
 import { DateRangeFilter, PaginationParams } from './api.types';
 
-export type GoalPriority = 'HIGH' | 'MEDIUM' | 'LOW';
+// Backend API types (what the API expects/returns)
+export type GoalPriority = 'HIGH' | 'MEDIUM' | 'LOW' | 'CRITICAL';
 export type GoalStatus = 'ACTIVE' | 'COMPLETED' | 'PAUSED' | 'CANCELLED';
+export type GoalType = 'SAVINGS' | 'SPENDING_LIMIT' | 'DEBT_PAYOFF' | 'INVESTMENT';
+export type GoalCategory =
+  | 'EMERGENCY_FUND'
+  | 'VACATION'
+  | 'HOME_PURCHASE'
+  | 'CAR_PURCHASE'
+  | 'DEBT_PAYOFF'
+  | 'EDUCATION'
+  | 'RETIREMENT'
+  | 'INVESTMENT'
+  | 'GENERAL_SAVINGS';
+export type ContributionType = 'MANUAL' | 'ROLLOVER' | 'WITHDRAWAL' | 'AUTO';
 
+// Frontend display types (what the UI uses)
+export type GoalTypeDisplay = 'savings' | 'spending' | 'debt';
+export type GoalPriorityDisplay = 'high' | 'medium' | 'low';
+
+// API Goal structure (from backend)
 export interface Goal {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   targetAmount: number;
   currentAmount: number;
+  originalAmount?: number; // For debt goals
   targetDate: string;
-  category: string;
+  category: GoalCategory | string;
+  originalCategory?: string; // Preserved for spending goals
+  type: GoalType;
   priority: GoalPriority;
+  monthlyTarget?: number; // Auto-contribution amount
   isActive: boolean;
+  isCompleted?: boolean;
   status?: GoalStatus;
   showOnBalanceCard?: boolean;
+  currency?: string;
   userId?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Frontend Goal structure (transformed for display)
+export interface GoalDisplay {
+  id: string;
+  title: string;
+  description?: string;
+  type: GoalTypeDisplay;
+  target: number;
+  current: number;
+  originalAmount?: number;
+  deadline: string;
+  category: string;
+  priority: GoalPriorityDisplay;
+  autoContribute: number;
+  showOnBalanceCard: boolean;
+  isActive: boolean;
+  completedDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  lastProgressUpdate?: string;
 }
 
 export interface CreateGoalData {
@@ -25,9 +70,17 @@ export interface CreateGoalData {
   description?: string;
   targetAmount: number;
   currentAmount?: number;
-  targetDate: string;
-  category?: string;
+  originalAmount?: number;
+  targetDate?: string;
+  category?: GoalCategory | string;
+  originalCategory?: string;
+  type?: GoalType;
   priority?: GoalPriority;
+  monthlyTarget?: number;
+  showOnBalanceCard?: boolean;
+  currency?: string;
+  isActive?: boolean;
+  isCompleted?: boolean;
 }
 
 export interface UpdateGoalData {
@@ -35,25 +88,36 @@ export interface UpdateGoalData {
   description?: string;
   targetAmount?: number;
   currentAmount?: number;
+  originalAmount?: number;
   targetDate?: string;
-  category?: string;
+  category?: GoalCategory | string;
+  originalCategory?: string;
+  type?: GoalType;
   priority?: GoalPriority;
+  monthlyTarget?: number;
   isActive?: boolean;
+  isCompleted?: boolean;
+  showOnBalanceCard?: boolean;
 }
 
 export interface GoalContribution {
   id: string;
   goalId: string;
   amount: number;
+  currency?: string;
+  description?: string;
+  type: ContributionType;
   date: string;
-  notes?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateContributionData {
-  amount: number;
+  amount: number | string;
+  currency?: string;
+  description?: string;
+  type?: ContributionType;
   date?: string;
-  notes?: string;
 }
 
 export interface GoalFilters extends DateRangeFilter, PaginationParams {
