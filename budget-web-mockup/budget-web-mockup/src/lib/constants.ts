@@ -6,7 +6,7 @@ export const PAYMENT_STATUSES = ['UPCOMING', 'PAID', 'OVERDUE'] as const;
 
 // Recurrence options
 export const RECURRENCE_OPTIONS = [
-  { id: 'none', name: 'One-time' },
+  { id: 'none', name: '-- None --' },
   { id: 'weekly', name: 'Weekly' },
   { id: 'fortnightly', name: 'Fortnightly' },
   { id: 'monthly', name: 'Monthly' },

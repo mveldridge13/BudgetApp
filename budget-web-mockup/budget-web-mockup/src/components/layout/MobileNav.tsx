@@ -9,7 +9,6 @@ const navItems = [
   { id: 'goals', name: 'Goals', href: '/goals', icon: 'goals' },
   { id: 'planner', name: 'Planner', href: '/planner', icon: 'planner' },
   { id: 'analytics', name: 'Analytics', href: '/analytics', icon: 'analytics' },
-  { id: 'settings', name: 'Settings', href: '/settings', icon: 'settings' },
 ];
 
 const icons: Record<string, React.ReactNode> = {

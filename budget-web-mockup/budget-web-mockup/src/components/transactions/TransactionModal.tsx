@@ -26,6 +26,7 @@ export default function TransactionModal({
     useCategories();
 
   const [showTypeSelection, setShowTypeSelection] = useState(true);
+  const [selectedFlowType, setSelectedFlowType] = useState<'oneoff' | 'recurring' | 'debt' | null>(null);
 
   const [transactionType, setTransactionType] = useState<'EXPENSE' | 'INCOME'>(
     'EXPENSE',
@@ -36,6 +37,7 @@ export default function TransactionModal({
   const [selectedSubcategory, setSelectedSubcategory] = useState('');
   const [selectedDate, setSelectedDate] = useState(formatISODate(new Date()));
   const [recurrence, setRecurrence] = useState('none');
+  const [dueDate, setDueDate] = useState(formatISODate(new Date()));
 
   // Populate form when editing
   useEffect(() => {
@@ -52,6 +54,7 @@ export default function TransactionModal({
         subcategory?: string;
         subcategoryId?: string;
         date?: string;
+        dueDate?: string;
         recurrence?: string;
         isRecurring?: boolean;
         recurringPattern?: {type?: string};
@@ -73,8 +76,17 @@ export default function TransactionModal({
         : formatISODate(new Date());
       setSelectedDate(dateValue);
 
+      // Format due date for HTML date input (yyyy-MM-dd)
+      const dueDateValue = transaction.dueDate
+        ? transaction.dueDate.split('T')[0]
+        : formatISODate(new Date());
+      setDueDate(dueDateValue);
+
       // Backend uses 'recurrence' field directly
-      setRecurrence(transaction.recurrence || 'none');
+      const recurrenceValue = transaction.recurrence || 'none';
+      setRecurrence(recurrenceValue);
+      // Set flow type based on whether it's recurring
+      setSelectedFlowType(recurrenceValue !== 'none' ? 'recurring' : 'oneoff');
     } else if (!visible) {
       resetForm();
     } else if (visible && !initialData) {
@@ -108,6 +120,7 @@ export default function TransactionModal({
 
     // Convert date to ISO string like mobile app does
     const dateISO = new Date(selectedDate).toISOString();
+    const dueDateISO = new Date(dueDate).toISOString();
 
     const transactionData = {
       amount: Math.abs(parseFloat(amount)), // Backend expects positive amounts
@@ -117,7 +130,8 @@ export default function TransactionModal({
       description,
       date: dateISO, // Backend expects ISO string
       recurrence: recurrence, // Send recurrence field directly
-      status: 'PAID', // Backend expects 'status', not 'paymentStatus'
+      ...(recurrence !== 'none' && {dueDate: dueDateISO}), // Include dueDate for recurring transactions
+      status: recurrence !== 'none' ? 'UPCOMING' : 'PAID', // Backend expects uppercase: UPCOMING, PAID, OVERDUE
     };
 
     onSave(transactionData);
@@ -126,12 +140,14 @@ export default function TransactionModal({
 
   const resetForm = () => {
     setShowTypeSelection(true);
+    setSelectedFlowType(null);
     setTransactionType('EXPENSE');
     setAmount('');
     setDescription('');
     setSelectedCategory('');
     setSelectedSubcategory('');
     setSelectedDate(formatISODate(new Date()));
+    setDueDate(formatISODate(new Date()));
     setRecurrence('none');
   };
 
@@ -142,10 +158,11 @@ export default function TransactionModal({
 
   const handleTypeSelect = (type: 'oneoff' | 'recurring' | 'debt') => {
     setShowTypeSelection(false);
+    setSelectedFlowType(type);
 
     // Set defaults based on type
     if (type === 'recurring') {
-      setRecurrence('monthly'); // Default to monthly for recurring
+      setRecurrence('none'); // Default to none, user must select a pattern
     } else if (type === 'debt') {
       // Could set specific defaults for debt payments
       setRecurrence('none');
@@ -393,22 +410,34 @@ export default function TransactionModal({
           </div>
         )}
 
-        {/* Recurrence */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Recurrence
-          </label>
-          <select
-            value={recurrence}
-            onChange={e => setRecurrence(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-            {RECURRENCE_OPTIONS.map(option => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Recurrence - only show for recurring and debt transactions */}
+        {(selectedFlowType === 'recurring' || selectedFlowType === 'debt') && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Recurrence
+            </label>
+            <select
+              value={recurrence}
+              onChange={e => setRecurrence(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              {RECURRENCE_OPTIONS.map(option => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Due Date - only show for recurring transactions */}
+        {recurrence !== 'none' && (selectedFlowType === 'recurring' || selectedFlowType === 'debt') && (
+          <Input
+            type="date"
+            label="Due Date"
+            value={dueDate}
+            onChange={e => setDueDate(e.target.value)}
+          />
+        )}
 
         {/* Actions */}
         <div className="flex justify-end space-x-3 pt-4">

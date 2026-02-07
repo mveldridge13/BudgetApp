@@ -226,22 +226,20 @@ export default function TransactionList({
 
             const frequency = getFrequencyLabel(transaction);
 
-            // Determine payment status
+            // Determine payment status based on backend status field
             const getPaymentStatus = () => {
-              if (!transaction.dueDate || frequency === 'One-time') return null;
+              // Only show status for recurring transactions that are not paid
+              if (frequency === 'One-time') return null;
+              if (transaction.status === 'PAID') return null;
 
-              const dueDate = new Date(transaction.dueDate);
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              dueDate.setHours(0, 0, 0, 0);
-
-              if (transaction.status === 'PAID') return null; // Don't show status if already paid
-
-              if (dueDate < today) {
+              // Show status based on backend's status field
+              if (transaction.status === 'OVERDUE') {
                 return { label: 'Overdue', color: '#EF4444' };
-              } else {
+              } else if (transaction.status === 'UPCOMING') {
                 return { label: 'Upcoming', color: '#3B82F6' };
               }
+
+              return null;
             };
 
             const paymentStatus = getPaymentStatus();
