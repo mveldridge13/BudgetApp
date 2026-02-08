@@ -1,6 +1,6 @@
 'use client';
 
-import { BalanceCard, ActiveGoalCard } from '@/components/dashboard';
+import { BalanceCard, ActiveGoalCard, GoalDistribution, OverallProgress, DebtProgress } from '@/components/dashboard';
 import { useDashboardData } from '@/hooks/useDashboardData';
 
 export default function DashboardPage() {
@@ -12,6 +12,7 @@ export default function DashboardPage() {
     discretionaryExpenses,
     activeGoalsCount,
     completedGoalsCount,
+    goals,
     isLoading,
   } = useDashboardData();
 
@@ -39,6 +40,18 @@ export default function DashboardPage() {
           completedGoalsCount={completedGoalsCount}
           isLoading={isLoading}
         />
+      </div>
+
+      {/* Second Row - 3 columns */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Goal Distribution Card */}
+        <GoalDistribution goals={goals} isLoading={isLoading} />
+
+        {/* Overall Progress Card */}
+        <OverallProgress goals={goals} isLoading={isLoading} />
+
+        {/* Debt Progress Card */}
+        <DebtProgress goals={goals} isLoading={isLoading} />
       </div>
     </div>
   );

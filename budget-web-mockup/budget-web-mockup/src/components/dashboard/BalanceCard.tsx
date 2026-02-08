@@ -34,7 +34,7 @@ export default function BalanceCard({
     if (isLowBalance) {
       return '#FFB366'; // Orange: 20-50% remaining
     }
-    return '#10B981'; // Green: > 50% remaining
+    return '#14B8A6'; // Teal: > 50% remaining
   };
 
   if (isLoading) {

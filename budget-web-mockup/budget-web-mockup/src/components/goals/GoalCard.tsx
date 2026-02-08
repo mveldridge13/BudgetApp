@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { GoalDisplay } from '@/types';
+import { useState, useEffect } from 'react';
+import { GoalDisplay, GoalContribution } from '@/types';
 import { goalService } from '@/services/goal.service';
 import {
   Eye,
@@ -13,6 +13,9 @@ import {
   Plus,
   Minus,
   DollarSign,
+  List,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from 'lucide-react';
 
 interface GoalCardProps {
@@ -35,9 +38,12 @@ export default function GoalCard({
   isCompleted = false,
 }: GoalCardProps) {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [contributions, setContributions] = useState<GoalContribution[]>([]);
+  const [loadingContributions, setLoadingContributions] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [transactionType, setTransactionType] = useState<'add' | 'withdraw'>('add');
-  const [paymentSource] = useState('income');
+  const [paymentSource, setPaymentSource] = useState('income');
   const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(goal.showOnBalanceCard);
 
   const progress = goalService.calculateProgress(goal);
@@ -105,6 +111,65 @@ export default function GoalCard({
       onToggleBalanceDisplay(goal.id);
     }
   };
+
+  const loadPaymentHistory = async () => {
+    setLoadingContributions(true);
+    try {
+      const data = await goalService.getContributions(goal.id);
+      setContributions(data);
+    } catch (error) {
+      console.error('Error loading payment history:', error);
+      setContributions([]);
+    } finally {
+      setLoadingContributions(false);
+    }
+  };
+
+  const handleOpenPaymentHistory = () => {
+    setShowPaymentHistory(true);
+    loadPaymentHistory();
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return 'Today';
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+  };
+
+  const getContributionTypeDisplay = (type: string) => {
+    switch (type) {
+      case 'MANUAL':
+        return 'Manual Payment';
+      case 'WITHDRAWAL':
+        return 'Withdrawal';
+      case 'AUTO':
+        return 'Automatic Payment';
+      case 'ROLLOVER':
+        return 'Rollover Allocation';
+      default:
+        return 'Payment';
+    }
+  };
+
+  const totalPaid = contributions.reduce((sum, c) => sum + c.amount, 0);
+  const remaining = isDebtGoal
+    ? Math.max(0, goal.current)
+    : Math.max(0, goal.target - goal.current);
 
   return (
     <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
@@ -235,6 +300,29 @@ export default function GoalCard({
             </div>
           )}
 
+          {/* Payment Source Selection - only show for additions or debt payments */}
+          {(transactionType === 'add' || isDebtGoal) && (
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-900 mb-2">
+                Payment Source
+              </label>
+              <div className="relative">
+                <select
+                  value={paymentSource}
+                  onChange={(e) => setPaymentSource(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
+                >
+                  <option value="income" className="text-gray-900">Income</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-lg px-3 py-2">
               <span className="text-gray-500 mr-1">$</span>
@@ -296,6 +384,13 @@ export default function GoalCard({
               {isDebtGoal ? 'Make Payment' : 'Add/Withdraw'}
             </span>
           </button>
+          <button
+            onClick={handleOpenPaymentHistory}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+          >
+            <List className="w-4 h-4" />
+            <span className="text-sm font-medium">Payment History</span>
+          </button>
         </div>
       )}
 
@@ -308,6 +403,105 @@ export default function GoalCard({
           <Check className="w-4 h-4" />
           <span className="text-sm font-medium">Mark as Complete</span>
         </button>
+      )}
+
+      {/* Payment History Modal */}
+      {showPaymentHistory && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">Payment History</h3>
+              <button
+                onClick={() => setShowPaymentHistory(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Summary Stats */}
+            {!loadingContributions && contributions.length > 0 && (
+              <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Total Paid</p>
+                    <p className="text-lg font-semibold text-gray-900">${totalPaid.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Remaining</p>
+                    <p className="text-lg font-semibold text-gray-900">${remaining.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Payments</p>
+                    <p className="text-lg font-semibold text-gray-900">{contributions.length}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingContributions ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : contributions.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <List className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm font-medium">No payment history yet</p>
+                  <p className="text-xs mt-1">Contributions and withdrawals will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {contributions.map((contribution, index) => {
+                    const isWithdrawal = contribution.type === 'WITHDRAWAL';
+                    return (
+                      <div
+                        key={contribution.id || index}
+                        className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      >
+                        <div className={`p-2 rounded-full ${isWithdrawal ? 'bg-red-100' : 'bg-green-100'}`}>
+                          {isWithdrawal ? (
+                            <ArrowUpCircle className="w-4 h-4 text-red-600" />
+                          ) : (
+                            <ArrowDownCircle className="w-4 h-4 text-green-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="font-semibold text-gray-900">
+                              {isWithdrawal ? '-' : ''}${contribution.amount.toFixed(2)}
+                            </p>
+                            <p className="text-xs text-gray-500">{formatDate(contribution.date)}</p>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-0.5">
+                            {getContributionTypeDisplay(contribution.type)}
+                          </p>
+                          {contribution.description && (
+                            <p className="text-xs text-gray-500 mt-1 truncate">
+                              {contribution.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowPaymentHistory(false)}
+                className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

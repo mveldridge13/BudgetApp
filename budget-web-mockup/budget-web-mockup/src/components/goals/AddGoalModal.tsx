@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Calendar,
   X,
+  ChevronDown,
 } from 'lucide-react';
 
 interface AddGoalModalProps {
@@ -199,15 +200,15 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4" style={{ backgroundColor: '#6366f1' }}>
+        <div className="flex items-center justify-between px-6 py-5" style={{ backgroundColor: '#6366f1' }}>
           <h2 className="text-xl font-semibold text-white">
-            {editingGoal ? 'Edit Goal' : 'Create New Goal'}
+            {editingGoal ? 'Edit Goal' : 'Add Goal'}
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-1 hover:bg-white/10 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-white" />
           </button>
@@ -215,256 +216,165 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-6">
-            {/* Goal Type Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-3">Goal Type</label>
-              <div className="grid grid-cols-3 gap-3">
-                {GOAL_TYPES.map((type) => {
-                  const Icon = type.icon;
-                  const isSelected = formData.type === type.id;
+          <div className="space-y-5">
 
-                  const getColorClasses = () => {
-                    if (!isSelected) {
-                      return {
-                        container: 'border-gray-100 hover:border-gray-200 bg-white',
-                        icon: 'text-gray-400',
-                        text: 'text-gray-700'
-                      };
-                    }
-
-                    switch (type.color) {
-                      case 'blue':
-                        return {
-                          container: 'border-blue-500 bg-blue-50',
-                          icon: 'text-blue-600',
-                          text: 'text-blue-900'
-                        };
-                      case 'amber':
-                        return {
-                          container: 'border-amber-500 bg-amber-50',
-                          icon: 'text-amber-600',
-                          text: 'text-amber-900'
-                        };
-                      case 'red':
-                        return {
-                          container: 'border-red-400 bg-red-50',
-                          icon: 'text-red-500',
-                          text: 'text-red-900'
-                        };
-                      default:
-                        return {
-                          container: 'border-gray-100 bg-white',
-                          icon: 'text-gray-400',
-                          text: 'text-gray-700'
-                        };
-                    }
-                  };
-
-                  const colors = getColorClasses();
-
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => updateFormData('type', type.id)}
-                      className={`relative p-4 rounded-xl border transition-all ${colors.container}`}
-                    >
-                      <Icon className={`w-6 h-6 mx-auto mb-2 ${colors.icon}`} />
-                      <p className={`text-sm font-medium ${colors.text}`}>
-                        {type.label}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-              {selectedType && (
-                <p className="mt-2 text-sm text-gray-500 text-center">{selectedType.description}</p>
-              )}
-            </div>
-
-            {/* Goal Title */}
+            {/* Goal Name */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">Goal Name</label>
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => updateFormData('title', e.target.value)}
-                placeholder="e.g., Emergency Fund, Vacation"
-                className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-0 transition-colors ${
+                placeholder="e.g., Emergency Fund"
+                className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
                   errors.title
-                    ? 'border-red-300 focus:border-red-500'
-                    : 'border-gray-200 focus:border-indigo-500'
+                    ? 'border-red-300'
+                    : 'border-gray-300'
                 }`}
                 maxLength={50}
               />
               {errors.title && <p className="mt-1.5 text-sm text-red-600">{errors.title}</p>}
             </div>
 
+            {/* Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Type</label>
+              <div className="relative">
+                <select
+                  value={formData.type}
+                  onChange={(e) => updateFormData('type', e.target.value as GoalTypeDisplay)}
+                  className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white appearance-none"
+                >
+                  {GOAL_TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Priority</label>
+              <div className="relative">
+                <select
+                  value={formData.priority}
+                  onChange={(e) => updateFormData('priority', e.target.value as GoalPriorityDisplay)}
+                  className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white appearance-none"
+                >
+                  {PRIORITIES.map((priority) => (
+                    <option key={priority.id} value={priority.id}>
+                      {priority.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Category</label>
+              <div className="relative">
+                <select
+                  value={formData.category}
+                  onChange={(e) => updateFormData('category', e.target.value)}
+                  className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white appearance-none"
+                >
+                  {CATEGORIES.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
             {/* Amount Fields */}
             <div className="grid grid-cols-2 gap-4">
+              {/* Current Amount */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">Current Amount</label>
+                <input
+                  type="number"
+                  value={formData.current ?? ''}
+                  onChange={(e) => updateFormData('current', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                  placeholder="0"
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                    errors.current
+                      ? 'border-red-300'
+                      : 'border-gray-300'
+                  }`}
+                />
+                {errors.current && <p className="mt-1.5 text-sm text-red-600">{errors.current}</p>}
+              </div>
+
               {/* Target/Original Amount */}
               <div>
                 <label className="block text-sm font-medium text-gray-900 mb-2">
                   {formData.type === 'debt' ? 'Original Amount' : 'Target Amount'}
                 </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    value={formData.type === 'debt' ? (formData.originalAmount ?? '') : (formData.target ?? '')}
-                    onChange={(e) =>
-                      updateFormData(
-                        formData.type === 'debt' ? 'originalAmount' : 'target',
-                        e.target.value === '' ? undefined : parseFloat(e.target.value)
-                      )
-                    }
-                    placeholder="0.00"
-                    className={`w-full pl-8 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-0 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                      errors.target || errors.originalAmount
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-indigo-500'
-                    }`}
-                  />
-                </div>
+                <input
+                  type="number"
+                  value={formData.type === 'debt' ? (formData.originalAmount ?? '') : (formData.target ?? '')}
+                  onChange={(e) =>
+                    updateFormData(
+                      formData.type === 'debt' ? 'originalAmount' : 'target',
+                      e.target.value === '' ? undefined : parseFloat(e.target.value)
+                    )
+                  }
+                  placeholder="0"
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                    errors.target || errors.originalAmount
+                      ? 'border-red-300'
+                      : 'border-gray-300'
+                  }`}
+                />
                 {(errors.target || errors.originalAmount) && (
                   <p className="mt-1.5 text-sm text-red-600">
                     {errors.target || errors.originalAmount}
                   </p>
                 )}
               </div>
-
-              {/* Current Amount */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  {formData.type === 'debt' ? 'Remaining Balance' : 'Starting Amount'}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    value={formData.current ?? ''}
-                    onChange={(e) => updateFormData('current', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                    placeholder="0.00"
-                    className={`w-full pl-8 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-0 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                      errors.current
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-indigo-500'
-                    }`}
-                  />
-                </div>
-                {errors.current && <p className="mt-1.5 text-sm text-red-600">{errors.current}</p>}
-              </div>
             </div>
 
-            {/* Category */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-3">Category</label>
-              <div className="grid grid-cols-3 gap-2">
-                {CATEGORIES.map((category) => {
-                  const Icon = category.icon;
-                  const isSelected = formData.category === category.id;
-                  return (
-                    <button
-                      key={category.id}
-                      onClick={() => updateFormData('category', category.id)}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border transition-all text-sm ${
-                        isSelected
-                          ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                          : 'border-gray-100 hover:border-gray-200 text-gray-700'
-                      }`}
-                    >
-                      <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
-                      <span className="font-medium">{category.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Deadline and Priority Row */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Deadline */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Deadline {formData.type !== 'debt' && '(Optional)'}
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => updateFormData('deadline', e.target.value)}
-                    className={`w-full pl-12 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-0 transition-colors ${
-                      errors.deadline
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-indigo-500'
-                    }`}
-                  />
-                </div>
-                {errors.deadline && <p className="mt-1.5 text-sm text-red-600">{errors.deadline}</p>}
-              </div>
-
-              {/* Priority */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Priority</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {PRIORITIES.map((priority) => {
-                    const isSelected = formData.priority === priority.id;
-                    return (
-                      <button
-                        key={priority.id}
-                        onClick={() => updateFormData('priority', priority.id)}
-                        className={`px-3 py-3 rounded-lg border transition-all text-sm font-medium ${
-                          isSelected ? '' : 'border-gray-100 hover:border-gray-200 text-gray-700'
-                        }`}
-                        style={
-                          isSelected
-                            ? {
-                                backgroundColor: priority.bgColor,
-                                borderColor: priority.borderColor,
-                                color: priority.textColor,
-                              }
-                            : {}
-                        }
-                      >
-                        {priority.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Monthly Contribution */}
+            {/* Deadline */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
-                Monthly {formData.type === 'debt' ? 'Payment' : 'Contribution'} (Optional)
+                Deadline {formData.type !== 'debt' && '(Optional)'}
               </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
-                  $
-                </span>
-                <input
-                  type="number"
-                  value={formData.autoContribute ?? ''}
-                  onChange={(e) => updateFormData('autoContribute', e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                  placeholder="0.00"
-                  className={`w-full pl-8 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-0 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                    errors.autoContribute
-                      ? 'border-red-300 focus:border-red-500'
-                      : 'border-gray-200 focus:border-indigo-500'
-                  }`}
-                />
-              </div>
-              <p className="mt-1.5 text-sm text-gray-500">
-                {formData.type === 'debt'
-                  ? 'Set a recurring monthly payment amount'
-                  : 'Set a recurring monthly contribution amount'}
-              </p>
+              <input
+                type="date"
+                value={formData.deadline}
+                onChange={(e) => updateFormData('deadline', e.target.value)}
+                className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                  errors.deadline
+                    ? 'border-red-300'
+                    : 'border-gray-300'
+                }`}
+              />
+              {errors.deadline && <p className="mt-1.5 text-sm text-red-600">{errors.deadline}</p>}
+            </div>
+
+            {/* Auto Contribute */}
+            <div>
+              <label className="block text-sm font-medium text-gray-900 mb-2">
+                Auto Contribute (Optional)
+              </label>
+              <input
+                type="number"
+                value={formData.autoContribute ?? ''}
+                onChange={(e) => updateFormData('autoContribute', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                placeholder="Monthly contribution"
+                className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                  errors.autoContribute
+                    ? 'border-red-300'
+                    : 'border-gray-300'
+                }`}
+              />
               {errors.autoContribute && (
                 <p className="mt-1.5 text-sm text-red-600">{errors.autoContribute}</p>
               )}
@@ -476,21 +386,21 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={!formData.title || saving}
-            className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all ${
+            className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
               !formData.title || saving
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'text-white hover:opacity-90 shadow-lg'
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'text-white hover:opacity-90'
             }`}
-            style={!formData.title && !saving ? {} : { backgroundColor: '#6366f1', boxShadow: '0 10px 25px rgba(99, 102, 241, 0.3)' }}
+            style={!formData.title && !saving ? {} : { backgroundColor: '#6366f1' }}
           >
-            {saving ? 'Saving...' : editingGoal ? 'Save Changes' : 'Create Goal'}
+            {saving ? 'Saving...' : editingGoal ? 'Save Changes' : 'Create'}
           </button>
         </div>
       </div>

@@ -6,3 +6,6 @@ export { default as TotalSavings } from './TotalSavings';
 export { default as ActiveGoals } from './ActiveGoals';
 export { default as BalanceCard } from './BalanceCard';
 export { default as ActiveGoalCard } from './ActiveGoalCard';
+export { default as GoalDistribution } from './GoalDistribution';
+export { default as OverallProgress } from './OverallProgress';
+export { default as DebtProgress } from './DebtProgress';

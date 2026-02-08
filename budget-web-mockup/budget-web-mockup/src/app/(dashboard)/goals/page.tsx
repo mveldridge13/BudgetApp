@@ -195,7 +195,7 @@ export default function GoalsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-shadow">
               <p className="text-sm font-medium text-gray-500 mb-1">Active Goals</p>
-              <p className="text-3xl font-bold text-gray-900">{activeGoals.length}</p>
+              <p className="text-3xl font-bold text-gray-900">{activeGoals.length + debtGoals.length}</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-shadow">

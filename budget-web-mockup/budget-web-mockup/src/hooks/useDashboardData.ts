@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import {goalService} from '@/services/goal.service';
 import {transactionService} from '@/services/transaction.service';
 import {userService} from '@/services/user.service';
-import {GoalDisplay, Transaction} from '@/types';
+import {GoalDisplay, Transaction, GoalContribution} from '@/types';
 
 interface DashboardData {
   balance: number;
@@ -48,7 +48,8 @@ export function useDashboardData(): DashboardData {
           ]);
 
         // Calculate balance: income + rollover (matching mobile app line 228)
-        const income = (incomeData as {income?: number}).income || 0;
+        const income = (incomeData as {amount?: number; income?: number}).amount ||
+                      (incomeData as {income?: number}).income || 0;
         const rollover =
           (rolloverData as {rolloverAmount?: number}).rolloverAmount || 0;
         const calculatedBalance = income + rollover;
@@ -70,9 +71,37 @@ export function useDashboardData(): DashboardData {
         setDiscretionaryExpenses(discretionary);
         setTotalExpenses(total);
 
-        // Calculate left to spend: balance - total expenses (matching mobile app line 229)
-        const calculatedLeftToSpend = calculatedBalance - total;
-        setLeftToSpend(calculatedLeftToSpend);
+        // Calculate total goal contributions (monthly auto-contributions for balance card goals)
+        const totalGoalContributions = goalsArray
+          .filter(goal => goal.showOnBalanceCard && goal.isActive)
+          .reduce((sum, goal) => sum + (goal.autoContribute || 0), 0);
+
+        // Fetch all contributions for all goals to calculate income payments
+        const contributionsPromises = goalsArray.map(goal =>
+          goalService.getContributions(goal.id).catch(() => [])
+        );
+        const allContributionsArrays = await Promise.all(contributionsPromises);
+        const flatContributions = allContributionsArrays.flat();
+
+        // Deduplicate contributions by ID to prevent double-counting
+        const contributionMap = new Map();
+        flatContributions.forEach(contrib => {
+          if (contrib.id && !contributionMap.has(contrib.id)) {
+            contributionMap.set(contrib.id, contrib);
+          }
+        });
+        const allContributions = Array.from(contributionMap.values());
+
+        // Calculate total income payments (MANUAL + AUTO contributions in current period)
+        const totalIncomePayments = calculateTotalIncomePayments(
+          allContributions,
+          incomeData as {nextPayDate?: string; frequency?: string; incomeFrequency?: string}
+        );
+
+        // Calculate left to spend with all deductions (matching mobile app lines 228-234)
+        const leftToSpendBase = calculatedBalance - total;
+        const adjustedLeftToSpend = leftToSpendBase - totalGoalContributions - totalIncomePayments;
+        setLeftToSpend(adjustedLeftToSpend);
       } catch (err) {
         setError(
           err instanceof Error
@@ -140,6 +169,19 @@ function calculateCommittedVsDiscretionary(transactions: Transaction[]): {
   let discretionary = 0;
 
   transactions.forEach(transaction => {
+    // Skip goal-related transactions to avoid double-counting
+    // Goal payments are already counted in totalIncomePayments
+    const description = transaction.description?.toLowerCase() || '';
+    const isGoalPayment =
+      description.includes('payment to') ||
+      description.includes('contribution to') ||
+      description.includes('goal payment') ||
+      description.includes('income payment to');
+
+    if (isGoalPayment) {
+      return; // Skip this transaction
+    }
+
     const amount = Math.abs(transaction.amount);
     const recurrence =
       transaction.recurrence ||
@@ -154,4 +196,53 @@ function calculateCommittedVsDiscretionary(transactions: Transaction[]): {
   });
 
   return {committed, discretionary};
+}
+
+// Calculate total income payments to goals in current pay period
+function calculateTotalIncomePayments(
+  contributions: GoalContribution[],
+  incomeData: {nextPayDate?: string; frequency?: string; incomeFrequency?: string}
+): number {
+  const frequency = incomeData.frequency || incomeData.incomeFrequency;
+
+  if (!incomeData.nextPayDate || !frequency) {
+    return 0;
+  }
+
+  // Get current pay period boundaries
+  const nextPayDate = new Date(incomeData.nextPayDate);
+
+  // Calculate period start date based on frequency (uppercase)
+  const periodStartDate = new Date(nextPayDate);
+  const freq = frequency.toUpperCase();
+  switch (freq) {
+    case 'WEEKLY':
+      periodStartDate.setDate(periodStartDate.getDate() - 7);
+      break;
+    case 'FORTNIGHTLY':
+      periodStartDate.setDate(periodStartDate.getDate() - 14);
+      break;
+    case 'MONTHLY':
+      periodStartDate.setMonth(periodStartDate.getMonth() - 1);
+      break;
+    case 'YEARLY':
+      periodStartDate.setFullYear(periodStartDate.getFullYear() - 1);
+      break;
+    default:
+      periodStartDate.setDate(periodStartDate.getDate() - 14); // Default to fortnightly
+  }
+
+  // Filter contributions to current pay period and MANUAL/AUTO types only
+  let total = 0;
+  contributions.forEach(contribution => {
+    const contributionDate = new Date(contribution.date);
+    const isInCurrentPeriod = contributionDate >= periodStartDate && contributionDate < nextPayDate;
+    const isIncomePayment = contribution.type === 'MANUAL' || contribution.type === 'AUTO';
+
+    if (isInCurrentPeriod && isIncomePayment) {
+      total += (contribution.amount || 0);
+    }
+  });
+
+  return total;
 }
