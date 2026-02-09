@@ -42,6 +42,9 @@ export interface Goal {
   userId?: string;
   createdAt?: string;
   updatedAt?: string;
+  interestRate?: number;
+  minimumPayment?: number;
+  loanTerm?: string;
 }
 
 // Frontend Goal structure (transformed for display)
@@ -63,6 +66,9 @@ export interface GoalDisplay {
   createdAt?: string;
   updatedAt?: string;
   lastProgressUpdate?: string;
+  interestRate?: number;
+  minimumPayment?: number;
+  loanTerm?: string;
 }
 
 export interface CreateGoalData {
@@ -81,6 +87,9 @@ export interface CreateGoalData {
   currency?: string;
   isActive?: boolean;
   isCompleted?: boolean;
+  interestRate?: number;
+  minimumPayment?: number;
+  loanTerm?: string;
 }
 
 export interface UpdateGoalData {

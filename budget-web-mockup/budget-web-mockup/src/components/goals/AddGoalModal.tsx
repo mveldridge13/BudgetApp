@@ -341,6 +341,63 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
               </div>
             </div>
 
+            {/* Loan Term - Only for Debt */}
+            {formData.type === 'debt' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Loan Term
+                </label>
+                <div className="relative">
+                  <select
+                    value={formData.loanTerm ?? ''}
+                    onChange={(e) => updateFormData('loanTerm', e.target.value || undefined)}
+                    className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white appearance-none"
+                  >
+                    <option value="">-- None --</option>
+                    <option value="1">1 year</option>
+                    <option value="3">3 years</option>
+                    <option value="5">5 years</option>
+                    <option value="7">7 years</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            )}
+
+            {/* Interest Rate & Minimum Payment - Only show if Loan Term is selected */}
+            {formData.type === 'debt' && formData.loanTerm && (
+              <>
+                {/* Interest Rate */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Interest Rate (Annual %)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.interestRate ?? ''}
+                    onChange={(e) => updateFormData('interestRate', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    placeholder="0.00"
+                    step="0.01"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+
+                {/* Minimum Payment */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Minimum Payment
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.minimumPayment ?? ''}
+                    onChange={(e) => updateFormData('minimumPayment', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </div>
+              </>
+            )}
+
             {/* Deadline */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">

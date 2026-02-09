@@ -81,6 +81,21 @@ const PRIORITY_TO_FRONTEND: Record<string, GoalPriorityDisplay> = {
   CRITICAL: 'high',
 };
 
+// Loan Term mapping
+const LOAN_TERM_TO_BACKEND: Record<string, string> = {
+  '1': 'ONE_YEAR',
+  '3': 'THREE_YEARS',
+  '5': 'FIVE_YEARS',
+  '7': 'SEVEN_YEARS',
+};
+
+const LOAN_TERM_TO_FRONTEND: Record<string, string> = {
+  ONE_YEAR: '1',
+  THREE_YEARS: '3',
+  FIVE_YEARS: '5',
+  SEVEN_YEARS: '7',
+};
+
 class GoalService {
   // Transform backend goal to frontend display format
   transformBackendGoal(backendGoal: Goal): GoalDisplay {
@@ -107,6 +122,11 @@ class GoalService {
       description: backendGoal.description,
       createdAt: backendGoal.createdAt,
       updatedAt: backendGoal.updatedAt,
+      interestRate: backendGoal.interestRate,
+      minimumPayment: backendGoal.minimumPayment,
+      loanTerm: backendGoal.loanTerm
+        ? LOAN_TERM_TO_FRONTEND[backendGoal.loanTerm]
+        : undefined,
     };
   }
 
@@ -166,11 +186,28 @@ class GoalService {
       data.originalAmount = Number(frontendGoal.originalAmount.toFixed(2));
     }
 
+    // Add debt-specific fields
+    if (frontendGoal.interestRate !== undefined) {
+      data.interestRate = frontendGoal.interestRate;
+    }
+
+    if (frontendGoal.minimumPayment !== undefined) {
+      data.minimumPayment = frontendGoal.minimumPayment;
+    }
+
+    if (frontendGoal.loanTerm !== undefined && frontendGoal.loanTerm !== '') {
+      data.loanTerm =
+        LOAN_TERM_TO_BACKEND[frontendGoal.loanTerm] || frontendGoal.loanTerm;
+    }
+
     return data;
   }
 
   async getGoals(filters?: GoalFilters): Promise<GoalDisplay[]> {
-    const goals = await api.get<Goal[]>('/goals', filters as Record<string, unknown> | undefined);
+    const goals = await api.get<Goal[]>(
+      '/goals',
+      filters as Record<string, unknown> | undefined,
+    );
     return goals.map(g => this.transformBackendGoal(g));
   }
 
@@ -220,7 +257,10 @@ class GoalService {
   }
 
   async getGoalsSummary(filters?: GoalFilters): Promise<GoalsSummary> {
-    return api.get<GoalsSummary>('/goals/analytics', filters as Record<string, unknown> | undefined);
+    return api.get<GoalsSummary>(
+      '/goals/analytics',
+      filters as Record<string, unknown> | undefined,
+    );
   }
 
   // Helper methods

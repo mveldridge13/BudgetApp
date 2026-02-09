@@ -25,6 +25,7 @@ interface GoalCardProps {
   onToggleBalanceDisplay?: (goalId: string) => void;
   onUpdateProgress?: (goalId: string, amount: number, paymentSource: string) => Promise<void>;
   onComplete?: (goalId: string) => void;
+  onOpenSimulator?: (goal: GoalDisplay) => void;
   isCompleted?: boolean;
 }
 
@@ -35,6 +36,7 @@ export default function GoalCard({
   onToggleBalanceDisplay,
   onUpdateProgress,
   onComplete,
+  onOpenSimulator,
   isCompleted = false,
 }: GoalCardProps) {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
@@ -368,29 +370,41 @@ export default function GoalCard({
 
       {/* Action Buttons */}
       {!isCompleted && !showProgressUpdate && (
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowProgressUpdate(true)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white ${
-              goalColor === 'red'
-                ? 'bg-red-400 hover:bg-red-500'
-                : goalColor === 'amber'
-                ? 'bg-amber-600 hover:bg-amber-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" />
-            <span className="text-sm font-medium">
-              {isDebtGoal ? 'Make Payment' : 'Add/Withdraw'}
-            </span>
-          </button>
-          <button
-            onClick={handleOpenPaymentHistory}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
-          >
-            <List className="w-4 h-4" />
-            <span className="text-sm font-medium">Payment History</span>
-          </button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowProgressUpdate(true)}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white ${
+                goalColor === 'red'
+                  ? 'bg-red-400 hover:bg-red-500'
+                  : goalColor === 'amber'
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              <span className="text-sm font-medium">
+                {isDebtGoal ? 'Make Payment' : 'Add/Withdraw'}
+              </span>
+            </button>
+            <button
+              onClick={handleOpenPaymentHistory}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+            >
+              <List className="w-4 h-4" />
+              <span className="text-sm font-medium">Payment History</span>
+            </button>
+          </div>
+
+          {/* Simulator Button - Only for Debt Goals */}
+          {isDebtGoal && onOpenSimulator && (
+            <button
+              onClick={() => onOpenSimulator(goal)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+            >
+              <span className="text-sm font-medium">Run Simulator</span>
+            </button>
+          )}
         </div>
       )}
 

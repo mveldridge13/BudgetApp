@@ -6,12 +6,14 @@ import { GoalDisplay } from '@/types';
 import { Plus, Target, TrendingDown, DollarSign } from 'lucide-react';
 import GoalCard from '@/components/goals/GoalCard';
 import AddGoalModal from '@/components/goals/AddGoalModal';
+import DebtSimulator from '@/components/goals/DebtSimulator';
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalDisplay | null>(null);
+  const [simulatingGoal, setSimulatingGoal] = useState<GoalDisplay | null>(null);
 
   useEffect(() => {
     loadGoals();
@@ -161,6 +163,14 @@ export default function GoalsPage() {
     setEditingGoal(null);
   };
 
+  const handleOpenSimulator = (goal: GoalDisplay) => {
+    setSimulatingGoal(goal);
+  };
+
+  const handleCloseSimulator = () => {
+    setSimulatingGoal(null);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -234,6 +244,7 @@ export default function GoalsPage() {
                         onToggleBalanceDisplay={handleToggleBalanceDisplay}
                         onUpdateProgress={handleUpdateProgress}
                         onComplete={handleCompleteGoal}
+                        onOpenSimulator={handleOpenSimulator}
                       />
                     ))}
                   </div>
@@ -260,6 +271,7 @@ export default function GoalsPage() {
                         onToggleBalanceDisplay={handleToggleBalanceDisplay}
                         onUpdateProgress={handleUpdateProgress}
                         onComplete={handleCompleteGoal}
+                        onOpenSimulator={handleOpenSimulator}
                       />
                     ))}
                   </div>
@@ -298,6 +310,7 @@ export default function GoalsPage() {
                     onToggleBalanceDisplay={handleToggleBalanceDisplay}
                     onUpdateProgress={handleUpdateProgress}
                     onComplete={handleCompleteGoal}
+                    onOpenSimulator={handleOpenSimulator}
                   />
                 ))}
               </div>
@@ -339,6 +352,15 @@ export default function GoalsPage() {
         onSave={handleSaveGoal}
         editingGoal={editingGoal}
       />
+
+      {/* Debt Simulator */}
+      {simulatingGoal && (
+        <DebtSimulator
+          goal={simulatingGoal}
+          visible={true}
+          onClose={handleCloseSimulator}
+        />
+      )}
     </div>
   );
 }
