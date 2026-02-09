@@ -89,6 +89,18 @@ export function useDebtSimulator(goal: GoalDisplay) {
     while (balance > 0 && month < 600) {
       const interestCharge = round(balance * monthlyRate);
 
+      // If payment covers balance + interest, treat as immediate payoff (UX improvement)
+      if (payment >= balance + interestCharge) {
+        month++;
+        schedule.push({
+          month: month,
+          balance: 0,
+          interest: interestCharge,
+          principal: balance,
+        });
+        break; // Paid off this month
+      }
+
       // Handle last payment - don't overshoot
       let actualPayment = payment;
       if (balance + interestCharge < payment) {

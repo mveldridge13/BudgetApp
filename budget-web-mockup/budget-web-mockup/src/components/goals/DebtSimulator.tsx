@@ -37,13 +37,13 @@ export default function DebtSimulator({
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5" style={{ backgroundColor: '#6366f1' }}>
           <div>
             <h2 className="text-xl font-semibold text-white">{goal.title}</h2>
-            <p className="text-sm text-blue-100 mt-0.5">Debt Payoff Simulator</p>
+            <p className="text-sm text-blue-100 mt-0.5">Adjust your payment to see how fast you can clear this debt</p>
           </div>
           <button
             onClick={onClose}
