@@ -99,7 +99,7 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
     current: undefined,
     originalAmount: undefined,
     deadline: '',
-    category: 'Other',
+    category: '',
     priority: 'medium',
     autoContribute: undefined,
   });
@@ -127,7 +127,7 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
           current: undefined,
           originalAmount: undefined,
           deadline: '',
-          category: 'Other',
+          category: '',
           priority: 'medium',
           autoContribute: undefined,
         });
@@ -147,7 +147,14 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
   }, [visible, editingGoal]);
 
   const updateFormData = (field: string, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      // Auto-set category to Debt when type is debt
+      if (field === 'type' && value === 'debt') {
+        updated.category = 'Debt';
+      }
+      return updated;
+    });
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));
     }
@@ -562,10 +569,14 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Category</label>
               <div className="relative">
                 <select
-                  value={formData.category}
+                  value={formData.type === 'debt' ? 'Debt' : formData.category}
                   onChange={(e) => updateFormData('category', e.target.value)}
-                  className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white appearance-none"
+                  disabled={formData.type === 'debt'}
+                  className={`w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none ${
+                    formData.type === 'debt' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white'
+                  }`}
                 >
+                  <option value="">-- None --</option>
                   {CATEGORIES.map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.label}
@@ -576,10 +587,64 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
               </div>
             </div>
 
+            {/* Loan Term - Only for Debt type */}
+            {formData.type === 'debt' && (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Loan Term</label>
+                <div className="relative">
+                  <select
+                    value={formData.loanTerm || ''}
+                    onChange={(e) => updateFormData('loanTerm', e.target.value)}
+                    className="w-full pl-4 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white appearance-none"
+                  >
+                    <option value="">-- None --</option>
+                    <option value="1">1 year</option>
+                    <option value="3">3 years</option>
+                    <option value="5">5 years</option>
+                    <option value="7">7 years</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            )}
+
+            {/* Interest Rate & Minimum Payment - Only when loan term is selected */}
+            {formData.type === 'debt' && formData.loanTerm && (
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Interest Rate (%)</label>
+                  <input
+                    type="number"
+                    value={formData.interestRate || ''}
+                    onChange={(e) => updateFormData('interestRate', parseFloat(e.target.value))}
+                    placeholder="0.00"
+                    step="0.01"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Minimum Payment</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      value={formData.minimumPayment || ''}
+                      onChange={(e) => updateFormData('minimumPayment', parseFloat(e.target.value))}
+                      placeholder="0.00"
+                      step="0.01"
+                      className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
             {/* Target Amount */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">
-                {formData.type === 'debt' ? 'Original Debt Amount' : formData.type === 'spending' ? 'Monthly Budget' : 'Target Amount'}
+                {formData.type === 'debt' ? 'Original Amount' : formData.type === 'spending' ? 'Monthly Budget' : 'Target Amount'}
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
