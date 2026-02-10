@@ -74,9 +74,9 @@ export default function GoalCard({
     if (isDebtGoal) return 'bg-red-300';
     if (isSpendingGoal) return 'bg-amber-500';
     if (isOverdue) return 'bg-red-500';
-    if (progress >= 80) return 'bg-green-500';
-    if (progress >= 50) return 'bg-amber-500';
-    return 'bg-blue-500';
+    if (progress >= 80) return 'bg-green-400';
+    if (progress >= 50) return 'bg-amber-400';
+    return 'bg-blue-400';
   };
 
   const handleCustomAmountSubmit = async () => {
@@ -280,9 +280,10 @@ export default function GoalCard({
                   onClick={() => setTransactionType('add')}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
                     transactionType === 'add'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      ? 'text-white'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
                   }`}
+                  style={transactionType === 'add' ? { backgroundColor: '#6366f1', borderColor: '#6366f1' } : {}}
                 >
                   <Plus className="w-4 h-4" />
                   <span className="text-sm font-medium">Add Money</span>
@@ -291,9 +292,10 @@ export default function GoalCard({
                   onClick={() => setTransactionType('withdraw')}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
                     transactionType === 'withdraw'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      ? 'text-white'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
                   }`}
+                  style={transactionType === 'withdraw' ? { backgroundColor: '#6366f1', borderColor: '#6366f1' } : {}}
                 >
                   <Minus className="w-4 h-4" />
                   <span className="text-sm font-medium">Withdraw</span>
@@ -354,13 +356,10 @@ export default function GoalCard({
             </button>
             <button
               onClick={handleCustomAmountSubmit}
-              className={`p-2 rounded-lg text-white ${
-                goalColor === 'red'
-                  ? 'bg-red-400 hover:bg-red-500'
-                  : goalColor === 'amber'
-                  ? 'bg-amber-600 hover:bg-amber-700'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+              className="p-2 rounded-lg text-white transition-colors"
+              style={{ backgroundColor: '#6366f1' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}
             >
               <Check className="w-5 h-5" />
             </button>
@@ -374,13 +373,10 @@ export default function GoalCard({
           <div className="flex gap-2">
             <button
               onClick={() => setShowProgressUpdate(true)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white ${
-                goalColor === 'red'
-                  ? 'bg-red-400 hover:bg-red-500'
-                  : goalColor === 'amber'
-                  ? 'bg-amber-600 hover:bg-amber-700'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white transition-colors"
+              style={{ backgroundColor: '#34D399' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#34D399'}
             >
               <DollarSign className="w-4 h-4" />
               <span className="text-sm font-medium">
@@ -389,7 +385,10 @@ export default function GoalCard({
             </button>
             <button
               onClick={handleOpenPaymentHistory}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white transition-colors"
+              style={{ backgroundColor: '#818CF8' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#818CF8'}
             >
               <List className="w-4 h-4" />
               <span className="text-sm font-medium">Payment History</span>

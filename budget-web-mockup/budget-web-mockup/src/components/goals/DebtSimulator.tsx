@@ -34,6 +34,19 @@ export default function DebtSimulator({
     setInputValue('');
   }, [goal.id]);
 
+  // Lock body scroll when modal is visible
+  useEffect(() => {
+    if (visible) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [visible]);
+
   if (!visible) return null;
 
   return (
@@ -54,7 +67,7 @@ export default function DebtSimulator({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 overscroll-contain">
           <div className="space-y-6">
             {/* Current Debt Info */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">

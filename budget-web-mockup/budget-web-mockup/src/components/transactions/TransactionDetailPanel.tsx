@@ -43,6 +43,9 @@ export default function TransactionDetailPanel({
 
   useEffect(() => {
     if (isOpen) {
+      // Lock body scroll
+      document.body.style.overflow = 'hidden';
+
       setShouldRender(true);
       setIsEditMode(false);
       setShowDeleteConfirm(false);
@@ -50,10 +53,17 @@ export default function TransactionDetailPanel({
       setTimeout(() => setIsAnimating(true), 10);
     } else {
       setIsAnimating(false);
+      // Unlock body scroll
+      document.body.style.overflow = '';
       // Remove from DOM after animation completes
       const timer = setTimeout(() => setShouldRender(false), 300);
       return () => clearTimeout(timer);
     }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -136,7 +146,7 @@ export default function TransactionDetailPanel({
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 overscroll-contain">
             {/* Category Icon & Amount */}
             <div className="flex items-center gap-4">
               <div
