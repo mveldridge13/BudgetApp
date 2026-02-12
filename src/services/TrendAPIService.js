@@ -12,7 +12,11 @@ class TrendAPIService {
   constructor() {
     this.baseURL = API_CONFIG.baseURL;
     this.token = null;
-    // Login rate limiting
+    this.refreshToken = null;
+    // Token refresh state (prevents concurrent refresh requests)
+    this.isRefreshing = false;
+    this.refreshPromise = null;
+    // Login rate limiting (client-side backup - server enforces stricter limits)
     this.loginAttempts = 0;
     this.lastFailedAttempt = 0;
     this.lockoutDuration = 5 * 60 * 1000; // 5 minutes
@@ -21,35 +25,46 @@ class TrendAPIService {
 
   async initialize() {
     try {
-      // 🔐 SECURE: Try loading token from Keychain first (new secure location)
+      // 🔐 SECURE: Try loading access token from Keychain
       const credentials = await Keychain.getGenericPassword({
         service: 'com.trendbudget.auth',
       });
 
       if (credentials) {
         this.token = credentials.password;
-        console.log('🔐 Token loaded from secure Keychain');
-        return true;
+        console.log('🔐 Access token loaded from secure Keychain');
+      }
+
+      // 🔐 SECURE: Try loading refresh token from Keychain
+      const refreshCredentials = await Keychain.getGenericPassword({
+        service: 'com.trendbudget.refresh',
+      });
+
+      if (refreshCredentials) {
+        this.refreshToken = refreshCredentials.password;
+        console.log('🔐 Refresh token loaded from secure Keychain');
       }
 
       // 🔄 MIGRATION: Check old AsyncStorage location for existing users
-      const oldToken = await AsyncStorage.getItem('trend_auth_token');
-      if (oldToken) {
-        console.log('🔄 Migrating token from AsyncStorage to secure Keychain');
+      if (!this.token) {
+        const oldToken = await AsyncStorage.getItem('trend_auth_token');
+        if (oldToken) {
+          console.log('🔄 Migrating token from AsyncStorage to secure Keychain');
 
-        // Save to Keychain
-        await this.saveToken(oldToken);
+          // Save to Keychain
+          await this.saveToken(oldToken);
 
-        // Remove from old insecure location
-        await AsyncStorage.removeItem('trend_auth_token');
+          // Remove from old insecure location
+          await AsyncStorage.removeItem('trend_auth_token');
 
-        this.token = oldToken;
-        console.log('✅ Token migration completed successfully');
-        return true;
+          this.token = oldToken;
+          console.log('✅ Token migration completed successfully');
+        }
       }
 
-      // No token found in either location
-      console.log('No authentication token found');
+      if (!this.token) {
+        console.log('No authentication token found');
+      }
       return true;
     } catch (error) {
       console.error('Failed to initialize API service:', error);
@@ -61,16 +76,34 @@ class TrendAPIService {
     try {
       this.token = token;
 
-      // 🔐 SECURE: Save token to iOS Keychain (hardware-encrypted)
+      // 🔐 SECURE: Save access token to iOS Keychain (hardware-encrypted)
       await Keychain.setGenericPassword('trend_user', token, {
         service: 'com.trendbudget.auth',
         accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
       });
 
-      console.log('🔐 Token saved to secure Keychain');
+      console.log('🔐 Access token saved to secure Keychain');
       return true;
     } catch (error) {
-      console.error('Failed to save token:', error);
+      console.error('Failed to save access token:', error);
+      return false;
+    }
+  }
+
+  async saveRefreshToken(refreshToken) {
+    try {
+      this.refreshToken = refreshToken;
+
+      // 🔐 SECURE: Save refresh token to iOS Keychain (separate entry)
+      await Keychain.setGenericPassword('trend_refresh', refreshToken, {
+        service: 'com.trendbudget.refresh',
+        accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+      });
+
+      console.log('🔐 Refresh token saved to secure Keychain');
+      return true;
+    } catch (error) {
+      console.error('Failed to save refresh token:', error);
       return false;
     }
   }
@@ -78,19 +111,25 @@ class TrendAPIService {
   async clearToken() {
     try {
       this.token = null;
+      this.refreshToken = null;
 
-      // 🔐 SECURE: Remove token from Keychain
+      // 🔐 SECURE: Remove access token from Keychain
       await Keychain.resetGenericPassword({
         service: 'com.trendbudget.auth',
+      });
+
+      // 🔐 SECURE: Remove refresh token from Keychain
+      await Keychain.resetGenericPassword({
+        service: 'com.trendbudget.refresh',
       });
 
       // 🔄 CLEANUP: Also remove from old AsyncStorage location (if it exists)
       await AsyncStorage.removeItem('trend_auth_token');
 
-      console.log('🔐 Token cleared from secure storage');
+      console.log('🔐 All tokens cleared from secure storage');
       return true;
     } catch (error) {
-      console.error('Failed to clear token:', error);
+      console.error('Failed to clear tokens:', error);
       return false;
     }
   }
@@ -123,6 +162,7 @@ class TrendAPIService {
       body = null,
       requiresAuth = true,
       headers = {},
+      skipAuthRefresh = false, // Skip refresh on retry to prevent infinite loop
     } = options;
 
     const url = `${this.baseURL}${endpoint}`;
@@ -154,14 +194,39 @@ class TrendAPIService {
       const response = await fetch(url, requestConfig);
       clearTimeout(timeoutId);
 
-      if (response.status === 401) {
+      // Handle 401 Unauthorized - attempt token refresh
+      if (response.status === 401 && !skipAuthRefresh) {
+        console.log('🔄 Received 401, attempting token refresh...');
+        const refreshed = await this.tryRefreshToken();
+        if (refreshed) {
+          // Retry original request with new token
+          console.log('🔄 Token refreshed, retrying original request...');
+          return this.makeRequest(endpoint, {...options, skipAuthRefresh: true});
+        }
+        // Refresh failed - clear tokens and throw auth error
         await this.clearToken();
-        throw new Error('Authentication required');
+        throw new Error('Session expired. Please login again.');
+      }
+
+      // Handle 429 Too Many Requests (rate limiting)
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        const retryAfter = response.headers.get('Retry-After') || '60';
+        throw new Error(
+          errorData.message ||
+            `Too many requests. Please wait ${retryAfter} seconds before trying again.`,
+        );
       }
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`API Error ${response.status}: ${errorText}`);
+        // Try to parse as JSON for better error messages (e.g., account lockout)
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.message || `API Error ${response.status}: ${errorText}`);
+        } catch {
+          throw new Error(`API Error ${response.status}: ${errorText}`);
+        }
       }
 
       const contentType = response.headers.get('content-type');
@@ -190,6 +255,73 @@ class TrendAPIService {
       } else {
         throw error;
       }
+    }
+  }
+
+  /**
+   * Attempt to refresh the access token using the refresh token
+   * Handles concurrent refresh requests by waiting for the first one to complete
+   */
+  async tryRefreshToken() {
+    // If no refresh token, can't refresh
+    if (!this.refreshToken) {
+      console.log('🔄 No refresh token available');
+      return false;
+    }
+
+    // If already refreshing, wait for that to complete
+    if (this.isRefreshing) {
+      console.log('🔄 Refresh already in progress, waiting...');
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = this._doRefreshToken();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+    }
+  }
+
+  async _doRefreshToken() {
+    try {
+      console.log('🔄 Calling /auth/refresh endpoint...');
+      const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: this.refreshToken,
+        }),
+      });
+
+      if (!response.ok) {
+        console.log('🔄 Refresh token request failed:', response.status);
+        return false;
+      }
+
+      const data = await response.json();
+
+      // Save new access token
+      if (data.access_token) {
+        await this.saveToken(data.access_token);
+        console.log('🔄 New access token saved');
+      }
+
+      // Handle token rotation - save new refresh token if provided
+      if (data.refresh_token) {
+        await this.saveRefreshToken(data.refresh_token);
+        console.log('🔄 Refresh token rotated and saved');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('🔄 Token refresh failed:', error);
+      return false;
     }
   }
 
@@ -224,6 +356,12 @@ class TrendAPIService {
 
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
+
+        // 🔐 Save refresh token for automatic session renewal
+        if (response.refresh_token) {
+          await this.saveRefreshToken(response.refresh_token);
+        }
+
         // Reset login attempts on successful login
         this.loginAttempts = 0;
         return {
@@ -250,10 +388,16 @@ class TrendAPIService {
         error.message.includes('Unauthorized')
       ) {
         userMessage = 'Invalid email or password.';
+      } else if (error.message.includes('locked') || error.message.includes('attempts remaining')) {
+        // Account lockout - pass through the server's message
+        userMessage = error.message;
+      } else if (error.message.includes('Too many requests')) {
+        // Rate limiting - pass through the server's message
+        userMessage = error.message;
       }
 
-      // Increment login attempts on failed login (except for rate limit errors)
-      if (!error.message.includes('Too many login attempts')) {
+      // Increment login attempts on failed login (except for rate limit/lockout errors)
+      if (!error.message.includes('Too many') && !error.message.includes('locked')) {
         this.loginAttempts++;
         this.lastFailedAttempt = Date.now();
       }
@@ -283,6 +427,12 @@ class TrendAPIService {
 
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
+
+        // 🔐 Save refresh token for automatic session renewal
+        if (response.refresh_token) {
+          await this.saveRefreshToken(response.refresh_token);
+        }
+
         return {
           success: true,
           user: response.user,
@@ -292,20 +442,34 @@ class TrendAPIService {
         throw new Error('Invalid response format');
       }
     } catch (error) {
+      let userMessage = error.message;
+      // Handle rate limiting for registration
+      if (error.message.includes('Too many requests')) {
+        userMessage = error.message;
+      }
       return {
         success: false,
-        error: error.message,
+        error: userMessage,
       };
     }
   }
 
   async logout() {
     try {
-      await this.makeRequest('/auth/logout', {
-        method: 'POST',
-      });
+      // 🔐 Send refresh token to backend to revoke it
+      if (this.refreshToken) {
+        await this.makeRequest('/auth/logout', {
+          method: 'POST',
+          body: {
+            refresh_token: this.refreshToken,
+          },
+          skipAuthRefresh: true, // Don't try to refresh during logout
+        });
+        console.log('🔐 Refresh token revoked on server');
+      }
     } catch (error) {
-      // Logout failed, but still clear local state
+      // Logout endpoint may fail, but still clear local state
+      console.log('🔐 Backend logout failed (continuing with local cleanup):', error.message);
     } finally {
       await this.clearToken();
     }
@@ -1386,9 +1550,18 @@ class TrendAPIService {
     }
   }
 
-  // Helper method to refresh authentication
+  // Helper method to refresh authentication (uses refresh token)
   async refreshAuth() {
     try {
+      // First try to refresh the token if we have a refresh token
+      if (this.refreshToken) {
+        const refreshed = await this.tryRefreshToken();
+        if (refreshed) {
+          return true;
+        }
+      }
+
+      // If no refresh token or refresh failed, try to validate current token
       const profile = await this.getUserProfile();
       return !!profile;
     } catch (error) {
@@ -1403,6 +1576,8 @@ class TrendAPIService {
       baseURL: this.baseURL,
       isAuthenticated: this.isAuthenticated(),
       hasToken: !!this.token,
+      hasRefreshToken: !!this.refreshToken,
+      isRefreshing: this.isRefreshing,
     };
   }
 }
