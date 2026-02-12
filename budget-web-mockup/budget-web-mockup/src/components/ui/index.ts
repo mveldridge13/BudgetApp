@@ -7,3 +7,4 @@ export { default as ProgressBar } from './ProgressBar';
 export { default as Spinner } from './Spinner';
 export { default as CategoryIcon } from './CategoryIcon';
 export { default as CustomSelect } from './CustomSelect';
+export { default as ConfirmDialog } from './ConfirmDialog';
