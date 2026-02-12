@@ -55,6 +55,7 @@ class ApiClient {
       console.log(`[API] Response status: ${response.status}`);
 
       if (!response.ok) {
+        // Handle 401 Unauthorized - attempt token refresh
         if (response.status === 401 && !skipAuthRefresh) {
           console.log('[API] 401 received - attempting token refresh');
 
@@ -73,6 +74,19 @@ class ApiClient {
             window.location.href = '/login';
           }
           throw new Error('Session expired. Please login again.');
+        }
+
+        // Handle 429 Rate Limiting
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          const retrySeconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+          const errorData = await response.json().catch(() => ({}));
+          const error: ApiError = {
+            message: errorData.message || `Too many attempts. Please try again in ${retrySeconds} seconds.`,
+            statusCode: 429,
+            error: 'Too Many Requests',
+          };
+          throw error;
         }
 
         const errorData = await response.json().catch(() => ({}));
