@@ -482,25 +482,25 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
           </div>
 
           {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!formData.title || saving}
-            className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
-              !formData.title || saving
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'text-white hover:opacity-90'
-            }`}
-            style={!formData.title && !saving ? {} : { backgroundColor: '#6366f1' }}
-          >
-            {saving ? 'Saving...' : editingGoal ? 'Save Changes' : 'Create'}
-          </button>
+        <div className="border-t border-gray-200 p-6 space-y-3">
+            <button
+              onClick={handleSave}
+              disabled={!formData.title || saving}
+              className={`w-full px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+                !formData.title || saving
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'text-white'
+              }`}
+              style={!formData.title && !saving ? {} : { backgroundColor: '#6366f1' }}
+            >
+              {saving ? 'Saving...' : editingGoal ? 'Save Changes' : 'Create'}
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full px-4 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
         </div>
       </div>
       </div>

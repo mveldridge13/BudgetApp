@@ -236,8 +236,10 @@ export default function DebtSimulator({
                                 y1={padding.top + ratio * graphHeight}
                                 x2={chartWidth - padding.right}
                                 y2={padding.top + ratio * graphHeight}
-                                stroke="#e5e7eb"
-                                strokeWidth="1"
+                                stroke={ratio === 1 ? "#d1d5db" : "#e5e7eb"}
+                                strokeWidth={ratio === 1 ? "1.5" : "1"}
+                                strokeDasharray={ratio === 1 ? "0" : "4 4"}
+                                opacity={ratio === 1 ? "1" : "0.6"}
                               />
                               <text
                                 x={padding.left - 10}
@@ -245,6 +247,7 @@ export default function DebtSimulator({
                                 textAnchor="end"
                                 fontSize="11"
                                 fill="#6b7280"
+                                fontWeight={ratio === 1 ? "600" : "400"}
                               >
                                 ${((1 - ratio) * maxBalance).toFixed(0)}
                               </text>
