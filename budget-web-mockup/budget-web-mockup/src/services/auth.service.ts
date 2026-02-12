@@ -23,6 +23,11 @@ class AuthService {
       tokenStorage.setToken(token);
     }
 
+    // Store refresh token if provided
+    if (response.refresh_token) {
+      tokenStorage.setRefreshToken(response.refresh_token);
+    }
+
     return response;
   }
 
@@ -43,21 +48,65 @@ class AuthService {
       tokenStorage.setToken(token);
     }
 
+    // Store refresh token if provided
+    if (response.refresh_token) {
+      tokenStorage.setRefreshToken(response.refresh_token);
+    }
+
     return response;
   }
 
   async logout(): Promise<void> {
     try {
-      await api.post('/auth/logout');
+      const refreshToken = tokenStorage.getRefreshToken();
+      if (refreshToken) {
+        await api.post('/auth/logout', { refresh_token: refreshToken });
+      }
     } finally {
       this.clearSession();
     }
   }
 
   clearSession(): void {
-    tokenStorage.removeToken();
+    tokenStorage.clearAll();
     storage.remove(API_CONFIG.storageKeys.userProfile);
     storage.remove(API_CONFIG.storageKeys.appSettings);
+  }
+
+  async refreshToken(): Promise<boolean> {
+    const refreshToken = tokenStorage.getRefreshToken();
+    if (!refreshToken) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_CONFIG.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!response.ok) {
+        this.clearSession();
+        return false;
+      }
+
+      const data = await response.json();
+      const newToken = data.access_token || data.token;
+      if (newToken) {
+        tokenStorage.setToken(newToken);
+      }
+
+      // Token rotation: store new refresh token if provided
+      if (data.refresh_token) {
+        tokenStorage.setRefreshToken(data.refresh_token);
+      }
+
+      return true;
+    } catch {
+      this.clearSession();
+      return false;
+    }
   }
 
   async getProfile(): Promise<UserProfile> {

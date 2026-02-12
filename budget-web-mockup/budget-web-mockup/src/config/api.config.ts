@@ -16,6 +16,7 @@ export const API_CONFIG = {
   // Storage keys
   storageKeys: {
     authToken: 'trend_auth_token',
+    refreshToken: 'trend_refresh_token',
     userProfile: 'trend_user_profile',
     appSettings: 'trend_app_settings',
   },

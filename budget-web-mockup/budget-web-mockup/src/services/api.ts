@@ -9,11 +9,14 @@ interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   timeout?: number;
+  skipAuthRefresh?: boolean; // Prevent infinite refresh loops
 }
 
 class ApiClient {
   private baseUrl: string;
   private defaultTimeout: number;
+  private isRefreshing: boolean = false;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
     this.baseUrl = API_CONFIG.baseUrl;
@@ -24,7 +27,7 @@ class ApiClient {
     endpoint: string,
     options: RequestOptions = {}
   ): Promise<T> {
-    const { method = 'GET', body, headers = {}, timeout = this.defaultTimeout } = options;
+    const { method = 'GET', body, headers = {}, timeout = this.defaultTimeout, skipAuthRefresh = false } = options;
 
     const token = tokenStorage.getToken();
     const requestHeaders: Record<string, string> = {
@@ -52,10 +55,20 @@ class ApiClient {
       console.log(`[API] Response status: ${response.status}`);
 
       if (!response.ok) {
-        if (response.status === 401) {
-          console.log('[API] 401 received - clearing token and redirecting');
-          // Token expired or invalid
-          tokenStorage.removeToken();
+        if (response.status === 401 && !skipAuthRefresh) {
+          console.log('[API] 401 received - attempting token refresh');
+
+          // Attempt to refresh the token
+          const refreshed = await this.tryRefreshToken();
+          if (refreshed) {
+            console.log('[API] Token refreshed - retrying original request');
+            // Retry the original request with the new token
+            return this.request<T>(endpoint, { ...options, skipAuthRefresh: true });
+          }
+
+          // Refresh failed - clear tokens and redirect
+          console.log('[API] Token refresh failed - redirecting to login');
+          tokenStorage.clearAll();
           if (typeof window !== 'undefined') {
             window.location.href = '/login';
           }
@@ -103,6 +116,57 @@ class ApiClient {
       }
 
       throw error;
+    }
+  }
+
+  private async tryRefreshToken(): Promise<boolean> {
+    // If already refreshing, wait for that to complete
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    const refreshToken = tokenStorage.getRefreshToken();
+    if (!refreshToken) {
+      return false;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = this.performTokenRefresh(refreshToken);
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+    }
+  }
+
+  private async performTokenRefresh(refreshToken: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json();
+      const newToken = data.access_token || data.token;
+      if (newToken) {
+        tokenStorage.setToken(newToken);
+      }
+
+      // Token rotation: store new refresh token if provided
+      if (data.refresh_token) {
+        tokenStorage.setRefreshToken(data.refresh_token);
+      }
+
+      return true;
+    } catch {
+      return false;
     }
   }
 

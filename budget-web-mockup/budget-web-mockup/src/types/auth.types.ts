@@ -15,6 +15,7 @@ export interface RegisterData {
 export interface AuthResponse {
   token?: string;
   access_token?: string; // API returns access_token
+  refresh_token?: string; // Refresh token for token renewal
   user: User;
 }
 

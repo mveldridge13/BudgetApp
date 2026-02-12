@@ -90,4 +90,21 @@ export const tokenStorage = {
   hasToken(): boolean {
     return !!this.getToken();
   },
+
+  getRefreshToken(): string | null {
+    return storage.get<string>(API_CONFIG.storageKeys.refreshToken);
+  },
+
+  setRefreshToken(token: string): void {
+    storage.set(API_CONFIG.storageKeys.refreshToken, token);
+  },
+
+  removeRefreshToken(): void {
+    storage.remove(API_CONFIG.storageKeys.refreshToken);
+  },
+
+  clearAll(): void {
+    this.removeToken();
+    this.removeRefreshToken();
+  },
 };
