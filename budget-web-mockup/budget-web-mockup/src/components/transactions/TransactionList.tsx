@@ -100,6 +100,44 @@ export default function TransactionList({
     ),
   ];
 
+  // Group transactions by date
+  const groupedTransactions = filteredTransactions.reduce((groups, transaction) => {
+    const dateKey = new Date(transaction.date).toDateString();
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+    }
+    groups[dateKey].push(transaction);
+    return groups;
+  }, {} as Record<string, Transaction[]>);
+
+  // Get sorted date keys (maintains the sort order from filteredTransactions)
+  const sortedDateKeys = Object.keys(groupedTransactions).sort((a, b) => {
+    const dateA = new Date(a).getTime();
+    const dateB = new Date(b).getTime();
+    return sortOrder === 'Oldest First' ? dateA - dateB : dateB - dateA;
+  });
+
+  // Format date for header display
+  function formatDateHeader(dateString: string): string {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString('en-AU', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+      });
+    }
+  }
+
 
   function getFrequencyLabel(transaction: Transaction): string {
     // Backend uses 'recurrence' field directly
@@ -201,13 +239,27 @@ export default function TransactionList({
       </div>
 
       {/* Transaction List */}
-      <div className="space-y-3">
+      <div className="space-y-6">
         {filteredTransactions.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
             <p>No transactions found</p>
           </div>
         ) : (
-          filteredTransactions.map(transaction => {
+          sortedDateKeys.map(dateKey => (
+            <div key={dateKey} className="space-y-3">
+              {/* Date Header */}
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                  {formatDateHeader(dateKey)}
+                </h3>
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs text-gray-400">
+                  {groupedTransactions[dateKey].length} transaction{groupedTransactions[dateKey].length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Transactions for this date */}
+              {groupedTransactions[dateKey].map(transaction => {
             // Handle category data - could be string or object
             let categoryName = 'Uncategorized';
             let categoryColor = '#6B7280';
@@ -341,8 +393,10 @@ export default function TransactionList({
                   </div>
                 </div>
               </div>
-            );
-          })
+              );
+            })}
+            </div>
+          ))
         )}
       </div>
 

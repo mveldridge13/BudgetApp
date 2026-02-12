@@ -7,6 +7,7 @@ import { Plus, Target, TrendingDown, DollarSign } from 'lucide-react';
 import GoalCard from '@/components/goals/GoalCard';
 import AddGoalModal from '@/components/goals/AddGoalModal';
 import DebtSimulator from '@/components/goals/DebtSimulator';
+import { CustomSelect } from '@/components/ui';
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<GoalDisplay[]>([]);
@@ -14,6 +15,12 @@ export default function GoalsPage() {
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalDisplay | null>(null);
   const [simulatingGoal, setSimulatingGoal] = useState<GoalDisplay | null>(null);
+
+  // Search and filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All Types');
+  const [priorityFilter, setPriorityFilter] = useState('All Priorities');
+  const [sortOrder, setSortOrder] = useState('Newest First');
 
   useEffect(() => {
     loadGoals();
@@ -31,20 +38,80 @@ export default function GoalsPage() {
     }
   };
 
-  // Filter goals
+  // Apply search and filters to goals
+  const filteredGoals = useMemo(() => {
+    return goals.filter((goal) => {
+      // Search filter
+      const matchesSearch = goal.title
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+
+      // Type filter
+      const matchesType =
+        typeFilter === 'All Types' ||
+        (typeFilter === 'Savings' && goal.type === 'savings') ||
+        (typeFilter === 'Spending' && goal.type === 'spending') ||
+        (typeFilter === 'Debt' && goal.type === 'debt');
+
+      // Priority filter
+      const matchesPriority =
+        priorityFilter === 'All Priorities' ||
+        (priorityFilter === 'High' && goal.priority === 'high') ||
+        (priorityFilter === 'Medium' && goal.priority === 'medium') ||
+        (priorityFilter === 'Low' && goal.priority === 'low');
+
+      return matchesSearch && matchesType && matchesPriority;
+    });
+  }, [goals, searchTerm, typeFilter, priorityFilter]);
+
+  // Sort filtered goals
+  const sortedFilteredGoals = useMemo(() => {
+    return [...filteredGoals].sort((a, b) => {
+      switch (sortOrder) {
+        case 'Newest First': {
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bCreated - aCreated;
+        }
+        case 'Oldest First': {
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return aCreated - bCreated;
+        }
+        case 'Highest Target':
+          return b.target - a.target;
+        case 'Lowest Target':
+          return a.target - b.target;
+        case 'Most Progress': {
+          const aProgress = a.target > 0 ? (a.current / a.target) * 100 : 0;
+          const bProgress = b.target > 0 ? (b.current / b.target) * 100 : 0;
+          return bProgress - aProgress;
+        }
+        case 'Least Progress': {
+          const aProgress = a.target > 0 ? (a.current / a.target) * 100 : 0;
+          const bProgress = b.target > 0 ? (b.current / b.target) * 100 : 0;
+          return aProgress - bProgress;
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [filteredGoals, sortOrder]);
+
+  // Filter goals by status and type (from sorted filtered goals)
   const activeGoals = useMemo(
-    () => goals.filter((g) => g.isActive && g.type !== 'debt'),
-    [goals]
+    () => sortedFilteredGoals.filter((g) => g.isActive && g.type !== 'debt'),
+    [sortedFilteredGoals]
   );
 
   const debtGoals = useMemo(
-    () => goals.filter((g) => g.isActive && g.type === 'debt'),
-    [goals]
+    () => sortedFilteredGoals.filter((g) => g.isActive && g.type === 'debt'),
+    [sortedFilteredGoals]
   );
 
   const completedGoals = useMemo(
-    () => goals.filter((g) => !g.isActive),
-    [goals]
+    () => sortedFilteredGoals.filter((g) => !g.isActive),
+    [sortedFilteredGoals]
   );
 
   const balanceCardGoals = useMemo(
@@ -221,6 +288,74 @@ export default function GoalsPage() {
             </div>
           </div>
 
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg
+                  className="h-5 w-5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Search goals..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white"
+              />
+            </div>
+            <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white min-w-[160px]">
+              <CustomSelect
+                value={typeFilter}
+                onChange={(value) => setTypeFilter(value)}
+                options={[
+                  { value: 'All Types', label: 'All Types' },
+                  { value: 'Savings', label: 'Savings' },
+                  { value: 'Spending', label: 'Spending' },
+                  { value: 'Debt', label: 'Debt' },
+                ]}
+                placeholder="All Types"
+              />
+            </div>
+            <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white min-w-[160px]">
+              <CustomSelect
+                value={priorityFilter}
+                onChange={(value) => setPriorityFilter(value)}
+                options={[
+                  { value: 'All Priorities', label: 'All Priorities' },
+                  { value: 'High', label: 'High' },
+                  { value: 'Medium', label: 'Medium' },
+                  { value: 'Low', label: 'Low' },
+                ]}
+                placeholder="All Priorities"
+              />
+            </div>
+            <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white min-w-[180px]">
+              <CustomSelect
+                value={sortOrder}
+                onChange={(value) => setSortOrder(value)}
+                options={[
+                  { value: 'Newest First', label: 'Newest First' },
+                  { value: 'Oldest First', label: 'Oldest First' },
+                  { value: 'Highest Target', label: 'Highest Target' },
+                  { value: 'Lowest Target', label: 'Lowest Target' },
+                  { value: 'Most Progress', label: 'Most Progress' },
+                  { value: 'Least Progress', label: 'Least Progress' },
+                ]}
+                placeholder="Sort by"
+              />
+            </div>
+          </div>
+
           {/* Active Goals - Grouped by Type */}
           {(activeGoals.length > 0 || debtGoals.length > 0) ? (
             <div className="space-y-8">
@@ -278,12 +413,22 @@ export default function GoalsPage() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : goals.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
               <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No Goals Yet</h3>
               <p className="text-gray-500 mb-6">
                 Set your first financial goal to start tracking your progress
+              </p>
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
+              <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Goals Found</h3>
+              <p className="text-gray-500 mb-6">
+                No goals match your current filters
               </p>
             </div>
           )}
