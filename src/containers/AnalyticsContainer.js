@@ -757,15 +757,21 @@ const AnalyticsContainer = () => {
         ? totalDiscretionaryExpenses / analyticsData.monthlyTrends.length
         : 0;
 
+    // Calculate discretionary percentage change
+    const previousDiscretionary = analyticsData.previousPeriodDiscretionary || 0;
+    const discretionaryPercentageChange = previousDiscretionary > 0
+      ? ((totalDiscretionaryExpenses - previousDiscretionary) / previousDiscretionary) * 100
+      : 0;
+
     // Use backend statistics with calculated discretionary data
     const statistics = {
       // Spending statistics
       currentTotal: analyticsData.totalExpenses || 0,
-      currentDiscretionary: totalDiscretionaryExpenses, // ✅ FIXED: Use backend calculation
-      previousTotal: 0, // Backend enhancement needed
-      previousDiscretionary: 0,
-      percentageChange: 0, // Backend enhancement needed
-      discretionaryPercentageChange: 0,
+      currentDiscretionary: totalDiscretionaryExpenses,
+      previousTotal: analyticsData.previousPeriodExpenses || 0,
+      previousDiscretionary: previousDiscretionary,
+      percentageChange: analyticsData.expensesPercentageChange || 0,
+      discretionaryPercentageChange: discretionaryPercentageChange,
       averageSpending: analyticsData.averageTransaction || 0,
       averageDiscretionary: averageDiscretionaryPerPeriod, // ✅ FIXED: Use backend calculation
       highestSpendingPeriod:
