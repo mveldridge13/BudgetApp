@@ -194,7 +194,6 @@ const DiscretionaryContainer = ({
         const filters = {
           startDate: dateRange.startDateTime, // Use full datetime
           endDate: dateRange.endDateTime, // Use full datetime
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
 
         // ✅ FIXED: Use the new TrendAPIService method
