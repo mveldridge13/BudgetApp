@@ -2,7 +2,7 @@
 
 import {useState} from 'react';
 import {Transaction, TransactionSummary} from '@/types';
-import {formatCurrency, formatDate} from '@/lib/formatters';
+import {formatCurrency} from '@/lib/formatters';
 import {CategoryIcon, CustomSelect} from '@/components/ui';
 import TransactionSummaryTiles from './TransactionSummaryTiles';
 import TransactionDetailPanel from './TransactionDetailPanel';
@@ -359,13 +359,10 @@ export default function TransactionList({
                     </p>
                   </div>
 
-                  {/* Amount and Date */}
+                  {/* Amount */}
                   <div className="text-right mr-4">
                     <p className="text-lg font-semibold text-gray-900">
                       {formatCurrency(Math.abs(transaction.amount))}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {formatDate(transaction.date)}
                     </p>
                   </div>
 
