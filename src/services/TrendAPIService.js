@@ -16,6 +16,10 @@ class TrendAPIService {
     // Token refresh state (prevents concurrent refresh requests)
     this.isRefreshing = false;
     this.refreshPromise = null;
+    // Proactive token refresh
+    this.tokenExpiry = null; // Timestamp when access token expires
+    this.refreshTimer = null; // Timer for proactive refresh
+    this.REFRESH_BUFFER = 2 * 60 * 1000; // Refresh 2 minutes before expiry
     // Login rate limiting (client-side backup - server enforces stricter limits)
     this.loginAttempts = 0;
     this.lastFailedAttempt = 0;
@@ -32,6 +36,8 @@ class TrendAPIService {
 
       if (credentials) {
         this.token = credentials.password;
+        // Extract expiry from loaded token for proactive refresh
+        this.tokenExpiry = this.decodeTokenExpiry(this.token);
         console.log('🔐 Access token loaded from secure Keychain');
       }
 
@@ -64,6 +70,9 @@ class TrendAPIService {
 
       if (!this.token) {
         console.log('No authentication token found');
+      } else {
+        // Schedule proactive refresh for loaded token
+        this.scheduleProactiveRefresh();
       }
       return true;
     } catch (error) {
@@ -75,6 +84,15 @@ class TrendAPIService {
   async saveToken(token) {
     try {
       this.token = token;
+
+      // Extract and store token expiry for proactive refresh
+      this.tokenExpiry = this.decodeTokenExpiry(token);
+      if (this.tokenExpiry) {
+        console.log(`🔐 Token expires at: ${new Date(this.tokenExpiry).toISOString()}`);
+      }
+
+      // Schedule proactive refresh before token expires
+      this.scheduleProactiveRefresh();
 
       // 🔐 SECURE: Save access token to iOS Keychain (hardware-encrypted)
       await Keychain.setGenericPassword('trend_user', token, {
@@ -112,6 +130,10 @@ class TrendAPIService {
     try {
       this.token = null;
       this.refreshToken = null;
+      this.tokenExpiry = null;
+
+      // Cancel any scheduled proactive refresh
+      this.cancelScheduledRefresh();
 
       // 🔐 SECURE: Remove access token from Keychain
       await Keychain.resetGenericPassword({
@@ -136,6 +158,99 @@ class TrendAPIService {
 
   isAuthenticated() {
     return !!this.token;
+  }
+
+  // ============================================================================
+  // PROACTIVE TOKEN REFRESH METHODS
+  // ============================================================================
+
+  /**
+   * Decode JWT token to extract expiry timestamp
+   * @param {string} token - JWT access token
+   * @returns {number|null} - Expiry timestamp in milliseconds, or null if invalid
+   */
+  decodeTokenExpiry(token) {
+    try {
+      if (!token) {
+        return null;
+      }
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return null;
+      }
+      const payload = parts[1];
+      // Add padding if needed for base64 decoding
+      const paddedPayload = payload + '='.repeat((4 - (payload.length % 4)) % 4);
+      // eslint-disable-next-line no-undef
+      const decoded = JSON.parse(atob(paddedPayload));
+      return decoded.exp ? decoded.exp * 1000 : null; // Convert to milliseconds
+    } catch (error) {
+      console.error('🔄 Failed to decode token expiry:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Schedule a proactive token refresh before the token expires
+   * This prevents 401 errors by refreshing ahead of time
+   */
+  scheduleProactiveRefresh() {
+    // Clear any existing timer
+    this.cancelScheduledRefresh();
+
+    if (!this.tokenExpiry || !this.token) {
+      return;
+    }
+
+    const now = Date.now();
+    const refreshTime = this.tokenExpiry - this.REFRESH_BUFFER;
+    const delay = refreshTime - now;
+
+    if (delay <= 0) {
+      // Token already expired or about to expire, refresh immediately
+      console.log('🔄 Token expired or expiring soon, refreshing immediately');
+      this.tryRefreshToken();
+      return;
+    }
+
+    console.log(`🔄 Scheduling proactive refresh in ${Math.round(delay / 1000)}s (token expires at ${new Date(this.tokenExpiry).toISOString()})`);
+    this.refreshTimer = setTimeout(() => {
+      console.log('🔄 Proactive token refresh triggered');
+      this.tryRefreshToken();
+    }, delay);
+  }
+
+  /**
+   * Cancel any scheduled proactive refresh
+   */
+  cancelScheduledRefresh() {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  /**
+   * Check and refresh token when app comes to foreground
+   * Called by BiometricAuth when app state changes to 'active'
+   */
+  async checkAndRefreshOnForeground() {
+    if (!this.token || !this.tokenExpiry) {
+      return;
+    }
+
+    const now = Date.now();
+    const timeUntilExpiry = this.tokenExpiry - now;
+
+    // If token expires in less than 5 minutes, refresh now
+    if (timeUntilExpiry < 5 * 60 * 1000) {
+      console.log('🔄 Token expiring soon, refreshing on foreground');
+      await this.tryRefreshToken();
+    } else {
+      // Re-schedule proactive refresh (timer may have been cleared while in background)
+      console.log('🔄 App foregrounded, re-scheduling proactive refresh');
+      this.scheduleProactiveRefresh();
+    }
   }
 
   // Helper method to build query string

@@ -17,10 +17,135 @@ class ApiClient {
   private defaultTimeout: number;
   private isRefreshing: boolean = false;
   private refreshPromise: Promise<boolean> | null = null;
+  // Proactive token refresh
+  private tokenExpiry: number | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly REFRESH_BUFFER = 2 * 60 * 1000; // Refresh 2 minutes before expiry
+  private visibilityHandler: (() => void) | null = null;
 
   constructor() {
     this.baseUrl = API_CONFIG.baseUrl;
     this.defaultTimeout = API_CONFIG.timeout;
+    // Initialize proactive refresh on construction
+    this.initializeProactiveRefresh();
+  }
+
+  /**
+   * Initialize proactive refresh by checking existing token and setting up visibility listener
+   */
+  private initializeProactiveRefresh(): void {
+    if (typeof window === 'undefined') return;
+
+    // Check existing token on init
+    const token = tokenStorage.getToken();
+    if (token) {
+      this.tokenExpiry = this.decodeTokenExpiry(token);
+      this.scheduleProactiveRefresh();
+    }
+
+    // Set up visibility change listener (similar to mobile app foreground detection)
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[API] Tab became visible - checking token refresh');
+        this.checkAndRefreshOnVisible();
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+  }
+
+  /**
+   * Decode JWT token to extract expiry timestamp
+   */
+  private decodeTokenExpiry(token: string): number | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = parts[1];
+      const paddedPayload = payload + '='.repeat((4 - (payload.length % 4)) % 4);
+      const decoded = JSON.parse(atob(paddedPayload));
+      return decoded.exp ? decoded.exp * 1000 : null; // Convert to milliseconds
+    } catch (error) {
+      console.error('[API] Failed to decode token expiry:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Schedule proactive token refresh before expiry
+   */
+  private scheduleProactiveRefresh(): void {
+    this.cancelScheduledRefresh();
+
+    if (!this.tokenExpiry) return;
+
+    const now = Date.now();
+    const refreshTime = this.tokenExpiry - this.REFRESH_BUFFER;
+    const delay = refreshTime - now;
+
+    if (delay <= 0) {
+      console.log('[API] Token expired or expiring soon, refreshing immediately');
+      this.tryRefreshToken();
+      return;
+    }
+
+    console.log(`[API] Scheduling proactive refresh in ${Math.round(delay / 1000)}s`);
+    this.refreshTimer = setTimeout(() => {
+      console.log('[API] Proactive token refresh triggered');
+      this.tryRefreshToken();
+    }, delay);
+  }
+
+  /**
+   * Cancel any scheduled proactive refresh
+   */
+  private cancelScheduledRefresh(): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  /**
+   * Check and refresh token when tab becomes visible
+   */
+  private async checkAndRefreshOnVisible(): Promise<void> {
+    const token = tokenStorage.getToken();
+    if (!token) return;
+
+    // Re-read expiry in case token changed
+    this.tokenExpiry = this.decodeTokenExpiry(token);
+    if (!this.tokenExpiry) return;
+
+    const now = Date.now();
+    const timeUntilExpiry = this.tokenExpiry - now;
+
+    // If token expires in less than 5 minutes, refresh now
+    if (timeUntilExpiry < 5 * 60 * 1000) {
+      console.log('[API] Token expiring soon, refreshing on visibility');
+      await this.tryRefreshToken();
+    } else {
+      // Re-schedule proactive refresh
+      this.scheduleProactiveRefresh();
+    }
+  }
+
+  /**
+   * Update token expiry tracking when token changes
+   */
+  updateTokenExpiry(token: string): void {
+    this.tokenExpiry = this.decodeTokenExpiry(token);
+    if (this.tokenExpiry) {
+      console.log(`[API] Token expires at: ${new Date(this.tokenExpiry).toISOString()}`);
+    }
+    this.scheduleProactiveRefresh();
+  }
+
+  /**
+   * Clear token expiry and cancel refresh on logout
+   */
+  clearTokenExpiry(): void {
+    this.tokenExpiry = null;
+    this.cancelScheduledRefresh();
   }
 
   private async request<T>(
@@ -171,6 +296,8 @@ class ApiClient {
       const newToken = data.access_token || data.token;
       if (newToken) {
         tokenStorage.setToken(newToken);
+        // Update expiry tracking and schedule next proactive refresh
+        this.updateTokenExpiry(newToken);
       }
 
       // Token rotation: store new refresh token if provided

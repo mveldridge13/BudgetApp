@@ -21,6 +21,8 @@ class AuthService {
     const token = response.access_token || response.token;
     if (token) {
       tokenStorage.setToken(token);
+      // Update API client's expiry tracking for proactive refresh
+      api.updateTokenExpiry(token);
     }
 
     // Store refresh token if provided
@@ -46,6 +48,8 @@ class AuthService {
     const token = response.access_token || response.token;
     if (token) {
       tokenStorage.setToken(token);
+      // Update API client's expiry tracking for proactive refresh
+      api.updateTokenExpiry(token);
     }
 
     // Store refresh token if provided
@@ -71,6 +75,8 @@ class AuthService {
     tokenStorage.clearAll();
     storage.remove(API_CONFIG.storageKeys.userProfile);
     storage.remove(API_CONFIG.storageKeys.appSettings);
+    // Clear API client's expiry tracking and cancel scheduled refresh
+    api.clearTokenExpiry();
   }
 
   async refreshToken(): Promise<boolean> {
@@ -95,6 +101,8 @@ class AuthService {
       const newToken = data.access_token || data.token;
       if (newToken) {
         tokenStorage.setToken(newToken);
+        // Update API client's expiry tracking for proactive refresh
+        api.updateTokenExpiry(newToken);
       }
 
       // Token rotation: store new refresh token if provided

@@ -1,6 +1,7 @@
 // services/BiometricAuth.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {AppState} from 'react-native';
+import TrendAPIService from './TrendAPIService';
 
 // Note: Will need to install react-native-biometrics
 // For now, creating the service structure
@@ -107,6 +108,9 @@ class BiometricAuthService {
     if (nextAppState === 'active') {
       // App came to foreground - check if should be locked
       this.checkShouldLock();
+
+      // Check and refresh auth token if needed (prevents silent expiry during background)
+      TrendAPIService.checkAndRefreshOnForeground();
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       // App went to background - save timestamp immediately
       console.log('🔐 BiometricAuth: App going to background, saving timestamp');
