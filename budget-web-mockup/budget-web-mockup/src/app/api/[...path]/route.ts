@@ -38,6 +38,13 @@ async function proxyRequest(request: NextRequest, path: string) {
   try {
     const response = await fetch(url, fetchOptions);
     console.log(`[Proxy] Backend response status: ${response.status}`);
+
+    // Handle 204 No Content (common for DELETE requests)
+    if (response.status === 204) {
+      console.log('[Proxy] 204 No Content - DELETE successful');
+      return new NextResponse(null, { status: 204 });
+    }
+
     const data = await response.json().catch(() => ({}));
     console.log('[Proxy] Backend response data:', JSON.stringify(data).substring(0, 200));
 

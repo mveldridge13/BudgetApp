@@ -301,16 +301,16 @@ const useGoals = () => {
           throw new Error('Invalid categories data');
         }
 
-        // Get FRESH goals data from cache to avoid stale state
-        console.log('🔍 UPDATE_SPENDING_GOALS: Loading goals from cache...');
+        // Use current goals state (already filtered by API response)
+        // Don't load from cache as it may contain deleted goals
+        console.log('🔍 UPDATE_SPENDING_GOALS: Using current goals state...');
         const currentUserId = TrendAPIService.getCurrentUserId();
         if (!currentUserId) {
           console.warn('🔍 UPDATE_SPENDING_GOALS: No user ID available for goals cache');
           return {success: true};
         }
-        const cacheResult = await loadGoalsFromCache(currentUserId);
-        let updatedGoals = [...cacheResult.goals];
-        console.log('🔍 UPDATE_SPENDING_GOALS: Loaded goals from cache:', {
+        let updatedGoals = [...goals];
+        console.log('🔍 UPDATE_SPENDING_GOALS: Using goals from state:', {
           totalGoals: updatedGoals.length,
           spendingGoals: updatedGoals.filter(g => g.type === 'spending').length,
         });
@@ -580,7 +580,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [loadGoalsFromCache, saveGoalsToCache, goals.length, setGoals],
+    [goals, saveGoalsToCache, setGoals],
   );
 
   const completeGoal = useCallback(

@@ -91,7 +91,7 @@ const TransactionTypeOverlay = ({
             onPress={() => onTypeSelect('oneoff')}
             activeOpacity={0.7}>
             <View style={[styles.typeIconContainer, styles.oneoffIcon]}>
-              <Icon name="flash-outline" size={32} color="#007AFF" />
+              <Icon name="flash-outline" size={32} color="#6366f1" />
             </View>
             <Text style={styles.typeTitle}>One-off</Text>
             <Text style={styles.typeDescription}>
@@ -104,7 +104,7 @@ const TransactionTypeOverlay = ({
             onPress={() => onTypeSelect('recurring')}
             activeOpacity={0.7}>
             <View style={[styles.typeIconContainer, styles.recurringIcon]}>
-              <Icon name="repeat-outline" size={32} color="#4CAF50" />
+              <Icon name="repeat-outline" size={32} color="#10b981" />
             </View>
             <Text style={styles.typeTitle}>Recurring</Text>
             <Text style={styles.typeDescription}>
@@ -117,7 +117,7 @@ const TransactionTypeOverlay = ({
             onPress={() => onTypeSelect('debt')}
             activeOpacity={0.7}>
             <View style={[styles.typeIconContainer, styles.debtIcon]}>
-              <Icon name="trending-down-outline" size={32} color="#FF6B85" />
+              <Icon name="trending-down-outline" size={32} color="#EF4444" />
             </View>
             <Text style={styles.typeTitle}>Debt Payment</Text>
             <Text style={styles.typeDescription}>
@@ -210,13 +210,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   oneoffIcon: {
-    backgroundColor: '#007AFF26',
+    backgroundColor: '#6366f140',
   },
   recurringIcon: {
-    backgroundColor: '#4CAF5026',
+    backgroundColor: '#10b98140',
   },
   debtIcon: {
-    backgroundColor: '#FF6B8526',
+    backgroundColor: '#EF444440',
   },
   typeTitle: {
     fontSize: 18,

@@ -162,15 +162,33 @@ const useGoalData = checkNetworkConnectivity => {
               };
             });
 
-            // CRITICAL: Preserve newly created goals that aren't in API response yet
-            // Check if cache has goals that API doesn't have (recently created locally)
+            // CRITICAL: Only preserve goals created locally within last 60 seconds
+            // Goals older than this should have synced; if not in API, they were deleted elsewhere
             if (cachedResult.success) {
               const apiGoalIds = new Set(result.goals.map(g => g.id));
-              const localOnlyGoals = cachedResult.goals.filter(
-                cachedGoal => !apiGoalIds.has(cachedGoal.id),
-              );
+              const sixtySecondsAgo = Date.now() - 60000;
+              const localOnlyGoals = cachedResult.goals.filter(cachedGoal => {
+                // Skip if goal exists in API response
+                if (apiGoalIds.has(cachedGoal.id)) {
+                  return false;
+                }
+                // Only preserve if created within last 60 seconds (pending sync)
+                const createdAt = cachedGoal.createdAt
+                  ? new Date(cachedGoal.createdAt).getTime()
+                  : 0;
+                const isRecentlyCreated = createdAt > sixtySecondsAgo;
+                if (!isRecentlyCreated) {
+                  console.log(
+                    `🔍 GOAL_DATA: Removing stale cached goal ${cachedGoal.id} - not in API response and not recently created`,
+                  );
+                }
+                return isRecentlyCreated;
+              });
 
               if (localOnlyGoals.length > 0) {
+                console.log(
+                  `🔍 GOAL_DATA: Preserving ${localOnlyGoals.length} recently created local goals`,
+                );
                 mergedGoals.push(...localOnlyGoals);
               }
             }
