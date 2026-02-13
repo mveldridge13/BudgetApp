@@ -26,14 +26,6 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSExceptionDomains</key>
-		<dict>
-			<key>trend-alb-1755058843.ap-southeast-2.elb.amazonaws.com</key>
-			<dict>
-				<key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
-		</dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>

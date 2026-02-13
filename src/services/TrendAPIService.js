@@ -4,7 +4,7 @@ import * as Keychain from 'react-native-keychain';
 import sanitizeInput from '../utils/sanitizer';
 
 const API_CONFIG = {
-  baseURL: 'http://trend-alb-1755058843.ap-southeast-2.elb.amazonaws.com/api/v1', // AWS Production Backend
+  baseURL: 'https://trendapp.co/api/v1', // AWS Production Backend (HTTPS)
   timeout: 30000, // Increased timeout for mobile devices
 };
 
