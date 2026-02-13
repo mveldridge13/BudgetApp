@@ -233,8 +233,9 @@ const BalanceCard = ({
     totalIncomePayments -
     localIncomePayments;
 
+  // Use adjustedLeftToSpend for percentage to match displayed value (consistency fix)
   const percentageRemaining =
-    incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
+    incomeAmount > 0 ? Math.round((adjustedLeftToSpend / incomeAmount) * 100) : 0;
 
   // Additional calculated metrics - use actual days until next pay
   const getDaysUntilNextPay = () => {
