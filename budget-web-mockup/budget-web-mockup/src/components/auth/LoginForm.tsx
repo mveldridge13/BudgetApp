@@ -32,7 +32,7 @@ export default function LoginForm() {
 
     try {
       await login({ email, password });
-      router.push('/');
+      router.push('/dashboard');
     } catch {
       // Error is handled by auth context
     }

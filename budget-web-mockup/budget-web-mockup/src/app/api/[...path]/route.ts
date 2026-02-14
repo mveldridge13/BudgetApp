@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = 'http://trend-alb-1755058843.ap-southeast-2.elb.amazonaws.com/api/v1';
+const API_BASE_URL = process.env.API_BASE_URL || 'https://trendapp.co/api/v1';
 
 async function proxyRequest(request: NextRequest, path: string) {
   const url = `${API_BASE_URL}/${path}`;

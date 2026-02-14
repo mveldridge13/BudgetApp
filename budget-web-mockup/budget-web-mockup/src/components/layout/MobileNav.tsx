@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
-  { id: 'home', name: 'Home', href: '/', icon: 'home' },
+  { id: 'home', name: 'Home', href: '/dashboard', icon: 'home' },
   { id: 'transactions', name: 'Transactions', href: '/transactions', icon: 'transactions' },
   { id: 'goals', name: 'Goals', href: '/goals', icon: 'goals' },
   { id: 'planner', name: 'Planner', href: '/planner', icon: 'planner' },
@@ -84,7 +84,7 @@ export default function MobileNav() {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
+    if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
   };
 
@@ -96,7 +96,7 @@ export default function MobileNav() {
             key={item.id}
             href={item.href}
             className={`flex flex-col items-center px-3 py-2 ${
-              isActive(item.href) ? 'text-blue-600' : 'text-gray-500'
+              isActive(item.href) ? 'text-indigo-500' : 'text-gray-500'
             }`}
           >
             {icons[item.icon]}
