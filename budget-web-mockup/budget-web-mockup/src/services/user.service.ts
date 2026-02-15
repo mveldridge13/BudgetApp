@@ -55,6 +55,47 @@ class UserService {
   async exportData(): Promise<ExportDataResponse> {
     return api.post<ExportDataResponse>('/users/export-data');
   }
+
+  // Home summary (single source of truth for balance card)
+  async getHomeSummary(): Promise<HomeSummaryResponse> {
+    return api.get<HomeSummaryResponse>('/home/summary');
+  }
+}
+
+// Home summary types
+export interface HomeSummaryResponse {
+  period: {
+    start: string;
+    end: string;
+    frequency: string;
+    daysRemaining: number;
+    daysTotal: number;
+  };
+  income: {
+    baseIncome: number;
+    additionalIncome: number;
+    rolloverAvailable: number;
+    totalInflow: number;
+  };
+  outflows: {
+    committed: {
+      plannedTotal: number;
+      paidSoFar: number;
+      remaining: number;
+    };
+    discretionary: {
+      spentSoFar: number;
+    };
+    goals: {
+      plannedTotal: number;
+      paidSoFar: number;
+      remaining: number;
+    };
+  };
+  totals: {
+    totalExpensesAllocated: number;
+    leftToSpendSafe: number;
+  };
 }
 
 export const userService = new UserService();

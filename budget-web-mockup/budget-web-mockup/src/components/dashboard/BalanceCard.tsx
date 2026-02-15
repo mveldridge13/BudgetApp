@@ -8,6 +8,7 @@ interface BalanceCardProps {
   totalExpenses: number;
   committedExpenses: number;
   discretionaryExpenses: number;
+  goalsExpenses?: number;
   isLoading: boolean;
 }
 
@@ -17,6 +18,7 @@ export default function BalanceCard({
   totalExpenses,
   committedExpenses,
   discretionaryExpenses,
+  goalsExpenses = 0,
   isLoading,
 }: BalanceCardProps) {
   // Calculate percentage remaining (leftToSpend / balance * 100)
@@ -134,6 +136,21 @@ export default function BalanceCard({
                 {formatCurrency(discretionaryExpenses)}
               </span>
             </div>
+            {goalsExpenses > 0 && (
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <div
+                    className="w-2 h-2 rounded-full mr-2.5"
+                    style={{backgroundColor: '#10B981'}}></div>
+                  <span className="text-xs text-gray-500 font-medium">
+                    Goals
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-gray-900">
+                  {formatCurrency(goalsExpenses)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

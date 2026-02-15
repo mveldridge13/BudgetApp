@@ -31,6 +31,8 @@ const BalanceCard = ({
   onReassignRollover = null,
   // Pay period UI state (calculated by HomeContainer)
   isNewPayPeriodForUI = false,
+  // Backend home summary (single source of truth)
+  homeSummary = null,
 }) => {
   const formatCurrency = amount => {
     return formatCurrencySync(amount, currency);
@@ -224,21 +226,30 @@ const BalanceCard = ({
     }
   }, [transactions, incomeData?.nextPayDate, incomeData?.frequency]);
 
-  // Calculate values
-  const incomeAmount = (incomeData?.income || 0) + rolloverAmount;
-  const leftToSpend = incomeAmount - totalExpenses;
-  const adjustedLeftToSpend =
-    leftToSpend -
-    totalGoalContributions -
-    totalIncomePayments -
-    localIncomePayments;
+  // Calculate values - prefer backend homeSummary when available
+  const incomeAmount = homeSummary?.income?.totalInflow
+    ?? ((incomeData?.income || 0) + rolloverAmount);
+
+  // Use backend leftToSpendSafe as single source of truth
+  const adjustedLeftToSpend = homeSummary?.totals?.leftToSpendSafe
+    ?? (incomeAmount - totalExpenses - totalGoalContributions - totalIncomePayments - localIncomePayments);
+
+  // leftToSpend is only used for over-budget detection
+  const leftToSpend = homeSummary
+    ? adjustedLeftToSpend
+    : (incomeAmount - totalExpenses);
 
   // Use adjustedLeftToSpend for percentage to match displayed value (consistency fix)
   const percentageRemaining =
     incomeAmount > 0 ? Math.round((adjustedLeftToSpend / incomeAmount) * 100) : 0;
 
-  // Additional calculated metrics - use actual days until next pay
+  // Additional calculated metrics - prefer backend daysRemaining
   const getDaysUntilNextPay = () => {
+    // Use backend value if available
+    if (homeSummary?.period?.daysRemaining) {
+      return Math.max(1, homeSummary.period.daysRemaining);
+    }
+
     if (!incomeData?.nextPayDate) {
       // Fallback to frequency-based calculation
       return incomeData?.frequency === 'weekly' ? 7
@@ -387,21 +398,27 @@ const BalanceCard = ({
           <View style={[styles.balanceItem, styles.balanceItemRight]}>
             <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
             <Text style={styles.balanceAmount}>
-              {formatCurrency(totalExpenses)}
+              {formatCurrency(homeSummary?.totals?.totalExpensesAllocated ?? totalExpenses)}
             </Text>
 
-            {/* Expense Breakdown */}
-            {!loading &&
-              expenseBreakdown &&
-              (expenseBreakdown.committed > 0 ||
-                expenseBreakdown.discretionary > 0) && (
+            {/* Expense Breakdown: Committed (planned), Discretionary (spent), Goals (paid) */}
+            {!loading && (
+              (homeSummary?.outflows?.committed?.plannedTotal > 0 ||
+                homeSummary?.outflows?.discretionary?.spentSoFar > 0 ||
+                homeSummary?.outflows?.goals?.paidSoFar > 0 ||
+                expenseBreakdown?.committed > 0 ||
+                expenseBreakdown?.discretionary > 0) && (
                 <View style={styles.expenseBreakdown}>
                   <View style={styles.expenseBreakdownRow}>
                     <Text style={styles.expenseBreakdownLabel}>
                       └─ Committed:
                     </Text>
                     <Text style={styles.expenseBreakdownAmount}>
-                      {formatCurrency(expenseBreakdown.committed)}
+                      {formatCurrency(
+                        homeSummary?.outflows?.committed?.plannedTotal ??
+                        expenseBreakdown?.committed ??
+                        0
+                      )}
                     </Text>
                   </View>
                   <View style={styles.expenseBreakdownRow}>
@@ -409,11 +426,26 @@ const BalanceCard = ({
                       └─ Discretionary:
                     </Text>
                     <Text style={styles.expenseBreakdownAmount}>
-                      {formatCurrency(expenseBreakdown.discretionary)}
+                      {formatCurrency(
+                        homeSummary?.outflows?.discretionary?.spentSoFar ??
+                        expenseBreakdown?.discretionary ??
+                        0
+                      )}
                     </Text>
                   </View>
+                  {(homeSummary?.outflows?.goals?.paidSoFar > 0) && (
+                    <View style={styles.expenseBreakdownRow}>
+                      <Text style={styles.expenseBreakdownLabel}>
+                        └─ Goals:
+                      </Text>
+                      <Text style={styles.expenseBreakdownAmount}>
+                        {formatCurrency(homeSummary.outflows.goals.paidSoFar)}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
+              )
+            )}
           </View>
         </View>
 

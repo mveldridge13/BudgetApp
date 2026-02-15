@@ -44,6 +44,7 @@ const HomeContainer = ({navigation}) => {
     new Date().toDateString(),
   );
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [homeSummary, setHomeSummary] = useState(null); // Backend-calculated balance card data
   const [currency, setCurrency] = useState('AUD');
   const [backgroundSyncCount, setBackgroundSyncCount] = useState(0);
   const [userActiveOperations, setUserActiveOperations] = useState(0);
@@ -408,6 +409,36 @@ const HomeContainer = ({navigation}) => {
     } catch (error) {
       console.error('Error loading currency setting:', error);
       setCurrency('AUD'); // Fallback
+    }
+  }, []);
+
+  // Load home summary from backend (single source of truth for balance card)
+  const loadHomeSummary = useCallback(async () => {
+    try {
+      console.log('🏠 loadHomeSummary START');
+
+      if (!AuthService.isAuthenticated()) {
+        return;
+      }
+
+      const summary = await TrendAPIService.getHomeSummary();
+      console.log('🏠 Home summary received:', {
+        period: summary?.period?.frequency,
+        totalInflow: summary?.income?.totalInflow,
+        leftToSpendSafe: summary?.totals?.leftToSpendSafe,
+        committedRemaining: summary?.outflows?.committed?.remaining,
+        discretionarySpent: summary?.outflows?.discretionary?.spentSoFar,
+      });
+
+      setHomeSummary(summary);
+
+      // Also update totalExpenses for backwards compatibility during transition
+      if (summary?.totals) {
+        setTotalExpenses(summary.totals.totalExpensesAllocated);
+      }
+    } catch (error) {
+      console.error('🏠 Error loading home summary:', error);
+      // Don't fail silently - fallback to local calculation will still work
     }
   }, []);
 
@@ -1176,6 +1207,21 @@ const HomeContainer = ({navigation}) => {
     });
   }, [totalExpensesValue]);
 
+  // Refresh home summary when transactions change (debounced)
+  useEffect(() => {
+    // Skip initial render and when no transactions signature yet
+    if (!transactionsSignature || transactionsSignature === '[]') {
+      return;
+    }
+
+    // Debounce to avoid too many API calls during rapid changes
+    const timeoutId = setTimeout(() => {
+      loadHomeSummary();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [transactionsSignature, loadHomeSummary]);
+
   // ==============================================
   // ADDITIONAL INCOME CALCULATION
   // ==============================================
@@ -1919,6 +1965,7 @@ const HomeContainer = ({navigation}) => {
           loadGoals(),
           loadTournaments(),
           loadCurrencySetting(),
+          loadHomeSummary(), // Backend-calculated balance card data
         ]);
 
         // Set loading to false after initial data is loaded (for first-time scenarios)
@@ -2481,6 +2528,9 @@ const HomeContainer = ({navigation}) => {
         currency={currency}
         isBackgroundSyncing={backgroundSyncCount > 0}
         isNewPayPeriodForUI={isNewPayPeriodForUI}
+        // Backend home summary (single source of truth for balance card)
+        homeSummary={homeSummary}
+        onRefreshHomeSummary={loadHomeSummary}
         // Rollover props
         rolloverAmount={rolloverAmount}
         rolloverBanner={rolloverBanner}

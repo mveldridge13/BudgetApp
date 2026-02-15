@@ -36,6 +36,10 @@ const HomeScreen = ({
   currency = 'AUD',
   isNewPayPeriodForUI = false,
 
+  // Backend home summary (single source of truth for balance card)
+  homeSummary = null,
+  onRefreshHomeSummary = () => {},
+
   // Rollover props
   rolloverAmount = 0,
   rolloverBanner = null,
@@ -205,6 +209,7 @@ const HomeScreen = ({
           onDismissRolloverBanner={onDismissRolloverBanner}
           onReassignRollover={onReassignRollover}
           isNewPayPeriodForUI={isNewPayPeriodForUI}
+          homeSummary={homeSummary}
         />
       </View>
 

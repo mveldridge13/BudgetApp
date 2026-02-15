@@ -637,6 +637,15 @@ class TrendAPIService {
     return this.makeRequest('/users/income');
   }
 
+  /**
+   * Get home summary for Balance Card
+   * Single source of truth for all balance calculations
+   * Returns: period, income, outflows (committed, discretionary, goals), totals
+   */
+  async getHomeSummary() {
+    return this.makeRequest('/home/summary');
+  }
+
   async deactivateAccount() {
     return this.makeRequest('/users/profile', {
       method: 'DELETE',
