@@ -483,8 +483,10 @@ const HomeContainer = ({navigation}) => {
 
       // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
       try {
+        // Load ALL transactions - filtering happens in TransactionList component
+        // This allows calendar navigation to show transactions for any date
         const response = await TrendAPIService.getTransactions({
-          limit: 1000, // Get all transactions for accurate balance calculations
+          limit: 1000,
         });
         const backendTransactions = response?.transactions || [];
         const sortedTransactions = sortTransactionsByDate(backendTransactions);

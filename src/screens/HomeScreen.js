@@ -241,6 +241,7 @@ const HomeScreen = ({
         <TransactionList
           transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
           selectedDate={selectedDate}
+          payPeriod={homeSummary?.period} // Pass pay period for filtering recurring transactions
           onDeleteTransaction={onDeleteTransaction}
           onEditTransaction={handleEditTransaction}
           onSwipeStart={handleSwipeStart}

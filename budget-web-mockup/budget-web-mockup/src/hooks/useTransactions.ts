@@ -3,6 +3,7 @@
 import {useState, useCallback, useEffect} from 'react';
 import {transactionService} from '@/services/transaction.service';
 import {categoryService} from '@/services/category.service';
+import {userService} from '@/services/user.service';
 import {
   Transaction,
   CreateTransactionData,
@@ -12,11 +13,17 @@ import {
   Category,
 } from '@/types';
 
+interface UseTransactionsOptions {
+  initialFilters?: TransactionFilters;
+  usePayPeriod?: boolean; // Filter by current pay period dates
+}
+
 interface UseTransactionsReturn {
   transactions: Transaction[];
   summary: TransactionSummary | null;
   isLoading: boolean;
   error: string | null;
+  payPeriod: { start: string; end: string } | null;
   fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
   createTransaction: (data: CreateTransactionData) => Promise<Transaction>;
   updateTransaction: (
@@ -29,8 +36,12 @@ interface UseTransactionsReturn {
 }
 
 export function useTransactions(
-  initialFilters?: TransactionFilters,
+  options?: UseTransactionsOptions | TransactionFilters,
 ): UseTransactionsReturn {
+  // Support both old signature (filters) and new signature (options)
+  const isOptionsObject = options && ('usePayPeriod' in options || 'initialFilters' in options);
+  const initialFilters = isOptionsObject ? (options as UseTransactionsOptions).initialFilters : options as TransactionFilters | undefined;
+  const usePayPeriod = isOptionsObject ? (options as UseTransactionsOptions).usePayPeriod : false;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +51,8 @@ export function useTransactions(
   >(initialFilters);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [payPeriod, setPayPeriod] = useState<{ start: string; end: string } | null>(null);
+  const [payPeriodLoaded, setPayPeriodLoaded] = useState(!usePayPeriod); // Skip if not using pay period
 
   // Fetch categories for enrichment
   useEffect(() => {
@@ -55,6 +68,29 @@ export function useTransactions(
     };
     loadCategories();
   }, []);
+
+  // Fetch pay period dates if usePayPeriod is enabled
+  useEffect(() => {
+    if (!usePayPeriod) {
+      setPayPeriodLoaded(true);
+      return;
+    }
+
+    const loadPayPeriod = async () => {
+      try {
+        const homeSummary = await userService.getHomeSummary();
+        setPayPeriod({
+          start: homeSummary.period.start,
+          end: homeSummary.period.end,
+        });
+        setPayPeriodLoaded(true);
+      } catch (err) {
+        console.error('Failed to load pay period:', err);
+        setPayPeriodLoaded(true); // Still mark as loaded even on error
+      }
+    };
+    loadPayPeriod();
+  }, [usePayPeriod]);
 
   // Enrich transactions with category data
   const enrichTransactions = useCallback(
@@ -96,9 +132,19 @@ export function useTransactions(
       setCurrentFilters(filters);
 
       try {
+        // Merge pay period dates into filters if usePayPeriod is enabled
+        let effectiveFilters = filters;
+        if (usePayPeriod && payPeriod) {
+          effectiveFilters = {
+            ...filters,
+            startDate: payPeriod.start,
+            endDate: payPeriod.end,
+          };
+        }
+
         const [transactionsData, summaryData] = await Promise.all([
-          transactionService.getTransactions(filters),
-          transactionService.getSummary(filters),
+          transactionService.getTransactions(effectiveFilters),
+          transactionService.getSummary(effectiveFilters),
         ]);
 
         const enrichedTransactions = enrichTransactions(transactionsData);
@@ -112,7 +158,7 @@ export function useTransactions(
         setIsLoading(false);
       }
     },
-    [enrichTransactions],
+    [enrichTransactions, usePayPeriod, payPeriod],
   );
 
   const createTransaction = useCallback(
@@ -255,19 +301,25 @@ export function useTransactions(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoriesLoaded, categories.length]);
 
-  // Initial fetch - wait for categories to load first
+  // Initial fetch - wait for categories and pay period to load first
+  // Include payPeriod in deps to ensure we refetch when period is available
   useEffect(() => {
-    if (categoriesLoaded) {
+    if (categoriesLoaded && payPeriodLoaded) {
+      // Only fetch if payPeriod is set when usePayPeriod is enabled
+      if (usePayPeriod && !payPeriod) {
+        return; // Wait for payPeriod to be set
+      }
       fetchTransactions(initialFilters);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriesLoaded]);
+  }, [categoriesLoaded, payPeriodLoaded, payPeriod]);
 
   return {
     transactions,
     summary,
     isLoading,
     error,
+    payPeriod,
     fetchTransactions,
     createTransaction,
     updateTransaction,

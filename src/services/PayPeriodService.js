@@ -1,9 +1,13 @@
 // services/PayPeriodService.js - Pay period calculation service
 import DateService from './DateService';
+import {subDays, subWeeks, subMonths, subYears, addDays, addWeeks, addMonths, addYears, startOfDay, endOfDay} from 'date-fns';
 
 /**
  * PayPeriodService handles all pay period related calculations and logic
  * Provides timezone-aware date parsing and pay period boundary calculations
+ *
+ * IMPORTANT: Pay periods run from pay date to the day BEFORE the next pay date
+ * Example: If pay day is the 15th, period is Feb 15 - Mar 14
  */
 class PayPeriodService {
   /**
@@ -19,74 +23,60 @@ class PayPeriodService {
 
   /**
    * Calculate the previous pay date based on frequency
+   * Uses date-fns for safe month/year arithmetic (handles edge cases like month-end dates)
    */
   static calculatePreviousPayDate(nextPayDate, frequency) {
     if (!nextPayDate || !frequency) {
       return null;
     }
 
-    const previousPayDate = new Date(nextPayDate);
+    const date = new Date(nextPayDate);
     const freq = frequency.toLowerCase();
 
     switch (freq) {
       case 'weekly':
-        previousPayDate.setDate(previousPayDate.getDate() - 7);
-        break;
+        return subWeeks(date, 1);
       case 'fortnightly':
-        previousPayDate.setDate(previousPayDate.getDate() - 14);
-        break;
+        return subWeeks(date, 2);
       case 'monthly':
-        previousPayDate.setMonth(previousPayDate.getMonth() - 1);
-        break;
+        return subMonths(date, 1);
       case 'sixmonths':
-        previousPayDate.setMonth(previousPayDate.getMonth() - 6);
-        break;
+        return subMonths(date, 6);
       case 'yearly':
-        previousPayDate.setFullYear(previousPayDate.getFullYear() - 1);
-        break;
+        return subYears(date, 1);
       default:
         // Default to monthly
-        previousPayDate.setMonth(previousPayDate.getMonth() - 1);
-        break;
+        return subMonths(date, 1);
     }
-
-    return previousPayDate;
   }
 
   /**
    * Calculate the next pay date by advancing based on frequency
+   * Uses date-fns for safe month/year arithmetic (handles edge cases like month-end dates)
    */
   static calculateNextPayDate(currentPayDate, frequency) {
     if (!currentPayDate || !frequency) {
       return null;
     }
 
-    const nextPayDate = new Date(currentPayDate);
+    const date = new Date(currentPayDate);
     const freq = frequency.toLowerCase();
 
     switch (freq) {
       case 'weekly':
-        nextPayDate.setDate(nextPayDate.getDate() + 7);
-        break;
+        return addWeeks(date, 1);
       case 'fortnightly':
-        nextPayDate.setDate(nextPayDate.getDate() + 14);
-        break;
+        return addWeeks(date, 2);
       case 'monthly':
-        nextPayDate.setMonth(nextPayDate.getMonth() + 1);
-        break;
+        return addMonths(date, 1);
       case 'sixmonths':
-        nextPayDate.setMonth(nextPayDate.getMonth() + 6);
-        break;
+        return addMonths(date, 6);
       case 'yearly':
-        nextPayDate.setFullYear(nextPayDate.getFullYear() + 1);
-        break;
+        return addYears(date, 1);
       default:
         // Default to monthly
-        nextPayDate.setMonth(nextPayDate.getMonth() + 1);
-        break;
+        return addMonths(date, 1);
     }
-
-    return nextPayDate;
   }
 
   /**
@@ -153,6 +143,10 @@ class PayPeriodService {
 
   /**
    * Calculate pay period boundaries (start and end dates)
+   *
+   * CRITICAL: Period ends the day BEFORE the next pay date
+   * Example: If next pay date is Mar 15, period ends Mar 14 at 23:59:59
+   * This aligns with backend DateService.calculatePayPeriodBoundaries()
    */
   static calculatePayPeriodBoundaries(
     nextPayDateString,
@@ -170,9 +164,10 @@ class PayPeriodService {
 
     let periodStart, periodEnd;
 
-    // Set period end to the next pay date
-    periodEnd = new Date(nextPayDate);
-    periodEnd.setHours(23, 59, 59, 999);
+    // FIXED: Period ends the day BEFORE the next pay date (not ON the next pay date)
+    // This aligns with backend: endOfDay(subDays(nextPayDate, 1))
+    const dayBeforeNextPay = subDays(nextPayDate, 1);
+    periodEnd = endOfDay(dayBeforeNextPay);
 
     const isNewPeriod = this.isNewPayPeriod(nextPayDateString);
 
@@ -189,8 +184,7 @@ class PayPeriodService {
         return null;
       }
 
-      periodStart = new Date(previousPayDate);
-      periodStart.setHours(0, 0, 0, 0);
+      periodStart = startOfDay(previousPayDate);
     }
 
     return {
@@ -392,9 +386,11 @@ class PayPeriodService {
     }
 
     // The "previous period" is the period that just ended
-    // It runs from previousPayDate to nextPayDate (exclusive)
-    const previousPeriodStart = previousPayDate;
-    const previousPeriodEnd = new Date(nextPayDate.getTime() - 1); // Subtract 1ms to make it exclusive
+    // It runs from previousPayDate to the day BEFORE nextPayDate
+    // FIXED: Use proper date-fns functions instead of subtracting 1ms
+    const previousPeriodStart = startOfDay(previousPayDate);
+    const dayBeforeNextPay = subDays(nextPayDate, 1);
+    const previousPeriodEnd = endOfDay(dayBeforeNextPay);
 
     console.log('🔄 Previous period expense calculation:', {
       frequency,
@@ -513,6 +509,8 @@ class PayPeriodService {
 
   /**
    * Check if today is the day before pay period ends (rollover availability)
+   * Note: The day before pay period ends is 2 days before the next pay date
+   * (since period ends the day before pay date)
    */
   static isRolloverAvailable(nextPayDateString, lastRolloverDate = null) {
     if (!nextPayDateString) {
@@ -525,10 +523,9 @@ class PayPeriodService {
     }
 
     const today = DateService.startOfToday();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrow = addDays(today, 1);
 
-    // Check if tomorrow is the pay date (today is day before)
+    // Check if tomorrow is the pay date (today is day before pay date)
     const isDayBeforePayday = DateService.isSameDayInTimezone(
       tomorrow,
       nextPayDate,

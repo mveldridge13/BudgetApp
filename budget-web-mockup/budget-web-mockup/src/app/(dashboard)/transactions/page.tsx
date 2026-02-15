@@ -13,11 +13,12 @@ export default function TransactionsPage() {
     summary,
     isLoading,
     error,
+    payPeriod,
     createTransaction,
     updateTransaction,
     deleteTransaction,
     refresh,
-  } = useTransactions();
+  } = useTransactions({ usePayPeriod: true });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
@@ -81,7 +82,18 @@ export default function TransactionsPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
           <p className="text-gray-600 mt-1">
-            Track and manage your financial transactions
+            {payPeriod ? (
+              <>
+                Showing transactions for{' '}
+                <span className="font-medium text-indigo-600">
+                  {new Date(payPeriod.start).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                  {' - '}
+                  {new Date(payPeriod.end).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                </span>
+              </>
+            ) : (
+              'Track and manage your financial transactions'
+            )}
           </p>
         </div>
         <button

@@ -140,91 +140,42 @@ const BalanceCard = ({
   }, [incomeData?.nextPayDate, adjustedLeftToSpend]);
 
   // Calculate expense breakdown with memoization - filter to current pay period only
+  // Uses homeSummary.period from backend as single source of truth for period dates
   const expenseBreakdown = useMemo(() => {
-    if (
-      !incomeData?.nextPayDate ||
-      !incomeData?.frequency ||
-      !Array.isArray(transactions)
-    ) {
+    if (!Array.isArray(transactions)) {
       return getExpenseBreakdownSync([]);
     }
 
-    // Calculate current pay period boundaries (same logic as HomeContainer)
-    try {
-      // Parse nextPayDate as local date
-      let nextPayDate;
-      if (incomeData.nextPayDate.includes('T')) {
-        const dateOnly = incomeData.nextPayDate.split('T')[0];
-        nextPayDate = new Date(dateOnly + 'T12:00:00');
-      } else {
-        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-      }
+    // Use backend's period dates if available (YYYY-MM-DD strings)
+    // This ensures alignment with backend pay period calculations
+    if (homeSummary?.period?.start && homeSummary?.period?.end) {
+      try {
+        // Parse period dates as local dates at start/end of day
+        const periodStart = new Date(homeSummary.period.start + 'T00:00:00');
+        const periodEnd = new Date(homeSummary.period.end + 'T23:59:59.999');
 
-      let periodStart, periodEnd;
-      periodEnd = new Date(nextPayDate);
-      periodEnd.setHours(23, 59, 59, 999);
-
-      // Check if we're in a new pay period using local timezone
-      const now = new Date();
-      const todayStart = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      );
-      const payDateStart = new Date(
-        nextPayDate.getFullYear(),
-        nextPayDate.getMonth(),
-        nextPayDate.getDate(),
-      );
-      const isInNewPeriod = todayStart >= payDateStart;
-
-      if (isInNewPeriod) {
-        // If in new period, start from today
-        periodStart = new Date(todayStart);
-        periodStart.setHours(0, 0, 0, 0);
-      } else {
-        // Calculate previous pay date
-        if (incomeData.frequency.toLowerCase() === 'weekly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 7);
-        } else if (incomeData.frequency.toLowerCase() === 'fortnightly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 14);
-        } else if (incomeData.frequency.toLowerCase() === 'monthly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        } else if (incomeData.frequency.toLowerCase() === 'sixmonths') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 6);
-        } else if (incomeData.frequency.toLowerCase() === 'yearly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setFullYear(periodStart.getFullYear() - 1);
-        } else {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        }
-        periodStart.setHours(0, 0, 0, 0);
-      }
-
-      // Filter transactions to current pay period only
-      const currentPeriodTransactions = transactions.filter(transaction => {
-        try {
-          const transactionDate = new Date(transaction.date);
-          if (isNaN(transactionDate.getTime())) {
+        // Filter transactions to current pay period only
+        const currentPeriodTransactions = transactions.filter(transaction => {
+          try {
+            const transactionDate = new Date(transaction.date);
+            if (isNaN(transactionDate.getTime())) {
+              return false;
+            }
+            return transactionDate >= periodStart && transactionDate <= periodEnd;
+          } catch (error) {
             return false;
           }
+        });
 
-          return transactionDate >= periodStart && transactionDate <= periodEnd;
-        } catch (error) {
-          return false;
-        }
-      });
-
-      return getExpenseBreakdownSync(currentPeriodTransactions);
-    } catch (error) {
-      return getExpenseBreakdownSync(transactions); // Fallback to all transactions
+        return getExpenseBreakdownSync(currentPeriodTransactions);
+      } catch (error) {
+        return getExpenseBreakdownSync(transactions); // Fallback to all transactions
+      }
     }
-  }, [transactions, incomeData?.nextPayDate, incomeData?.frequency]);
+
+    // Fallback: return all transactions if no period data
+    return getExpenseBreakdownSync(transactions);
+  }, [transactions, homeSummary?.period?.start, homeSummary?.period?.end]);
 
   // Calculate values - prefer backend homeSummary when available
   const incomeAmount = homeSummary?.income?.totalInflow

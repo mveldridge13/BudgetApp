@@ -9,6 +9,7 @@ import incomeAnalyticsCache from '../services/IncomeAnalyticsCache';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import {colors} from '../styles';
+import PayPeriodService from '../services/PayPeriodService';
 
 // Cache keys to match useTransactions hook
 const TRANSACTIONS_KEY = 'transactions';
@@ -272,61 +273,32 @@ const AnalyticsContainer = () => {
           })),
       });
 
-      // Calculate pay period boundaries (same logic as HomeContainer)
+      // Calculate pay period boundaries using PayPeriodService (single source of truth)
       const now = new Date();
       let periodStart, periodEnd;
 
       if (userProfile?.nextPayDate && userProfile?.incomeFrequency) {
         try {
-          // Parse next pay date with error handling
-          let nextPayDate;
-          if (userProfile.nextPayDate.includes('T')) {
-            nextPayDate = new Date(userProfile.nextPayDate);
+          // Use PayPeriodService for consistent period calculation across the app
+          const boundaries = PayPeriodService.calculatePayPeriodBoundaries(
+            userProfile.nextPayDate,
+            userProfile.incomeFrequency,
+            false, // Don't use current period for new period in analytics
+          );
+
+          if (boundaries) {
+            periodStart = boundaries.start;
+            periodEnd = boundaries.end;
+
+            console.log('📋 Bills Analytics: Pay period calculated:', {
+              frequency: userProfile.incomeFrequency,
+              periodStart: periodStart.toISOString(),
+              periodEnd: periodEnd.toISOString(),
+              today: now.toISOString(),
+            });
           } else {
-            // For date-only format, create date in local timezone at noon to avoid timezone issues
-            nextPayDate = new Date(userProfile.nextPayDate + 'T12:00:00');
+            throw new Error('Failed to calculate pay period boundaries');
           }
-
-          if (isNaN(nextPayDate.getTime())) {
-            throw new Error('Invalid next pay date');
-          }
-
-          // Set period end to the next pay date
-          periodEnd = new Date(nextPayDate);
-          periodEnd.setHours(23, 59, 59, 999);
-
-          // Calculate the PREVIOUS pay date - this becomes the start of the current period
-          if (userProfile.incomeFrequency === 'weekly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setDate(periodStart.getDate() - 7);
-          } else if (userProfile.incomeFrequency === 'fortnightly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setDate(periodStart.getDate() - 14);
-          } else if (userProfile.incomeFrequency === 'monthly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setMonth(periodStart.getMonth() - 1);
-          } else if (userProfile.incomeFrequency === 'sixmonths') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setMonth(periodStart.getMonth() - 6);
-          } else if (userProfile.incomeFrequency === 'yearly') {
-            periodStart = new Date(nextPayDate);
-            periodStart.setFullYear(periodStart.getFullYear() - 1);
-          } else {
-            // Default to monthly if frequency is unknown
-            periodStart = new Date(nextPayDate);
-            periodStart.setMonth(periodStart.getMonth() - 1);
-          }
-
-          // Set period start to beginning of day to include all transactions from that day
-          periodStart.setHours(0, 0, 0, 0);
-
-          console.log('📋 Bills Analytics: Pay period calculated:', {
-            frequency: userProfile.incomeFrequency,
-            nextPayDate: nextPayDate.toISOString(),
-            periodStart: periodStart.toISOString(),
-            periodEnd: periodEnd.toISOString(),
-            today: now.toISOString(),
-          });
         } catch (periodError) {
           console.error(
             '📋 Bills Analytics: Error calculating pay period:',

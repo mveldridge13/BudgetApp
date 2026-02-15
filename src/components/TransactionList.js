@@ -9,6 +9,7 @@ const STORAGE_KEY = '@transaction_filter_due_today';
 const TransactionList = ({
   transactions, // ✅ Now contains pre-resolved categoryData
   selectedDate,
+  payPeriod, // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } for filtering recurring transactions
   onDeleteTransaction,
   onEditTransaction,
   onSwipeStart,
@@ -99,16 +100,37 @@ const TransactionList = ({
     return isSameDay(transactionDate, selectedDate);
   });
 
+  // Helper to check if a date is within pay period
+  const isWithinPayPeriod = (dateStr) => {
+    if (!payPeriod?.start || !payPeriod?.end ||!dateStr) {
+      return true; // If no pay period info, show all
+    }
+    const date = new Date(dateStr);
+    const start = new Date(payPeriod.start);
+    const end = new Date(payPeriod.end);
+    // Set times to start/end of day for proper comparison
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    date.setHours(12, 0, 0, 0); // Noon to avoid timezone edge cases
+    return date >= start && date <= end;
+  };
+
   // Filter and group recurring transactions by frequency
+  // Only show recurring transactions with dueDate within current pay period
   const getRecurringTransactionsByFrequency = () => {
     const recurringTransactions = transactions.filter(transaction => {
-      return (
-        transaction.recurrence &&
-        transaction.recurrence !== 'none' &&
-        ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
-          transaction.recurrence,
-        )
-      );
+      // Must be a recurring transaction
+      if (!transaction.recurrence || transaction.recurrence === 'none') {
+        return false;
+      }
+      if (!['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
+        transaction.recurrence,
+      )) {
+        return false;
+      }
+      // Filter by pay period using dueDate (or date if no dueDate)
+      const relevantDate = transaction.dueDate || transaction.date;
+      return isWithinPayPeriod(relevantDate);
     });
 
     // Group by recurrence type
