@@ -414,7 +414,7 @@ const AddTransactionModal = ({
     return null;
   }
 
-  // When showing transaction type overlay, render it directly over HomeScreen
+  // When showing overlays, render them directly over HomeScreen
   // without the form behind it (like V2 behavior)
   if (overlayMode === 'transactionType') {
     return (
@@ -422,6 +422,104 @@ const AddTransactionModal = ({
         visible={true}
         onClose={onTransactionTypeClose}
         onTypeSelect={onTransactionTypeSelect}
+      />
+    );
+  }
+
+  if (overlayMode === 'recurrence') {
+    return (
+      <RecurrenceOverlay
+        visible={true}
+        onClose={onRecurrenceOverlayClose}
+        onContinue={onRecurrenceOverlayContinue}
+        selectedRecurrence={selectedRecurrence}
+        selectedDueDate={selectedDueDate}
+        onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
+        onDueDatePress={onRecurrenceOverlayDueDatePress}
+        recurrenceOptions={recurrenceOptions}
+      />
+    );
+  }
+
+  if (overlayMode === 'debt') {
+    return (
+      <DebtPaymentOverlay
+        visible={true}
+        onClose={onDebtPaymentClose}
+        onSave={onDebtPaymentSave}
+        onDueDatePress={onDebtPaymentDueDatePress}
+        selectedDueDate={selectedDueDate}
+      />
+    );
+  }
+
+  if (overlayMode === 'quick') {
+    return (
+      <QuickAddOverlay
+        visible={true}
+        onClose={onQuickAddClose}
+        onUseFullForm={onQuickAddUseFullForm}
+        onCategoryPress={onQuickAddCategoryPress}
+        onDatePress={onQuickAddDatePress}
+        selectedDate={selectedDate}
+        description={description}
+        onDescriptionChange={onDescriptionChange}
+        selectedCategory={selectedCategory}
+        getCategoryById={getCategoryById}
+        selectedTransactionType={selectedTransactionType}
+        onTransactionTypeChange={onQuickAddTransactionTypeChange}
+      />
+    );
+  }
+
+  if (overlayMode === 'category') {
+    return (
+      <CategorySelectionOverlay
+        visible={true}
+        onClose={onCategoryOverlayClose}
+        onBack={onCategoryOverlayBack}
+        onCategorySelect={onCategoryOverlaySelect}
+        allCategories={allCategories}
+        transformCategoriesForUI={transformCategoriesForUI}
+        selectedTransactionType={selectedTransactionType}
+        onTransactionTypeChange={onTransactionTypeChange}
+        selectedCategory={selectedCategory}
+        isLoading={isLoading}
+      />
+    );
+  }
+
+  if (overlayMode === 'subcategory') {
+    return (
+      <SubcategorySelectionOverlay
+        visible={true}
+        onClose={onSubcategoryOverlayClose}
+        onBack={onSubcategoryOverlayBack}
+        onSubcategorySelect={onSubcategoryOverlaySelect}
+        selectedCategory={currentSubcategoryData?.id}
+        selectedSubcategory={selectedSubcategory}
+        getCategoryById={getCategoryById}
+        isLoading={isLoading}
+        onAddSubcategory={onAddSubcategory}
+      />
+    );
+  }
+
+  if (overlayMode === 'amount') {
+    return (
+      <AmountEntryOverlay
+        visible={true}
+        onClose={onAmountOverlayClose}
+        onBack={onAmountOverlayBack}
+        onSave={onAmountOverlaySave}
+        amount={amount}
+        onAmountChange={onAmountChange}
+        description={description}
+        selectedCategory={selectedCategory}
+        selectedSubcategory={selectedSubcategory}
+        getCategoryById={getCategoryById}
+        selectedDate={selectedDate}
+        selectedTransactionType={selectedTransactionType}
       />
     );
   }
@@ -871,97 +969,6 @@ const AddTransactionModal = ({
           onSave={onTournamentSave}
         />
 
-        {/* Recurrence Overlay */}
-        {overlayMode === 'recurrence' && (
-          <RecurrenceOverlay
-            visible={true}
-            onClose={onRecurrenceOverlayClose}
-            onContinue={onRecurrenceOverlayContinue}
-            selectedRecurrence={selectedRecurrence}
-            selectedDueDate={selectedDueDate}
-            onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
-            onDueDatePress={onRecurrenceOverlayDueDatePress}
-            recurrenceOptions={recurrenceOptions}
-          />
-        )}
-
-        {/* Debt Payment Overlay */}
-        {overlayMode === 'debt' && (
-          <DebtPaymentOverlay
-            visible={true}
-            onClose={onDebtPaymentClose}
-            onSave={onDebtPaymentSave}
-            onDueDatePress={onDebtPaymentDueDatePress}
-            selectedDueDate={selectedDueDate}
-          />
-        )}
-
-        {/* Quick Add Overlay */}
-        {overlayMode === 'quick' && (
-          <QuickAddOverlay
-            visible={true}
-            onClose={onQuickAddClose}
-            onUseFullForm={onQuickAddUseFullForm}
-            onCategoryPress={onQuickAddCategoryPress}
-            onDatePress={onQuickAddDatePress}
-            selectedDate={selectedDate}
-            description={description}
-            onDescriptionChange={onDescriptionChange}
-            selectedCategory={selectedCategory}
-            getCategoryById={getCategoryById}
-            selectedTransactionType={selectedTransactionType}
-            onTransactionTypeChange={onQuickAddTransactionTypeChange}
-          />
-        )}
-
-        {/* Category Selection Overlay */}
-        {overlayMode === 'category' && (
-          <CategorySelectionOverlay
-            visible={true}
-            onClose={onCategoryOverlayClose}
-            onBack={onCategoryOverlayBack}
-            onCategorySelect={onCategoryOverlaySelect}
-            allCategories={allCategories}
-            transformCategoriesForUI={transformCategoriesForUI}
-            selectedTransactionType={selectedTransactionType}
-            onTransactionTypeChange={onTransactionTypeChange}
-            selectedCategory={selectedCategory}
-            isLoading={isLoading}
-          />
-        )}
-
-        {/* Subcategory Selection Overlay */}
-        {overlayMode === 'subcategory' && (
-          <SubcategorySelectionOverlay
-            visible={true}
-            onClose={onSubcategoryOverlayClose}
-            onBack={onSubcategoryOverlayBack}
-            onSubcategorySelect={onSubcategoryOverlaySelect}
-            selectedCategory={currentSubcategoryData?.id}
-            selectedSubcategory={selectedSubcategory}
-            getCategoryById={getCategoryById}
-            isLoading={isLoading}
-            onAddSubcategory={onAddSubcategory}
-          />
-        )}
-
-        {/* Amount Entry Overlay */}
-        {overlayMode === 'amount' && (
-          <AmountEntryOverlay
-            visible={true}
-            onClose={onAmountOverlayClose}
-            onBack={onAmountOverlayBack}
-            onSave={onAmountOverlaySave}
-            amount={amount}
-            onAmountChange={onAmountChange}
-            description={description}
-            selectedCategory={selectedCategory}
-            selectedSubcategory={selectedSubcategory}
-            getCategoryById={getCategoryById}
-            selectedDate={selectedDate}
-            selectedTransactionType={selectedTransactionType}
-          />
-        )}
       </Animated.View>
     </View>
   );
