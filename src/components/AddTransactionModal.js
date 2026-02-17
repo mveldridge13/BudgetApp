@@ -129,12 +129,17 @@ const AddTransactionModal = ({
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // Compact mode view state: 'form', 'category', 'subcategory'
+  const [compactView, setCompactView] = useState('form');
+
   // ==============================================
   // ANIMATION HANDLING
   // ==============================================
 
   useEffect(() => {
     if (visible) {
+      // Reset compact view to form when opening
+      setCompactView('form');
       // Animate modal in from bottom with fade
       Animated.parallel([
         Animated.timing(slideAnim, {
@@ -152,6 +157,7 @@ const AddTransactionModal = ({
       // Reset positions when modal is closed
       slideAnim.setValue(300);
       fadeAnim.setValue(0);
+      setCompactView('form');
     }
   }, [visible, slideAnim, fadeAnim]);
 
@@ -197,21 +203,32 @@ const AddTransactionModal = ({
     });
   };
 
+  // Check if we're in compact mode (one-off transactions)
+  const isCompactMode = !isRecurringTransaction;
+
   // Navigation functions
   const showCategoryPicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    if (isCompactMode) {
+      setCompactView('category');
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: -screenWidth,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const showSubcategoryPicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth * 2,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    if (isCompactMode) {
+      setCompactView('subcategory');
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: -screenWidth * 2,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const showRecurrencePicker = () => {
@@ -223,19 +240,27 @@ const AddTransactionModal = ({
   };
 
   const hideCategoryPicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    if (isCompactMode) {
+      setCompactView('form');
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const hideSubcategoryPicker = () => {
-    Animated.timing(slideAnim, {
-      toValue: -screenWidth,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    if (isCompactMode) {
+      setCompactView('category');
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: -screenWidth,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const handleCategorySelect = categoryId => {
@@ -257,11 +282,15 @@ const AddTransactionModal = ({
   const handleSubcategorySelect = subcategoryId => {
     onSubcategorySelect(subcategoryId);
     // Go back to transaction view
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    if (isCompactMode) {
+      setCompactView('form');
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const handleRecurrenceSelect = recurrenceId => {
@@ -524,6 +553,284 @@ const AddTransactionModal = ({
     );
   }
 
+  // Render compact mode (one-off transactions) - single view at a time, no slide animation
+  if (isCompactMode) {
+    return (
+      <View style={styles.compactModalOverlay} pointerEvents={visible ? 'auto' : 'none'}>
+        <Animated.View
+          style={[
+            styles.backdrop,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.compactModalContent,
+            {
+              transform: [{translateY: slideAnim}],
+              opacity: fadeAnim,
+            },
+          ]}>
+
+          {/* Form View */}
+          {compactView === 'form' && (
+            <>
+              <View style={styles.compactModalHeader}>
+                <TouchableOpacity
+                  onPress={handleClose}
+                  style={styles.cancelButton}>
+                  <Text style={styles.compactCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.compactModalTitle}>
+                  {isEditMode
+                    ? `Edit ${getTransactionTypeDisplayName()}`
+                    : 'Add Transaction'}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleSave}
+                  style={[
+                    styles.compactSaveButton,
+                    (!amount || !selectedCategory) && styles.saveButtonDisabled,
+                  ]}
+                  disabled={!amount || !selectedCategory}
+                  activeOpacity={0.7}>
+                  <Text
+                    style={[
+                      styles.compactSaveText,
+                      (!amount || !selectedCategory) && styles.saveTextDisabled,
+                    ]}>
+                    {isEditMode ? 'Update' : 'Save'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.compactFormContainer}>
+                {/* Date Field */}
+                <TouchableOpacity
+                  style={styles.compactDateField}
+                  onPress={onShowCalendar}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name="calendar-outline"
+                    size={16}
+                    color="#007AFF"
+                    style={styles.dateIcon}
+                  />
+                  <Text style={styles.compactDateText}>{formatDate(selectedDate)}</Text>
+                </TouchableOpacity>
+
+                {/* Amount Field */}
+                <View style={styles.compactInputContainer}>
+                  <Text style={styles.compactCurrencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.compactAmountInput}
+                    value={amount}
+                    onChangeText={onAmountChange}
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                {/* Description Field */}
+                <View style={styles.compactFieldWrapper}>
+                  <Text style={styles.compactFieldLabel}>Description</Text>
+                  <View style={styles.compactFieldBox}>
+                    <TextInput
+                      style={styles.compactFieldInput}
+                      value={description}
+                      onChangeText={onDescriptionChange}
+                      placeholder="Enter description (optional)"
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+                </View>
+
+                {/* Category Field */}
+                <View style={styles.compactFieldWrapper}>
+                  <Text style={styles.compactFieldLabel}>Category</Text>
+                  <TouchableOpacity
+                    style={styles.compactFieldBox}
+                    onPress={showCategoryPicker}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      {selectedCategory ? (
+                        <>
+                          <View
+                            style={getCategoryIconStyle(
+                              getCategoryById(selectedCategory)?.color,
+                            )}>
+                            <Icon
+                              name={getCategoryFieldIcon()}
+                              size={16}
+                              color={getCategoryById(selectedCategory)?.color}
+                            />
+                          </View>
+                          <Text style={styles.compactCategoryText}>
+                            {getCategoryFieldDisplayName()}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.compactCategoryPlaceholder}>Select a category</Text>
+                      )}
+                    </View>
+                    <Icon
+                      name="chevron-forward"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </>
+          )}
+
+          {/* Category Picker View */}
+          {compactView === 'category' && (
+            <>
+              <View style={styles.compactCategoryPickerHeader}>
+                <TouchableOpacity
+                  onPress={hideCategoryPicker}
+                  style={styles.cancelButton}>
+                  <Icon name="chevron-back" size={20} color={colors.textWhite} />
+                </TouchableOpacity>
+                <Text style={styles.compactModalTitle}>Select Category</Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.compactFormContainer}
+                showsVerticalScrollIndicator={false}>
+                {isLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>Loading categories...</Text>
+                  </View>
+                ) : (
+                  <>
+                    {categories.map(category => (
+                      <TouchableOpacity
+                        key={category.id}
+                        style={[
+                          styles.compactCategoryOption,
+                          selectedCategory === category.id &&
+                            styles.selectedOption,
+                        ]}
+                        onPress={() => handleCategorySelect(category.id)}
+                        activeOpacity={0.7}>
+                        <View style={styles.categoryLeft}>
+                          <View style={getCategoryIconStyle(category.color)}>
+                            <Icon
+                              name={category.icon}
+                              size={18}
+                              color={category.color}
+                            />
+                          </View>
+                          <View style={styles.categoryInfo}>
+                            <Text style={styles.compactCategoryName}>
+                              {category.name}
+                            </Text>
+                            {category.isCustom && (
+                              <Text style={styles.customLabel}>Custom</Text>
+                            )}
+                          </View>
+                        </View>
+                        <View style={styles.categoryRight}>
+                          {selectedCategory === category.id &&
+                            !category.hasSubcategories && (
+                              <Icon
+                                name="checkmark"
+                                size={18}
+                                color={colors.primary}
+                              />
+                            )}
+                          {category.hasSubcategories && (
+                            <Icon
+                              name="chevron-forward"
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Subcategory Picker View */}
+          {compactView === 'subcategory' && (
+            <>
+              <View style={styles.compactCategoryPickerHeader}>
+                <TouchableOpacity
+                  onPress={hideSubcategoryPicker}
+                  style={styles.cancelButton}>
+                  <Icon name="chevron-back" size={20} color={colors.textWhite} />
+                </TouchableOpacity>
+                <Text style={styles.compactModalTitle}>
+                  {currentSubcategoryData?.name || 'Select Subcategory'}
+                </Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.compactFormContainer}
+                showsVerticalScrollIndicator={false}>
+                {currentSubcategoryData?.subcategories?.map(subcategory => (
+                  <TouchableOpacity
+                    key={subcategory.id}
+                    style={[
+                      styles.compactCategoryOption,
+                      selectedSubcategory === subcategory.id &&
+                        styles.selectedOption,
+                    ]}
+                    onPress={() => handleSubcategorySelect(subcategory.id)}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      <View
+                        style={getCategoryIconStyle(
+                          currentSubcategoryData.color,
+                        )}>
+                        <Icon
+                          name={subcategory.icon}
+                          size={18}
+                          color={currentSubcategoryData.color}
+                        />
+                      </View>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.compactCategoryName}>
+                          {subcategory.name}
+                        </Text>
+                        {subcategory.isCustom && (
+                          <Text style={styles.customLabel}>Custom</Text>
+                        )}
+                      </View>
+                    </View>
+                    {selectedSubcategory === subcategory.id && (
+                      <Icon name="checkmark" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Calendar Modal */}
+          <CalendarModal
+            visible={showCalendar}
+            onClose={onHideCalendar}
+            selectedDate={selectedDate}
+            onDateChange={onDateChange}
+          />
+        </Animated.View>
+      </View>
+    );
+  }
+
+  // Render full mode (recurring transactions) - uses slide animation between views
   return (
     <View style={styles.modalOverlay} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View
@@ -576,66 +883,68 @@ const AddTransactionModal = ({
             </View>
 
             <ScrollView style={styles.formContainer}>
-              {/* Transaction Type Selector */}
-              <View style={styles.transactionTypeContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.transactionTypeButton,
-                    styles.transactionTypeButtonExpense,
-                    selectedTransactionType === 'EXPENSE' &&
-                      styles.transactionTypeButtonActiveExpense,
-                  ]}
-                  onPress={() => handleTransactionTypeSelect('EXPENSE')}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="trending-down"
-                    size={18}
-                    color={
-                      selectedTransactionType === 'EXPENSE'
-                        ? colors.textWhite || '#FFFFFF'
-                        : colors.textSecondary
-                    }
-                    style={styles.transactionTypeIcon}
-                  />
-                  <Text
+              {/* Transaction Type Selector - Only show for recurring transactions */}
+              {isRecurringTransaction && (
+                <View style={styles.transactionTypeContainer}>
+                  <TouchableOpacity
                     style={[
-                      styles.transactionTypeText,
+                      styles.transactionTypeButton,
+                      styles.transactionTypeButtonExpense,
                       selectedTransactionType === 'EXPENSE' &&
-                        styles.transactionTypeTextActive,
-                    ]}>
-                    Expense
-                  </Text>
-                </TouchableOpacity>
+                        styles.transactionTypeButtonActiveExpense,
+                    ]}
+                    onPress={() => handleTransactionTypeSelect('EXPENSE')}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="trending-down"
+                      size={18}
+                      color={
+                        selectedTransactionType === 'EXPENSE'
+                          ? colors.textWhite || '#FFFFFF'
+                          : colors.textSecondary
+                      }
+                      style={styles.transactionTypeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        selectedTransactionType === 'EXPENSE' &&
+                          styles.transactionTypeTextActive,
+                      ]}>
+                      Expense
+                    </Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.transactionTypeButton,
-                    styles.transactionTypeButtonIncome,
-                    selectedTransactionType === 'INCOME' &&
-                      styles.transactionTypeButtonActiveIncome,
-                  ]}
-                  onPress={() => handleTransactionTypeSelect('INCOME')}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="trending-up"
-                    size={18}
-                    color={
-                      selectedTransactionType === 'INCOME'
-                        ? colors.textWhite || '#FFFFFF'
-                        : colors.textSecondary
-                    }
-                    style={styles.transactionTypeIcon}
-                  />
-                  <Text
+                  <TouchableOpacity
                     style={[
-                      styles.transactionTypeText,
+                      styles.transactionTypeButton,
+                      styles.transactionTypeButtonIncome,
                       selectedTransactionType === 'INCOME' &&
-                        styles.transactionTypeTextActive,
-                    ]}>
-                    Income
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                        styles.transactionTypeButtonActiveIncome,
+                    ]}
+                    onPress={() => handleTransactionTypeSelect('INCOME')}
+                    activeOpacity={0.7}>
+                    <Icon
+                      name="trending-up"
+                      size={18}
+                      color={
+                        selectedTransactionType === 'INCOME'
+                          ? colors.textWhite || '#FFFFFF'
+                          : colors.textSecondary
+                      }
+                      style={styles.transactionTypeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        selectedTransactionType === 'INCOME' &&
+                          styles.transactionTypeTextActive,
+                      ]}>
+                      Income
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Date Field */}
               <TouchableOpacity
@@ -692,135 +1001,144 @@ const AddTransactionModal = ({
                         />
                       </View>
                       <Text style={styles.categoryText}>
-                        {getCategoryFieldDisplayName()}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.categoryIconPlaceholder}>
-                        <Icon
-                          name="albums-outline"
-                          size={18}
-                          color={colors.textSecondary}
-                        />
-                      </View>
-                      <Text style={styles.categoryPlaceholder}>Category</Text>
-                    </>
-                  )}
-                </View>
-                <Icon
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-
-              {/* Recurrence Field */}
-              <TouchableOpacity
-                style={styles.recurrenceField}
-                onPress={showRecurrencePicker}
-                activeOpacity={0.7}>
-                <View style={styles.recurrenceLeft}>
+                          {getCategoryFieldDisplayName()}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.categoryIconPlaceholder}>
+                          <Icon
+                            name="albums-outline"
+                            size={18}
+                            color={colors.textSecondary}
+                          />
+                        </View>
+                        <Text style={styles.categoryPlaceholder}>Category</Text>
+                      </>
+                    )}
+                  </View>
                   <Icon
-                    name={getRecurrenceIcon()}
-                    size={18}
-                    color={getRecurrenceColor()}
-                    style={styles.recurrenceIcon}
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
                   />
-                  <Text
-                    style={[
-                      styles.recurrenceText,
-                      selectedRecurrence !== 'none' &&
-                        styles.recurrenceActiveText,
-                    ]}>
-                    {getRecurrenceById(selectedRecurrence)?.name}
-                  </Text>
-                </View>
-                <Icon
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Due Date Field */}
-              <TouchableOpacity
-                style={styles.dueDateField}
-                onPress={() => onShowCalendar('dueDate')}
-                activeOpacity={0.7}>
-                <View style={styles.dueDateLeft}>
+              {/* Recurrence Field - Only show for recurring transactions */}
+              {isRecurringTransaction && (
+                <TouchableOpacity
+                  style={styles.recurrenceField}
+                  onPress={showRecurrencePicker}
+                  activeOpacity={0.7}>
+                  <View style={styles.recurrenceLeft}>
+                    <Icon
+                      name={getRecurrenceIcon()}
+                      size={18}
+                      color={getRecurrenceColor()}
+                      style={styles.recurrenceIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.recurrenceText,
+                        selectedRecurrence !== 'none' &&
+                          styles.recurrenceActiveText,
+                      ]}>
+                      {getRecurrenceById(selectedRecurrence)?.name}
+                    </Text>
+                  </View>
                   <Icon
-                    name="calendar-outline"
-                    size={18}
-                    color={
-                      selectedDueDate ? colors.primary : colors.textSecondary
-                    }
-                    style={styles.dueDateIcon}
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
                   />
-                  <Text
-                    style={[
-                      styles.dueDateText,
-                      selectedDueDate && styles.dueDateActiveText,
-                    ]}>
-                    {selectedDueDate
-                      ? selectedDueDate.toLocaleDateString('en-AU', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                        })
-                      : 'Due Date (Optional)'}
-                  </Text>
-                </View>
-                <Icon
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
 
-              {/* Payment Status Field */}
-              <TouchableOpacity
-                style={styles.paymentStatusField}
-                onPress={showPaymentStatusPicker}
-                activeOpacity={0.7}>
-                <View style={styles.paymentStatusLeft}>
+              {/* Due Date Field - Only show for recurring transactions */}
+              {isRecurringTransaction && (
+                <TouchableOpacity
+                  style={styles.dueDateField}
+                  onPress={() => onShowCalendar('dueDate')}
+                  activeOpacity={0.7}>
+                  <View style={styles.dueDateLeft}>
+                    <Icon
+                      name="calendar-outline"
+                      size={18}
+                      color={
+                        selectedDueDate ? colors.primary : colors.textSecondary
+                      }
+                      style={styles.dueDateIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.dueDateText,
+                        selectedDueDate && styles.dueDateActiveText,
+                      ]}>
+                      {selectedDueDate
+                        ? selectedDueDate.toLocaleDateString('en-AU', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                          })
+                        : 'Due Date (Optional)'}
+                    </Text>
+                  </View>
                   <Icon
-                    name={getPaymentStatusIcon()}
-                    size={18}
-                    color={getPaymentStatusColor()}
-                    style={styles.paymentStatusIcon}
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
                   />
-                  <Text
-                    style={[
-                      styles.paymentStatusText,
-                      selectedPaymentStatus && styles.paymentStatusActiveText,
-                    ]}>
-                    {getPaymentStatusDisplayName()}
-                  </Text>
-                </View>
-                <Icon
-                  name="chevron-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
+
+              {/* Payment Status Field - Only show for recurring transactions */}
+              {isRecurringTransaction && (
+                <TouchableOpacity
+                  style={styles.paymentStatusField}
+                  onPress={showPaymentStatusPicker}
+                  activeOpacity={0.7}>
+                  <View style={styles.paymentStatusLeft}>
+                    <Icon
+                      name={getPaymentStatusIcon()}
+                      size={18}
+                      color={getPaymentStatusColor()}
+                      style={styles.paymentStatusIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.paymentStatusText,
+                        selectedPaymentStatus && styles.paymentStatusActiveText,
+                      ]}>
+                      {getPaymentStatusDisplayName()}
+                    </Text>
+                  </View>
+                  <Icon
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
 
           {/* Category Picker View */}
-          <View style={styles.view}>
-            <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+          <View style={isCompactMode ? styles.compactView : styles.view}>
+            <View style={[
+              isCompactMode ? styles.compactCategoryPickerHeader : styles.modalHeader,
+              !isCompactMode && {paddingTop: insets.top + 20},
+            ]}>
               <TouchableOpacity
                 onPress={hideCategoryPicker}
                 style={styles.cancelButton}>
-                <Icon name="chevron-back" size={24} color={colors.textWhite} />
+                <Icon name="chevron-back" size={isCompactMode ? 20 : 24} color={colors.textWhite} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Select Category</Text>
+              <Text style={isCompactMode ? styles.compactModalTitle : styles.modalTitle}>Select Category</Text>
               <View style={styles.placeholder} />
             </View>
 
             <ScrollView
-              style={styles.formContainer}
+              style={isCompactMode ? styles.compactFormContainer : styles.formContainer}
               showsVerticalScrollIndicator={false}>
               {isLoading ? (
                 <View style={styles.loadingContainer}>
@@ -832,7 +1150,7 @@ const AddTransactionModal = ({
                     <TouchableOpacity
                       key={category.id}
                       style={[
-                        styles.categoryOption,
+                        isCompactMode ? styles.compactCategoryOption : styles.categoryOption,
                         selectedCategory === category.id &&
                           styles.selectedOption,
                       ]}
@@ -842,12 +1160,12 @@ const AddTransactionModal = ({
                         <View style={getCategoryIconStyle(category.color)}>
                           <Icon
                             name={category.icon}
-                            size={20}
+                            size={isCompactMode ? 18 : 20}
                             color={category.color}
                           />
                         </View>
                         <View style={styles.categoryInfo}>
-                          <Text style={styles.categoryName}>
+                          <Text style={isCompactMode ? styles.compactCategoryName : styles.categoryName}>
                             {category.name}
                           </Text>
                           {category.isCustom && (
@@ -860,14 +1178,14 @@ const AddTransactionModal = ({
                           !category.hasSubcategories && (
                             <Icon
                               name="checkmark"
-                              size={20}
+                              size={18}
                               color={colors.primary}
                             />
                           )}
                         {category.hasSubcategories && (
                           <Icon
                             name="chevron-forward"
-                            size={20}
+                            size={18}
                             color={colors.textSecondary}
                           />
                         )}
@@ -880,28 +1198,31 @@ const AddTransactionModal = ({
           </View>
 
           {/* Subcategory Picker View */}
-          <View style={styles.view}>
-            <View style={[styles.modalHeader, {paddingTop: insets.top + 20}]}>
+          <View style={isCompactMode ? styles.compactView : styles.view}>
+            <View style={[
+              isCompactMode ? styles.compactCategoryPickerHeader : styles.modalHeader,
+              !isCompactMode && {paddingTop: insets.top + 20},
+            ]}>
               <TouchableOpacity
                 onPress={hideSubcategoryPicker}
                 style={styles.cancelButton}>
-                <Icon name="chevron-back" size={24} color={colors.textWhite} />
+                <Icon name="chevron-back" size={isCompactMode ? 20 : 24} color={colors.textWhite} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>
+              <Text style={isCompactMode ? styles.compactModalTitle : styles.modalTitle}>
                 {currentSubcategoryData?.name || 'Select Subcategory'}
               </Text>
               <View style={styles.placeholder} />
             </View>
 
             <ScrollView
-              style={styles.formContainer}
+              style={isCompactMode ? styles.compactFormContainer : styles.formContainer}
               showsVerticalScrollIndicator={false}>
               {/* Subcategories */}
               {currentSubcategoryData?.subcategories?.map(subcategory => (
                 <TouchableOpacity
                   key={subcategory.id}
                   style={[
-                    styles.categoryOption,
+                    isCompactMode ? styles.compactCategoryOption : styles.categoryOption,
                     selectedSubcategory === subcategory.id &&
                       styles.selectedOption,
                   ]}
@@ -914,12 +1235,12 @@ const AddTransactionModal = ({
                       )}>
                       <Icon
                         name={subcategory.icon}
-                        size={20}
+                        size={isCompactMode ? 18 : 20}
                         color={currentSubcategoryData.color}
                       />
                     </View>
                     <View style={styles.categoryInfo}>
-                      <Text style={styles.categoryName}>
+                      <Text style={isCompactMode ? styles.compactCategoryName : styles.categoryName}>
                         {subcategory.name}
                       </Text>
                       {subcategory.isCustom && (
@@ -928,7 +1249,7 @@ const AddTransactionModal = ({
                     </View>
                   </View>
                   {selectedSubcategory === subcategory.id && (
-                    <Icon name="checkmark" size={20} color={colors.primary} />
+                    <Icon name="checkmark" size={18} color={colors.primary} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -984,6 +1305,16 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     justifyContent: 'flex-end',
   },
+  compactModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   backdrop: {
     position: 'absolute',
     top: 0,
@@ -1005,6 +1336,198 @@ const styles = StyleSheet.create({
   view: {
     width: screenWidth,
     height: '100%',
+  },
+  // Compact mode styles for one-off transactions (window style)
+  compactModalContent: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    width: screenWidth - 40,
+    height: 480,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  compactViewContainer: {
+    flexDirection: 'row',
+    width: screenWidth - 40,
+    height: '100%',
+  },
+  compactView: {
+    width: screenWidth - 40,
+    height: '100%',
+  },
+  compactModalHeader: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  compactCancelText: {
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+  },
+  compactModalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 12,
+  },
+  compactSaveButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 6,
+  },
+  compactSaveText: {
+    fontSize: 15,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textWhite,
+  },
+  compactFormContainer: {
+    padding: 16,
+  },
+  compactDateField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  compactDateText: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+  },
+  compactInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+  },
+  compactCurrencySymbol: {
+    fontSize: 36,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    marginRight: 4,
+  },
+  compactAmountInput: {
+    flex: 1,
+    fontSize: 36,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    padding: 0,
+    textAlign: 'left',
+  },
+  compactDescriptionInput: {
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  compactFieldWrapper: {
+    marginBottom: 16,
+  },
+  compactFieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  compactFieldBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border || '#E5E7EB',
+  },
+  compactFieldInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    padding: 0,
+  },
+  compactCategoryField: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  compactCategoryText: {
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  compactCategoryPlaceholder: {
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  compactCategoryPickerHeader: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  compactCategoryOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  compactCategoryName: {
+    fontSize: 15,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
   },
   modalHeader: {
     backgroundColor: colors.primary,
