@@ -414,6 +414,18 @@ const AddTransactionModal = ({
     return null;
   }
 
+  // When showing transaction type overlay, render it directly over HomeScreen
+  // without the form behind it (like V2 behavior)
+  if (overlayMode === 'transactionType') {
+    return (
+      <TransactionTypeOverlay
+        visible={true}
+        onClose={onTransactionTypeClose}
+        onTypeSelect={onTransactionTypeSelect}
+      />
+    );
+  }
+
   return (
     <View style={styles.modalOverlay} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View
@@ -858,15 +870,6 @@ const AddTransactionModal = ({
           onClose={onTournamentModalClose}
           onSave={onTournamentSave}
         />
-
-        {/* Transaction Type Overlay */}
-        {overlayMode === 'transactionType' && (
-          <TransactionTypeOverlay
-            visible={true}
-            onClose={onTransactionTypeClose}
-            onTypeSelect={onTransactionTypeSelect}
-          />
-        )}
 
         {/* Recurrence Overlay */}
         {overlayMode === 'recurrence' && (

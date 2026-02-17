@@ -76,13 +76,11 @@ const TransactionTypeOverlay = ({
           },
         ]}>
         <View style={styles.header}>
+          <View style={styles.handle} />
           <View style={styles.titleContainer}>
-            <Text style={styles.title}>Transaction Type</Text>
-            <Text style={styles.subtitle}>Choose how often this transaction occurs</Text>
+            <Text style={styles.title}>New Transaction</Text>
+            <Text style={styles.subtitle}>What type of transaction?</Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Icon name="close" size={24} color={colors.textSecondary} />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.typeOptions}>
@@ -91,12 +89,18 @@ const TransactionTypeOverlay = ({
             onPress={() => onTypeSelect('oneoff')}
             activeOpacity={0.7}>
             <View style={[styles.typeIconContainer, styles.oneoffIcon]}>
-              <Icon name="flash-outline" size={32} color="#6366f1" />
+              <Icon name="flash-outline" size={24} color="#6366F1" />
             </View>
-            <Text style={styles.typeTitle}>One-off</Text>
-            <Text style={styles.typeDescription}>
-              A single transaction that happens once
-            </Text>
+            <View style={styles.typeContent}>
+              <Text style={styles.typeTitle}>One-off</Text>
+              <Text style={styles.typeDescription}>A single transaction</Text>
+            </View>
+            <Icon
+              name="chevron-forward"
+              size={20}
+              color={colors.textTertiary || '#9CA3AF'}
+              style={styles.chevron}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -104,12 +108,18 @@ const TransactionTypeOverlay = ({
             onPress={() => onTypeSelect('recurring')}
             activeOpacity={0.7}>
             <View style={[styles.typeIconContainer, styles.recurringIcon]}>
-              <Icon name="repeat-outline" size={32} color="#10b981" />
+              <Icon name="repeat-outline" size={24} color="#10B981" />
             </View>
-            <Text style={styles.typeTitle}>Recurring</Text>
-            <Text style={styles.typeDescription}>
-              A transaction that repeats over time
-            </Text>
+            <View style={styles.typeContent}>
+              <Text style={styles.typeTitle}>Recurring</Text>
+              <Text style={styles.typeDescription}>Repeats on a schedule</Text>
+            </View>
+            <Icon
+              name="chevron-forward"
+              size={20}
+              color={colors.textTertiary || '#9CA3AF'}
+              style={styles.chevron}
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -117,12 +127,18 @@ const TransactionTypeOverlay = ({
             onPress={() => onTypeSelect('debt')}
             activeOpacity={0.7}>
             <View style={[styles.typeIconContainer, styles.debtIcon]}>
-              <Icon name="trending-down-outline" size={32} color="#EF4444" />
+              <Icon name="trending-down-outline" size={24} color="#EF4444" />
             </View>
-            <Text style={styles.typeTitle}>Debt Payment</Text>
-            <Text style={styles.typeDescription}>
-              Pay down a loan or credit card
-            </Text>
+            <View style={styles.typeContent}>
+              <Text style={styles.typeTitle}>Debt Payment</Text>
+              <Text style={styles.typeDescription}>Pay down a loan or card</Text>
+            </View>
+            <Icon
+              name="chevron-forward"
+              size={20}
+              color={colors.textTertiary || '#9CA3AF'}
+              style={styles.chevron}
+            />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -147,91 +163,86 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   overlayContent: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.background || '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    padding: 24,
+    paddingTop: 12,
+    paddingHorizontal: 24,
     paddingBottom: 40,
     width: screenWidth,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: -4},
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    backgroundColor: colors.border || '#E5E7EB',
+    borderRadius: 2,
+    marginBottom: 20,
   },
   titleContainer: {
-    flex: 1,
-    paddingRight: 16,
+    alignItems: 'center',
   },
   title: {
     fontSize: 20,
     fontWeight: '600',
-    fontFamily: 'System',
-    color: colors.textPrimary,
+    color: colors.textPrimary || '#111827',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.textSecondary || '#6B7280',
   },
   closeButton: {
-    padding: 4,
+    display: 'none',
   },
   typeOptions: {
-    gap: 16,
+    gap: 12,
   },
   typeButton: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-    padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'transparent',
+    padding: 16,
+    backgroundColor: colors.overlayLight || '#F9FAFB',
+    borderRadius: 16,
   },
   typeIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginRight: 16,
   },
   oneoffIcon: {
-    backgroundColor: '#6366f140',
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
   },
   recurringIcon: {
-    backgroundColor: '#10b98140',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
   },
   debtIcon: {
-    backgroundColor: '#EF444440',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  typeContent: {
+    flex: 1,
   },
   typeTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    marginBottom: 4,
+    color: colors.textPrimary || '#111827',
+    marginBottom: 2,
   },
   typeDescription: {
     fontSize: 14,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
+    color: colors.textSecondary || '#6B7280',
+  },
+  chevron: {
+    marginLeft: 8,
   },
 });
 
