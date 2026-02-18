@@ -203,8 +203,8 @@ const AddTransactionModal = ({
     });
   };
 
-  // Check if we're in compact mode (one-off transactions)
-  const isCompactMode = !isRecurringTransaction;
+  // Check if we're in compact mode (one-off transactions OR editing recurring)
+  const isCompactMode = !isRecurringTransaction || isEditMode;
 
   // Navigation functions
   const showCategoryPicker = () => {
@@ -232,11 +232,27 @@ const AddTransactionModal = ({
   };
 
   const showRecurrencePicker = () => {
-    setShowRecurrenceModal(true);
+    if (isCompactMode) {
+      setCompactView('recurrence');
+    } else {
+      setShowRecurrenceModal(true);
+    }
+  };
+
+  const hideRecurrencePicker = () => {
+    setCompactView('form');
   };
 
   const showPaymentStatusPicker = () => {
-    setShowPaymentStatusModal(true);
+    if (isCompactMode) {
+      setCompactView('paymentStatus');
+    } else {
+      setShowPaymentStatusModal(true);
+    }
+  };
+
+  const hidePaymentStatusPicker = () => {
+    setCompactView('form');
   };
 
   const hideCategoryPicker = () => {
@@ -588,6 +604,7 @@ const AddTransactionModal = ({
               transform: [{translateY: slideAnim}],
               opacity: fadeAnim,
             },
+            isRecurringTransaction && {height: 620},
           ]}>
 
           {/* Form View */}
@@ -668,7 +685,7 @@ const AddTransactionModal = ({
                 <View style={styles.compactFieldWrapper}>
                   <Text style={styles.compactFieldLabel}>Category</Text>
                   <TouchableOpacity
-                    style={styles.compactFieldBox}
+                    style={styles.compactCategoryFieldBox}
                     onPress={showCategoryPicker}
                     activeOpacity={0.7}>
                     <View style={styles.categoryLeft}>
@@ -699,6 +716,108 @@ const AddTransactionModal = ({
                     />
                   </TouchableOpacity>
                 </View>
+
+                {/* Recurrence Field */}
+                {isRecurringTransaction && (
+                  <View style={styles.compactFieldWrapper}>
+                    <Text style={styles.compactFieldLabel}>Recurrence</Text>
+                    <TouchableOpacity
+                      style={styles.compactCategoryFieldBox}
+                      onPress={showRecurrencePicker}
+                      activeOpacity={0.7}>
+                      <View style={styles.categoryLeft}>
+                        <Icon
+                          name={getRecurrenceIcon()}
+                          size={16}
+                          color={getRecurrenceColor()}
+                          style={styles.compactFieldIcon}
+                        />
+                        <Text
+                          style={[
+                            styles.compactCategoryText,
+                            selectedRecurrence === 'none' && styles.compactCategoryPlaceholder,
+                          ]}>
+                          {getRecurrenceById(selectedRecurrence)?.name}
+                        </Text>
+                      </View>
+                      <Icon
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Due Date Field - Only show for recurring transactions */}
+                {isRecurringTransaction && (
+                  <View style={styles.compactFieldWrapper}>
+                    <Text style={styles.compactFieldLabel}>Due Date</Text>
+                    <TouchableOpacity
+                      style={styles.compactFieldBox}
+                      onPress={() => onShowCalendar('dueDate')}
+                      activeOpacity={0.7}>
+                      <View style={styles.categoryLeft}>
+                        <Icon
+                          name="calendar-outline"
+                          size={16}
+                          color={selectedDueDate ? colors.primary : colors.textSecondary}
+                          style={styles.compactFieldIcon}
+                        />
+                        <Text
+                          style={[
+                            styles.compactCategoryText,
+                            !selectedDueDate && styles.compactCategoryPlaceholder,
+                          ]}>
+                          {selectedDueDate
+                            ? selectedDueDate.toLocaleDateString('en-AU', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                              })
+                            : 'Select due date'}
+                        </Text>
+                      </View>
+                      <Icon
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Payment Status Field - Only show for recurring transactions */}
+                {isRecurringTransaction && (
+                  <View style={styles.compactFieldWrapper}>
+                    <Text style={styles.compactFieldLabel}>Payment Status</Text>
+                    <TouchableOpacity
+                      style={styles.compactFieldBox}
+                      onPress={showPaymentStatusPicker}
+                      activeOpacity={0.7}>
+                      <View style={styles.categoryLeft}>
+                        <Icon
+                          name={getPaymentStatusIcon()}
+                          size={16}
+                          color={getPaymentStatusColor()}
+                          style={styles.compactFieldIcon}
+                        />
+                        <Text
+                          style={[
+                            styles.compactCategoryText,
+                            !selectedPaymentStatus && styles.compactCategoryPlaceholder,
+                          ]}>
+                          {getPaymentStatusDisplayName()}
+                        </Text>
+                      </View>
+                      <Icon
+                        name="chevron-forward"
+                        size={18}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </ScrollView>
             </>
           )}
@@ -834,6 +953,106 @@ const AddTransactionModal = ({
             </>
           )}
 
+          {/* Recurrence Picker View */}
+          {compactView === 'recurrence' && (
+            <>
+              <View style={styles.compactCategoryPickerHeader}>
+                <TouchableOpacity
+                  onPress={hideRecurrencePicker}
+                  style={styles.cancelButton}>
+                  <Icon name="chevron-back" size={20} color={colors.textWhite} />
+                </TouchableOpacity>
+                <Text style={styles.compactModalTitle}>Select Recurrence</Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.compactFormContainer}
+                showsVerticalScrollIndicator={false}>
+                {recurrenceOptions
+                  .filter(option => option.id !== 'none')
+                  .map(option => (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[
+                        styles.compactCategoryOption,
+                        selectedRecurrence === option.id && styles.selectedOption,
+                      ]}
+                      onPress={() => {
+                        onRecurrenceSelect(option.id);
+                        hideRecurrencePicker();
+                      }}
+                      activeOpacity={0.7}>
+                      <View style={styles.categoryLeft}>
+                        <View style={styles.recurrenceOptionIcon}>
+                          <Icon
+                            name="repeat-outline"
+                            size={18}
+                            color={selectedRecurrence === option.id ? colors.primary : colors.textSecondary}
+                          />
+                        </View>
+                        <Text style={styles.compactCategoryName}>
+                          {option.name}
+                        </Text>
+                      </View>
+                      {selectedRecurrence === option.id && (
+                        <Icon name="checkmark" size={18} color={colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+              </ScrollView>
+            </>
+          )}
+
+          {/* Payment Status Picker View */}
+          {compactView === 'paymentStatus' && (
+            <>
+              <View style={styles.compactCategoryPickerHeader}>
+                <TouchableOpacity
+                  onPress={hidePaymentStatusPicker}
+                  style={styles.cancelButton}>
+                  <Icon name="chevron-back" size={20} color={colors.textWhite} />
+                </TouchableOpacity>
+                <Text style={styles.compactModalTitle}>Payment Status</Text>
+                <View style={styles.placeholder} />
+              </View>
+
+              <ScrollView
+                style={styles.compactFormContainer}
+                showsVerticalScrollIndicator={false}>
+                {paymentStatusOptions.map(option => (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.compactCategoryOption,
+                      selectedPaymentStatus === option.id && styles.selectedOption,
+                    ]}
+                    onPress={() => {
+                      onPaymentStatusChange(option.id);
+                      hidePaymentStatusPicker();
+                    }}
+                    activeOpacity={0.7}>
+                    <View style={styles.categoryLeft}>
+                      <View style={[styles.paymentStatusOptionIcon, {backgroundColor: `${getPaymentStatusColor(option.id)}20`}]}>
+                        <Icon
+                          name={getPaymentStatusIcon(option.id)}
+                          size={18}
+                          color={getPaymentStatusColor(option.id)}
+                        />
+                      </View>
+                      <Text style={styles.compactCategoryName}>
+                        {option.name}
+                      </Text>
+                    </View>
+                    {selectedPaymentStatus === option.id && (
+                      <Icon name="checkmark" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
+
           {/* Calendar Modal */}
           <CalendarModal
             visible={showCalendar}
@@ -846,7 +1065,7 @@ const AddTransactionModal = ({
     );
   }
 
-  // Render full mode (recurring transactions) - uses slide animation between views
+  // Render full mode (recurring transactions - create only) - uses slide animation between views
   return (
     <View style={styles.modalOverlay} pointerEvents={visible ? 'auto' : 'none'}>
       <Animated.View
@@ -1373,7 +1592,7 @@ const styles = StyleSheet.create({
   },
   compactView: {
     width: screenWidth - 40,
-    height: '100%',
+    height: 480,
   },
   compactModalHeader: {
     backgroundColor: colors.primary,
@@ -1489,6 +1708,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border || '#E5E7EB',
   },
+  compactCategoryFieldBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: 48,
+    paddingHorizontal: 14,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border || '#E5E7EB',
+  },
   compactFieldInput: {
     flex: 1,
     fontSize: 15,
@@ -1496,6 +1726,26 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textPrimary,
     padding: 0,
+  },
+  compactFieldIcon: {
+    marginRight: 10,
+  },
+  recurrenceOptionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    backgroundColor: colors.overlayLight,
+  },
+  paymentStatusOptionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   compactCategoryField: {
     flexDirection: 'row',
@@ -1875,6 +2125,44 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  // Recurrence Picklist Styles
+  recurrencePicklistContainer: {
+    marginBottom: 20,
+  },
+  picklistLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    marginBottom: 8,
+    marginLeft: 2,
+  },
+  picklistScroll: {
+    flexGrow: 0,
+  },
+  picklistOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 10,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  picklistOptionActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  picklistOptionText: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+  },
+  picklistOptionTextActive: {
+    color: colors.textWhite,
+    fontWeight: '500',
   },
 });
 
