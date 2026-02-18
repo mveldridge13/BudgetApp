@@ -457,28 +457,44 @@ const AddTransactionModal = ({
 
   if (overlayMode === 'recurrence') {
     return (
-      <RecurrenceOverlay
-        visible={true}
-        onClose={onRecurrenceOverlayClose}
-        onContinue={onRecurrenceOverlayContinue}
-        selectedRecurrence={selectedRecurrence}
-        selectedDueDate={selectedDueDate}
-        onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
-        onDueDatePress={onRecurrenceOverlayDueDatePress}
-        recurrenceOptions={recurrenceOptions}
-      />
+      <>
+        <RecurrenceOverlay
+          visible={true}
+          onClose={onRecurrenceOverlayClose}
+          onContinue={onRecurrenceOverlayContinue}
+          selectedRecurrence={selectedRecurrence}
+          selectedDueDate={selectedDueDate}
+          onRecurrenceSelect={onRecurrenceOverlayRecurrenceSelect}
+          onDueDatePress={onRecurrenceOverlayDueDatePress}
+          recurrenceOptions={recurrenceOptions}
+        />
+        <CalendarModal
+          visible={showCalendar}
+          onClose={onHideCalendar}
+          selectedDate={selectedDueDate || selectedDate}
+          onDateChange={onDateChange}
+        />
+      </>
     );
   }
 
   if (overlayMode === 'debt') {
     return (
-      <DebtPaymentOverlay
-        visible={true}
-        onClose={onDebtPaymentClose}
-        onSave={onDebtPaymentSave}
-        onDueDatePress={onDebtPaymentDueDatePress}
-        selectedDueDate={selectedDueDate}
-      />
+      <>
+        <DebtPaymentOverlay
+          visible={true}
+          onClose={onDebtPaymentClose}
+          onSave={onDebtPaymentSave}
+          onDueDatePress={onDebtPaymentDueDatePress}
+          selectedDueDate={selectedDueDate}
+        />
+        <CalendarModal
+          visible={showCalendar}
+          onClose={onHideCalendar}
+          selectedDate={selectedDueDate || selectedDate}
+          onDateChange={onDateChange}
+        />
+      </>
     );
   }
 

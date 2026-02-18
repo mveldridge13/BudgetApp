@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useEffect} from 'react';
+import React, {useState, useCallback, useEffect, useRef} from 'react';
 import {Alert, Keyboard} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
 import CategoryCache from '../services/CategoryCache';
@@ -61,6 +61,13 @@ const AddTransactionContainer = ({
 
   // Track if user manually entered description
   const [hasManualDescription, setHasManualDescription] = useState(false);
+
+  // Track the last auto-generated description to detect manual edits
+  const lastAutoDescRef = useRef('');
+
+  // Track initial category/subcategory for edit mode to prevent auto-fill on open
+  const initialEditCategoryRef = useRef(null);
+  const initialEditSubcategoryRef = useRef(null);
 
   // Overlay state
   const [overlayMode, setOverlayMode] = useState('transactionType'); // 'transactionType', 'quick', 'category', 'subcategory', 'amount', 'recurrence', null
@@ -388,6 +395,9 @@ const AddTransactionContainer = ({
     setSelectedPaymentStatus(null);
     setCurrentSubcategoryData(null);
     setHasManualDescription(false);
+    lastAutoDescRef.current = '';
+    initialEditCategoryRef.current = null;
+    initialEditSubcategoryRef.current = null;
 
     // Reset overlay mode
     setOverlayMode('transactionType');
@@ -434,15 +444,13 @@ const AddTransactionContainer = ({
         }
       }
 
-      // Check if the existing description was manually entered
-      const categoryDisplayName = getCategoryDisplayName(
-        editingTransaction.categoryId,
-        editingTransaction.subcategoryId,
-      );
-      const hasCustomDescription =
-        editingTransaction.description &&
-        editingTransaction.description.trim() !== categoryDisplayName;
-      setHasManualDescription(hasCustomDescription);
+      // Let category changes auto-update description unless the user types in this session
+      // This fixes the issue where historical custom descriptions permanently disable auto-updates
+      setHasManualDescription(false);
+      lastAutoDescRef.current = editingTransaction.description || '';
+      // Track initial category/subcategory to prevent auto-fill on open
+      initialEditCategoryRef.current = editingTransaction.categoryId;
+      initialEditSubcategoryRef.current = editingTransaction.subcategoryId || null;
 
       // Set isRecurringTransaction based on existing transaction
       setIsRecurringTransaction(
@@ -580,11 +588,6 @@ const AddTransactionContainer = ({
             }));
           }
 
-          console.log(
-            '➕ AddTransactionContainer: Subcategory synced successfully:',
-            realSubcategory.name,
-          );
-
           // Return the real subcategory data
           return realSubcategory;
         } catch (syncError) {
@@ -658,10 +661,6 @@ const AddTransactionContainer = ({
       typeof selectedSubcategory === 'string' &&
       selectedSubcategory.startsWith('temp_')
     ) {
-      console.log(
-        '🚫 AddTransactionContainer: Preventing save with temporary subcategory ID:',
-        selectedSubcategory,
-      );
       Alert.alert(
         'Please wait',
         'Subcategory is being created. Please wait a moment and try again.',
@@ -773,24 +772,11 @@ const AddTransactionContainer = ({
     setAmount(text);
   }, []);
 
-  const handleDescriptionChange = useCallback(
-    text => {
-      setDescription(text);
-      // Mark as manually entered if user types anything different from category names
-      if (
-        text.trim() &&
-        !categories.some(
-          cat =>
-            cat.name === text.trim() ||
-            (cat.subcategories &&
-              cat.subcategories.some(sub => sub.name === text.trim())),
-        )
-      ) {
-        setHasManualDescription(true);
-      }
-    },
-    [categories],
-  );
+  const handleDescriptionChange = useCallback(text => {
+    setDescription(text);
+    // Mark as manual if user types something different from the last auto-generated description
+    setHasManualDescription(text.trim() !== lastAutoDescRef.current.trim());
+  }, []);
 
   const handleDateChange = useCallback(
     date => {
@@ -1003,8 +989,6 @@ const AddTransactionContainer = ({
   const handleDebtPaymentSave = useCallback(
     async debtData => {
       try {
-        console.log('🔍 DEBT_PAYMENT: Creating debt goal with data:', debtData);
-
         // Transform debt payment form data to goal format
         const goalData = {
           title: debtData.name, // "Credit Card"
@@ -1019,16 +1003,12 @@ const AddTransactionContainer = ({
           isActive: true,
         };
 
-        console.log('🔍 DEBT_PAYMENT: Transformed goal data:', goalData);
-
         // Use the saveGoal hook which handles:
         // - Cache-first: Saves to local cache immediately
         // - Background sync: Syncs to backend when online
         // - Validation: Validates goal data
         // - Transformation: Transforms to backend format
         const result = await saveGoal(goalData);
-
-        console.log('🔍 DEBT_PAYMENT: Save result:', result);
 
         if (result.success) {
           // Close overlay
@@ -1105,14 +1085,10 @@ const AddTransactionContainer = ({
         otherExpenses: tournamentOtherExpenses,
       };
 
-      console.log('Creating tournament:', tournamentData);
-
       // Call the API to create tournament
       const createdTournament = await TrendAPIService.createTournament(
         tournamentData,
       );
-
-      console.log('Tournament created successfully:', createdTournament);
 
       // Reset tournament form and close modal
       setTournamentName('');
@@ -1200,8 +1176,26 @@ const AddTransactionContainer = ({
   // ==============================================
 
   // Effect to auto-update description when category changes
+  // NOTE: `description` is intentionally NOT in the dependency array to prevent
+  // this effect from running on every keystroke and overwriting user input
   useEffect(() => {
     if (!visible || !selectedCategory || categories.length === 0) {
+      return;
+    }
+
+    // In edit mode, only auto-fill if category/subcategory has CHANGED from initial values
+    // This preserves the saved description on initial open
+    if (isEditMode) {
+      const categoryChanged = selectedCategory !== initialEditCategoryRef.current;
+      const subcategoryChanged = selectedSubcategory !== initialEditSubcategoryRef.current;
+
+      if (!categoryChanged && !subcategoryChanged) {
+        return; // Don't auto-fill on initial open or when category hasn't changed
+      }
+    }
+
+    // Don't auto-update if user has manually entered a description
+    if (hasManualDescription) {
       return;
     }
 
@@ -1210,57 +1204,17 @@ const AddTransactionContainer = ({
       selectedSubcategory,
     );
 
-    if (isEditMode && editingTransaction) {
-      // Don't auto-update if user has manually entered a description
-      if (hasManualDescription) {
-        return;
-      }
-
-      // Get the original category display name properly
-      const originalCategoryDisplayName = getCategoryDisplayName(
-        editingTransaction.categoryId,
-        editingTransaction.subcategoryId,
-      );
-
-      // Only auto-update if description is empty OR matches the original category name
-      const shouldAutoUpdate =
-        !description.trim() || // Empty description
-        description.trim() === originalCategoryDisplayName; // Matches original category
-
-      if (shouldAutoUpdate) {
-        setDescription(newCategoryDisplayName);
-      }
-    } else {
-      // For new transactions, don't auto-update if user has manually entered a description
-      if (hasManualDescription) {
-        return;
-      }
-
-      // For new transactions, auto-update if description is empty OR matches a category name
-      const descriptionMatchesCategory = categories.some(
-        cat =>
-          cat.name === description.trim() ||
-          (cat.subcategories &&
-            cat.subcategories.some(sub => sub.name === description.trim())),
-      );
-
-      const shouldAutoUpdate =
-        !description.trim() || descriptionMatchesCategory;
-
-      if (shouldAutoUpdate) {
-        setDescription(newCategoryDisplayName);
-      }
-    }
+    // Track the auto-generated description so we can detect manual edits
+    lastAutoDescRef.current = newCategoryDisplayName;
+    setDescription(newCategoryDisplayName);
   }, [
     selectedCategory,
     selectedSubcategory,
     visible,
-    isEditMode,
-    description,
     categories,
     getCategoryDisplayName,
-    editingTransaction,
     hasManualDescription,
+    isEditMode,
   ]);
 
   // ==============================================
@@ -1282,6 +1236,7 @@ const AddTransactionContainer = ({
   useEffect(() => {
     populateFormForEdit();
   }, [populateFormForEdit]);
+
 
   // Effect to update categories when transaction type changes
   useEffect(() => {
@@ -1312,23 +1267,11 @@ const AddTransactionContainer = ({
       selectedSubcategory.startsWith('temp_') &&
       categories.length > 0
     ) {
-      console.log(
-        '🔍 AddTransactionContainer: Checking for temp ID replacement. Temp ID:',
-        selectedSubcategory,
-      );
-
       // Find the category containing our temporary subcategory
       const parentCategory = categories.find(
         cat =>
           cat.subcategories &&
           cat.subcategories.some(sub => sub.id === selectedSubcategory),
-      );
-
-      console.log(
-        '🔍 Parent category found:',
-        parentCategory?.name,
-        'Subcategories:',
-        parentCategory?.subcategories?.map(s => `${s.name}(${s.id})`),
       );
 
       if (parentCategory) {
@@ -1343,20 +1286,9 @@ const AddTransactionContainer = ({
         );
 
         if (realSubcategory) {
-          console.log(
-            '🔄 AddTransactionContainer: Updating selected subcategory from temp ID to real ID:',
-            realSubcategory.id,
-          );
           setSelectedSubcategory(realSubcategory.id);
         } else {
-          console.log(
-            '⚠️ AddTransactionContainer: No real subcategory found with name:',
-            tempSubcategory?.name,
-          );
           // Clear the temp ID if no real subcategory is found (creation likely failed)
-          console.log(
-            '🧹 AddTransactionContainer: Clearing temporary subcategory ID and invalidating cache',
-          );
           setSelectedSubcategory(null);
           // Clear cache to force refresh from backend
           const currentUserId = TrendAPIService.getCurrentUserId();
@@ -1366,9 +1298,6 @@ const AddTransactionContainer = ({
           loadCategories();
         }
       } else {
-        console.log(
-          '⚠️ AddTransactionContainer: No parent category found for temp ID, clearing selection',
-        );
         setSelectedSubcategory(null);
         // Clear cache to force refresh from backend
         const currentUserId = TrendAPIService.getCurrentUserId();
