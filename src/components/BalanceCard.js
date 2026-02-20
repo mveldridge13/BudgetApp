@@ -161,7 +161,9 @@ const BalanceCard = ({
             if (isNaN(transactionDate.getTime())) {
               return false;
             }
-            return transactionDate >= periodStart && transactionDate <= periodEnd;
+            return (
+              transactionDate >= periodStart && transactionDate <= periodEnd
+            );
           } catch (error) {
             return false;
           }
@@ -178,21 +180,29 @@ const BalanceCard = ({
   }, [transactions, homeSummary?.period?.start, homeSummary?.period?.end]);
 
   // Calculate values - prefer backend homeSummary when available
-  const incomeAmount = homeSummary?.income?.totalInflow
-    ?? ((incomeData?.income || 0) + rolloverAmount);
+  const incomeAmount =
+    homeSummary?.income?.totalInflow ??
+    (incomeData?.income || 0) + rolloverAmount;
 
   // Use backend leftToSpendSafe as single source of truth
-  const adjustedLeftToSpend = homeSummary?.totals?.leftToSpendSafe
-    ?? (incomeAmount - totalExpenses - totalGoalContributions - totalIncomePayments - localIncomePayments);
+  const adjustedLeftToSpend =
+    homeSummary?.totals?.leftToSpendSafe ??
+    incomeAmount -
+      totalExpenses -
+      totalGoalContributions -
+      totalIncomePayments -
+      localIncomePayments;
 
   // leftToSpend is only used for over-budget detection
   const leftToSpend = homeSummary
     ? adjustedLeftToSpend
-    : (incomeAmount - totalExpenses);
+    : incomeAmount - totalExpenses;
 
   // Use adjustedLeftToSpend for percentage to match displayed value (consistency fix)
   const percentageRemaining =
-    incomeAmount > 0 ? Math.round((adjustedLeftToSpend / incomeAmount) * 100) : 0;
+    incomeAmount > 0
+      ? Math.round((adjustedLeftToSpend / incomeAmount) * 100)
+      : 0;
 
   // Additional calculated metrics - prefer backend daysRemaining
   const getDaysUntilNextPay = () => {
@@ -203,8 +213,10 @@ const BalanceCard = ({
 
     if (!incomeData?.nextPayDate) {
       // Fallback to frequency-based calculation
-      return incomeData?.frequency === 'weekly' ? 7
-        : incomeData?.frequency === 'fortnightly' ? 14
+      return incomeData?.frequency === 'weekly'
+        ? 7
+        : incomeData?.frequency === 'fortnightly'
+        ? 14
         : 30;
     }
 
@@ -240,8 +252,10 @@ const BalanceCard = ({
       return Math.max(1, daysDiff); // Minimum 1 day to avoid division by zero
     } catch (error) {
       // Fallback to frequency-based calculation
-      return incomeData?.frequency === 'weekly' ? 7
-        : incomeData?.frequency === 'fortnightly' ? 14
+      return incomeData?.frequency === 'weekly'
+        ? 7
+        : incomeData?.frequency === 'fortnightly'
+        ? 14
         : 30;
     }
   };
@@ -327,7 +341,7 @@ const BalanceCard = ({
         collapsable={false}>
         <View style={styles.balanceRow}>
           <View style={styles.balanceItem}>
-            <Text style={styles.balanceLabel}>BALANCE</Text>
+            <Text style={styles.balanceLabel}>STARTING FUNDS</Text>
             {loading ? (
               <Text style={styles.totalIncome}>$0.00</Text>
             ) : rolloverAmount > 0 ? (
@@ -347,13 +361,15 @@ const BalanceCard = ({
             )}
           </View>
           <View style={[styles.balanceItem, styles.balanceItemRight]}>
-            <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
+            <Text style={styles.balanceLabel}>ALLOCATED THIS PERIOD</Text>
             <Text style={styles.balanceAmount}>
-              {formatCurrency(homeSummary?.totals?.totalExpensesAllocated ?? totalExpenses)}
+              {formatCurrency(
+                homeSummary?.totals?.totalExpensesAllocated ?? totalExpenses,
+              )}
             </Text>
 
             {/* Expense Breakdown: Committed (planned), Discretionary (spent), Goals (paid) */}
-            {!loading && (
+            {!loading &&
               (homeSummary?.outflows?.committed?.plannedTotal > 0 ||
                 homeSummary?.outflows?.discretionary?.spentSoFar > 0 ||
                 homeSummary?.outflows?.goals?.paidSoFar > 0 ||
@@ -367,8 +383,8 @@ const BalanceCard = ({
                     <Text style={styles.expenseBreakdownAmount}>
                       {formatCurrency(
                         homeSummary?.outflows?.committed?.plannedTotal ??
-                        expenseBreakdown?.committed ??
-                        0
+                          expenseBreakdown?.committed ??
+                          0,
                       )}
                     </Text>
                   </View>
@@ -379,12 +395,12 @@ const BalanceCard = ({
                     <Text style={styles.expenseBreakdownAmount}>
                       {formatCurrency(
                         homeSummary?.outflows?.discretionary?.spentSoFar ??
-                        expenseBreakdown?.discretionary ??
-                        0
+                          expenseBreakdown?.discretionary ??
+                          0,
                       )}
                     </Text>
                   </View>
-                  {(homeSummary?.outflows?.goals?.paidSoFar > 0) && (
+                  {homeSummary?.outflows?.goals?.paidSoFar > 0 && (
                     <View style={styles.expenseBreakdownRow}>
                       <Text style={styles.expenseBreakdownLabel}>
                         └─ Goals:
@@ -395,8 +411,7 @@ const BalanceCard = ({
                     </View>
                   )}
                 </View>
-              )
-            )}
+              )}
           </View>
         </View>
 
@@ -581,7 +596,8 @@ const BalanceCard = ({
 
             {!loading && dailyBudget > 0 && (
               <Text style={styles.dailyBudgetText}>
-                {formatCurrency(dailyBudget)}/day ({formatCurrency(weeklyBudget)}/week)
+                {formatCurrency(dailyBudget)}/day (
+                {formatCurrency(weeklyBudget)}/week)
               </Text>
             )}
           </View>
@@ -913,11 +929,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   leftAmount: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '300',
     fontFamily: 'System',
     color: colors.textWhite,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   rolloverPreviewText: {
     fontSize: 12,
