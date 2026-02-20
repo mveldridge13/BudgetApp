@@ -62,7 +62,7 @@ const QuickAddOverlay = ({
       event => {
         const height = event.endCoordinates.height;
         Animated.timing(keyboardAnim, {
-          toValue: -height + 50, // Move up by keyboard height minus 50px gap
+          toValue: -height + 90, // Account for bottom padding
           duration: Platform.OS === 'ios' ? event.duration : 300,
           useNativeDriver: true,
         }).start();

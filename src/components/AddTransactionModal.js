@@ -516,20 +516,28 @@ const AddTransactionModal = ({
 
   if (overlayMode === 'quick') {
     return (
-      <QuickAddOverlay
-        visible={true}
-        onClose={onQuickAddClose}
-        onUseFullForm={onQuickAddUseFullForm}
-        onCategoryPress={onQuickAddCategoryPress}
-        onDatePress={onQuickAddDatePress}
-        selectedDate={selectedDate}
-        description={description}
-        onDescriptionChange={onDescriptionChange}
-        selectedCategory={selectedCategory}
-        getCategoryById={getCategoryById}
-        selectedTransactionType={selectedTransactionType}
-        onTransactionTypeChange={onQuickAddTransactionTypeChange}
-      />
+      <>
+        <QuickAddOverlay
+          visible={true}
+          onClose={onQuickAddClose}
+          onUseFullForm={onQuickAddUseFullForm}
+          onCategoryPress={onQuickAddCategoryPress}
+          onDatePress={onQuickAddDatePress}
+          selectedDate={selectedDate}
+          description={description}
+          onDescriptionChange={onDescriptionChange}
+          selectedCategory={selectedCategory}
+          getCategoryById={getCategoryById}
+          selectedTransactionType={selectedTransactionType}
+          onTransactionTypeChange={onQuickAddTransactionTypeChange}
+        />
+        <CalendarModal
+          visible={showCalendar}
+          onClose={onHideCalendar}
+          selectedDate={selectedDate}
+          onDateChange={onDateChange}
+        />
+      </>
     );
   }
 
