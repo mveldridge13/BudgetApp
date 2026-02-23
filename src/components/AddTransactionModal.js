@@ -589,6 +589,10 @@ const AddTransactionModal = ({
         getCategoryById={getCategoryById}
         selectedDate={selectedDate}
         selectedTransactionType={selectedTransactionType}
+        isRecurringTransaction={isRecurringTransaction}
+        selectedRecurrence={selectedRecurrence}
+        selectedDueDate={selectedDueDate}
+        recurrenceOptions={recurrenceOptions}
       />
     );
   }

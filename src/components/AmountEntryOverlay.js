@@ -28,6 +28,10 @@ const AmountEntryOverlay = ({
   getCategoryById,
   selectedDate,
   selectedTransactionType,
+  isRecurringTransaction,
+  selectedRecurrence,
+  selectedDueDate,
+  recurrenceOptions,
 }) => {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -128,6 +132,22 @@ const AmountEntryOverlay = ({
     };
   };
 
+  const getRecurrenceDisplayText = () => {
+    if (selectedRecurrence && recurrenceOptions) {
+      const option = recurrenceOptions.find(opt => opt.id === selectedRecurrence);
+      return option?.name || selectedRecurrence;
+    }
+    return selectedRecurrence;
+  };
+
+  const formatDueDate = date => {
+    if (!date) return '';
+    return date.toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'short',
+    });
+  };
+
   const isValidAmount = amount && parseFloat(amount) > 0;
 
   const handleSave = () => {
@@ -158,7 +178,9 @@ const AmountEntryOverlay = ({
             activeOpacity={0.7}>
             <Icon name="chevron-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Add Transaction</Text>
+          <Text style={styles.title}>
+            {isRecurringTransaction ? 'Add Recurring' : 'Add Transaction'}
+          </Text>
           <View style={styles.placeholder} />
         </View>
 
@@ -188,6 +210,26 @@ const AmountEntryOverlay = ({
             </View>
             <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
           </View>
+
+          {/* Recurrence Info */}
+          {isRecurringTransaction && selectedRecurrence && (
+            <View style={styles.recurrenceRow}>
+              <View style={styles.recurrenceItem}>
+                <Icon name="repeat" size={16} color={colors.primary} />
+                <Text style={styles.recurrenceText}>
+                  {getRecurrenceDisplayText()}
+                </Text>
+              </View>
+              {selectedDueDate && (
+                <View style={styles.recurrenceItem}>
+                  <Icon name="calendar" size={16} color={colors.primary} />
+                  <Text style={styles.recurrenceText}>
+                    Due {formatDueDate(selectedDueDate)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Amount Input */}
@@ -233,7 +275,7 @@ const AmountEntryOverlay = ({
               styles.addButtonText,
               !isValidAmount && styles.addButtonTextDisabled,
             ]}>
-            Add Transaction
+            {isRecurringTransaction ? 'Add Recurring' : 'Add Transaction'}
           </Text>
         </TouchableOpacity>
       </Animated.View>
@@ -341,6 +383,26 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
+  },
+  recurrenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.3)',
+    gap: 16,
+  },
+  recurrenceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recurrenceText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.primary,
   },
   amountContainer: {
     marginBottom: 32,

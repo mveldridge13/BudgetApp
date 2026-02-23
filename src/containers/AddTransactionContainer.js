@@ -873,10 +873,14 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleCategoryOverlayBack = useCallback(() => {
-    // Go back from category overlay to transaction type overlay
-    setOverlayMode('transactionType');
+    // Go back from category overlay to the appropriate previous screen
+    if (isRecurringTransaction) {
+      setOverlayMode('recurrence');
+    } else {
+      setOverlayMode('transactionType');
+    }
     setCurrentSubcategoryData(null);
-  }, []);
+  }, [isRecurringTransaction]);
 
   const handleCategoryOverlaySelect = useCallback(
     categoryId => {
@@ -974,7 +978,7 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleRecurrenceOverlayContinue = useCallback(() => {
-    setOverlayMode('quick');
+    setOverlayMode('category');
   }, []);
 
   const handleRecurrenceOverlayRecurrenceSelect = useCallback(recurrenceId => {
