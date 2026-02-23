@@ -1,10 +1,10 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  Modal,
   Dimensions,
   Animated,
 } from 'react-native';
@@ -25,9 +25,15 @@ const RecurrenceOverlay = ({
 }) => {
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [showPicker, setShowPicker] = useState(false);
+  const wasCompleteRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      // Reset the completion tracker when overlay opens
+      const isComplete = selectedRecurrence && selectedRecurrence !== 'none' && selectedDueDate;
+      wasCompleteRef.current = isComplete;
+
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
@@ -43,8 +49,27 @@ const RecurrenceOverlay = ({
     } else {
       slideAnim.setValue(300);
       fadeAnim.setValue(0);
+      setShowPicker(false);
+      wasCompleteRef.current = false;
     }
   }, [visible, slideAnim, fadeAnim]);
+
+  // Auto-continue when both frequency and date are selected
+  useEffect(() => {
+    if (!visible) return;
+
+    const isComplete = selectedRecurrence && selectedRecurrence !== 'none' && selectedDueDate;
+
+    // Only auto-continue if transitioning from incomplete to complete
+    if (isComplete && !wasCompleteRef.current) {
+      wasCompleteRef.current = true;
+      // Small delay for better UX - let the user see their selection
+      const timer = setTimeout(() => {
+        onContinue();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, selectedRecurrence, selectedDueDate, onContinue]);
 
   const handleClose = () => {
     // Animate out before closing
@@ -64,9 +89,22 @@ const RecurrenceOverlay = ({
     });
   };
 
+  const handleRecurrenceSelect = (optionId) => {
+    onRecurrenceSelect(optionId);
+    setShowPicker(false);
+  };
+
   if (!visible) {
     return null;
   }
+
+  const getRecurrenceDisplayText = () => {
+    if (selectedRecurrence && selectedRecurrence !== 'none') {
+      const option = recurrenceOptions?.find(opt => opt.id === selectedRecurrence);
+      return option?.name || 'Select Frequency';
+    }
+    return 'Select Frequency';
+  };
 
   const getDueDateDisplayText = () => {
     if (selectedDueDate) {
@@ -75,8 +113,7 @@ const RecurrenceOverlay = ({
     return 'Select Due Date';
   };
 
-  const canContinue =
-    selectedRecurrence && selectedRecurrence !== 'none' && selectedDueDate;
+  const filteredOptions = recurrenceOptions?.filter(option => option.id !== 'none') || [];
 
   return (
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
@@ -94,142 +131,116 @@ const RecurrenceOverlay = ({
           },
         ]}>
         <View style={styles.header}>
+          <View style={styles.headerPlaceholder} />
           <Text style={styles.title}>Recurring Transaction</Text>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
             <Icon name="close" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.subtitle}>
-          <Text style={styles.subtitleText}>
-            Configure how often this transaction repeats and when it's due
-          </Text>
-        </View>
-
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}>
-          <View style={styles.form}>
-            {/* Recurrence Options */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recurrence</Text>
-            </View>
-
-            {recurrenceOptions && recurrenceOptions.length > 0 ? (
-              recurrenceOptions
-                .filter(option => option.id !== 'none') // Exclude "Does not repeat" since this overlay is for recurring transactions
-                .map(option => {
-                const isSelected = selectedRecurrence === option.id;
-                return (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.optionButton,
-                      isSelected && styles.selectedOption,
-                    ]}
-                    onPress={() => onRecurrenceSelect(option.id)}
-                    activeOpacity={0.7}>
-                    <View style={styles.optionContent}>
-                      <View style={styles.optionLeft}>
-                        <View style={styles.optionIconContainer}>
-                          <Icon
-                            name="repeat-outline"
-                            size={20}
-                            color={
-                              isSelected ? colors.primary : colors.textSecondary
-                            }
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            styles.optionText,
-                            isSelected && styles.selectedOptionText,
-                          ]}>
-                          {option.name}
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Icon
-                          name="checkmark"
-                          size={20}
-                          color={colors.primary}
-                        />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-                })
-            ) : (
-              <Text style={styles.noOptionsText}>No recurrence options available</Text>
-            )}
-
-            {/* Due Date Field */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Due Date</Text>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.field,
-                styles.dueDateField,
-                !selectedDueDate && styles.fieldEmpty,
-              ]}
-              onPress={onDueDatePress}
-              activeOpacity={0.7}>
-              <View style={styles.fieldLeft}>
-                <View style={styles.iconContainer}>
-                  <Icon
-                    name="calendar-outline"
-                    size={20}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.fieldContent}>
-                  <Text style={styles.fieldLabel}>Due Date</Text>
-                  <Text
-                    style={[
-                      styles.fieldText,
-                      !selectedDueDate && styles.placeholderText,
-                    ]}>
-                    {getDueDateDisplayText()}
-                  </Text>
-                </View>
-              </View>
-              <Icon
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-
-        <View style={styles.footer}>
+        <View style={styles.form}>
+          {/* Recurrence Dropdown Field */}
           <TouchableOpacity
             style={[
-              styles.continueButton,
-              canContinue && styles.continueButtonActive,
+              styles.field,
+              !selectedRecurrence || selectedRecurrence === 'none' ? styles.fieldEmpty : null,
             ]}
-            onPress={onContinue}
-            disabled={!canContinue}
+            onPress={() => setShowPicker(true)}
             activeOpacity={0.7}>
-            <Text
-              style={[
-                styles.continueButtonText,
-                canContinue && styles.continueButtonTextActive,
-              ]}>
-              Continue
-            </Text>
+            <View style={styles.fieldLeft}>
+              <View style={styles.iconContainer}>
+                <Icon
+                  name="repeat-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.fieldText,
+                  (!selectedRecurrence || selectedRecurrence === 'none') && styles.placeholderText,
+                ]}>
+                {getRecurrenceDisplayText()}
+              </Text>
+            </View>
+            <Icon
+              name="chevron-down"
+              size={20}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
 
+          {/* Due Date Field */}
           <TouchableOpacity
-            style={styles.skipButton}
-            onPress={handleClose}
+            style={[
+              styles.field,
+              !selectedDueDate && styles.fieldEmpty,
+            ]}
+            onPress={onDueDatePress}
             activeOpacity={0.7}>
-            <Text style={styles.skipButtonText}>Cancel</Text>
+            <View style={styles.fieldLeft}>
+              <View style={styles.iconContainer}>
+                <Icon
+                  name="calendar-outline"
+                  size={20}
+                  color={colors.primary}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.fieldText,
+                  !selectedDueDate && styles.placeholderText,
+                ]}>
+                {getDueDateDisplayText()}
+              </Text>
+            </View>
+            <Icon
+              name="chevron-forward"
+              size={20}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* Recurrence Picker Modal */}
+      <Modal
+        visible={showPicker}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowPicker(false)}>
+        <TouchableOpacity
+          style={styles.pickerBackdrop}
+          onPress={() => setShowPicker(false)}
+          activeOpacity={1}>
+          <View style={styles.pickerContent}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Select Frequency</Text>
+            </View>
+            {filteredOptions.map(option => {
+              const isSelected = selectedRecurrence === option.id;
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  style={styles.pickerOption}
+                  onPress={() => handleRecurrenceSelect(option.id)}
+                  activeOpacity={0.7}>
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      isSelected && styles.pickerOptionTextSelected,
+                    ]}>
+                    {option.name}
+                  </Text>
+                  {isSelected && (
+                    <Icon name="checkmark" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Animated.View>
   );
 };
@@ -258,7 +269,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     width: screenWidth,
-    maxHeight: '80%',
+    paddingBottom: 40,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -4},
     shadowOpacity: 0.25,
@@ -270,7 +281,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 24,
-    paddingBottom: 8,
+    paddingBottom: 24,
+  },
+  headerPlaceholder: {
+    width: 32,
   },
   title: {
     fontSize: 20,
@@ -283,83 +297,9 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 4,
   },
-  subtitle: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  subtitleText: {
-    fontSize: 14,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  scrollView: {
-    flexGrow: 1,
-  },
   form: {
     paddingHorizontal: 24,
     paddingBottom: 20,
-  },
-  sectionHeader: {
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-  },
-  optionButton: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  selectedOption: {
-    borderColor: colors.primary,
-    backgroundColor: `${colors.primary}0D`,
-  },
-  optionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  optionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  optionIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  selectedOptionText: {
-    fontWeight: '500',
-    color: colors.primary,
-  },
-  noOptionsText: {
-    fontSize: 16,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    padding: 20,
   },
   field: {
     flexDirection: 'row',
@@ -391,64 +331,60 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: colors.overlayLight,
   },
-  fieldContent: {
-    flex: 1,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
   fieldText: {
     fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',
     color: colors.textPrimary,
+    flex: 1,
   },
   placeholderText: {
     color: colors.textSecondary,
   },
-  recurrenceField: {
-    // Specific styling for recurrence field if needed
-  },
-  dueDateField: {
-    // Specific styling for due date field if needed
-  },
-  footer: {
-    padding: 24,
-    paddingTop: 16,
-  },
-  continueButton: {
-    backgroundColor: colors.overlayLight,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+  // Picker Modal Styles
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  continueButtonActive: {
-    backgroundColor: '#FF6B85',
+  pickerContent: {
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    width: screenWidth - 48,
+    maxWidth: 320,
+    overflow: 'hidden',
   },
-  continueButtonText: {
+  pickerHeader: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.overlayLight,
+  },
+  pickerTitle: {
     fontSize: 16,
     fontWeight: '600',
     fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+    textAlign: 'center',
   },
-  continueButtonTextActive: {
-    color: colors.background,
-  },
-  skipButton: {
+  pickerOption: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.overlayLight,
   },
-  skipButtonText: {
-    fontSize: 14,
+  pickerOptionText: {
+    fontSize: 16,
     fontWeight: '400',
     fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+  },
+  pickerOptionTextSelected: {
+    color: colors.primary,
+    fontWeight: '500',
   },
 });
 
