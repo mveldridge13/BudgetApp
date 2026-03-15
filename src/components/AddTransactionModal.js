@@ -204,7 +204,7 @@ const AddTransactionModal = ({
   };
 
   // Check if we're in compact mode (one-off transactions OR editing recurring)
-  const isCompactMode = !isRecurringTransaction || isEditMode;
+  const isCompactMode = true; // Always use windowed/compact mode for modern UI
 
   // Navigation functions
   const showCategoryPicker = () => {
@@ -554,6 +554,7 @@ const AddTransactionModal = ({
         onTransactionTypeChange={onTransactionTypeChange}
         selectedCategory={selectedCategory}
         isLoading={isLoading}
+        skipEntryAnimation={true}
       />
     );
   }
@@ -570,6 +571,7 @@ const AddTransactionModal = ({
         getCategoryById={getCategoryById}
         isLoading={isLoading}
         onAddSubcategory={onAddSubcategory}
+        skipEntryAnimation={true}
       />
     );
   }
@@ -593,6 +595,7 @@ const AddTransactionModal = ({
         selectedRecurrence={selectedRecurrence}
         selectedDueDate={selectedDueDate}
         recurrenceOptions={recurrenceOptions}
+        skipEntryAnimation={true}
       />
     );
   }

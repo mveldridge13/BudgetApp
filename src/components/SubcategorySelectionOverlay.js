@@ -27,35 +27,42 @@ const SubcategorySelectionOverlay = ({
   getCategoryById,
   isLoading,
   onAddSubcategory,
+  skipEntryAnimation,
 }) => {
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(skipEntryAnimation ? 0 : 300)).current;
+  const fadeAnim = useRef(new Animated.Value(skipEntryAnimation ? 1 : 0)).current;
   const keyboardAnim = useRef(new Animated.Value(0)).current;
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      // Reset animation values before starting
-      slideAnim.setValue(300);
-      fadeAnim.setValue(0);
-      keyboardAnim.setValue(0);
+      if (skipEntryAnimation) {
+        // Instant appearance
+        slideAnim.setValue(0);
+        fadeAnim.setValue(1);
+      } else {
+        // Reset animation values before starting
+        slideAnim.setValue(300);
+        fadeAnim.setValue(0);
+        keyboardAnim.setValue(0);
 
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 100);
+        setTimeout(() => {
+          Animated.parallel([
+            Animated.timing(slideAnim, {
+              toValue: 0,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 100);
+      }
     }
-  }, [visible, slideAnim, fadeAnim, keyboardAnim]);
+  }, [visible, slideAnim, fadeAnim, keyboardAnim, skipEntryAnimation]);
 
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener(

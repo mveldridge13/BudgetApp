@@ -32,34 +32,41 @@ const AmountEntryOverlay = ({
   selectedRecurrence,
   selectedDueDate,
   recurrenceOptions,
+  skipEntryAnimation,
 }) => {
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(skipEntryAnimation ? 0 : 300)).current;
+  const fadeAnim = useRef(new Animated.Value(skipEntryAnimation ? 1 : 0)).current;
   const keyboardAnim = useRef(new Animated.Value(0)).current;
   const [isAmountFocused, setIsAmountFocused] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }, 100);
+      if (skipEntryAnimation) {
+        // Instant appearance
+        slideAnim.setValue(0);
+        fadeAnim.setValue(1);
+      } else {
+        setTimeout(() => {
+          Animated.parallel([
+            Animated.timing(slideAnim, {
+              toValue: 0,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 100);
+      }
     } else {
-      slideAnim.setValue(300);
-      fadeAnim.setValue(0);
+      slideAnim.setValue(skipEntryAnimation ? 0 : 300);
+      fadeAnim.setValue(skipEntryAnimation ? 1 : 0);
       keyboardAnim.setValue(0);
     }
-  }, [visible, slideAnim, fadeAnim, keyboardAnim]);
+  }, [visible, slideAnim, fadeAnim, keyboardAnim, skipEntryAnimation]);
 
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener(

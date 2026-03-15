@@ -63,30 +63,17 @@ const RecurrenceOverlay = ({
     // Only auto-continue if transitioning from incomplete to complete
     if (isComplete && !wasCompleteRef.current) {
       wasCompleteRef.current = true;
-      // Small delay for better UX - let the user see their selection
+      // Brief delay for user to see their selection registered
       const timer = setTimeout(() => {
         onContinue();
-      }, 300);
+      }, 150);
       return () => clearTimeout(timer);
     }
   }, [visible, selectedRecurrence, selectedDueDate, onContinue]);
 
   const handleClose = () => {
-    // Animate out before closing
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 300,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
+    // Instant transition back
+    onClose();
   };
 
   const handleRecurrenceSelect = (optionId) => {
