@@ -973,7 +973,9 @@ const AddTransactionContainer = ({
   }, [onClose]);
 
   const handleRecurrenceOverlayClose = useCallback(() => {
-    // Go back to transaction type selection
+    // Go back to transaction type selection and clear selections
+    setSelectedDueDate(null);
+    setSelectedRecurrence('none');
     setOverlayMode('transactionType');
   }, []);
 
@@ -1046,7 +1048,8 @@ const AddTransactionContainer = ({
   );
 
   const handleDebtPaymentClose = useCallback(() => {
-    // Go back to transaction type selection
+    // Go back to transaction type selection and clear due date
+    setSelectedDueDate(null);
     setOverlayMode('transactionType');
   }, []);
 

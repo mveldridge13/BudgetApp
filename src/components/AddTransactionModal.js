@@ -503,6 +503,7 @@ const AddTransactionModal = ({
           onSave={onDebtPaymentSave}
           onDueDatePress={onDebtPaymentDueDatePress}
           selectedDueDate={selectedDueDate}
+          skipEntryAnimation={true}
         />
         <CalendarModal
           visible={showCalendar}

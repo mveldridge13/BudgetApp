@@ -15,34 +15,63 @@ import {colors} from '../styles';
 
 const {width: screenWidth} = Dimensions.get('window');
 
-const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedDueDate}) => {
+const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedDueDate, skipEntryAnimation}) => {
   const [step, setStep] = useState(1); // Step 1: Name + Date, Step 2: Amounts
   const [debtName, setDebtName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
 
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(skipEntryAnimation ? 0 : 300)).current;
+  const fadeAnim = useRef(new Animated.Value(skipEntryAnimation ? 1 : 0)).current;
   const keyboardAnim = useRef(new Animated.Value(0)).current;
   const totalAmountInputRef = useRef(null);
+  const wasCompleteRef = useRef(false);
+
+  // Auto-advance to step 2 when debt name and due date are both provided
+  useEffect(() => {
+    if (!visible || step !== 1) {
+      wasCompleteRef.current = false;
+      return;
+    }
+
+    const isComplete = debtName.trim() && selectedDueDate;
+
+    if (isComplete && !wasCompleteRef.current) {
+      wasCompleteRef.current = true;
+      // Brief delay for user to see their selection registered
+      const timer = setTimeout(() => {
+        setStep(2);
+        setTimeout(() => {
+          totalAmountInputRef.current?.focus();
+        }, 100);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, step, debtName, selectedDueDate]);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      if (skipEntryAnimation) {
+        // Instant appearance
+        slideAnim.setValue(0);
+        fadeAnim.setValue(1);
+      } else {
+        Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
     } else {
-      slideAnim.setValue(300);
-      fadeAnim.setValue(0);
+      slideAnim.setValue(skipEntryAnimation ? 0 : 300);
+      fadeAnim.setValue(skipEntryAnimation ? 1 : 0);
       keyboardAnim.setValue(0);
       // Reset form
       setTimeout(() => {
@@ -50,9 +79,10 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
         setDebtName('');
         setTotalAmount('');
         setPaymentAmount('');
-      }, 400);
+        wasCompleteRef.current = false;
+      }, 100);
     }
-  }, [visible, slideAnim, fadeAnim, keyboardAnim]);
+  }, [visible, slideAnim, fadeAnim, keyboardAnim, skipEntryAnimation]);
 
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener(
@@ -85,21 +115,8 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
   }, [keyboardAnim]);
 
   const handleClose = () => {
-    // Animate out before closing
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 300,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
+    // Instant transition back
+    onClose();
   };
 
   if (!visible) {
@@ -125,23 +142,13 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
     if (selectedDueDate) {
       return selectedDueDate.toLocaleDateString();
     }
-    return 'Due Date';
-  };
-
-  const handleContinue = () => {
-    setStep(2);
-    // Auto-focus the total amount input after a short delay
-    setTimeout(() => {
-      totalAmountInputRef.current?.focus();
-    }, 400); // Match the slide animation duration
+    return 'Select Due Date';
   };
 
   const handleBack = () => {
     setStep(1);
+    wasCompleteRef.current = false;
   };
-
-  // Step 1: Can continue if debt name is provided
-  const canContinue = debtName.trim();
 
   // Step 2: Can save if total amount is valid
   const canSave = totalAmount && parseFloat(totalAmount) > 0;
@@ -202,7 +209,7 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
                 </View>
               </View>
 
-              {/* Due Date Field (Optional) */}
+              {/* Due Date Field */}
               <TouchableOpacity
                 style={[
                   styles.field,
@@ -285,44 +292,16 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
           )}
         </View>
 
-        {step === 1 ? (
-          <>
-            <TouchableOpacity
-              style={[styles.saveButton, canContinue && styles.saveButtonActive]}
-              onPress={handleContinue}
-              disabled={!canContinue}
-              activeOpacity={0.7}>
-              <Text style={[styles.saveButtonText, canContinue && styles.saveButtonTextActive]}>
-                Continue
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.skipButton}
-              onPress={handleClose}
-              activeOpacity={0.7}>
-              <Text style={styles.skipButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity
-              style={[styles.saveButton, canSave && styles.saveButtonActive]}
-              onPress={handleSave}
-              disabled={!canSave}
-              activeOpacity={0.7}>
-              <Text style={[styles.saveButtonText, canSave && styles.saveButtonTextActive]}>
-                Create Debt Goal
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.skipButton}
-              onPress={handleBack}
-              activeOpacity={0.7}>
-              <Text style={styles.skipButtonText}>Back</Text>
-            </TouchableOpacity>
-          </>
+        {step === 2 && (
+          <TouchableOpacity
+            style={[styles.saveButton, canSave && styles.saveButtonActive]}
+            onPress={handleSave}
+            disabled={!canSave}
+            activeOpacity={0.7}>
+            <Text style={[styles.saveButtonText, canSave && styles.saveButtonTextActive]}>
+              Create Debt Goal
+            </Text>
+          </TouchableOpacity>
         )}
       </Animated.View>
     </Animated.View>
@@ -484,16 +463,6 @@ const styles = StyleSheet.create({
   },
   saveButtonTextActive: {
     color: colors.textWhite,
-  },
-  skipButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  skipButtonText: {
-    fontSize: 14,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.textSecondary,
   },
 });
 
