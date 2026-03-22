@@ -284,9 +284,6 @@ class PayPeriodService {
           return false;
         }
 
-        const inPeriod =
-          transactionDate >= periodStart && transactionDate <= periodEnd;
-
         // Exclude ROLLOVER transactions - they show in transaction list but don't count as expenses
         // ROLLOVER transactions represent moving rollover funds to goals, not actual spending
         if (transaction.type === 'ROLLOVER') {
@@ -305,10 +302,40 @@ class PayPeriodService {
             transactionType === 'EXPENSE'
               ? transaction.type === 'EXPENSE' || !transaction.type
               : transaction.type === transactionType;
-          return inPeriod && matchesType;
+          if (!matchesType) {
+            return false;
+          }
         }
 
-        return inPeriod;
+        // Smart filtering to avoid double-counting:
+        // - PAID transactions: use payment date (date field)
+        // - UPCOMING/OVERDUE: use dueDate
+        // - No status (discretionary): use date
+        const dateInPeriod =
+          transactionDate >= periodStart && transactionDate <= periodEnd;
+
+        const dueDate = transaction.dueDate
+          ? new Date(transaction.dueDate)
+          : null;
+        const dueDateInPeriod =
+          dueDate &&
+          !isNaN(dueDate.getTime()) &&
+          dueDate >= periodStart &&
+          dueDate <= periodEnd;
+
+        if (transaction.status === 'PAID') {
+          // PAID: only count if payment DATE is in this period
+          return dateInPeriod;
+        } else if (
+          transaction.status === 'UPCOMING' ||
+          transaction.status === 'OVERDUE'
+        ) {
+          // UPCOMING/OVERDUE: only count if dueDate is in this period
+          return dueDateInPeriod;
+        } else {
+          // No status (discretionary): use date
+          return dateInPeriod;
+        }
       } catch (error) {
         console.error(
           'PayPeriodService: Error filtering transaction:',
@@ -402,21 +429,15 @@ class PayPeriodService {
     });
 
     // Filter transactions for the previous period
+    // Use smarter logic to avoid double-counting:
+    // - PAID transactions: count by date (payment date)
+    // - UPCOMING/OVERDUE: count by dueDate (when it's due)
     const previousPeriodTransactions = transactions.filter(transaction => {
       try {
         const transactionDate = new Date(transaction.date);
         if (isNaN(transactionDate.getTime())) {
           return false;
         }
-
-        // Use DateService for timezone-aware date comparison
-        const inPreviousPeriod = DateService.isWithinIntervalInTimezone(
-          transactionDate,
-          {
-            start: previousPeriodStart,
-            end: previousPeriodEnd,
-          },
-        );
 
         // Only include expense transactions (or transactions without type specified)
         // Exclude ROLLOVER and TRANSFER types as they don't represent actual expenses
@@ -425,18 +446,75 @@ class PayPeriodService {
           transaction.type !== 'ROLLOVER' &&
           transaction.type !== 'TRANSFER';
 
-        const included = inPreviousPeriod && isExpense;
+        if (!isExpense) {
+          return false;
+        }
+
+        // Check if date and dueDate are in the period
+        const dateInPeriod = DateService.isWithinIntervalInTimezone(
+          transactionDate,
+          {start: previousPeriodStart, end: previousPeriodEnd},
+        );
+
+        const dueDate = transaction.dueDate
+          ? new Date(transaction.dueDate)
+          : null;
+        const dueDateInPeriod =
+          dueDate &&
+          !isNaN(dueDate.getTime()) &&
+          DateService.isWithinIntervalInTimezone(dueDate, {
+            start: previousPeriodStart,
+            end: previousPeriodEnd,
+          });
+
+        // Smart filtering to avoid double-counting:
+        // - For PAID transactions: only count if payment DATE is in this period
+        // - For UPCOMING/OVERDUE: only count if dueDate is in this period
+        let included = false;
+
+        if (transaction.status === 'PAID') {
+          // PAID: use payment date (the date field)
+          included = dateInPeriod;
+          if (!dateInPeriod && dueDateInPeriod) {
+            console.log(
+              '🔄 Excluding PAID transaction (date outside period, matched by dueDate only):',
+              {
+                description: transaction.description,
+                date: transaction.date,
+                dueDate: transaction.dueDate,
+                amount: transaction.amount,
+              },
+            );
+          }
+        } else if (
+          transaction.status === 'UPCOMING' ||
+          transaction.status === 'OVERDUE'
+        ) {
+          // UPCOMING/OVERDUE: use dueDate
+          included = dueDateInPeriod;
+          if (dateInPeriod && !dueDateInPeriod) {
+            console.log(
+              '🔄 Excluding UPCOMING transaction (dueDate outside period, matched by date only):',
+              {
+                description: transaction.description,
+                date: transaction.date,
+                dueDate: transaction.dueDate,
+                amount: transaction.amount,
+              },
+            );
+          }
+        } else {
+          // No status (discretionary transactions): use date
+          included = dateInPeriod;
+        }
 
         if (included) {
           console.log('🔄 Including transaction in previous period:', {
             date: transaction.date,
+            dueDate: transaction.dueDate,
             amount: transaction.amount,
             type: transaction.type,
-          });
-        } else if (isExpense) {
-          console.log('🔄 Excluding transaction (outside period):', {
-            date: transaction.date,
-            amount: transaction.amount,
+            status: transaction.status,
           });
         }
 

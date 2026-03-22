@@ -1849,6 +1849,36 @@ const HomeContainer = ({navigation}) => {
       window.debugShowAddTransactionSpotlight =
         onboarding.debugShowAddTransactionSpotlight;
       window.debugResetOnboarding = onboarding.debugResetOnboarding;
+      window.debugRecurringTransactions = () => {
+        const recurring = transactions.filter(t => t.recurrence && t.recurrence !== 'none');
+        const phoneBill = transactions.filter(t =>
+          t.amount === 380 ||
+          (t.description && t.description.toLowerCase().includes('phone'))
+        );
+        console.log('🔄 DEBUG: All recurring transactions:', recurring.map(t => ({
+          id: t.id,
+          description: t.description,
+          amount: t.amount,
+          date: t.date,
+          dueDate: t.dueDate,
+          status: t.status,
+          recurrence: t.recurrence,
+        })));
+        console.log('🔄 DEBUG: Phone bill / $380 transactions:', phoneBill.map(t => ({
+          id: t.id,
+          description: t.description,
+          amount: t.amount,
+          date: t.date,
+          dueDate: t.dueDate,
+          status: t.status,
+          recurrence: t.recurrence,
+        })));
+        console.log('🔄 DEBUG: Current pay period info:', {
+          nextPayDate: incomeData?.nextPayDate,
+          frequency: incomeData?.frequency,
+        });
+        return { recurring, phoneBill };
+      };
       window.debugCategories = async () => {
         const currentUserId = TrendAPIService.getCurrentUserId();
         if (currentUserId) {
@@ -1887,7 +1917,7 @@ const HomeContainer = ({navigation}) => {
         return null;
       };
       console.log(
-        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugCategories(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
+        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugCategories(), window.debugRecurringTransactions(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
       );
     }
     return () => {
@@ -1895,6 +1925,7 @@ const HomeContainer = ({navigation}) => {
         delete window.reloadTournaments;
         delete window.reloadCategories;
         delete window.debugCategories;
+        delete window.debugRecurringTransactions;
         delete window.debugShowAddTransactionSpotlight;
         delete window.debugResetOnboarding;
       }
@@ -1902,6 +1933,8 @@ const HomeContainer = ({navigation}) => {
   }, [
     reloadTournaments,
     reloadCategories,
+    transactions,
+    incomeData,
     onboarding.debugShowAddTransactionSpotlight,
     onboarding.debugResetOnboarding,
   ]);
