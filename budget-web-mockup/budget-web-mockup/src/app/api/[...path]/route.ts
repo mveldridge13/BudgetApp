@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 const API_BASE_URL = process.env.API_BASE_URL || 'https://trendapp.co/api/v1';
 
 async function proxyRequest(request: NextRequest, path: string) {
-  const url = `${API_BASE_URL}/${path}`;
+  // Include query parameters from the original request
+  const searchParams = request.nextUrl.searchParams.toString();
+  const queryString = searchParams ? `?${searchParams}` : '';
+  const url = `${API_BASE_URL}/${path}${queryString}`;
   console.log(`[Proxy] ${request.method} ${url}`);
 
   // Forward headers, especially Authorization
