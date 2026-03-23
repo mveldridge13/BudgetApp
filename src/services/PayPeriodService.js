@@ -419,15 +419,6 @@ class PayPeriodService {
     const dayBeforeNextPay = subDays(nextPayDate, 1);
     const previousPeriodEnd = endOfDay(dayBeforeNextPay);
 
-    console.log('🔄 Previous period expense calculation:', {
-      frequency,
-      nextPayDate: nextPayDate.toISOString(),
-      previousPayDate: previousPayDate.toISOString(),
-      previousPeriodStart: previousPeriodStart.toISOString(),
-      previousPeriodEnd: previousPeriodEnd.toISOString(),
-      totalTransactions: transactions.length,
-    });
-
     // Filter transactions for the previous period
     // Use smarter logic to avoid double-counting:
     // - PAID transactions: count by date (payment date)
@@ -475,47 +466,15 @@ class PayPeriodService {
         if (transaction.status === 'PAID') {
           // PAID: use payment date (the date field)
           included = dateInPeriod;
-          if (!dateInPeriod && dueDateInPeriod) {
-            console.log(
-              '🔄 Excluding PAID transaction (date outside period, matched by dueDate only):',
-              {
-                description: transaction.description,
-                date: transaction.date,
-                dueDate: transaction.dueDate,
-                amount: transaction.amount,
-              },
-            );
-          }
         } else if (
           transaction.status === 'UPCOMING' ||
           transaction.status === 'OVERDUE'
         ) {
           // UPCOMING/OVERDUE: use dueDate
           included = dueDateInPeriod;
-          if (dateInPeriod && !dueDateInPeriod) {
-            console.log(
-              '🔄 Excluding UPCOMING transaction (dueDate outside period, matched by date only):',
-              {
-                description: transaction.description,
-                date: transaction.date,
-                dueDate: transaction.dueDate,
-                amount: transaction.amount,
-              },
-            );
-          }
         } else {
           // No status (discretionary transactions): use date
           included = dateInPeriod;
-        }
-
-        if (included) {
-          console.log('🔄 Including transaction in previous period:', {
-            date: transaction.date,
-            dueDate: transaction.dueDate,
-            amount: transaction.amount,
-            type: transaction.type,
-            status: transaction.status,
-          });
         }
 
         return included;
@@ -545,11 +504,6 @@ class PayPeriodService {
       },
       0,
     );
-
-    console.log('🔄 Previous period expense total:', {
-      transactionsInPeriod: previousPeriodTransactions.length,
-      totalExpenses,
-    });
 
     return totalExpenses;
   }
