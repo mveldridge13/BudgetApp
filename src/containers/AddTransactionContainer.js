@@ -1041,8 +1041,9 @@ const AddTransactionContainer = ({
             }
           }
 
-          // Close overlay
+          // Close overlay and modal first
           setOverlayMode(null);
+          onClose();
 
           // Build success message
           let successMessage = `Your ${debtData.name} debt goal has been created successfully!`;
@@ -1050,16 +1051,8 @@ const AddTransactionContainer = ({
             successMessage += `\n\nA recurring ${debtData.recurringFrequency || 'monthly'} payment of $${debtData.paymentAmount} has been set up.`;
           }
 
-          // Show success message and navigate to HomeScreen on OK
-          Alert.alert('Debt Goal Created', successMessage, [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Close the transaction modal and navigate to HomeScreen
-                onClose();
-              },
-            },
-          ]);
+          // Show success message
+          Alert.alert('Debt Goal Created', successMessage);
         } else {
           throw new Error(result.error || 'Failed to create debt goal');
         }
