@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,13 @@ const safeColors = {
 const CalendarModal = ({visible, onClose, selectedDate, onDateChange}) => {
   const currentDate = new Date();
   const [displayMonth, setDisplayMonth] = useState(new Date(selectedDate));
+
+  // Sync displayMonth when modal opens or selectedDate changes
+  useEffect(() => {
+    if (visible && selectedDate) {
+      setDisplayMonth(new Date(selectedDate));
+    }
+  }, [visible, selectedDate]);
 
   const months = [
     'January',

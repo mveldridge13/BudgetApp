@@ -52,6 +52,7 @@ const AddTransactionModal = ({
 
   // Calendar state
   showCalendar,
+  calendarMode,
 
   // Event handler props
   onAmountChange,
@@ -111,6 +112,8 @@ const AddTransactionModal = ({
   onDebtPaymentSave,
   onDebtPaymentClose,
   onDebtPaymentDueDatePress,
+  onDebtPaymentFirstPaymentDatePress,
+  selectedFirstPaymentDate,
 
   // Tournament props (simplified for container)
   showTournamentModal,
@@ -503,12 +506,13 @@ const AddTransactionModal = ({
           onSave={onDebtPaymentSave}
           onDueDatePress={onDebtPaymentDueDatePress}
           selectedDueDate={selectedDueDate}
-          skipEntryAnimation={true}
+          onFirstPaymentDatePress={onDebtPaymentFirstPaymentDatePress}
+          selectedFirstPaymentDate={selectedFirstPaymentDate}
         />
         <CalendarModal
           visible={showCalendar}
           onClose={onHideCalendar}
-          selectedDate={selectedDueDate || selectedDate}
+          selectedDate={calendarMode === 'firstPaymentDate' ? (selectedFirstPaymentDate || new Date()) : (selectedDueDate || selectedDate)}
           onDateChange={onDateChange}
         />
       </>

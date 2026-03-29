@@ -7,22 +7,30 @@ import {
   TextInput,
   Dimensions,
   Animated,
-  Platform,
   Keyboard,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
 
 const {width: screenWidth} = Dimensions.get('window');
 
-const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedDueDate, skipEntryAnimation}) => {
-  const [step, setStep] = useState(1); // Step 1: Name + Date, Step 2: Amounts
+const FREQUENCY_OPTIONS = [
+  {value: 'weekly', label: 'Weekly'},
+  {value: 'fortnightly', label: 'Fortnightly'},
+  {value: 'monthly', label: 'Monthly'},
+];
+
+const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedDueDate, onFirstPaymentDatePress, selectedFirstPaymentDate}) => {
+  const [step, setStep] = useState(1); // Step 1: Name + Date, Step 2: Amounts + Recurring
   const [debtName, setDebtName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [setupRecurringPayment, setSetupRecurringPayment] = useState(false);
+  const [recurringFrequency, setRecurringFrequency] = useState('monthly');
 
-  const slideAnim = useRef(new Animated.Value(skipEntryAnimation ? 0 : 300)).current;
-  const fadeAnim = useRef(new Animated.Value(skipEntryAnimation ? 1 : 0)).current;
+  const slideAnim = useRef(new Animated.Value(300)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const keyboardAnim = useRef(new Animated.Value(0)).current;
   const totalAmountInputRef = useRef(null);
   const wasCompleteRef = useRef(false);
@@ -51,46 +59,40 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
 
   useEffect(() => {
     if (visible) {
-      if (skipEntryAnimation) {
-        // Instant appearance
-        slideAnim.setValue(0);
-        fadeAnim.setValue(1);
-      } else {
-        Animated.parallel([
-          Animated.timing(slideAnim, {
-            toValue: 0,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else {
-      slideAnim.setValue(skipEntryAnimation ? 0 : 300);
-      fadeAnim.setValue(skipEntryAnimation ? 1 : 0);
+      slideAnim.setValue(300);
+      fadeAnim.setValue(0);
       keyboardAnim.setValue(0);
       // Reset form
-      setTimeout(() => {
-        setStep(1);
-        setDebtName('');
-        setTotalAmount('');
-        setPaymentAmount('');
-        wasCompleteRef.current = false;
-      }, 100);
+      setStep(1);
+      setDebtName('');
+      setTotalAmount('');
+      setPaymentAmount('');
+      setSetupRecurringPayment(false);
+      setRecurringFrequency('monthly');
+      wasCompleteRef.current = false;
     }
-  }, [visible, slideAnim, fadeAnim, keyboardAnim, skipEntryAnimation]);
+  }, [visible, slideAnim, fadeAnim, keyboardAnim]);
 
   useEffect(() => {
     const keyboardWillShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       event => {
-        const height = event.endCoordinates.height;
+        const keyboardHeight = event.endCoordinates.height;
         Animated.timing(keyboardAnim, {
-          toValue: -height + 90, // Move up less - leave 90px gap
+          toValue: -keyboardHeight + 90,
           duration: Platform.OS === 'ios' ? event.duration : 300,
           useNativeDriver: true,
         }).start();
@@ -133,6 +135,9 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
       totalAmount: parseFloat(totalAmount),
       paymentAmount: paymentAmount ? parseFloat(paymentAmount) : 0,
       dueDate: selectedDueDate || null,
+      setupRecurringPayment,
+      recurringFrequency: setupRecurringPayment ? recurringFrequency : null,
+      firstPaymentDate: setupRecurringPayment ? selectedFirstPaymentDate : null,
     };
 
     onSave(debtData);
@@ -145,13 +150,21 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
     return 'Select Due Date';
   };
 
+  const getFirstPaymentDateDisplayText = () => {
+    if (selectedFirstPaymentDate) {
+      return selectedFirstPaymentDate.toLocaleDateString();
+    }
+    return 'Select first payment date';
+  };
+
   const handleBack = () => {
     setStep(1);
     wasCompleteRef.current = false;
   };
 
-  // Step 2: Can save if total amount is valid
-  const canSave = totalAmount && parseFloat(totalAmount) > 0;
+  // Step 2: Can save if total amount is valid (and payment amount + first payment date if recurring is enabled)
+  const canSave = totalAmount && parseFloat(totalAmount) > 0 &&
+    (!setupRecurringPayment || (paymentAmount && parseFloat(paymentAmount) > 0 && selectedFirstPaymentDate));
 
   return (
     <Animated.View style={[styles.overlayContainer, {opacity: fadeAnim}]}>
@@ -267,27 +280,109 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
                 </View>
               </View>
 
-              {/* Payment Amount Field (Optional) */}
-              <View style={[styles.field, styles.inputField]}>
+              {/* Recurring Payment Toggle */}
+              <TouchableOpacity
+                style={styles.toggleField}
+                onPress={() => setSetupRecurringPayment(!setupRecurringPayment)}
+                activeOpacity={0.7}>
                 <View style={styles.fieldLeft}>
-                  <View style={styles.iconContainer}>
+                  <View style={[styles.iconContainer, {backgroundColor: setupRecurringPayment ? '#4CAF5026' : colors.overlayLight}]}>
                     <Icon
-                      name="card-outline"
+                      name="repeat-outline"
+                      size={20}
+                      color={setupRecurringPayment ? '#4CAF50' : colors.textSecondary}
+                    />
+                  </View>
+                  <View style={styles.toggleTextContainer}>
+                    <Text style={styles.toggleLabel}>Set up recurring payment</Text>
+                    <Text style={styles.toggleDescription}>
+                      Auto-create payment each cycle
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.toggle, setupRecurringPayment && styles.toggleActive]}>
+                  <View style={[styles.toggleKnob, setupRecurringPayment && styles.toggleKnobActive]} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Recurring Payment Options (shown when toggle is enabled) */}
+              {setupRecurringPayment && (
+                <>
+                  <View style={styles.frequencyContainer}>
+                    {FREQUENCY_OPTIONS.map(option => (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.frequencyOption,
+                          recurringFrequency === option.value && styles.frequencyOptionActive,
+                        ]}
+                        onPress={() => setRecurringFrequency(option.value)}
+                        activeOpacity={0.7}>
+                        <Text
+                          style={[
+                            styles.frequencyText,
+                            recurringFrequency === option.value && styles.frequencyTextActive,
+                          ]}>
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Recurring Payment Amount */}
+                  <View style={[styles.field, styles.inputField]}>
+                    <View style={styles.fieldLeft}>
+                      <View style={[styles.iconContainer, {backgroundColor: '#4CAF5026'}]}>
+                        <Icon
+                          name="card-outline"
+                          size={20}
+                          color="#4CAF50"
+                        />
+                      </View>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        style={[styles.input, styles.inputWithCurrency]}
+                        value={paymentAmount}
+                        onChangeText={text => setPaymentAmount(text.replace(/[^0-9.]/g, ''))}
+                        placeholder="Recurring payment amount"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                  </View>
+
+                  {/* First Payment Date */}
+                  <TouchableOpacity
+                    style={[
+                      styles.field,
+                      !selectedFirstPaymentDate && styles.fieldEmpty,
+                    ]}
+                    onPress={onFirstPaymentDatePress}
+                    activeOpacity={0.7}>
+                    <View style={styles.fieldLeft}>
+                      <View style={[styles.iconContainer, {backgroundColor: '#4CAF5026'}]}>
+                        <Icon
+                          name="calendar-outline"
+                          size={20}
+                          color="#4CAF50"
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.fieldText,
+                          !selectedFirstPaymentDate && styles.placeholderText,
+                        ]}>
+                        {getFirstPaymentDateDisplayText()}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="chevron-forward"
                       size={20}
                       color={colors.textSecondary}
                     />
-                  </View>
-                  <Text style={styles.currencySymbol}>$</Text>
-                  <TextInput
-                    style={[styles.input, styles.inputWithCurrency]}
-                    value={paymentAmount}
-                    onChangeText={text => setPaymentAmount(text.replace(/[^0-9.]/g, ''))}
-                    placeholder="Payment amount (optional)"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-              </View>
+                  </TouchableOpacity>
+                </>
+              )}
             </>
           )}
         </View>
@@ -463,6 +558,85 @@ const styles = StyleSheet.create({
   },
   saveButtonTextActive: {
     color: colors.textWhite,
+  },
+  toggleField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.overlayLight,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  toggleTextContainer: {
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+  },
+  toggleDescription: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.border,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#4CAF50',
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.textWhite,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleKnobActive: {
+    alignSelf: 'flex-end',
+  },
+  frequencyContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  frequencyOption: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: colors.overlayLight,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  frequencyOptionActive: {
+    backgroundColor: '#4CAF5015',
+    borderColor: '#4CAF50',
+  },
+  frequencyText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  frequencyTextActive: {
+    color: '#4CAF50',
   },
 });
 

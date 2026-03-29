@@ -47,6 +47,7 @@ const AddTransactionContainer = ({
     DateService.createTodayInTimezone(),
   );
   const [selectedDueDate, setSelectedDueDate] = useState(null);
+  const [selectedFirstPaymentDate, setSelectedFirstPaymentDate] = useState(null);
   const [selectedRecurrence, setSelectedRecurrence] = useState('none');
   const [selectedTransactionType, setSelectedTransactionType] =
     useState('EXPENSE');
@@ -75,7 +76,7 @@ const AddTransactionContainer = ({
 
   // Other modals state
   const [showCalendar, setShowCalendar] = useState(false);
-  const [calendarMode, setCalendarMode] = useState('transaction'); // 'transaction' or 'dueDate'
+  const [calendarMode, setCalendarMode] = useState('transaction'); // 'transaction', 'dueDate', or 'firstPaymentDate'
 
   // Tournament modal state
   const [showTournamentModal, setShowTournamentModal] = useState(false);
@@ -782,6 +783,8 @@ const AddTransactionContainer = ({
     date => {
       if (calendarMode === 'dueDate') {
         setSelectedDueDate(date);
+      } else if (calendarMode === 'firstPaymentDate') {
+        setSelectedFirstPaymentDate(date);
       } else {
         setSelectedDate(date);
       }
@@ -959,7 +962,8 @@ const AddTransactionContainer = ({
     if (type === 'recurring') {
       setOverlayMode('recurrence');
     } else if (type === 'debt') {
-      // Show debt payment overlay
+      // Show debt payment overlay - clear due date from any previous debt
+      setSelectedDueDate(null);
       setOverlayMode('debt');
     } else {
       setOverlayMode('quick');
@@ -1017,23 +1021,45 @@ const AddTransactionContainer = ({
         const result = await saveGoal(goalData);
 
         if (result.success) {
+          // If recurring payment is enabled, create linked recurring transaction
+          if (debtData.setupRecurringPayment && debtData.paymentAmount > 0 && debtData.firstPaymentDate && result.goal?.id) {
+            try {
+              const paymentDate = debtData.firstPaymentDate;
+              await TrendAPIService.createTransaction({
+                description: `${debtData.name} Payment`,
+                amount: debtData.paymentAmount,
+                type: 'EXPENSE',
+                date: paymentDate.toISOString(),
+                dueDate: paymentDate.toISOString(),
+                status: 'UPCOMING',
+                recurrence: debtData.recurringFrequency || 'monthly',
+                linkedGoalId: result.goal.id,
+              });
+            } catch (txError) {
+              console.error('Error creating linked recurring transaction:', txError);
+              // Don't fail the whole operation, goal was created successfully
+            }
+          }
+
           // Close overlay
           setOverlayMode(null);
 
+          // Build success message
+          let successMessage = `Your ${debtData.name} debt goal has been created successfully!`;
+          if (debtData.setupRecurringPayment && debtData.paymentAmount > 0) {
+            successMessage += `\n\nA recurring ${debtData.recurringFrequency || 'monthly'} payment of $${debtData.paymentAmount} has been set up.`;
+          }
+
           // Show success message and navigate to HomeScreen on OK
-          Alert.alert(
-            'Debt Goal Created',
-            `Your ${debtData.name} debt goal has been created successfully!`,
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  // Close the transaction modal and navigate to HomeScreen
-                  onClose();
-                },
+          Alert.alert('Debt Goal Created', successMessage, [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Close the transaction modal and navigate to HomeScreen
+                onClose();
               },
-            ],
-          );
+            },
+          ]);
         } else {
           throw new Error(result.error || 'Failed to create debt goal');
         }
@@ -1048,8 +1074,9 @@ const AddTransactionContainer = ({
   );
 
   const handleDebtPaymentClose = useCallback(() => {
-    // Go back to transaction type selection and clear due date
+    // Go back to transaction type selection and clear dates
     setSelectedDueDate(null);
+    setSelectedFirstPaymentDate(null);
     setOverlayMode('transactionType');
   }, []);
 
@@ -1057,6 +1084,12 @@ const AddTransactionContainer = ({
     Keyboard.dismiss();
     setShowCalendar(true);
     setCalendarMode('dueDate');
+  }, []);
+
+  const handleDebtPaymentFirstPaymentDatePress = useCallback(() => {
+    Keyboard.dismiss();
+    setShowCalendar(true);
+    setCalendarMode('firstPaymentDate');
   }, []);
 
   // ==============================================
@@ -1344,6 +1377,7 @@ const AddTransactionContainer = ({
       currentSubcategoryData={currentSubcategoryData}
       // Calendar state
       showCalendar={showCalendar}
+      calendarMode={calendarMode}
       // Event handlers
       onAmountChange={handleAmountChange}
       onDescriptionChange={handleDescriptionChange}
@@ -1398,6 +1432,8 @@ const AddTransactionContainer = ({
       onDebtPaymentSave={handleDebtPaymentSave}
       onDebtPaymentClose={handleDebtPaymentClose}
       onDebtPaymentDueDatePress={handleDebtPaymentDueDatePress}
+      onDebtPaymentFirstPaymentDatePress={handleDebtPaymentFirstPaymentDatePress}
+      selectedFirstPaymentDate={selectedFirstPaymentDate}
       // Tournament props
       showTournamentModal={showTournamentModal}
       tournamentName={tournamentName}
