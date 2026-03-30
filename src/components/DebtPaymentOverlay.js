@@ -34,11 +34,18 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
   const keyboardAnim = useRef(new Animated.Value(0)).current;
   const totalAmountInputRef = useRef(null);
   const wasCompleteRef = useRef(false);
+  const [wentBack, setWentBack] = useState(false);
 
-  // Auto-advance to step 2 when debt name and due date are both provided
+  // Auto-advance to step 2 when debt name and due date are both provided (only on first fill)
   useEffect(() => {
-    if (!visible || step !== 1) {
+    if (!visible) {
       wasCompleteRef.current = false;
+      setWentBack(false);
+      return;
+    }
+
+    // Don't auto-advance if user went back
+    if (step !== 1 || wentBack) {
       return;
     }
 
@@ -55,7 +62,7 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [visible, step, debtName, selectedDueDate]);
+  }, [visible, step, debtName, selectedDueDate, wentBack]);
 
   useEffect(() => {
     if (visible) {
@@ -159,8 +166,17 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
 
   const handleBack = () => {
     setStep(1);
-    wasCompleteRef.current = false;
+    setWentBack(true);
   };
+
+  const handleContinue = () => {
+    setStep(2);
+    setTimeout(() => {
+      totalAmountInputRef.current?.focus();
+    }, 100);
+  };
+
+  const canContinue = debtName.trim() && selectedDueDate;
 
   // Step 2: Can save if total amount is valid (and payment amount + first payment date if recurring is enabled)
   const canSave = totalAmount && parseFloat(totalAmount) > 0 &&
@@ -253,6 +269,19 @@ const DebtPaymentOverlay = ({visible, onClose, onSave, onDueDatePress, selectedD
                   color={colors.textSecondary}
                 />
               </TouchableOpacity>
+
+              {/* Continue button - only shown if user went back */}
+              {wentBack && (
+                <TouchableOpacity
+                  style={[styles.continueButton, canContinue && styles.continueButtonActive]}
+                  onPress={handleContinue}
+                  disabled={!canContinue}
+                  activeOpacity={0.7}>
+                  <Text style={[styles.continueButtonText, canContinue && styles.continueButtonTextActive]}>
+                    Continue
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           ) : (
             // Step 2: Total Amount + Payment Amount
@@ -429,7 +458,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     padding: 24,
-    paddingBottom: 90,
+    paddingBottom: 40,
     width: screenWidth,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -4},
@@ -538,6 +567,26 @@ const styles = StyleSheet.create({
   },
   dueDateField: {
     // Specific styling for due date field if needed
+  },
+  continueButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: colors.border,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  continueButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  continueButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  continueButtonTextActive: {
+    color: colors.textWhite,
   },
   saveButton: {
     paddingVertical: 16,
