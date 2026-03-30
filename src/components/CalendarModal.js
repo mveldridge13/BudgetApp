@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Modal,
   Dimensions,
 } from 'react-native';
@@ -297,15 +298,19 @@ const CalendarModal = ({visible, onClose, selectedDate, onDateChange}) => {
       transparent={true}
       animationType="fade"
       onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.calendarContainer}>
-            {pickerMode === 'calendar'
-              ? renderCalendarView()
-              : renderMonthYearPicker()}
-          </View>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback>
+            <View style={styles.modalContent}>
+              <View style={styles.calendarContainer}>
+                {pickerMode === 'calendar'
+                  ? renderCalendarView()
+                  : renderMonthYearPicker()}
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
