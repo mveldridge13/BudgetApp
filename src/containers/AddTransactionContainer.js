@@ -1,6 +1,7 @@
 import React, {useState, useCallback, useEffect, useRef} from 'react';
-import {Alert, Keyboard} from 'react-native';
+import {Alert, Keyboard, DeviceEventEmitter} from 'react-native';
 import TrendAPIService from '../services/TrendAPIService';
+import TransactionCache from '../services/TransactionCache';
 import CategoryCache from '../services/CategoryCache';
 import AddTransactionModal from '../components/AddTransactionModal';
 import {useAppSettings} from '../contexts/AppSettingsContext';
@@ -1025,7 +1026,7 @@ const AddTransactionContainer = ({
           if (debtData.setupRecurringPayment && debtData.paymentAmount > 0 && debtData.firstPaymentDate && result.goal?.id) {
             try {
               const paymentDate = debtData.firstPaymentDate;
-              await TrendAPIService.createTransaction({
+              const newTransaction = await TrendAPIService.createTransaction({
                 description: `${debtData.name} Payment`,
                 amount: debtData.paymentAmount,
                 type: 'EXPENSE',
@@ -1035,6 +1036,15 @@ const AddTransactionContainer = ({
                 recurrence: debtData.recurringFrequency || 'monthly',
                 linkedGoalId: result.goal.id,
               });
+
+              // Add to cache and notify HomeContainer
+              if (newTransaction) {
+                const currentUserId = TrendAPIService.getCurrentUserId();
+                if (currentUserId) {
+                  await TransactionCache.upsertTransaction(currentUserId, newTransaction);
+                }
+                DeviceEventEmitter.emit('transactionsChanged');
+              }
             } catch (txError) {
               console.error('Error creating linked recurring transaction:', txError);
               // Don't fail the whole operation, goal was created successfully

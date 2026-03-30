@@ -1065,8 +1065,18 @@ const HomeContainer = ({navigation}) => {
     } catch (error) {
       console.error('HomeContainer: Transaction delete failed:', error);
 
-      // Rollback (UI + Cache)
-      if (deletedTransaction) {
+      // Check if it's a 404 error - transaction already deleted, don't rollback
+      const is404 = error?.message?.includes('404') || error?.status === 404;
+
+      if (is404) {
+        // Transaction doesn't exist on backend - remove from UI and cache instead of rollback
+        if (deletedTransaction && currentUserId) {
+          TransactionCache.removeTransaction(currentUserId, deletedTransaction.id).catch(err => {
+            console.warn('💳 Failed to remove transaction from cache:', err);
+          });
+        }
+      } else if (deletedTransaction) {
+        // Rollback (UI + Cache) for other errors
         setTransactions(prev => {
           const updated = sortTransactionsByDate([deletedTransaction, ...prev]);
           return updated;

@@ -156,18 +156,9 @@ const GoalCard = ({
   };
 
   const handleDeletePress = () => {
-    Alert.alert(
-      'Delete Goal',
-      `Are you sure you want to delete "${safeGoal.title}"? This action cannot be undone.`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => onDelete && onDelete(safeGoal.id),
-        },
-      ],
-    );
+    // Pass the full goal to parent for confirmation handling
+    // Parent will check for linked transactions and show appropriate warning
+    onDelete && onDelete(safeGoal);
   };
 
   const handleCompletePress = () => {

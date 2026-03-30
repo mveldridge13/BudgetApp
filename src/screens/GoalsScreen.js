@@ -9,6 +9,7 @@ import {
   RefreshControl,
   AppState,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
@@ -20,6 +21,8 @@ import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
 import {formatCurrencySync} from '../utils/currencyHelper';
 import {useAppSettings} from '../contexts/AppSettingsContext';
+import TrendAPIService from '../services/TrendAPIService';
+import TransactionCache from '../services/TransactionCache';
 
 const GoalsScreen = ({route, navigation}) => {
   const insets = useSafeAreaInsets();
@@ -252,11 +255,69 @@ const GoalsScreen = ({route, navigation}) => {
   );
 
   const handleDeleteGoal = useCallback(
-    async goalId => {
+    async goal => {
       try {
-        await deleteGoal(goalId);
+        // Check for linked transactions
+        let linkedTransactions = [];
+        try {
+          const response = await TrendAPIService.getTransactions({
+            linkedGoalId: goal.id,
+          });
+          linkedTransactions = Array.isArray(response)
+            ? response
+            : response?.transactions || response?.data || [];
+        } catch (fetchError) {
+          console.warn('Error fetching linked transactions:', fetchError);
+        }
+
+        // Build confirmation message
+        let message = `Are you sure you want to delete "${goal.title}"? This action cannot be undone.`;
+        if (linkedTransactions.length > 0) {
+          message += `\n\nThis will also delete ${linkedTransactions.length} linked recurring transaction${linkedTransactions.length > 1 ? 's' : ''}.`;
+        }
+
+        // Show confirmation alert
+        Alert.alert('Delete Goal', message, [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Delete linked transactions first
+                let deletedTransactions = false;
+                const currentUserId = TrendAPIService.getCurrentUserId();
+                for (const transaction of linkedTransactions) {
+                  const txId = transaction.id || transaction._id;
+                  if (txId) {
+                    try {
+                      await TrendAPIService.deleteTransaction(txId);
+                      // Also remove from local cache
+                      if (currentUserId) {
+                        await TransactionCache.removeTransaction(currentUserId, txId);
+                      }
+                      deletedTransactions = true;
+                    } catch (txError) {
+                      console.warn('Error deleting linked transaction:', txError);
+                    }
+                  }
+                }
+                // Emit event to refresh transactions in HomeContainer
+                if (deletedTransactions) {
+                  DeviceEventEmitter.emit('transactionsChanged');
+                }
+                // Then delete the goal
+                await deleteGoal(goal.id);
+              } catch (error) {
+                console.warn('Error deleting goal:', error);
+                Alert.alert('Error', 'Failed to delete goal. Please try again.');
+              }
+            },
+          },
+        ]);
       } catch (error) {
-        console.warn('Error deleting goal:', error);
+        console.warn('Error in delete goal flow:', error);
+        Alert.alert('Error', 'Something went wrong. Please try again.');
       }
     },
     [deleteGoal],
