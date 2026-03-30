@@ -7,10 +7,10 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  Switch,
   Alert,
   Share,
 } from 'react-native';
+import CustomToggle from '../components/CustomToggle';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -470,15 +470,10 @@ const SettingsScreen = ({navigation}) => {
                     </Text>
                   </View>
                 </View>
-                <Switch
+                <CustomToggle
                   value={isPro || false}
                   onValueChange={handleTogglePro}
-                  trackColor={{
-                    false: colors.border,
-                    true: colors.warning,
-                  }}
-                  thumbColor={isPro ? colors.textWhite : colors.textSecondary}
-                  ios_backgroundColor={colors.border}
+                  activeColor={colors.warning}
                 />
               </View>
             ) : (
@@ -528,19 +523,10 @@ const SettingsScreen = ({navigation}) => {
                       </Text>
                     </View>
                   </View>
-                  <Switch
+                  <CustomToggle
                     value={appSettings.notifications || false}
                     onValueChange={() => handleToggleSetting('notifications')}
-                    trackColor={{
-                      false: colors.border,
-                      true: colors.primary,
-                    }}
-                    thumbColor={
-                      appSettings.notifications
-                        ? colors.textWhite
-                        : colors.textSecondary
-                    }
-                    ios_backgroundColor={colors.border}
+                    activeColor={colors.primary}
                   />
                 </View>
 
@@ -560,19 +546,10 @@ const SettingsScreen = ({navigation}) => {
                       </Text>
                     </View>
                   </View>
-                  <Switch
+                  <CustomToggle
                     value={appSettings.biometricAuth || false}
                     onValueChange={() => handleToggleSetting('biometricAuth')}
-                    trackColor={{
-                      false: colors.border,
-                      true: colors.primary,
-                    }}
-                    thumbColor={
-                      appSettings.biometricAuth
-                        ? colors.textWhite
-                        : colors.textSecondary
-                    }
-                    ios_backgroundColor={colors.border}
+                    activeColor={colors.primary}
                   />
                 </View>
 
