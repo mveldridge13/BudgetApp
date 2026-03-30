@@ -1051,7 +1051,9 @@ const AddTransactionContainer = ({
             }
           }
 
-          // Close overlay and modal first
+          // Reset dates and close overlay/modal
+          setSelectedDueDate(null);
+          setSelectedFirstPaymentDate(null);
           setOverlayMode(null);
           onClose();
 
