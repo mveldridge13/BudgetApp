@@ -36,7 +36,6 @@ class CategoryCache {
         isStale,
       };
     } catch (error) {
-      console.error('📂 CategoryCache: Get error:', error);
       return null;
     }
   }
@@ -57,7 +56,6 @@ class CategoryCache {
       await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       return true;
     } catch (error) {
-      console.error('📂 CategoryCache: Set error:', error);
       return false;
     }
   }
@@ -70,10 +68,8 @@ class CategoryCache {
     try {
       const cacheKey = this.getCacheKey(userId);
       await AsyncStorage.removeItem(cacheKey);
-      console.log('📂 CategoryCache: Cache cleared');
       return true;
     } catch (error) {
-      console.error('📂 CategoryCache: Clear error:', error);
       return false;
     }
   }
@@ -117,7 +113,6 @@ class CategoryCache {
       }
       return false;
     } catch (error) {
-      console.error('📂 CategoryCache: Invalidate error:', error);
       return false;
     }
   }
@@ -163,7 +158,6 @@ class CategoryCache {
         })),
       };
     } catch (error) {
-      console.error('📂 CategoryCache: Stats error:', error);
       return {
         exists: false,
         error: error.message,
@@ -201,7 +195,6 @@ class CategoryCache {
 
       return await this.set(categories, userId);
     } catch (error) {
-      console.error('📂 CategoryCache: Upsert error:', error);
       return false;
     }
   }
@@ -224,7 +217,6 @@ class CategoryCache {
 
       return true;
     } catch (error) {
-      console.error('📂 CategoryCache: Remove error:', error);
       return false;
     }
   }

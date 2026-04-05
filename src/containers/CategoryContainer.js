@@ -46,8 +46,6 @@ const CategoryContainer = ({navigation, route}) => {
 
       // Check if this category has nested subcategories
       if (cat.subcategories && Array.isArray(cat.subcategories)) {
-        console.log('🔧 FLATTEN - Found nested subcategories in:', cat.name, 'count:', cat.subcategories.length);
-
         // Flatten nested subcategories and add parentId
         cat.subcategories.forEach(subcat => {
           const flatSubcat = {
@@ -63,22 +61,6 @@ const CategoryContainer = ({navigation, route}) => {
     const uniqueCategories = flattenedCategories.filter((category, index, array) =>
       array.findIndex(c => c.id === category.id) === index
     );
-
-    console.log('🔧 FLATTEN - Total categories after flattening:', flattenedCategories.length);
-    console.log('🔧 FLATTEN - Unique categories after deduplication:', uniqueCategories.length);
-
-    if (flattenedCategories.length !== uniqueCategories.length) {
-      console.log('🔧 FLATTEN - Removed duplicates:', flattenedCategories.length - uniqueCategories.length);
-    }
-
-    // 🔍 DEBUG: Check "Other" category specifically
-    const otherCategory = uniqueCategories.find(cat => cat.name && cat.name.toLowerCase().includes('other'));
-    if (otherCategory) {
-      const otherSubcategories = uniqueCategories.filter(cat => cat.parentId === otherCategory.id);
-      console.log('🔍 FLATTEN - Other category found:', otherCategory.name, 'ID:', otherCategory.id);
-      console.log('🔍 FLATTEN - Other subcategories count:', otherSubcategories.length);
-      console.log('🔍 FLATTEN - Other subcategories:', otherSubcategories.map(s => s.name));
-    }
 
     return uniqueCategories;
   }, []);
@@ -154,8 +136,11 @@ const CategoryContainer = ({navigation, route}) => {
       setIsLoading(true);
       setErrorState(null);
 
+      // Get current user ID for cache operations
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       // 🔄 CACHE-FIRST: Load from cache immediately
-      const cached = await CategoryCache.get();
+      const cached = currentUserId ? await CategoryCache.get(currentUserId) : null;
       if (cached && cached.data) {
         const transformedCategories = transformCategoriesForUI(cached.data);
         setCategories(transformedCategories);
@@ -170,14 +155,13 @@ const CategoryContainer = ({navigation, route}) => {
       // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
       try {
         const response = await TrendAPIService.getCategories();
+        // DEBUG: Log raw API response to check subcategory presence
+        console.log('DEBUG API Response:', JSON.stringify(response, null, 2));
         const backendCategories = response?.categories || [];
 
         if (backendCategories && Array.isArray(backendCategories)) {
           // Flatten nested categories before storing in cache
           const flattenedCategories = flattenNestedCategories(backendCategories);
-
-          // Update cache in background with flattened data
-          const currentUserId = TrendAPIService.getCurrentUserId();
           if (currentUserId) {
             CategoryCache.set(flattenedCategories, currentUserId);
           }
@@ -234,11 +218,6 @@ const CategoryContainer = ({navigation, route}) => {
 
         return transformedCategory;
       } catch (creationError) {
-        console.error(
-          '➕ CategoryContainer: Error creating category:',
-          creationError,
-        );
-
         Alert.alert('Error', 'Failed to create category. Please try again.');
         return null;
       }
@@ -344,18 +323,8 @@ const CategoryContainer = ({navigation, route}) => {
           });
         });
 
-        console.log(
-          '➕ CategoryContainer: Subcategory synced successfully:',
-          realSubcategory.name,
-        );
-
         return realSubcategory;
       } catch (creationError) {
-        console.error(
-          '➕ CategoryContainer: Error creating subcategory:',
-          creationError,
-        );
-
         // Rollback optimistic update on failure
         if (currentUserId) {
           await CategoryCache.removeCategory(optimisticSubcategory.id, currentUserId);
@@ -446,34 +415,8 @@ const CategoryContainer = ({navigation, route}) => {
   useEffect(() => {
     if (visible) {
       loadCategories();
-
-      // 🐛 TEMPORARY DEBUG: Check cache contents
-      setTimeout(() => {
-        CategoryCache.get().then(cache => {
-          if (cache) {
-            console.log('🐛 DEBUG - Raw cache data:');
-            console.log('🐛 DEBUG - All categories:', cache.data.length);
-            console.log('🐛 DEBUG - Main categories:', cache.data.filter(c => !c.parentId).length);
-            console.log('🐛 DEBUG - Subcategories:', cache.data.filter(c => c.parentId).length);
-
-            const customSubcategories = cache.data.filter(c => c.parentId && !c.isSystem);
-            console.log('🐛 DEBUG - Custom subcategories:', customSubcategories.map(s => `${s.name} (parent: ${s.parentId})`));
-
-            const allSubcategories = cache.data.filter(c => c.parentId);
-            console.log('🐛 DEBUG - All subcategories with parents:');
-            allSubcategories.forEach(sub => {
-              const parent = cache.data.find(p => p.id === sub.parentId);
-              console.log(`🐛 DEBUG -   ${sub.name} → ${parent?.name || 'UNKNOWN PARENT'} (parentId: ${sub.parentId})`);
-            });
-
-            console.log('🐛 DEBUG - Transformed categories for UI:', categories.length);
-            console.log('🐛 DEBUG - Categories with subcategories:', categories.filter(c => c.hasSubcategories).map(c => `${c.name}: ${c.subcategories?.length || 0} subs`));
-          }
-        });
-      }, 1000);
-    } else {
     }
-  }, [visible, loadCategories, categories]);
+  }, [visible, loadCategories]);
 
   // ==============================================
   // RENDER

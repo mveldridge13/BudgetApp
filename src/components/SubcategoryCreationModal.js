@@ -59,7 +59,7 @@ const SubcategoryCreationModal = ({
       event => {
         const keyboardHeight = event.endCoordinates.height;
         Animated.timing(keyboardAnim, {
-          toValue: -keyboardHeight + 50,
+          toValue: -keyboardHeight + 90,
           duration: Platform.OS === 'ios' ? event.duration : 300,
           useNativeDriver: true,
         }).start();
@@ -293,9 +293,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
     paddingTop: 24,
-    paddingBottom: 20,
+    paddingBottom: 90,
     width: screenWidth,
-    height: '50%', // Fixed height like working overlays
     shadowColor: '#000',
     shadowOffset: {width: 0, height: -4},
     shadowOpacity: 0.25,
@@ -383,7 +382,6 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     gap: 12,
-    paddingBottom: 10, // Extra padding to ensure buttons are visible
   },
   cancelButton: {
     flex: 1,
@@ -406,7 +404,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveButtonDisabled: {
-    backgroundColor: colors.textSecondary,
+    backgroundColor: colors.overlayLight,
   },
   saveButtonText: {
     fontSize: 16,
@@ -415,7 +413,7 @@ const styles = StyleSheet.create({
     color: colors.textWhite,
   },
   saveButtonTextDisabled: {
-    color: colors.overlayLight,
+    color: colors.textSecondary,
   },
 });
 

@@ -1,8 +1,11 @@
+export type CategoryType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
+
 export interface Category {
   id: string;
   name: string;
   color: string;
   icon: string;
+  type: CategoryType;
   parentId?: string;
   isArchived: boolean;
   isSystem?: boolean;
@@ -27,6 +30,7 @@ export interface CreateCategoryData {
   name: string;
   color: string;
   icon: string;
+  type: CategoryType;
   parentId?: string;
 }
 

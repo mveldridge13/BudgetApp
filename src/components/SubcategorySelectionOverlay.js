@@ -7,8 +7,6 @@ import {
   Dimensions,
   Animated,
   ScrollView,
-  Keyboard,
-  Platform,
   Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -31,7 +29,6 @@ const SubcategorySelectionOverlay = ({
 }) => {
   const slideAnim = useRef(new Animated.Value(skipEntryAnimation ? 0 : 300)).current;
   const fadeAnim = useRef(new Animated.Value(skipEntryAnimation ? 1 : 0)).current;
-  const keyboardAnim = useRef(new Animated.Value(0)).current;
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
@@ -44,7 +41,6 @@ const SubcategorySelectionOverlay = ({
         // Reset animation values before starting
         slideAnim.setValue(300);
         fadeAnim.setValue(0);
-        keyboardAnim.setValue(0);
 
         setTimeout(() => {
           Animated.parallel([
@@ -62,37 +58,10 @@ const SubcategorySelectionOverlay = ({
         }, 100);
       }
     }
-  }, [visible, slideAnim, fadeAnim, keyboardAnim, skipEntryAnimation]);
+  }, [visible, slideAnim, fadeAnim, skipEntryAnimation]);
 
-  useEffect(() => {
-    const keyboardWillShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      event => {
-        const keyboardHeight = event.endCoordinates.height;
-        Animated.timing(keyboardAnim, {
-          toValue: -keyboardHeight + 50,
-          duration: Platform.OS === 'ios' ? event.duration : 300,
-          useNativeDriver: true,
-        }).start();
-      },
-    );
-
-    const keyboardWillHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      event => {
-        Animated.timing(keyboardAnim, {
-          toValue: 0,
-          duration: Platform.OS === 'ios' ? event.duration : 300,
-          useNativeDriver: true,
-        }).start();
-      },
-    );
-
-    return () => {
-      keyboardWillShowListener.remove();
-      keyboardWillHideListener.remove();
-    };
-  }, [keyboardAnim]);
+  // Note: No keyboard animation needed here - this overlay has no text inputs.
+  // SubcategoryCreationModal handles its own keyboard animation when it opens.
 
   if (!visible) {
     return null;
@@ -237,7 +206,7 @@ const SubcategorySelectionOverlay = ({
           style={[
             styles.overlayContent,
             {
-              transform: [{translateY: slideAnim}, {translateY: keyboardAnim}],
+              transform: [{translateY: slideAnim}],
             },
           ]}>
           <View style={styles.header}>

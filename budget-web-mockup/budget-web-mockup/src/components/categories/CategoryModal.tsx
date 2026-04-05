@@ -5,7 +5,7 @@ import { IoClose } from 'react-icons/io5';
 import { CategoryIcon } from '@/components/ui';
 import ColorPicker from './ColorPicker';
 import IconPicker from './IconPicker';
-import { Category, CategoryWithSubcategories, CreateCategoryData, UpdateCategoryData } from '@/types';
+import { Category, CategoryWithSubcategories, CreateCategoryData, UpdateCategoryData, CategoryType } from '@/types';
 
 interface CategoryModalProps {
   visible: boolean;
@@ -161,10 +161,16 @@ export default function CategoryModal({
     try {
       setSaving(true);
 
+      // For subcategories, inherit type from parent; otherwise default to EXPENSE
+      const categoryType: CategoryType = (isSubcategoryMode && parentCategory)
+        ? (parentCategory.type || 'EXPENSE')
+        : (editingCategory?.type || 'EXPENSE');
+
       const data: CreateCategoryData = {
         name: formData.name.trim(),
         color: formData.color,
         icon: formData.icon,
+        type: categoryType,
       };
 
       // Add parentId for subcategories
