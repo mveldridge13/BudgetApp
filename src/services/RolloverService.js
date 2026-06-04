@@ -283,12 +283,16 @@ class RolloverService {
   }
 
   /**
-   * Process goal allocations from rollover funds with optimistic updates
-   * Reduces rollover by allocated amount (supports partial allocations)
+   * Process goal allocations from rollover funds using atomic backend endpoint
+   * Backend atomically: creates contributions, deducts rolloverAmount, updates/dismisses notification
+   *
+   * @param {Array} goalAllocations - Array of { goalId, amount, goal } objects
+   * @param {Function} addGoalContribution - Unused, kept for backward compatibility
+   * @param {number} currentRolloverAmount - Current rollover amount for optimistic updates
    */
   static async processGoalAllocations(
     goalAllocations,
-    addGoalContribution,
+    _addGoalContribution,
     currentRolloverAmount,
   ) {
     try {
@@ -315,62 +319,51 @@ class RolloverService {
         new Date().toISOString(),
       );
 
-      // Add contributions to selected goals with ROLLOVER type
-      const goalPromises = goalAllocations.map(async allocation => {
-        try {
-          // Pass 'ROLLOVER' as the contribution type to avoid double-counting in totalIncomePayments
-          await addGoalContribution(
-            allocation.goalId,
-            allocation.amount,
-            'ROLLOVER',
-          );
-          console.log(
-            `🎯 RolloverService: Added $${allocation.amount.toFixed(
-              2,
-            )} rollover allocation to goal: ${allocation.goal.title}`,
-          );
-          return true;
-        } catch (goalError) {
-          console.error(
-            `🎯 RolloverService: Failed to add contribution to goal ${allocation.goal.title}:`,
-            goalError,
-          );
-          return false;
-        }
-      });
+      // Format allocations for backend (only goalId and amount needed)
+      const formattedAllocations = goalAllocations.map(alloc => ({
+        goalId: alloc.goalId,
+        amount: alloc.amount,
+      }));
 
-      // Background sync - update rollover amount on backend
-      const [goalResults] = await Promise.all([
-        Promise.all(goalPromises),
-        TrendAPIService.processRollover({
-          amount: newRolloverAmount,
-        }),
-      ]);
+      // Generate description with current date
+      const today = new Date();
+      const description = `Rollover allocation - ${today.toLocaleDateString()}`;
 
-      // Update cache with confirmed data
+      // Call atomic backend endpoint
+      const response = await TrendAPIService.allocateRolloverToGoals(
+        formattedAllocations,
+        description,
+      );
+
+      console.log('🎯 RolloverService: Backend response:', response);
+
+      // Update cache with confirmed data from backend
+      const confirmedRolloverAmount = response?.newRolloverAmount ?? newRolloverAmount;
       await RolloverCache.setRolloverAmount({
-        rolloverAmount: newRolloverAmount,
+        rolloverAmount: confirmedRolloverAmount,
         lastRolloverDate: new Date().toISOString(),
       });
 
-      console.log('🎯 RolloverService: Rollover amount reduced successfully:', {
+      // Clear banner cache if fully allocated
+      if (confirmedRolloverAmount === 0) {
+        await RolloverCache.clearRolloverBanner();
+      }
+
+      console.log('🎯 RolloverService: Rollover allocation completed:', {
         previousAmount: currentRolloverAmount,
         totalAllocated,
-        newAmount: newRolloverAmount,
+        newAmount: confirmedRolloverAmount,
       });
 
       const allocatedGoalsCount = goalAllocations.length;
-      const successfulAllocations = goalResults.filter(
-        result => result === true,
-      ).length;
 
       const result = {
         success: true,
-        newRolloverAmount,
-        shouldMarkProcessed: newRolloverAmount === 0, // Only mark as processed if fully allocated
+        newRolloverAmount: confirmedRolloverAmount,
+        shouldMarkProcessed: confirmedRolloverAmount === 0,
         message: `$${totalAllocated.toFixed(
           2,
-        )} allocated to ${successfulAllocations}/${allocatedGoalsCount} goal${
+        )} allocated to ${allocatedGoalsCount} goal${
           allocatedGoalsCount > 1 ? 's' : ''
         }`,
       };
@@ -505,7 +498,7 @@ class RolloverService {
     currentRollover,
     incomeData,
     goals,
-    addGoalContribution,
+    _addGoalContribution,
     navigation,
   }) {
     try {
@@ -710,12 +703,11 @@ class RolloverService {
         '🔄 RolloverService: Confirming rollover banner - user accepts rollover',
       );
 
-      // Clear the banner from cache since user has acknowledged it
-      await RolloverCache.clearRolloverBanner();
+      // Call backend to dismiss the notification
+      await TrendAPIService.dismissRolloverNotification();
 
-      // Note: The rollover amount is already integrated into the user's balance
-      // and available in their spendable pool from the auto-rollover process.
-      // No additional API calls needed - the X click just confirms acceptance.
+      // Clear the banner from local cache
+      await RolloverCache.clearRolloverBanner();
 
       console.log('🔄 RolloverService: Rollover confirmed, banner dismissed');
       return {

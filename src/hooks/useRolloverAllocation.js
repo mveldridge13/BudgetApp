@@ -48,7 +48,7 @@ const useRolloverAllocation = (rolloverParams, loadGoals) => {
 
   /**
    * Main allocation function - allocates rollover funds to a goal
-   * Follows sequential backend operations then single reload pattern
+   * Uses atomic backend endpoint for rollover allocation
    */
   const allocateToGoal = useCallback(
     async goalId => {
@@ -62,23 +62,20 @@ const useRolloverAllocation = (rolloverParams, loadGoals) => {
       setError(null);
 
       try {
-        // Step 1: Add contribution to goal
-        const contributionData = {
-          amount: rolloverData.amount,
-          type: 'ROLLOVER',
-          description: `Rollover allocation from ${rolloverData.frequency} period`,
-          date: new Date().toISOString(),
-        };
+        const description = `Rollover allocation from ${rolloverData.frequency} period`;
 
-        await TrendAPIService.addGoalContribution(goalId, contributionData);
+        // Use atomic backend endpoint for rollover allocation
+        const response = await TrendAPIService.allocateRolloverToGoals(
+          [{goalId, amount: rolloverData.amount}],
+          description,
+        );
 
-        // Step 2: Process rollover on backend (reduce by allocated amount)
-        const remainingRollover = rolloverData.amount - contributionData.amount;
-        await TrendAPIService.processRollover({
-          amount: Math.max(0, remainingRollover), // Reduce rollover by allocated amount, minimum 0
-        });
+        console.log('🔄 useRolloverAllocation: Backend response:', response);
 
-        // Step 3: Emit event to notify other components (HomeContainer)
+        // Get remaining rollover from backend response
+        const remainingRollover = response?.newRolloverAmount ?? 0;
+
+        // Emit event to notify other components (HomeContainer)
         try {
           DeviceEventEmitter.emit('goalIncomePaymentMade', {
             goalId: goalId,
@@ -93,37 +90,29 @@ const useRolloverAllocation = (rolloverParams, loadGoals) => {
           // Don't fail the whole operation if event emission fails
         }
 
-        // Step 4: Update rollover banner with remaining amount (if any)
-        // This allows users to make multiple partial allocations within the 3-day window
+        // Update local cache based on backend response
         if (remainingRollover > 0) {
           try {
-            const RolloverService =
-              require('../services/RolloverService').default;
+            const RolloverCache = require('../services/RolloverCache').default;
 
-            // Load existing banner to preserve the original date (don't reset 3-day timer)
-            const existingBanner = await RolloverService.loadRolloverBanner();
+            // Update cache with remaining amount
+            await RolloverCache.setRolloverAmount({
+              rolloverAmount: remainingRollover,
+              lastRolloverDate: new Date().toISOString(),
+            });
 
-            const bannerData = {
-              amount: remainingRollover,
-              frequency: rolloverData.frequency,
-              date: existingBanner?.date || new Date().toISOString(), // Preserve original date
-            };
-            await RolloverService.setRolloverBanner(bannerData);
             console.log(
-              '🔄 Updated rollover banner with remaining amount:',
+              '🔄 Updated rollover cache with remaining amount:',
               remainingRollover,
-              '(preserved original date)',
             );
-          } catch (bannerError) {
-            console.error('Failed to update rollover banner:', bannerError);
-            // Don't fail the allocation if banner update fails
+          } catch (cacheError) {
+            console.error('Failed to update rollover cache:', cacheError);
           }
         } else {
-          // No remaining rollover - clear the banner
+          // No remaining rollover - clear the banner cache
           try {
-            const RolloverService =
-              require('../services/RolloverService').default;
-            await RolloverService.confirmRolloverBanner();
+            const RolloverCache = require('../services/RolloverCache').default;
+            await RolloverCache.clearRolloverBanner();
             console.log(
               '🔄 Cleared rollover banner - full allocation completed',
             );
@@ -132,21 +121,21 @@ const useRolloverAllocation = (rolloverParams, loadGoals) => {
           }
         }
 
-        // Step 5: Single reload after all backend operations complete
-        // This follows the cache-first pattern - reload from backend to sync
+        // Reload goals after backend operations complete
         if (loadGoals) {
           await loadGoals(true); // Force refresh from backend
         }
 
         // Success - transition to completed state
         setRolloverState(ROLLOVER_STATES.COMPLETED);
+        const allocatedAmount = rolloverData.amount;
         setRolloverData(null);
         isAllocating.current = false;
 
         return {
           success: true,
           remainingRollover: Math.max(0, remainingRollover),
-          allocatedAmount: contributionData.amount,
+          allocatedAmount,
         };
       } catch (allocationError) {
         console.error('Failed to allocate rollover funds:', allocationError);

@@ -15,8 +15,8 @@ import PayPeriodService from '../services/PayPeriodService';
 const TRANSACTIONS_KEY = 'transactions';
 
 const AnalyticsContainer = () => {
-  // Get Pro status and module settings from context
-  const {isPro, moduleSettings} = useAppSettings();
+  // Get Pro status, features, and module settings from context
+  const {isPro, proFeatures, moduleSettings} = useAppSettings();
 
   // UI state only
   const [selectedPeriod, setSelectedPeriod] = useState('daily');
@@ -1005,6 +1005,7 @@ const AnalyticsContainer = () => {
     comparisonMode,
     refreshing,
     isPro,
+    proFeatures,
     showBreakdown,
 
     // ✅ UPDATED: Backend-calculated statistics with real discretionary data

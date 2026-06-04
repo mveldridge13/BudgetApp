@@ -131,7 +131,7 @@ export default function TransactionModal({
       date: dateISO, // Backend expects ISO string
       recurrence: recurrence, // Send recurrence field directly
       ...(recurrence !== 'none' && {dueDate: dueDateISO}), // Include dueDate for recurring transactions
-      status: recurrence !== 'none' ? 'UPCOMING' : 'PAID', // Backend expects uppercase: UPCOMING, PAID, OVERDUE
+      ...(recurrence !== 'none' && {status: 'UPCOMING'}), // Only recurring transactions have status; one-off = no status
     };
 
     onSave(transactionData);

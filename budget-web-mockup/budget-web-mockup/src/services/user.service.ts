@@ -43,6 +43,14 @@ class UserService {
     return api.get<RolloverHistory>('/users/rollover/history', filters as Record<string, unknown> | undefined);
   }
 
+  /**
+   * Dismiss rollover notification banner
+   * Marks notification as dismissed, funds stay in spendable pool
+   */
+  async dismissRolloverNotification(): Promise<void> {
+    await api.delete('/users/rollover/notification');
+  }
+
   // Account management
   async deleteProfile(): Promise<void> {
     await api.delete('/users/profile');

@@ -13,6 +13,7 @@ import {
   GoalCategory,
   GoalPriority,
   GoalPriorityDisplay,
+  RolloverAllocationResponse,
 } from '@/types';
 
 // Category mapping: Frontend display <-> Backend enum
@@ -261,6 +262,23 @@ class GoalService {
       '/goals/analytics',
       filters as Record<string, unknown> | undefined,
     );
+  }
+
+  /**
+   * Allocate rollover funds to goals (atomic operation)
+   * Backend atomically: creates contributions, deducts rolloverAmount, updates/dismisses notification
+   *
+   * @param goalAllocations - Array of { goalId, amount } objects
+   * @param description - Description for the contributions
+   */
+  async allocateRolloverToGoals(
+    goalAllocations: Array<{ goalId: string; amount: number }>,
+    description: string,
+  ): Promise<RolloverAllocationResponse> {
+    return api.post<RolloverAllocationResponse>('/goals/rollover-contribution', {
+      goalAllocations,
+      description,
+    });
   }
 
   // Helper methods

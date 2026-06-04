@@ -972,10 +972,9 @@ const AddTransactionContainer = ({
   }, []);
 
   const handleTransactionTypeClose = useCallback(() => {
-    // Close the entire modal immediately - the modal's handleClose will animate everything out together
-    // Don't call resetForm here - let the modal's onClose handler do it
+    resetForm();
     onClose();
-  }, [onClose]);
+  }, [resetForm, onClose]);
 
   const handleRecurrenceOverlayClose = useCallback(() => {
     // Go back to transaction type selection and clear selections

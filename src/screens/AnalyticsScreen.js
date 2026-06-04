@@ -249,6 +249,7 @@ const AnalyticsScreen = ({
   comparisonMode,
   refreshing,
   isPro,
+  proFeatures,
   showBreakdown,
 
   // Calculated statistics
@@ -290,7 +291,7 @@ const AnalyticsScreen = ({
 
   // ✅ NEW: Handle Spending Velocity tap
   const handleSpendingVelocityPress = () => {
-    if (isPro) {
+    if (proFeatures?.spendingVelocityDetails) {
       setShowSpendingVelocityModal(true);
     } else {
       Alert.alert(
@@ -577,7 +578,7 @@ const AnalyticsScreen = ({
                           2,
                         )}
                       </Text>
-                      {isPro ? (
+                      {proFeatures?.advancedAnalytics ? (
                         <Text style={styles.tapHint}>Tap for details</Text>
                       ) : (
                         <View style={styles.proIndicator}>
@@ -636,7 +637,7 @@ const AnalyticsScreen = ({
                 <TouchableOpacity
                   style={[
                     styles.insightCard,
-                    isPro && styles.clickableInsight, // Only clickable if Pro
+                    proFeatures?.spendingVelocityDetails && styles.clickableInsight,
                     {
                       borderLeftColor:
                         spendingVelocity.velocityStatus === 'ON_TRACK'
@@ -658,7 +659,7 @@ const AnalyticsScreen = ({
                       {spendingVelocity.velocityStatus === 'VERY_HIGH' &&
                         'Very High'}
                     </Text>
-                    {isPro ? (
+                    {proFeatures?.spendingVelocityDetails ? (
                       <Text style={styles.tapHint}>Tap for details</Text>
                     ) : (
                       <View style={styles.proIndicator}>
@@ -689,24 +690,27 @@ const AnalyticsScreen = ({
             {/* Income Stats Cards */}
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Total This Month</Text>
+                <Text style={styles.statLabel}>Year to Date</Text>
                 <Text style={styles.statValue}>
-                  ${incomeAnalytics?.totalIncomeThisMonth?.toFixed(2) || '0.00'}
+                  ${incomeAnalytics?.totalIncomeYTD?.toFixed(2) || '0.00'}
                 </Text>
-                {incomeAnalytics?.monthChangePercentage !== undefined && (
+                {incomeAnalytics?.hasYearOverYearData && incomeAnalytics?.ytdChangePercentage !== undefined ? (
                   <Text
                     style={[
                       styles.statChange,
                       {
                         color:
-                          incomeAnalytics.monthChangePercentage >= 0
+                          incomeAnalytics.ytdChangePercentage >= 0
                             ? colors.success || '#10B981'
                             : colors.danger || '#EF4444',
                       },
                     ]}>
-                    {incomeAnalytics.monthChangePercentage >= 0 ? '+' : ''}
-                    {incomeAnalytics.monthChangePercentage.toFixed(1)}% from
-                    last month
+                    {incomeAnalytics.ytdChangePercentage >= 0 ? '+' : ''}
+                    {incomeAnalytics.ytdChangePercentage.toFixed(1)}% vs last year
+                  </Text>
+                ) : (
+                  <Text style={styles.statSubtext}>
+                    Since {incomeAnalytics?.anniversaryStartDate ? new Date(incomeAnalytics.anniversaryStartDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'signup'}
                   </Text>
                 )}
               </View>
@@ -718,9 +722,22 @@ const AnalyticsScreen = ({
                   {incomeAnalytics?.totalIncomeThisPayPeriod?.toFixed(2) ||
                     '0.00'}
                 </Text>
-                <Text style={styles.statSubtext}>
-                  {incomeAnalytics?.payPeriodInfo?.frequency || 'Unknown'}
-                </Text>
+                {incomeAnalytics?.payPeriodChangePercentage !== undefined && (
+                  <Text
+                    style={[
+                      styles.statChange,
+                      {
+                        color:
+                          incomeAnalytics.payPeriodChangePercentage >= 0
+                            ? colors.success || '#10B981'
+                            : colors.danger || '#EF4444',
+                      },
+                    ]}>
+                    {incomeAnalytics.payPeriodChangePercentage >= 0 ? '+' : ''}
+                    {incomeAnalytics.payPeriodChangePercentage.toFixed(1)}% from
+                    last period
+                  </Text>
+                )}
               </View>
 
               <View style={styles.statCard}>
@@ -771,7 +788,7 @@ const AnalyticsScreen = ({
                 ) : (
                   <View style={styles.incomeSourceItem}>
                     <Text style={styles.incomeSourceLabel}>
-                      No income sources found for this month
+                      No income sources found for this pay period
                     </Text>
                   </View>
                 )}

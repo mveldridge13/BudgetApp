@@ -19,6 +19,7 @@ interface UseUserReturn {
   updateIncome: (data: UpdateIncomeData) => Promise<void>;
   fetchRollover: () => Promise<void>;
   updateRollover: (data: UpdateRolloverData) => Promise<void>;
+  dismissRolloverNotification: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -89,6 +90,20 @@ export function useUser(): UseUserReturn {
     }
   }, []);
 
+  const dismissRolloverNotification = useCallback(async () => {
+    setError(null);
+
+    try {
+      await userService.dismissRolloverNotification();
+      // Refresh rollover data after dismissing notification
+      await fetchRollover();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to dismiss rollover notification';
+      setError(message);
+      throw err;
+    }
+  }, [fetchRollover]);
+
   const refresh = useCallback(async () => {
     await Promise.all([fetchIncome(), fetchRollover()]);
   }, [fetchIncome, fetchRollover]);
@@ -109,6 +124,7 @@ export function useUser(): UseUserReturn {
     updateIncome,
     fetchRollover,
     updateRollover,
+    dismissRolloverNotification,
     refresh,
   };
 }

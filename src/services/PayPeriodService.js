@@ -157,23 +157,27 @@ class PayPeriodService {
       return null;
     }
 
-    const nextPayDate = this.parseNextPayDate(nextPayDateString);
+    let nextPayDate = this.parseNextPayDate(nextPayDateString);
     if (!nextPayDate) {
       return null;
     }
 
     let periodStart, periodEnd;
 
-    // FIXED: Period ends the day BEFORE the next pay date (not ON the next pay date)
-    // This aligns with backend: endOfDay(subDays(nextPayDate, 1))
-    const dayBeforeNextPay = subDays(nextPayDate, 1);
-    periodEnd = endOfDay(dayBeforeNextPay);
-
     const isNewPeriod = this.isNewPayPeriod(nextPayDateString);
 
     if (isNewPeriod && useCurrentPeriodForNewPeriod) {
-      // If we're in a new pay period, period starts TODAY (not from previous pay date)
+      // If we're in a new pay period, we need to calculate the CURRENT period
+      // which starts today and ends the day before the NEXT pay date
       periodStart = DateService.startOfToday();
+
+      // Advance to the next pay date to get correct period end
+      const newNextPayDate = this.calculateNextPayDate(nextPayDate, frequency);
+      if (!newNextPayDate) {
+        return null;
+      }
+      const dayBeforeNewNextPay = subDays(newNextPayDate, 1);
+      periodEnd = endOfDay(dayBeforeNewNextPay);
     } else {
       // Calculate the previous pay date - this becomes the start of the current period
       const previousPayDate = this.calculatePreviousPayDate(
@@ -185,6 +189,10 @@ class PayPeriodService {
       }
 
       periodStart = startOfDay(previousPayDate);
+
+      // Period ends the day BEFORE the next pay date
+      const dayBeforeNextPay = subDays(nextPayDate, 1);
+      periodEnd = endOfDay(dayBeforeNextPay);
     }
 
     return {

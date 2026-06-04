@@ -29,8 +29,8 @@ const SettingsScreen = ({navigation}) => {
     appSettings,
     userProfile,
     isPro,
+    proExpiresAt,
     updateAppSettings,
-    updateProStatus,
     refreshUserProfile,
     toggleAppSetting,
   } = useAppSettings();
@@ -103,24 +103,24 @@ const SettingsScreen = ({navigation}) => {
     }, [refreshUserProfile, loadAdditionalData]),
   );
 
-  // Toggle Pro status
-  const handleTogglePro = useCallback(async () => {
-    try {
-      const newProStatus = !isPro;
-      await updateProStatus(newProStatus);
-
+  // Handle Pro subscription info
+  const handleProPress = useCallback(() => {
+    if (isPro) {
+      const expiryText = proExpiresAt
+        ? `Your subscription is active until ${new Date(proExpiresAt).toLocaleDateString()}.`
+        : 'Your subscription is active.';
+      Alert.alert('Pro Subscription', expiryText, [{text: 'OK'}]);
+    } else {
       Alert.alert(
-        'Pro Status Updated',
-        `Pro features are now ${
-          newProStatus ? 'enabled' : 'disabled'
-        }. This change will take effect throughout the app.`,
-        [{text: 'OK'}],
+        'Upgrade to Pro',
+        'Unlock advanced analytics, spending velocity details, data export, and more!',
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {text: 'Learn More', onPress: () => console.log('TODO: Open subscription screen')},
+        ],
       );
-    } catch (error) {
-      console.error('Error toggling Pro status:', error);
-      Alert.alert('Error', 'Failed to update Pro status. Please try again.');
     }
-  }, [isPro, updateProStatus]);
+  }, [isPro, proExpiresAt]);
 
   // Settings handlers
   const handleToggleSetting = useCallback(
@@ -449,7 +449,10 @@ const SettingsScreen = ({navigation}) => {
 
           <View style={styles.settingCard}>
             {isPro !== null ? (
-              <View style={styles.settingRow}>
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={handleProPress}
+                activeOpacity={0.7}>
                 <View style={styles.settingInfo}>
                   <View
                     style={[
@@ -460,22 +463,20 @@ const SettingsScreen = ({navigation}) => {
                   </View>
                   <View style={styles.settingText}>
                     <View style={styles.settingLabelRow}>
-                      <Text style={styles.settingLabel}>Pro Mode</Text>
+                      <Text style={styles.settingLabel}>
+                        {isPro ? 'Pro Subscription' : 'Upgrade to Pro'}
+                      </Text>
                       {isPro && <ProBadge />}
                     </View>
                     <Text style={styles.settingDescription}>
                       {isPro
                         ? 'Advanced analytics and features enabled'
-                        : 'Enable to test Pro features and analytics'}
+                        : 'Unlock advanced analytics and more'}
                     </Text>
                   </View>
                 </View>
-                <CustomToggle
-                  value={isPro || false}
-                  onValueChange={handleTogglePro}
-                  activeColor={colors.warning}
-                />
-              </View>
+                <Icon name="chevron-right" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
             ) : (
               <View style={styles.settingRow}>
                 <View style={styles.settingInfo}>

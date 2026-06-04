@@ -156,3 +156,16 @@ export interface GoalsSummary {
   totalCurrentAmount: number;
   overallProgress: number;
 }
+
+// Rollover allocation types
+export interface RolloverAllocationRequest {
+  goalAllocations: Array<{ goalId: string; amount: number }>;
+  description: string;
+}
+
+export interface RolloverAllocationResponse {
+  success: boolean;
+  newRolloverAmount: number;
+  contributions: GoalContribution[];
+  message?: string;
+}

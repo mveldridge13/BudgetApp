@@ -735,7 +735,7 @@ const useGoalData = checkNetworkConnectivity => {
                     type: transactionType,
                     date: updateTimestamp,
                     recurrence: 'none', // Must be 'none' (lowercase) to appear in daily transactions
-                    status: 'PAID', // Mark as paid since payment was made
+                    // One-off transactions have no status (only recurring transactions use UPCOMING/PAID/OVERDUE)
                   };
 
                   await TrendAPIService.createTransaction(transactionData);

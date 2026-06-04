@@ -27,12 +27,24 @@ const defaultModuleSettings = {
   pokerTracker: false,
 };
 
+// Default Pro features (all disabled)
+const defaultProFeatures = {
+  spendingVelocityDetails: false,
+  advancedAnalytics: false,
+  exportData: false,
+  aiAssistant: false,
+};
+
 export const AppSettingsProvider = ({children}) => {
   // Settings state
   const [appSettings, setAppSettings] = useState(null);
   const [moduleSettings, setModuleSettings] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [isPro, setIsPro] = useState(null);
+
+  // Pro/Subscription state (synced from backend via home summary)
+  const [isPro, setIsPro] = useState(false);
+  const [proExpiresAt, setProExpiresAt] = useState(null);
+  const [proFeatures, setProFeatures] = useState(defaultProFeatures);
 
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -47,17 +59,18 @@ export const AppSettingsProvider = ({children}) => {
 
   const loadCachedData = useCallback(async () => {
     try {
+      // Get current user ID first - cache is user-specific
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       // Batch all AsyncStorage operations to prevent conflicts
       const [
         cachedProfile,
         storedAppSettings,
         storedModuleSettings,
-        proStatus,
       ] = await Promise.all([
-        UserProfileCache.get(),
+        currentUserId ? UserProfileCache.get(currentUserId) : Promise.resolve(null),
         AsyncStorage.getItem('appSettings'),
         AsyncStorage.getItem('moduleSettings'),
-        AsyncStorage.getItem('isPro'),
       ]);
 
       if (!isMountedRef.current) {
@@ -93,15 +106,14 @@ export const AppSettingsProvider = ({children}) => {
         setModuleSettings(defaultModuleSettings);
       }
 
-      // Process pro status
-      setIsPro(proStatus === 'true');
+      // Note: isPro and proFeatures are synced from backend via updateSubscriptionStatus
+      // They will be updated when HomeContainer loads the home summary
     } catch (error) {
       console.error('Error loading cached app settings:', error);
       // Set defaults on error
       if (isMountedRef.current) {
         setAppSettings(defaultAppSettings);
         setModuleSettings(defaultModuleSettings);
-        setIsPro(false);
       }
     } finally {
       if (isMountedRef.current) {
@@ -177,14 +189,35 @@ export const AppSettingsProvider = ({children}) => {
     [moduleSettings],
   );
 
-  const updateProStatus = useCallback(async newProStatus => {
-    try {
-      await AsyncStorage.setItem('isPro', newProStatus.toString());
-      setIsPro(newProStatus);
-    } catch (error) {
-      console.error('Error updating pro status:', error);
-      throw error;
+  /**
+   * Update subscription status from backend home summary
+   * Called by HomeContainer when it loads the home summary
+   *
+   * @param {Object} userData - user object from home summary { isPro, proExpiresAt }
+   * @param {Object} features - features object from home summary
+   */
+  const updateSubscriptionStatus = useCallback((userData, features) => {
+    if (!isMountedRef.current) return;
+
+    // Update Pro status
+    setIsPro(userData?.isPro ?? false);
+    setProExpiresAt(userData?.proExpiresAt ?? null);
+
+    // Update feature flags
+    if (features) {
+      setProFeatures({
+        ...defaultProFeatures,
+        ...features,
+      });
+    } else {
+      setProFeatures(defaultProFeatures);
     }
+
+    console.log('🔐 AppSettings: Subscription status updated', {
+      isPro: userData?.isPro,
+      proExpiresAt: userData?.proExpiresAt,
+      features,
+    });
   }, []);
 
   // ==============================================
@@ -237,7 +270,11 @@ export const AppSettingsProvider = ({children}) => {
     appSettings,
     moduleSettings,
     userProfile,
+
+    // Subscription state (synced from backend)
     isPro,
+    proExpiresAt,
+    proFeatures,
 
     // Loading states
     isLoading,
@@ -246,7 +283,7 @@ export const AppSettingsProvider = ({children}) => {
     // Update functions
     updateAppSettings,
     updateModuleSettings,
-    updateProStatus,
+    updateSubscriptionStatus,
     refreshUserProfile,
 
     // Helper functions

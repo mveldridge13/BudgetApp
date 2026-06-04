@@ -8,6 +8,7 @@ import {
   GoalsSummary,
   CreateContributionData,
   GoalContribution,
+  RolloverAllocationResponse,
 } from '@/types';
 
 interface UseGoalsReturn {
@@ -20,6 +21,10 @@ interface UseGoalsReturn {
   updateGoal: (id: string, data: Partial<GoalDisplay>) => Promise<GoalDisplay>;
   deleteGoal: (id: string) => Promise<void>;
   addContribution: (goalId: string, data: CreateContributionData) => Promise<GoalContribution>;
+  allocateRolloverToGoals: (
+    allocations: Array<{ goalId: string; amount: number }>,
+    description: string
+  ) => Promise<RolloverAllocationResponse>;
   getProgress: (goal: GoalDisplay) => number;
   getDaysRemaining: (targetDate: string) => number;
   refresh: () => Promise<void>;
@@ -130,6 +135,38 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
     }
   }, []);
 
+  /**
+   * Allocate rollover funds to goals (atomic operation)
+   * Backend atomically: creates contributions, deducts rolloverAmount, updates/dismisses notification
+   */
+  const allocateRolloverToGoals = useCallback(async (
+    allocations: Array<{ goalId: string; amount: number }>,
+    description: string
+  ): Promise<RolloverAllocationResponse> => {
+    setError(null);
+
+    try {
+      const response = await goalService.allocateRolloverToGoals(allocations, description);
+
+      // Update goals with new contribution amounts
+      setGoals((prev) =>
+        prev.map((goal) => {
+          const allocation = allocations.find((a) => a.goalId === goal.id);
+          if (allocation) {
+            return { ...goal, current: goal.current + allocation.amount };
+          }
+          return goal;
+        })
+      );
+
+      return response;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to allocate rollover to goals';
+      setError(message);
+      throw err;
+    }
+  }, []);
+
   const getProgress = useCallback((goal: GoalDisplay): number => {
     return goalService.calculateProgress(goal);
   }, []);
@@ -158,6 +195,7 @@ export function useGoals(initialFilters?: GoalFilters): UseGoalsReturn {
     updateGoal,
     deleteGoal,
     addContribution,
+    allocateRolloverToGoals,
     getProgress,
     getDaysRemaining,
     refresh,

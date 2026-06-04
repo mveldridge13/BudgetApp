@@ -57,10 +57,13 @@ const HomeContainer = ({navigation}) => {
 
   // Rollover state
   const [rolloverAmount, setRolloverAmount] = useState(0);
-  const [rolloverBanner, setRolloverBanner] = useState(null); // {amount: number, frequency: string, date: string}
+  const [rolloverBanner, setRolloverBanner] = useState(null); // Derived from homeSummary.rolloverNotification
   const [showGoalAllocationModal, setShowGoalAllocationModal] = useState(false);
   const [rolloverAmountToAllocate, setRolloverAmountToAllocate] = useState(0);
   const [showAddGoalModal, setShowAddGoalModal] = useState(false);
+
+  // Pull-to-refresh state
+  const [refreshing, setRefreshing] = useState(false);
 
   // ==============================================
   // HOOKS
@@ -73,7 +76,7 @@ const HomeContainer = ({navigation}) => {
     saveGoal,
     addGoalContribution,
   } = useGoals();
-  const {moduleSettings} = useAppSettings();
+  const {moduleSettings, updateSubscriptionStatus} = useAppSettings();
 
   // Get poker module setting
   const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
@@ -102,7 +105,10 @@ const HomeContainer = ({navigation}) => {
 
       // Both have due dates - sort by due date ascending (soonest first)
       if (aHasDueDate && bHasDueDate) {
-        return new Date(a.dueDate) - new Date(b.dueDate);
+        const dueDateDiff = new Date(a.dueDate) - new Date(b.dueDate);
+        if (dueDateDiff !== 0) return dueDateDiff;
+        // Same due date - sort by createdAt descending (newest first)
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       }
 
       // Only a has due date - a comes first
@@ -116,7 +122,10 @@ const HomeContainer = ({navigation}) => {
       }
 
       // Neither has due date - sort by transaction date descending (newest first)
-      return new Date(b.date || 0) - new Date(a.date || 0);
+      const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
+      if (dateDiff !== 0) return dateDiff;
+      // Same date - sort by createdAt descending (newest first)
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
   };
 
@@ -432,6 +441,11 @@ const HomeContainer = ({navigation}) => {
 
       setHomeSummary(summary);
 
+      // Sync subscription/Pro status from backend
+      if (summary?.user || summary?.features) {
+        updateSubscriptionStatus(summary.user, summary.features);
+      }
+
       // Also update totalExpenses for backwards compatibility during transition
       if (summary?.totals) {
         setTotalExpenses(summary.totals.totalExpensesAllocated);
@@ -440,7 +454,7 @@ const HomeContainer = ({navigation}) => {
       console.error('🏠 Error loading home summary:', error);
       // Don't fail silently - fallback to local calculation will still work
     }
-  }, []);
+  }, [updateSubscriptionStatus]);
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -535,6 +549,45 @@ const HomeContainer = ({navigation}) => {
       );
     }
   }, [userActiveOperations, sortTransactionsByDate]);
+
+  // Pull-to-refresh handler - bypasses cache and forces fresh data
+  const handleRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      console.log('🔄 Pull-to-refresh: Invalidating caches and reloading...');
+
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (currentUserId) {
+        // Invalidate transaction cache to force fresh fetch
+        await TransactionCache.invalidate(currentUserId);
+      }
+
+      // Reload all data in parallel
+      await Promise.all([
+        loadHomeSummary(),
+        (async () => {
+          // Force reload transactions from API (cache was invalidated)
+          if (!AuthService.isAuthenticated()) return;
+          const response = await TrendAPIService.getTransactions({ limit: 1000 });
+          const backendTransactions = response?.transactions || [];
+          const sortedTransactions = sortTransactionsByDate(backendTransactions);
+          setTransactions(sortedTransactions);
+
+          // Update cache with fresh data
+          if (currentUserId) {
+            await TransactionCache.set(currentUserId, sortedTransactions);
+          }
+        })(),
+        loadGoalsRef.current?.(),
+      ]);
+
+      console.log('🔄 Pull-to-refresh: Complete');
+    } catch (error) {
+      console.error('🔄 Pull-to-refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadHomeSummary, sortTransactionsByDate]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -1297,32 +1350,32 @@ const HomeContainer = ({navigation}) => {
     }
   }, []);
 
-  // Load rollover data and banner on component mount
+  // Load rollover data on component mount
   useEffect(() => {
     loadRolloverAmount();
-    loadRolloverBanner();
-  }, [loadRolloverAmount, loadRolloverBanner]);
+  }, [loadRolloverAmount]);
 
-  // Load rollover banner from cache using cache-first approach
-  const loadRolloverBanner = useCallback(async () => {
-    try {
-      const bannerData = await RolloverService.loadRolloverBanner();
-      console.log('🔄 HomeContainer: Loaded rollover banner:', bannerData);
-      setRolloverBanner(bannerData);
-    } catch (error) {
-      console.error('🔄 Error loading rollover banner:', error);
+  // Derive rollover banner from homeSummary (backend is the source of truth)
+  useEffect(() => {
+    if (homeSummary?.rolloverNotification) {
+      setRolloverBanner({
+        amount: homeSummary.rolloverNotification.amount,
+        fromPeriod: homeSummary.rolloverNotification.fromPeriod,
+        date: homeSummary.rolloverNotification.createdAt,
+      });
+    } else {
+      setRolloverBanner(null);
     }
-  }, []);
+  }, [homeSummary?.rolloverNotification]);
 
-  // Listen for navigation events to refresh rollover amount when returning from Goals
+  // Listen for navigation events to refresh data when returning from other screens
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Always reload rollover amount when returning to Home screen
-      // This ensures we get the latest rollover state after goal creation
-      loadRolloverAmount();
+      // Reload home summary (includes rollover notification from backend)
+      loadHomeSummary();
 
-      // Reload rollover banner to show updated amount after partial allocations
-      loadRolloverBanner();
+      // Reload rollover amount
+      loadRolloverAmount();
 
       // Also reload goals to ensure we have the latest goal data (including contributions)
       if (loadGoalsRef.current) {
@@ -1334,210 +1387,15 @@ const HomeContainer = ({navigation}) => {
     });
 
     return unsubscribe;
-  }, [navigation, loadRolloverAmount, loadRolloverBanner, loadTransactions]);
+  }, [navigation, loadHomeSummary, loadRolloverAmount, loadTransactions]);
 
   // ==============================================
   // PAY PERIOD TRANSITION DETECTION
   // ==============================================
 
-  // Check if we've crossed into a new pay period and need to reset
-  const checkPayPeriodTransition = useCallback(async () => {
-    try {
-      if (!incomeData?.nextPayDate || !incomeData?.frequency) {
-        return;
-      }
-
-      // Use PayPeriodService to check if transition is needed
-      const transitionResult = PayPeriodService.checkPayPeriodTransition(
-        incomeData.nextPayDate,
-        incomeData.frequency,
-      );
-
-      if (!transitionResult.shouldTransition) {
-        return;
-      }
-
-      console.log('🔄 Pay period transition detected:', {
-        currentNextPayDate: incomeData.nextPayDate,
-        newNextPayDate: transitionResult.newNextPayDate,
-        frequency: incomeData.frequency,
-      });
-
-      // Update the user profile with the new next pay date
-      try {
-        const updateData = {
-          nextPayDate: transitionResult.newNextPayDate,
-        };
-
-        await TrendAPIService.updateIncomeProfile(updateData);
-
-        // Update local state
-        setIncomeData(prev => ({
-          ...prev,
-          nextPayDate: transitionResult.newNextPayDate.split('T')[0],
-        }));
-
-        // Calculate if there were leftover funds from previous period using RolloverService
-        // NOTE: Use 0 for rolloverAmount since we're calculating the previous period's surplus
-        // before any rollover was applied to this new period
-
-        // Ensure we have complete data before calculating surplus
-        if (
-          totalExpenses === null ||
-          totalExpenses === undefined ||
-          !Array.isArray(goals)
-        ) {
-          console.log('🔄 Skipping auto-rollover: incomplete data', {
-            totalExpenses,
-            goalsLoaded: Array.isArray(goals),
-            goalsCount: goals?.length || 0,
-          });
-          return;
-        }
-
-        // Calculate expenses from PREVIOUS pay period (not current period)
-        // This is crucial for mid-period app adoption scenarios
-        const previousPeriodExpenses =
-          PayPeriodService.calculateTotalExpensesForPreviousPeriod(
-            transactions,
-            incomeData.nextPayDate,
-            incomeData.frequency,
-          );
-
-        const previousPeriodSurplus = RolloverService.calculateAvailableSurplus(
-          incomeData,
-          0, // Previous period had no rollover contribution
-          previousPeriodExpenses, // Use previous period expenses, not current period
-          goals,
-        );
-
-        console.log('🔄 Surplus calculation details:', {
-          income: incomeData.income,
-          currentPeriodExpenses: totalExpenses, // Current period (should be 0 for new period)
-          previousPeriodExpenses, // Previous period (where the $500 transaction should be)
-          goals: goals.map(g => ({
-            id: g.id,
-            autoContribute: g.autoContribute || 0,
-          })),
-          goalContributions: goals.reduce(
-            (sum, g) => sum + (g.autoContribute || 0),
-            0,
-          ),
-          calculatedSurplus: previousPeriodSurplus,
-          expectedSurplus:
-            incomeData.income -
-            previousPeriodExpenses - // Use previous period expenses for surplus calculation
-            goals.reduce((sum, g) => sum + (g.autoContribute || 0), 0),
-        });
-
-        // AUTO-ROLLOVER: Automatically process surplus rollover to new period
-        if (previousPeriodSurplus > 0) {
-          console.log(
-            '🔄 Auto-rollover: Processing surplus from previous period:',
-            previousPeriodSurplus,
-          );
-
-          try {
-            const rolloverResult =
-              await RolloverService.processRolloverToNextPeriod(
-                previousPeriodSurplus,
-                rolloverAmount,
-                incomeData.frequency,
-                incomeData,
-              );
-
-            // Update rollover amount in state
-            setRolloverAmount(rolloverResult.newRolloverAmount);
-
-            // Set rollover banner using cache-first approach
-            // Use simple leftToSpend calculation from PREVIOUS period
-            const leftToSpend = incomeData.income - previousPeriodExpenses;
-            const bannerData = {
-              amount: leftToSpend, // Show actual Left to Spend amount from previous period
-              frequency: incomeData.frequency,
-              date: new Date().toISOString(),
-            };
-
-            // Cache the banner data and update UI state
-            await RolloverService.setRolloverBanner(bannerData);
-            setRolloverBanner(bannerData);
-
-            console.log(
-              '🔄 Auto-rollover completed:',
-              `$${previousPeriodSurplus.toFixed(
-                2,
-              )} → New total: $${rolloverResult.newRolloverAmount.toFixed(2)}`,
-            );
-          } catch (rolloverError) {
-            console.error('🔄 Auto-rollover failed:', rolloverError);
-
-            // Show error notification to user
-            Alert.alert(
-              'Auto-Rollover Failed',
-              `Failed to automatically roll over $${previousPeriodSurplus.toFixed(
-                2,
-              )}. You can manually process this in your settings.`,
-              [{text: 'OK'}],
-            );
-          }
-        }
-      } catch (error) {
-        console.error(
-          'Pay period transition failed to update next pay date:',
-          error,
-        );
-
-        // Still update local state even if server update fails
-        // This prevents the app from getting stuck in an infinite loop
-        setIncomeData(prev => ({
-          ...prev,
-          nextPayDate: transitionResult.newNextPayDate.split('T')[0],
-        }));
-
-        // Don't throw - this shouldn't break the app, just log the error
-      }
-    } catch (error) {
-      console.error('Pay period transition error:', error);
-    }
-  }, [incomeData, rolloverAmount, totalExpenses, goals]);
-
-  // Check pay period transition when app becomes active or when all required data is loaded
-  useEffect(() => {
-    if (
-      incomeData?.nextPayDate &&
-      incomeData?.frequency &&
-      totalExpenses !== null &&
-      totalExpenses !== undefined &&
-      Array.isArray(goals) &&
-      !loading // Wait for initial loading to complete
-    ) {
-      console.log('🔄 All data loaded, checking pay period transition', {
-        incomeLoaded: !!incomeData?.nextPayDate,
-        expensesCalculated: totalExpenses !== null,
-        totalExpenses,
-        goalsLoaded: Array.isArray(goals),
-        transactionCount: transactions.length,
-        loadingComplete: !loading,
-      });
-      checkPayPeriodTransition();
-    } else {
-      console.log('🔄 Waiting for data before pay period check', {
-        incomeLoaded: !!incomeData?.nextPayDate,
-        expensesCalculated: totalExpenses !== null,
-        totalExpenses,
-        goalsLoaded: Array.isArray(goals),
-        transactionCount: transactions?.length || 0,
-        stillLoading: loading,
-      });
-    }
-  }, [
-    checkPayPeriodTransition,
-    incomeData?.nextPayDate,
-    totalExpenses,
-    goals,
-    loading,
-    transactions.length,
-  ]);
+  // Backend handles pay period transitions automatically via getSummary.
+  // We just need to ensure homeSummary is loaded - the backend processes transitions when called.
+  // No client-side transition logic needed anymore.
 
   // ==============================================
   // EVENT HANDLERS
@@ -2050,14 +1908,14 @@ const HomeContainer = ({navigation}) => {
             setSelectedDate(new Date());
           }
 
-          // Reload data for new day and check for pay period transitions
+          // Reload data for new day - backend handles pay period transitions via getSummary
           const reloadForNewDay = async () => {
             try {
               setLoading(true);
 
               if (AuthService.isAuthenticated()) {
-                // Check for pay period transitions first (this may update nextPayDate)
-                await checkPayPeriodTransition();
+                // Load home summary first - backend processes any pay period transitions
+                await loadHomeSummary();
                 await Promise.all([
                   loadUserProfile(), // ✅ Will reload backend profile data
                   loadTransactions(),
@@ -2543,6 +2401,9 @@ const HomeContainer = ({navigation}) => {
         // Backend home summary (single source of truth for balance card)
         homeSummary={homeSummary}
         onRefreshHomeSummary={loadHomeSummary}
+        // Pull-to-refresh
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
         // Rollover props
         rolloverAmount={rolloverAmount}
         rolloverBanner={rolloverBanner}

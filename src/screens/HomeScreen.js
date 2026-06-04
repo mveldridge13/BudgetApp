@@ -4,6 +4,7 @@ import {
   View,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Text,
 } from 'react-native';
@@ -39,6 +40,10 @@ const HomeScreen = ({
   // Backend home summary (single source of truth for balance card)
   homeSummary = null,
   onRefreshHomeSummary = () => {},
+
+  // Pull-to-refresh
+  refreshing = false,
+  onRefresh = () => {},
 
   // Rollover props
   rolloverAmount = 0,
@@ -222,7 +227,15 @@ const HomeScreen = ({
         showsVerticalScrollIndicator={false}
         scrollEnabled={scrollEnabled}
         keyboardShouldPersistTaps="handled"
-        removeClippedSubviews={false}>
+        removeClippedSubviews={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }>
         {/* Poker/Tournament Section - Show if poker module is enabled */}
         {pokerTrackerEnabled && (
           <PokerSection

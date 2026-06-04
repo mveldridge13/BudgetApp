@@ -1633,6 +1633,36 @@ class TrendAPIService {
     return this.makeRequest(endpoint);
   }
 
+  /**
+   * Dismiss rollover notification banner
+   * Marks notification as dismissed, funds stay in spendable pool
+   */
+  async dismissRolloverNotification() {
+    return this.makeRequest('/users/rollover/notification', {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Allocate rollover funds to goals (atomic operation)
+   * Backend validates allocations don't exceed available rollover, then atomically:
+   * - Creates contributions
+   * - Deducts from user.rolloverAmount
+   * - Dismisses notification (if fully allocated) or updates amount (if partial)
+   *
+   * @param {Array} goalAllocations - Array of { goalId, amount } objects
+   * @param {string} description - Description for the contributions
+   */
+  async allocateRolloverToGoals(goalAllocations, description) {
+    return this.makeRequest('/goals/rollover-contribution', {
+      method: 'POST',
+      body: {
+        goalAllocations,
+        description,
+      },
+    });
+  }
+
   // ============================================================================
   // UTILITY METHODS
   // ============================================================================
