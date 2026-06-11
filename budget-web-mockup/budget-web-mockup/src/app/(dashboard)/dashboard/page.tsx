@@ -1,9 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { BalanceCard, ActiveGoalCard, GoalDistribution, OverallProgress, DebtProgress } from '@/components/dashboard';
 import { useDashboardData } from '@/hooks/useDashboardData';
+import { useAuth } from '@/contexts/AuthContext';
+import GoalAllocationModal from '@/components/goals/GoalAllocationModal';
+import { goalService } from '@/services/goal.service';
+import { userService } from '@/services/user.service';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const {
     balance,
     leftToSpend,
@@ -14,8 +20,33 @@ export default function DashboardPage() {
     activeGoalsCount,
     completedGoalsCount,
     goals,
+    rolloverAmount,
     isLoading,
+    refresh,
   } = useDashboardData();
+
+  const [showAllocationModal, setShowAllocationModal] = useState(false);
+  const currency = user?.currency || 'AUD';
+
+  const handleAllocateRollover = async (allocations: { goalId: string; amount: number }[]) => {
+    try {
+      await goalService.allocateRolloverToGoals(allocations, 'Rollover allocation');
+      setShowAllocationModal(false);
+      refresh();
+    } catch (error) {
+      console.error('Failed to allocate rollover:', error);
+      alert('Failed to allocate funds. Please try again.');
+    }
+  };
+
+  const handleDismissRollover = async () => {
+    try {
+      await userService.dismissRolloverNotification();
+      refresh();
+    } catch (error) {
+      console.error('Failed to dismiss rollover notification:', error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -34,6 +65,10 @@ export default function DashboardPage() {
           discretionaryExpenses={discretionaryExpenses}
           goalsExpenses={goalsExpenses}
           isLoading={isLoading}
+          currency={currency}
+          rolloverBanner={rolloverAmount > 0 ? { amount: rolloverAmount } : null}
+          onAllocateRollover={() => setShowAllocationModal(true)}
+          onDismissRollover={handleDismissRollover}
         />
 
         {/* Goals Overview Card */}
@@ -55,6 +90,15 @@ export default function DashboardPage() {
         {/* Debt Progress Card */}
         <DebtProgress goals={goals} isLoading={isLoading} />
       </div>
+
+      {/* Goal Allocation Modal */}
+      <GoalAllocationModal
+        visible={showAllocationModal}
+        onClose={() => setShowAllocationModal(false)}
+        onConfirm={handleAllocateRollover}
+        availableAmount={rolloverAmount}
+        goals={goals}
+      />
     </div>
   );
 }

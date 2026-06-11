@@ -1,7 +1,9 @@
 export interface UserIncome {
   id: string;
   amount: number;
-  frequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
+  income: number;
+  incomeFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
+  frequency?: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
   source?: string;
   isActive: boolean;
   nextPayDate?: string;
@@ -9,8 +11,11 @@ export interface UserIncome {
 
 export interface UpdateIncomeData {
   amount: number;
-  frequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
+  income?: number;
+  incomeFrequency: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
+  frequency?: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
   source?: string;
+  nextPayDate?: string;
 }
 
 export interface RolloverSettings {

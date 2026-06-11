@@ -1,6 +1,11 @@
 'use client';
 
+import { ArrowRightCircle, X } from 'lucide-react';
 import {formatCurrency} from '@/lib/formatters';
+
+interface RolloverBannerData {
+  amount: number;
+}
 
 interface BalanceCardProps {
   balance: number;
@@ -10,6 +15,10 @@ interface BalanceCardProps {
   discretionaryExpenses: number;
   goalsExpenses?: number;
   isLoading: boolean;
+  currency?: string;
+  rolloverBanner?: RolloverBannerData | null;
+  onAllocateRollover?: () => void;
+  onDismissRollover?: () => void;
 }
 
 export default function BalanceCard({
@@ -20,7 +29,29 @@ export default function BalanceCard({
   discretionaryExpenses,
   goalsExpenses = 0,
   isLoading,
+  currency = 'AUD',
+  rolloverBanner,
+  onAllocateRollover,
+  onDismissRollover,
 }: BalanceCardProps) {
+  // Get locale based on currency
+  const getLocale = (curr: string) => {
+    const localeMap: Record<string, string> = {
+      AUD: 'en-AU',
+      USD: 'en-US',
+      GBP: 'en-GB',
+      EUR: 'de-DE',
+      CAD: 'en-CA',
+      NZD: 'en-NZ',
+      JPY: 'ja-JP',
+      CNY: 'zh-CN',
+      INR: 'en-IN',
+    };
+    return localeMap[curr] || 'en-AU';
+  };
+
+  const locale = getLocale(currency);
+  const format = (amount: number) => formatCurrency(amount, currency, locale);
   // Calculate percentage remaining (leftToSpend / balance * 100)
   const percentageRemaining =
     balance > 0 ? Math.round((leftToSpend / balance) * 100) : 0;
@@ -64,9 +95,36 @@ export default function BalanceCard({
       <div className="mb-6">
         <p className="text-sm font-medium text-gray-500 mb-2">Balance</p>
         <p className="text-4xl font-bold text-gray-900 tracking-tight">
-          {formatCurrency(balance)}
+          {format(balance)}
         </p>
       </div>
+
+      {/* Rollover Banner - shown after auto-rollover occurs */}
+      {rolloverBanner && rolloverBanner.amount > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onAllocateRollover}
+              className="text-white hover:text-emerald-100 transition-colors"
+              title="Allocate to goals"
+            >
+              <ArrowRightCircle className="w-6 h-6" />
+            </button>
+            <p className="flex-1 text-white font-medium text-center">
+              {format(rolloverBanner.amount)} has been rolled into this period
+            </p>
+            {onDismissRollover && (
+              <button
+                onClick={onDismissRollover}
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Left to Spend and Total Expenses */}
       <div className="grid grid-cols-2 gap-4">
@@ -77,7 +135,7 @@ export default function BalanceCard({
           <p
             className="text-2xl font-bold mb-4 tracking-tight"
             style={{color: '#6366f1'}}>
-            {formatCurrency(leftToSpend)}
+            {format(leftToSpend)}
           </p>
 
           {/* Progress Bar */}
@@ -103,7 +161,7 @@ export default function BalanceCard({
           <p
             className="text-2xl font-bold tracking-tight"
             style={{color: '#F87171'}}>
-            {formatCurrency(totalExpenses)}
+            {format(totalExpenses)}
           </p>
 
           {/* Committed vs Discretionary Breakdown */}
@@ -120,7 +178,7 @@ export default function BalanceCard({
                 </span>
               </div>
               <span className="text-xs font-semibold text-gray-900">
-                {formatCurrency(committedExpenses)}
+                {format(committedExpenses)}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -133,7 +191,7 @@ export default function BalanceCard({
                 </span>
               </div>
               <span className="text-xs font-semibold text-gray-900">
-                {formatCurrency(discretionaryExpenses)}
+                {format(discretionaryExpenses)}
               </span>
             </div>
             {goalsExpenses > 0 && (
@@ -147,7 +205,7 @@ export default function BalanceCard({
                   </span>
                 </div>
                 <span className="text-xs font-semibold text-gray-900">
-                  {formatCurrency(goalsExpenses)}
+                  {format(goalsExpenses)}
                 </span>
               </div>
             )}

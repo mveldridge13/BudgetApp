@@ -1,12 +1,12 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { storage } from '@/lib/storage';
 import { API_CONFIG } from '@/config/api.config';
+import { useAuth } from './AuthContext';
 
 interface AppSettings {
   currency: string;
-  budgetPeriod: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY';
   notifications: boolean;
   darkMode: boolean;
   compactView: boolean;
@@ -14,13 +14,12 @@ interface AppSettings {
 
 interface AppSettingsContextType {
   settings: AppSettings;
-  updateSettings: (updates: Partial<AppSettings>) => void;
+  updateSettings: (updates: Partial<AppSettings>) => Promise<void>;
   resetSettings: () => void;
 }
 
 const defaultSettings: AppSettings = {
-  currency: 'USD',
-  budgetPeriod: 'MONTHLY',
+  currency: 'AUD',
   notifications: true,
   darkMode: false,
   compactView: false,
@@ -29,8 +28,10 @@ const defaultSettings: AppSettings = {
 const AppSettingsContext = createContext<AppSettingsContextType | undefined>(undefined);
 
 export function AppSettingsProvider({ children }: { children: React.ReactNode }) {
+  const { user, updateProfile } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoaded, setIsLoaded] = useState(false);
+  const initializedFromUser = useRef(false);
 
   // Load settings from storage on mount
   useEffect(() => {
@@ -41,16 +42,33 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     setIsLoaded(true);
   }, []);
 
-  // Save settings to storage when they change
+  // Sync currency from user profile (backend is source of truth)
+  useEffect(() => {
+    if (user?.currency && !initializedFromUser.current) {
+      setSettings((prev) => ({ ...prev, currency: user.currency }));
+      initializedFromUser.current = true;
+    }
+  }, [user?.currency]);
+
+  // Save non-backend settings to storage when they change
   useEffect(() => {
     if (isLoaded) {
       storage.set(API_CONFIG.storageKeys.appSettings, settings);
     }
   }, [settings, isLoaded]);
 
-  const updateSettings = useCallback((updates: Partial<AppSettings>) => {
+  const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
+    // If currency is being updated, sync to backend
+    if (updates.currency && updates.currency !== settings.currency) {
+      try {
+        await updateProfile({ currency: updates.currency });
+      } catch (error) {
+        console.error('Failed to update currency on backend:', error);
+        throw error;
+      }
+    }
     setSettings((prev) => ({ ...prev, ...updates }));
-  }, []);
+  }, [settings.currency, updateProfile]);
 
   const resetSettings = useCallback(() => {
     setSettings(defaultSettings);

@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppSettings } from '@/contexts/AppSettingsContext';
 import { useUser } from '@/hooks/useUser';
 import Link from 'next/link';
+import CustomDropdown from '@/components/ui/CustomDropdown';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -54,16 +55,25 @@ export default function SettingsPage() {
               <p className="font-medium text-gray-900">Currency</p>
               <p className="text-sm text-gray-500">Your preferred currency</p>
             </div>
-            <select
+            <CustomDropdown
               value={settings.currency}
-              onChange={(e) => updateSettings({ currency: e.target.value })}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="USD">USD ($)</option>
-              <option value="AUD">AUD ($)</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
+              options={[
+                { value: 'AUD', label: 'AUD ($)' },
+                { value: 'USD', label: 'USD ($)' },
+                { value: 'EUR', label: 'EUR (€)' },
+                { value: 'GBP', label: 'GBP (£)' },
+                { value: 'CAD', label: 'CAD ($)' },
+                { value: 'NZD', label: 'NZD ($)' },
+              ]}
+              onChange={async (value) => {
+                try {
+                  await updateSettings({ currency: value });
+                } catch (error) {
+                  console.error('Failed to update currency:', error);
+                  alert('Failed to update currency. Please try again.');
+                }
+              }}
+            />
           </div>
 
           {/* Pay Period (from backend income frequency) */}
@@ -72,16 +82,24 @@ export default function SettingsPage() {
               <p className="font-medium text-gray-900">Pay Period</p>
               <p className="text-sm text-gray-500">How often you get paid</p>
             </div>
-            <select
-              value={income?.frequency || 'MONTHLY'}
-              onChange={async (e) => {
-                const newFrequency = e.target.value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
+            <CustomDropdown
+              value={income?.incomeFrequency || income?.frequency || 'MONTHLY'}
+              options={[
+                { value: 'WEEKLY', label: 'Weekly' },
+                { value: 'FORTNIGHTLY', label: 'Fortnightly' },
+                { value: 'MONTHLY', label: 'Monthly' },
+                { value: 'YEARLY', label: 'Yearly' },
+              ]}
+              onChange={async (value) => {
+                const newFrequency = value as 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY' | 'YEARLY';
                 if (income) {
                   try {
                     await updateIncome({
-                      amount: income.amount,
-                      frequency: newFrequency,
+                      amount: income.income || income.amount,
+                      income: income.income || income.amount,
+                      incomeFrequency: newFrequency,
                       source: income.source,
+                      nextPayDate: income.nextPayDate,
                     });
                   } catch (error) {
                     console.error('Failed to update pay period:', error);
@@ -90,13 +108,7 @@ export default function SettingsPage() {
                 }
               }}
               disabled={!income}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="WEEKLY">Weekly</option>
-              <option value="FORTNIGHTLY">Fortnightly</option>
-              <option value="MONTHLY">Monthly</option>
-              <option value="YEARLY">Yearly</option>
-            </select>
+            />
           </div>
 
           {/* Notifications */}
