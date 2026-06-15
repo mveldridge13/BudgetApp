@@ -56,7 +56,6 @@ const useGoalData = checkNetworkConnectivity => {
     ) => {
       // Prevent multiple simultaneous loads
       if (isLoadingRef.current && !forceAPI) {
-        console.log('🔍 LOAD_GOALS: Already loading, skipping...');
         return {success: true, goals};
       }
 
@@ -67,9 +66,6 @@ const useGoalData = checkNetworkConnectivity => {
         now - lastSyncTime.current < 1000 &&
         !forceAPI
       ) {
-        console.log(
-          '🔍 LOAD_GOALS: Too soon since last sync, skipping API call',
-        );
         return {success: true, goals};
       }
 
@@ -93,7 +89,6 @@ const useGoalData = checkNetworkConnectivity => {
 
         const cachedResult = await loadGoalsFromCache(currentUserId);
         if (cachedResult.success && cachedResult.goals.length > 0) {
-          console.log('🔍 LOAD_GOALS: Using cached goals data');
           setGoals(cachedResult.goals);
 
           // If we have goals and this is initial load, consider it loaded
@@ -106,17 +101,9 @@ const useGoalData = checkNetworkConnectivity => {
 
         let result;
 
-        // Re-enabled API loading with proper safeguards
-        console.log('🔍 LOAD_GOALS: Network status:', {
-          isConnected,
-          authenticated: TrendAPIService.isAuthenticated(),
-        });
-
         if (isConnected && TrendAPIService.isAuthenticated()) {
-          console.log('🔍 LOAD_GOALS: Loading goals from backend API (background sync)...');
           // 🌐 BACKGROUND SYNC: Fetch from API to update with fresh data
           result = await loadGoalsFromAPI();
-          console.log('🔍 LOAD_GOALS: API result:', result);
 
           if (result.success) {
             // Merge with cached showOnBalanceCard preferences
@@ -140,9 +127,6 @@ const useGoalData = checkNetworkConnectivity => {
                       current: cachedGoal.current,
                       lastProgressUpdate: cachedGoal.lastProgressUpdate,
                     };
-                    console.log(
-                      `🔍 GOAL_DATA: Preserving recent progress update for goal ${cachedGoal.id}, updated ${timeSinceUpdate}ms ago`,
-                    );
                   }
                 }
               });
@@ -177,18 +161,10 @@ const useGoalData = checkNetworkConnectivity => {
                   ? new Date(cachedGoal.createdAt).getTime()
                   : 0;
                 const isRecentlyCreated = createdAt > sixtySecondsAgo;
-                if (!isRecentlyCreated) {
-                  console.log(
-                    `🔍 GOAL_DATA: Removing stale cached goal ${cachedGoal.id} - not in API response and not recently created`,
-                  );
-                }
                 return isRecentlyCreated;
               });
 
               if (localOnlyGoals.length > 0) {
-                console.log(
-                  `🔍 GOAL_DATA: Preserving ${localOnlyGoals.length} recently created local goals`,
-                );
                 mergedGoals.push(...localOnlyGoals);
               }
             }
@@ -203,9 +179,6 @@ const useGoalData = checkNetworkConnectivity => {
             // API failed, cache was already loaded at start
             console.warn('API failed, using previously loaded cache data');
           }
-        } else {
-          // Offline or not authenticated, cache was already loaded at start
-          console.log('🔍 LOAD_GOALS: Offline or not authenticated, using cache data');
         }
 
         // Return current goals state (either from cache loaded at start, or updated from API)
@@ -237,23 +210,14 @@ const useGoalData = checkNetworkConnectivity => {
   // Save or update a goal
   const saveGoal = useCallback(
     async (goalData, goals, editingGoal, setGoals) => {
-      console.log('🔍 SAVE_GOAL: Starting saveGoal with:', {
-        goalData,
-        editingGoal: editingGoal?.id,
-        goalsLength: goals.length,
-      });
-
       try {
         if (!goalData || typeof goalData !== 'object') {
           console.error('🔍 SAVE_GOAL: Invalid goal data provided:', goalData);
           throw new Error('Invalid goal data provided');
         }
 
-        console.log('🔍 SAVE_GOAL: Sanitizing goal data...');
         const sanitizedData = sanitizeGoalData(goalData);
-        console.log('🔍 SAVE_GOAL: Sanitized data:', sanitizedData);
 
-        console.log('🔍 SAVE_GOAL: Validating goal data...');
         if (!validateGoalData(sanitizedData)) {
           console.error(
             '🔍 SAVE_GOAL: Goal data validation failed for:',
@@ -262,24 +226,17 @@ const useGoalData = checkNetworkConnectivity => {
           throw new Error('Goal data validation failed');
         }
 
-        console.log('🔍 SAVE_GOAL: Checking network connectivity...');
         const isConnected = await checkNetworkConnectivity();
         const isEdit = editingGoal && editingGoal.id;
-        console.log('🔍 SAVE_GOAL: Network status:', {isConnected, isEdit});
         let result;
 
         // Re-enable API calls for backend goal creation
         if (isConnected && TrendAPIService.isAuthenticated()) {
           // Try API first
           try {
-            console.log('🔍 SAVE_GOAL: Transforming to backend format...');
             const backendGoalData = transformFrontendGoal(sanitizedData);
-            console.log('🔍 SAVE_GOAL: Backend goal data:', backendGoalData);
 
             if (isEdit) {
-              console.log(
-                '🔍 SAVE_GOAL: Calling TrendAPIService.updateGoal for editing',
-              );
               result = await TrendAPIService.updateGoal(
                 editingGoal.id,
                 backendGoalData,
@@ -310,10 +267,6 @@ const useGoalData = checkNetworkConnectivity => {
                 isNewGoal: !isEdit,
                 source: 'api',
               };
-            } else {
-              console.log(
-                '🔍 SAVE_GOAL: API returned null/empty result, falling back to local',
-              );
             }
           } catch (apiError) {
             console.error('❌ SAVE_GOAL: API save failed:', apiError);
@@ -332,25 +285,20 @@ const useGoalData = checkNetworkConnectivity => {
             );
             // Continue to local save below
           }
-        } else {
-          console.log('🔍 SAVE_GOAL: API disabled, using local save only');
         }
 
         // Offline mode or API failed - save locally
-        console.log('🔍 SAVE_GOAL: Starting local save...');
         const currentGoals = [...goals];
         let updatedGoals;
         let newGoal;
 
         if (isEdit) {
-          console.log('🔍 SAVE_GOAL: Updating existing goal locally');
           // Update existing goal
           updatedGoals = currentGoals.map(goal =>
             goal.id === editingGoal.id ? {...goal, ...sanitizedData} : goal,
           );
           newGoal = updatedGoals.find(goal => goal.id === editingGoal.id);
         } else {
-          console.log('🔍 SAVE_GOAL: Adding new goal locally');
           // Add new goal - ensure it has an ID
           newGoal = {
             ...sanitizedData,
@@ -363,21 +311,12 @@ const useGoalData = checkNetworkConnectivity => {
             lastUpdated: new Date().toISOString(),
           };
           updatedGoals = [...currentGoals, newGoal];
-          console.log('🔍 SAVE_GOAL: New goal created:', newGoal);
         }
 
-        console.log(
-          '🔍 SAVE_GOAL: Updated goals array:',
-          updatedGoals.length,
-          'goals',
-        );
-
         // Update state immediately
-        console.log('🔍 SAVE_GOAL: Setting goals state...');
         setGoals(updatedGoals);
 
         // Save to cache in background
-        console.log('🔍 SAVE_GOAL: Saving to cache...');
         const currentUserId = TrendAPIService.getCurrentUserId();
         if (!currentUserId) {
           console.warn('🔍 SAVE_GOAL: No user ID available for goals cache');
@@ -386,7 +325,6 @@ const useGoalData = checkNetworkConnectivity => {
         const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
-          console.log('🔍 SAVE_GOAL: Goal saved to cache successfully');
           return {
             success: true,
             goal: newGoal,
@@ -629,11 +567,10 @@ const useGoalData = checkNetworkConnectivity => {
                 date: updateTimestamp,
               };
 
-              const contributionResult =
-                await TrendAPIService.addGoalContribution(
-                  goalId,
-                  contributionData,
-                );
+              await TrendAPIService.addGoalContribution(
+                goalId,
+                contributionData,
+              );
 
               // Create a transaction for the payment to show in transaction list
               try {

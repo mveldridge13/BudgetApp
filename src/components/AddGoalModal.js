@@ -262,14 +262,9 @@ const AddGoalModal = ({
     try {
       setSaving(true);
 
-      // Add debugging to see what form data we have
-      console.log('🔍 MODAL - Raw form data:', formData);
-
-      // Helper function to safely parse numbers - FIXED to preserve decimals
+      // Helper function to safely parse numbers - preserves decimals
       const parseNumberSafely = (value, fallback = 0) => {
-        console.log('🔍 PARSE: Input value:', value, 'type:', typeof value);
         if (value === null || value === undefined || value === '') {
-          console.log('🔍 PARSE: Empty value, returning fallback:', fallback);
           return fallback;
         }
 
@@ -282,14 +277,6 @@ const AddGoalModal = ({
             ? fallback
             : Math.round(parsed * 100) / 100;
 
-        console.log(
-          '🔍 PARSE: Cleaned value:',
-          cleanValue,
-          'parsed:',
-          parsed,
-          'result:',
-          result,
-        );
         return result;
       };
 
@@ -319,47 +306,17 @@ const AddGoalModal = ({
           !editingGoal && parsedCurrent === 0
             ? goalData.originalAmount
             : parsedCurrent;
-        console.log('🔍 MODAL - Debt goal processed:');
-        console.log(
-          '🔍 MODAL - originalAmount:',
-          goalData.originalAmount,
-          typeof goalData.originalAmount,
-        );
-        console.log(
-          '🔍 MODAL - target:',
-          goalData.target,
-          typeof goalData.target,
-        );
-        console.log(
-          '🔍 MODAL - current:',
-          goalData.current,
-          typeof goalData.current,
-        );
       } else {
         // For savings/spending goals, use current from form
         goalData.current = parseNumberSafely(formData.current, 0);
         // For savings/spending goals, use target
         goalData.target = parseNumberSafely(formData.target, 0);
-        console.log('🔍 MODAL - Non-debt goal processed:');
-        console.log(
-          '🔍 MODAL - target:',
-          goalData.target,
-          typeof goalData.target,
-        );
       }
 
       // Add auto contribution if specified
       if (formData.autoContribute) {
         goalData.autoContribute = parseNumberSafely(formData.autoContribute, 0);
       }
-
-      console.log('🔍 MODAL - Processed goal data:', goalData);
-      console.log(
-        '🔍 MODAL - Target amount:',
-        goalData.target,
-        'Type:',
-        typeof goalData.target,
-      );
 
       let result;
       try {
