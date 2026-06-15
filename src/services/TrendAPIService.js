@@ -95,9 +95,14 @@ class TrendAPIService {
       this.scheduleProactiveRefresh();
 
       // 🔐 SECURE: Save access token to iOS Keychain (hardware-encrypted)
+      // AFTER_FIRST_UNLOCK (not WHEN_UNLOCKED) so the proactive refresh timer
+      // can persist rotated tokens while the app is backgrounded / device is
+      // locked. WHEN_UNLOCKED throws errSecInteractionNotAllowed in that case,
+      // leaving the new tokens only in memory and the Keychain copy stale.
+      // THIS_DEVICE_ONLY keeps auth tokens out of iCloud Keychain sync.
       await Keychain.setGenericPassword('trend_user', token, {
         service: 'com.trendbudget.auth',
-        accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+        accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
       });
 
       console.log('🔐 Access token saved to secure Keychain');
@@ -113,9 +118,11 @@ class TrendAPIService {
       this.refreshToken = refreshToken;
 
       // 🔐 SECURE: Save refresh token to iOS Keychain (separate entry)
+      // See saveToken: AFTER_FIRST_UNLOCK allows background persistence of the
+      // rotated refresh token; THIS_DEVICE_ONLY keeps it off iCloud Keychain.
       await Keychain.setGenericPassword('trend_refresh', refreshToken, {
         service: 'com.trendbudget.refresh',
-        accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
+        accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
       });
 
       console.log('🔐 Refresh token saved to secure Keychain');
