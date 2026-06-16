@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { IncomeFrequency } from '@/hooks/useIncomeSetup';
+import {IncomeFrequency} from '@/hooks/useIncomeSetup';
+import {DatePicker} from '@/components/ui';
 
 interface FrequencyOption {
   id: IncomeFrequency;
@@ -52,20 +52,10 @@ const FrequencyButton = ({
           : 'bg-gray-50 border-gray-200 text-gray-700 hover:border-purple-300'
       }
       ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-    `}
-  >
+    `}>
     <span className="text-sm font-medium">{frequency.label}</span>
   </button>
 );
-
-const formatDateForDisplay = (date: Date): string => {
-  if (!date) return '';
-  return date.toLocaleDateString('en-AU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-};
 
 const formatDateForInput = (date: Date): string => {
   if (!date) return '';
@@ -79,7 +69,6 @@ export default function IncomeSetupForm({
   income,
   selectedFrequency,
   nextPayDate,
-  hasSelectedDate,
   loading,
   error,
   isEditMode,
@@ -89,12 +78,8 @@ export default function IncomeSetupForm({
   onDateChange,
   onSave,
   onCancel,
-  clearError,
 }: IncomeSetupFormProps) {
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
-  const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const dateValue = e.target.value;
+  const handleDateChange = (dateValue: string) => {
     if (dateValue) {
       const selectedDate = new Date(dateValue + 'T12:00:00'); // Noon to avoid timezone issues
       onDateChange(selectedDate);
@@ -133,17 +118,21 @@ export default function IncomeSetupForm({
           <div className="space-y-6">
             {/* Income Input */}
             <div>
-              <label htmlFor="income" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="income"
+                className="block text-sm font-medium text-gray-700 mb-2">
                 Income Amount
               </label>
               <div className="flex items-center border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-transparent">
-                <span className="px-4 text-lg font-medium text-gray-700">$</span>
+                <span className="px-4 text-lg font-medium text-gray-700">
+                  $
+                </span>
                 <input
                   id="income"
                   type="number"
                   step="0.01"
                   value={income}
-                  onChange={(e) => onIncomeChange(e.target.value)}
+                  onChange={e => onIncomeChange(e.target.value)}
                   disabled={loading}
                   placeholder="0"
                   className="flex-1 py-3 pr-4 text-lg border-0 focus:ring-0 focus:outline-none"
@@ -157,7 +146,7 @@ export default function IncomeSetupForm({
                 How often are you paid?
               </label>
               <div className="flex gap-3">
-                {frequencies.map((frequency) => (
+                {frequencies.map(frequency => (
                   <FrequencyButton
                     key={frequency.id}
                     frequency={frequency}
@@ -171,16 +160,15 @@ export default function IncomeSetupForm({
 
             {/* Next Pay Date */}
             <div>
-              <label htmlFor="nextPayDate" className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="nextPayDate"
+                className="block text-sm font-medium text-gray-700 mb-2">
                 Next Pay Date
               </label>
-              <input
-                id="nextPayDate"
-                type="date"
+              <DatePicker
                 value={formatDateForInput(nextPayDate)}
-                onChange={handleDateInputChange}
+                onChange={handleDateChange}
                 disabled={loading}
-                className="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
               <p className="mt-2 text-xs text-gray-500">
                 This helps us calculate your current budget period
@@ -195,8 +183,7 @@ export default function IncomeSetupForm({
                 type="button"
                 onClick={onCancel}
                 disabled={loading}
-                className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
+                className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 Cancel
               </button>
             )}
@@ -209,18 +196,33 @@ export default function IncomeSetupForm({
                 py-3 px-4 bg-purple-600 text-white rounded-lg font-medium
                 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500
                 disabled:opacity-50 disabled:cursor-not-allowed transition-colors
-              `}
-            >
+              `}>
               {loading ? (
                 <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                   Saving...
                 </span>
+              ) : isEditMode ? (
+                'Save Changes'
               ) : (
-                isEditMode ? 'Save Changes' : 'Get Started'
+                'Get Started'
               )}
             </button>
           </div>

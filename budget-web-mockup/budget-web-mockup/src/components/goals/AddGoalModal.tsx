@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { GoalDisplay, GoalTypeDisplay, GoalPriorityDisplay } from '@/types';
+import { DatePicker } from '@/components/ui';
 import {
   DollarSign,
   CreditCard,
@@ -446,15 +447,10 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">
                 Deadline {formData.type !== 'debt' && '(Optional)'}
               </label>
-              <input
-                type="date"
-                value={formData.deadline}
-                onChange={(e) => updateFormData('deadline', e.target.value)}
-                className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                  errors.deadline
-                    ? 'border-red-300'
-                    : 'border-gray-300'
-                }`}
+              <DatePicker
+                value={formData.deadline?.split('T')[0] || ''}
+                onChange={(val) => updateFormData('deadline', val)}
+                error={!!errors.deadline}
               />
               {errors.deadline && <p className="mt-1.5 text-sm text-red-600">{errors.deadline}</p>}
             </div>
@@ -710,11 +706,9 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">
                 {formData.type === 'spending' ? 'Budget Period (Optional)' : 'Target Date'}
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={formData.deadline?.split('T')[0] || ''}
-                onChange={(e) => updateFormData('deadline', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                onChange={(val) => updateFormData('deadline', val)}
               />
             </div>
 

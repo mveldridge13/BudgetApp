@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Transaction, RecurrenceType, PaymentStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
-import { CategoryIcon, CustomSelect } from '@/components/ui';
+import { CategoryIcon, CustomSelect, DatePicker } from '@/components/ui';
 import { useCategories } from '@/hooks/useCategories';
 
 interface CategoryObject {
@@ -261,18 +261,16 @@ export default function TransactionDetailPanel({
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Date</label>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-                  {isEditMode ? (
-                    <input
-                      type="date"
-                      value={editedTransaction?.date?.split('T')[0] || ''}
-                      onChange={(e) => setEditedTransaction(prev => prev ? {...prev, date: e.target.value} : prev)}
-                      className="w-full bg-transparent border-none p-0 text-sm text-gray-900 font-medium focus:outline-none focus:ring-0"
-                    />
-                  ) : (
+                {isEditMode ? (
+                  <DatePicker
+                    value={editedTransaction?.date?.split('T')[0] || ''}
+                    onChange={(val) => setEditedTransaction(prev => prev ? {...prev, date: val} : prev)}
+                  />
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
                     <p className="text-sm text-gray-900 font-medium">{formatDate(transaction.date)}</p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Frequency</label>
@@ -306,18 +304,16 @@ export default function TransactionDetailPanel({
               {(editedTransaction?.recurrence && editedTransaction.recurrence !== 'none') && (
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">Due Date</label>
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-                    {isEditMode ? (
-                      <input
-                        type="date"
-                        value={editedTransaction?.dueDate?.split('T')[0] || ''}
-                        onChange={(e) => setEditedTransaction(prev => prev ? {...prev, dueDate: e.target.value} : prev)}
-                        className="w-full bg-transparent border-none p-0 text-sm text-gray-900 font-medium focus:outline-none focus:ring-0"
-                      />
-                    ) : (
+                  {isEditMode ? (
+                    <DatePicker
+                      value={editedTransaction?.dueDate?.split('T')[0] || ''}
+                      onChange={(val) => setEditedTransaction(prev => prev ? {...prev, dueDate: val} : prev)}
+                    />
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
                       <p className="text-sm text-gray-900 font-medium">{transaction.dueDate ? formatDate(transaction.dueDate) : 'None'}</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
               {(editedTransaction?.recurrence && editedTransaction.recurrence !== 'none') && (

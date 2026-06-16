@@ -2,7 +2,7 @@
 
 import {useState, useEffect} from 'react';
 import {useCategories} from '@/hooks/useCategories';
-import {Modal, Button, Input} from '@/components/ui';
+import {Modal, Button, Input, DatePicker} from '@/components/ui';
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import {RECURRENCE_OPTIONS} from '@/lib/constants';
 import {formatISODate} from '@/lib/formatters';
@@ -314,12 +314,13 @@ export default function TransactionModal({
         </div>
 
         {/* Date Field */}
-        <Input
-          type="date"
-          label="Date"
-          value={selectedDate}
-          onChange={e => setSelectedDate(e.target.value)}
-        />
+        <div className="w-full">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+          <DatePicker
+            value={selectedDate}
+            onChange={setSelectedDate}
+          />
+        </div>
 
         {/* Amount Field */}
         <div>
@@ -431,12 +432,13 @@ export default function TransactionModal({
 
         {/* Due Date - only show for recurring transactions */}
         {recurrence !== 'none' && (selectedFlowType === 'recurring' || selectedFlowType === 'debt') && (
-          <Input
-            type="date"
-            label="Due Date"
-            value={dueDate}
-            onChange={e => setDueDate(e.target.value)}
-          />
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+            <DatePicker
+              value={dueDate}
+              onChange={setDueDate}
+            />
+          </div>
         )}
 
         {/* Actions */}
