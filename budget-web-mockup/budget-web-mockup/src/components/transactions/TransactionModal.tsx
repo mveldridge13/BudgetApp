@@ -2,7 +2,7 @@
 
 import {useState, useEffect} from 'react';
 import {useCategories} from '@/hooks/useCategories';
-import {Modal, Button, Input, DatePicker} from '@/components/ui';
+import {Modal, Button, Input, DatePicker, CustomSelect} from '@/components/ui';
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import {RECURRENCE_OPTIONS} from '@/lib/constants';
 import {formatISODate} from '@/lib/formatters';
@@ -355,39 +355,44 @@ export default function TransactionModal({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Category
           </label>
-          <div className="relative">
-            {selectedCategoryData && (
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: `${selectedCategoryData.color}20`,
-                  }}>
-                  <CategoryIcon
-                    iconName={selectedCategoryData.icon}
-                    size={12}
-                    color={selectedCategoryData.color}
-                  />
-                </div>
-              </div>
-            )}
-            <select
+          <div className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 transition-colors hover:border-gray-400">
+            <CustomSelect
               value={selectedCategory}
-              onChange={e => {
-                setSelectedCategory(e.target.value);
+              onChange={value => {
+                setSelectedCategory(value);
                 setSelectedSubcategory(''); // Reset subcategory when category changes
               }}
-              className={`w-full ${
-                selectedCategoryData ? 'pl-12' : 'pl-4'
-              } pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white`}
-              disabled={categoriesLoading}>
-              <option value="">Select a category</option>
-              {categoriesWithSubcategories.map(category => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Select a category"
+              disabled={categoriesLoading}
+              leftIcon={
+                selectedCategoryData ? (
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: `${selectedCategoryData.color}20` }}>
+                    <CategoryIcon
+                      iconName={selectedCategoryData.icon}
+                      size={12}
+                      color={selectedCategoryData.color}
+                    />
+                  </div>
+                ) : undefined
+              }
+              options={categoriesWithSubcategories.map(category => ({
+                value: category.id,
+                label: category.name,
+                icon: (
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: `${category.color}20` }}>
+                    <CategoryIcon
+                      iconName={category.icon}
+                      size={12}
+                      color={category.color}
+                    />
+                  </div>
+                ),
+              }))}
+            />
           </div>
         </div>
 
@@ -397,17 +402,20 @@ export default function TransactionModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Subcategory <span className="text-gray-400">(optional)</span>
             </label>
-            <select
-              value={selectedSubcategory}
-              onChange={e => setSelectedSubcategory(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white">
-              <option value="">None</option>
-              {selectedCategoryData.subcategories.map(subcategory => (
-                <option key={subcategory.id} value={subcategory.id}>
-                  {subcategory.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 transition-colors hover:border-gray-400">
+              <CustomSelect
+                value={selectedSubcategory}
+                onChange={setSelectedSubcategory}
+                placeholder="None"
+                options={[
+                  { value: '', label: 'None' },
+                  ...selectedCategoryData.subcategories.map(subcategory => ({
+                    value: subcategory.id,
+                    label: subcategory.name,
+                  })),
+                ]}
+              />
+            </div>
           </div>
         )}
 
@@ -417,16 +425,16 @@ export default function TransactionModal({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Recurrence
             </label>
-            <select
-              value={recurrence}
-              onChange={e => setRecurrence(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              {RECURRENCE_OPTIONS.map(option => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+            <div className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 transition-colors hover:border-gray-400">
+              <CustomSelect
+                value={recurrence}
+                onChange={setRecurrence}
+                options={RECURRENCE_OPTIONS.map(option => ({
+                  value: option.id,
+                  label: option.id === 'none' ? 'None' : option.name,
+                }))}
+              />
+            </div>
           </div>
         )}
 
