@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
-import { useCategories } from '@/hooks/useCategories';
-import { Spinner, CategoryIcon, ConfirmDialog } from '@/components/ui';
-import { CategoryModal } from '@/components/categories';
-import { Category, CategoryWithSubcategories, CreateCategoryData, UpdateCategoryData } from '@/types';
-import { IoPencil, IoTrash, IoAdd } from 'react-icons/io5';
+import {useState, useMemo} from 'react';
+import Link from 'next/link';
+import {useSearchParams} from 'next/navigation';
+import {useCategories} from '@/hooks/useCategories';
+import {Spinner, CategoryIcon, ConfirmDialog} from '@/components/ui';
+import {CategoryModal} from '@/components/categories';
+import {
+  Category,
+  CategoryWithSubcategories,
+  CreateCategoryData,
+  UpdateCategoryData,
+} from '@/types';
+import {IoPencil, IoTrash, IoAdd} from 'react-icons/io5';
 
 export default function CategoriesPage() {
   const {
@@ -21,15 +28,33 @@ export default function CategoriesPage() {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [parentCategory, setParentCategory] = useState<CategoryWithSubcategories | null>(null);
+  const [parentCategory, setParentCategory] =
+    useState<CategoryWithSubcategories | null>(null);
 
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(
+    null,
+  );
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Track expanded categories
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(),
+  );
+
+  // Filter by the global search query (?q=...).
+  const searchParams = useSearchParams();
+  const query = (searchParams.get('q') || '').trim();
+  const filteredCategories = useMemo(() => {
+    if (!query) return categoriesWithSubcategories;
+    const q = query.toLowerCase();
+    return categoriesWithSubcategories.filter(
+      c =>
+        c.name.toLowerCase().includes(q) ||
+        c.subcategories.some(sub => sub.name.toLowerCase().includes(q)),
+    );
+  }, [categoriesWithSubcategories, query]);
 
   // Handlers
   const handleAddCategory = () => {
@@ -50,13 +75,17 @@ export default function CategoriesPage() {
     setShowModal(true);
   };
 
-  const handleEditSubcategory = (subcategory: Category, parent: CategoryWithSubcategories) => {
+  const handleEditSubcategory = (
+    subcategory: Category,
+    parent: CategoryWithSubcategories,
+  ) => {
     // Convert subcategory to Category format for editing
     const categoryToEdit: Category = {
       id: subcategory.id,
       name: subcategory.name,
       color: subcategory.color || parent.color,
       icon: subcategory.icon || 'albums-outline',
+      type: parent.type,
       parentId: parent.id,
       isArchived: false,
     };
@@ -70,12 +99,16 @@ export default function CategoriesPage() {
     setShowDeleteConfirm(true);
   };
 
-  const handleDeleteSubcategory = (subcategory: { id: string; name: string }, parent: CategoryWithSubcategories) => {
+  const handleDeleteSubcategory = (
+    subcategory: {id: string; name: string},
+    parent: CategoryWithSubcategories,
+  ) => {
     const categoryToDelete: Category = {
       id: subcategory.id,
       name: subcategory.name,
       color: parent.color,
       icon: 'albums-outline',
+      type: parent.type,
       parentId: parent.id,
       isArchived: false,
     };
@@ -99,7 +132,9 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleSaveCategory = async (data: CreateCategoryData | UpdateCategoryData) => {
+  const handleSaveCategory = async (
+    data: CreateCategoryData | UpdateCategoryData,
+  ) => {
     try {
       if (editingCategory) {
         await updateCategory(editingCategory.id, data as UpdateCategoryData);
@@ -123,7 +158,7 @@ export default function CategoriesPage() {
   };
 
   const toggleExpanded = (categoryId: string) => {
-    setExpandedCategories((prev) => {
+    setExpandedCategories(prev => {
       const next = new Set(prev);
       if (next.has(categoryId)) {
         next.delete(categoryId);
@@ -146,10 +181,13 @@ export default function CategoriesPage() {
         <button
           onClick={handleAddCategory}
           className="text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
-          style={{ backgroundColor: '#6366f1' }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}
-        >
+          style={{backgroundColor: '#6366f1'}}
+          onMouseEnter={e =>
+            (e.currentTarget.style.backgroundColor = '#4f46e5')
+          }
+          onMouseLeave={e =>
+            (e.currentTarget.style.backgroundColor = '#6366f1')
+          }>
           <IoAdd size={20} />
           <span>Add Category</span>
         </button>
@@ -160,8 +198,7 @@ export default function CategoriesPage() {
           <p>{error}</p>
           <button
             onClick={refresh}
-            className="mt-2 text-sm font-medium text-red-600 hover:text-red-500"
-          >
+            className="mt-2 text-sm font-medium text-red-600 hover:text-red-500">
             Retry
           </button>
         </div>
@@ -176,125 +213,161 @@ export default function CategoriesPage() {
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
             <CategoryIcon iconName="albums-outline" size={32} color="#9CA3AF" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No categories yet</h3>
-          <p className="text-gray-500 mb-4">Get started by creating your first category.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No categories yet
+          </h3>
+          <p className="text-gray-500 mb-4">
+            Get started by creating your first category.
+          </p>
           <button
             onClick={handleAddCategory}
             className="inline-flex items-center space-x-2 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-            style={{ backgroundColor: '#6366f1' }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}
-          >
+            style={{backgroundColor: '#6366f1'}}
+            onMouseEnter={e =>
+              (e.currentTarget.style.backgroundColor = '#4f46e5')
+            }
+            onMouseLeave={e =>
+              (e.currentTarget.style.backgroundColor = '#6366f1')
+            }>
             <IoAdd size={20} />
             <span>Add Category</span>
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {categoriesWithSubcategories.map((category) => (
-            <div
-              key={category.id}
-              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-            >
-              {/* Category Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: `${category.color}20` }}
-                  >
-                    <CategoryIcon
-                      iconName={category.icon}
-                      size={20}
-                      color={category.color}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{category.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {category.subcategories.length} subcategories
-                    </p>
-                  </div>
-                </div>
+        <>
+          {query && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>
+                Showing results for{' '}
+                <span className="font-medium text-gray-900">
+                  &ldquo;{query}&rdquo;
+                </span>{' '}
+                ({filteredCategories.length})
+              </span>
+              <Link
+                href="/categories"
+                className="font-medium text-indigo-600 hover:text-indigo-700">
+                Clear
+              </Link>
+            </div>
+          )}
 
-                {/* Category Actions */}
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={() => handleEditCategory(category)}
-                    className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
-                    aria-label="Edit category"
-                  >
-                    <IoPencil size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCategory(category)}
-                    className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
-                    aria-label="Delete category"
-                  >
-                    <IoTrash size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Subcategories - fixed height for 5 items to align buttons */}
-              <div className="mb-4" style={{ minHeight: '160px' }}>
-                {category.subcategories.length > 0 && (
-                  <div className="space-y-2">
-                    {(expandedCategories.has(category.id)
-                      ? category.subcategories
-                      : category.subcategories.slice(0, 5)
-                    ).map((sub) => (
+          {filteredCategories.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              No categories match &ldquo;{query}&rdquo;
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCategories.map(category => (
+                <div
+                  key={category.id}
+                  className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  {/* Category Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-3">
                       <div
-                        key={sub.id}
-                        className="group flex items-center justify-between text-sm text-gray-600 pl-4 border-l-2 border-gray-200 hover:border-indigo-400 transition-colors"
-                      >
-                        <span>{sub.name}</span>
-                        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleEditSubcategory(sub as unknown as Category, category)}
-                            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                            aria-label="Edit subcategory"
-                          >
-                            <IoPencil size={12} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSubcategory(sub, category)}
-                            className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
-                            aria-label="Delete subcategory"
-                          >
-                            <IoTrash size={12} />
-                          </button>
-                        </div>
+                        className="w-10 h-10 rounded-full flex items-center justify-center"
+                        style={{backgroundColor: `${category.color}20`}}>
+                        <CategoryIcon
+                          iconName={category.icon}
+                          size={20}
+                          color={category.color}
+                        />
                       </div>
-                    ))}
-                    {category.subcategories.length > 5 && (
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {category.name}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {category.subcategories.length} subcategories
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Category Actions */}
+                    <div className="flex items-center space-x-1">
                       <button
-                        onClick={() => toggleExpanded(category.id)}
-                        className="text-sm pl-4 font-medium transition-colors"
-                        style={{ color: '#6366f1' }}
-                        onMouseEnter={(e) => e.currentTarget.style.color = '#4f46e5'}
-                        onMouseLeave={(e) => e.currentTarget.style.color = '#6366f1'}
-                      >
-                        {expandedCategories.has(category.id)
-                          ? 'Show less'
-                          : `+${category.subcategories.length - 5} more`}
+                        onClick={() => handleEditCategory(category)}
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                        aria-label="Edit category">
+                        <IoPencil size={16} />
                       </button>
+                      <button
+                        onClick={() => handleDeleteCategory(category)}
+                        className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600 transition-colors"
+                        aria-label="Delete category">
+                        <IoTrash size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Subcategories - fixed height for 5 items to align buttons */}
+                  <div className="mb-4" style={{minHeight: '160px'}}>
+                    {category.subcategories.length > 0 && (
+                      <div className="space-y-2">
+                        {(expandedCategories.has(category.id)
+                          ? category.subcategories
+                          : category.subcategories.slice(0, 5)
+                        ).map(sub => (
+                          <div
+                            key={sub.id}
+                            className="group flex items-center justify-between text-sm text-gray-600 pl-4 border-l-2 border-gray-200 hover:border-indigo-400 transition-colors">
+                            <span>{sub.name}</span>
+                            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() =>
+                                  handleEditSubcategory(
+                                    sub as unknown as Category,
+                                    category,
+                                  )
+                                }
+                                className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                                aria-label="Edit subcategory">
+                                <IoPencil size={12} />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDeleteSubcategory(sub, category)
+                                }
+                                className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+                                aria-label="Delete subcategory">
+                                <IoTrash size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {category.subcategories.length > 5 && (
+                          <button
+                            onClick={() => toggleExpanded(category.id)}
+                            className="text-sm pl-4 font-medium transition-colors"
+                            style={{color: '#6366f1'}}
+                            onMouseEnter={e =>
+                              (e.currentTarget.style.color = '#4f46e5')
+                            }
+                            onMouseLeave={e =>
+                              (e.currentTarget.style.color = '#6366f1')
+                            }>
+                            {expandedCategories.has(category.id)
+                              ? 'Show less'
+                              : `+${category.subcategories.length - 5} more`}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* Add Subcategory Button */}
-              <button
-                onClick={() => handleAddSubcategory(category)}
-                className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg border-2 border-dashed border-gray-200 text-gray-500 transition-colors hover:border-indigo-400 hover:text-indigo-600"
-              >
-                <IoAdd size={16} />
-                <span className="text-sm font-medium">Add Subcategory</span>
-              </button>
+                  {/* Add Subcategory Button */}
+                  <button
+                    onClick={() => handleAddSubcategory(category)}
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg border-2 border-dashed border-gray-200 text-gray-500 transition-colors hover:border-indigo-400 hover:text-indigo-600">
+                    <IoAdd size={16} />
+                    <span className="text-sm font-medium">Add Subcategory</span>
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {/* Category Modal */}
@@ -315,7 +388,9 @@ export default function CategoriesPage() {
           setDeletingCategory(null);
         }}
         onConfirm={handleConfirmDelete}
-        title={deletingCategory?.parentId ? 'Delete Subcategory' : 'Delete Category'}
+        title={
+          deletingCategory?.parentId ? 'Delete Subcategory' : 'Delete Category'
+        }
         message={
           deletingCategory?.parentId
             ? `Are you sure you want to delete "${deletingCategory?.name}"? This action cannot be undone.`

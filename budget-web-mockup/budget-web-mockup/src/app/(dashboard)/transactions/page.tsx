@@ -1,10 +1,13 @@
 'use client';
 
-import {useState} from 'react';
+import {useState, useMemo} from 'react';
+import Link from 'next/link';
+import {useSearchParams} from 'next/navigation';
 import {useTransactions} from '@/hooks/useTransactions';
 import TransactionList from '@/components/transactions/TransactionList';
 import TransactionModal from '@/components/transactions/TransactionModal';
 import {Spinner} from '@/components/ui';
+import {exportTransactionsToCsv} from '@/lib/exportTransactions';
 import {Transaction, UpdateTransactionData} from '@/types';
 
 export default function TransactionsPage() {
@@ -22,6 +25,19 @@ export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
+
+  // Filter by the global search query (?q=...).
+  const searchParams = useSearchParams();
+  const query = (searchParams.get('q') || '').trim();
+  const filteredTransactions = useMemo(() => {
+    if (!query) return transactions;
+    const q = query.toLowerCase();
+    return transactions.filter(
+      (t) =>
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.categoryName || '').toLowerCase().includes(q),
+    );
+  }, [transactions, query]);
 
   const handleSaveTransaction = async (data: unknown) => {
     try {
@@ -76,6 +92,15 @@ export default function TransactionsPage() {
     setEditingTransaction(null);
   };
 
+  // Export the currently visible (filtered) transactions to CSV.
+  const handleExport = () => {
+    if (filteredTransactions.length === 0) {
+      alert('There are no transactions to export.');
+      return;
+    }
+    exportTransactionsToCsv(filteredTransactions);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -96,24 +121,43 @@ export default function TransactionsPage() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="text-white px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all hover:shadow-lg"
-          style={{ backgroundColor: '#6366f1', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.2)' }}>
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-            />
-          </svg>
-          <span>Add Transaction</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            className="text-gray-700 bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all hover:bg-gray-50 hover:shadow-sm">
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            <span>Export</span>
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="text-white px-5 py-2.5 rounded-xl font-medium flex items-center space-x-2 transition-all hover:shadow-lg"
+            style={{ backgroundColor: '#6366f1', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.2)' }}>
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+              />
+            </svg>
+            <span>Add Transaction</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -127,13 +171,26 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {query && (
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span>
+            Showing results for{' '}
+            <span className="font-medium text-gray-900">&ldquo;{query}&rdquo;</span>
+            {' '}({filteredTransactions.length})
+          </span>
+          <Link href="/transactions" className="font-medium text-indigo-600 hover:text-indigo-700">
+            Clear
+          </Link>
+        </div>
+      )}
+
       {isLoading && transactions.length === 0 ? (
         <div className="flex items-center justify-center py-12">
           <Spinner size="lg" />
         </div>
       ) : (
         <TransactionList
-          transactions={transactions}
+          transactions={filteredTransactions}
           summary={summary}
           onEdit={handleEditTransaction}
           onUpdate={async (id, data) => {

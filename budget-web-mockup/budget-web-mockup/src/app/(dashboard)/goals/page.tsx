@@ -1,6 +1,7 @@
 'use client';
 
 import {useState, useEffect, useMemo} from 'react';
+import {useSearchParams} from 'next/navigation';
 import {goalService} from '@/services/goal.service';
 import {GoalDisplay} from '@/types';
 import {
@@ -31,6 +32,13 @@ export default function GoalsPage() {
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [priorityFilter, setPriorityFilter] = useState('All Priorities');
   const [sortOrder, setSortOrder] = useState('Newest First');
+
+  // Pre-fill the search from the global search (?q=...).
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) setSearchTerm(q);
+  }, [searchParams]);
 
   useEffect(() => {
     loadGoals();
