@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BalanceCard, ActiveGoalCard, GoalDistribution, OverallProgress, DebtProgress } from '@/components/dashboard';
+import { BalanceCard, CashFlowCard, GoalDistribution, OverallProgress, DebtProgress, RecentTransactions } from '@/components/dashboard';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
 import GoalAllocationModal from '@/components/goals/GoalAllocationModal';
@@ -17,8 +17,6 @@ export default function DashboardPage() {
     committedExpenses,
     discretionaryExpenses,
     goalsExpenses,
-    activeGoalsCount,
-    completedGoalsCount,
     goals,
     rolloverAmount,
     isLoading,
@@ -71,12 +69,8 @@ export default function DashboardPage() {
           onDismissRollover={handleDismissRollover}
         />
 
-        {/* Goals Overview Card */}
-        <ActiveGoalCard
-          activeGoalsCount={activeGoalsCount}
-          completedGoalsCount={completedGoalsCount}
-          isLoading={isLoading}
-        />
+        {/* Cash Flow Card */}
+        <CashFlowCard currency={currency} />
       </div>
 
       {/* Second Row - 3 columns */}
@@ -90,6 +84,9 @@ export default function DashboardPage() {
         {/* Debt Progress Card */}
         <DebtProgress goals={goals} isLoading={isLoading} />
       </div>
+
+      {/* Recent Transactions */}
+      <RecentTransactions currency={currency} limit={5} />
 
       {/* Goal Allocation Modal */}
       <GoalAllocationModal

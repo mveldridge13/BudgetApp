@@ -195,16 +195,24 @@ export default function AnalyticsPage() {
       const now = new Date();
       let startDate: string;
 
+      // Date ranges intentionally match the mobile app (AnalyticsContainer) so
+      // the backend returns identically-grouped monthlyTrends across platforms.
       switch (selectedPeriod) {
-        case 'daily':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString();
+        case 'daily': {
+          const start = new Date(now);
+          start.setDate(start.getDate() - 6);
+          startDate = start.toISOString();
           break;
-        case 'weekly':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 28).toISOString();
+        }
+        case 'weekly': {
+          const start = new Date(now);
+          start.setDate(start.getDate() - 27);
+          startDate = start.toISOString();
           break;
+        }
         case 'monthly':
         default:
-          startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString();
+          startDate = new Date(now.getFullYear(), now.getMonth() - 4, 1).toISOString();
           break;
       }
 

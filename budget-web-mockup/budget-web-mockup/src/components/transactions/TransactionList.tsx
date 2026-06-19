@@ -296,6 +296,8 @@ export default function TransactionList({
 
             const paymentStatus = getPaymentStatus();
 
+            const isIncome = transaction.type === 'INCOME';
+
             return (
               <div
                 key={transaction.id}
@@ -361,7 +363,12 @@ export default function TransactionList({
 
                   {/* Amount */}
                   <div className="text-right mr-4">
-                    <p className="text-lg font-semibold text-gray-900">
+                    <p
+                      className={`text-lg font-semibold ${
+                        isIncome ? 'text-green-600' : 'text-gray-900'
+                      }`}
+                    >
+                      {isIncome ? '+' : ''}
                       {formatCurrency(Math.abs(transaction.amount))}
                     </p>
                   </div>
