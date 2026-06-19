@@ -328,14 +328,14 @@ export default function GoalCard({
           )}
 
           <div className="flex gap-2">
-            <div className="flex-1 flex items-center bg-white border border-gray-300 rounded-lg px-3 py-2">
+            <div className="flex-1 min-w-0 flex items-center bg-white border border-gray-300 rounded-lg px-3 py-2">
               <span className="text-gray-500 mr-1">$</span>
               <input
                 type="number"
                 value={customAmount}
                 onChange={(e) => setCustomAmount(e.target.value)}
                 placeholder="0.00"
-                className="flex-1 outline-none text-gray-900"
+                className="flex-1 min-w-0 w-full outline-none text-gray-900"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -350,13 +350,13 @@ export default function GoalCard({
                 setTransactionType('add');
                 setShowProgressUpdate(false);
               }}
-              className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-shrink-0 p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               <X className="w-5 h-5 text-gray-600" />
             </button>
             <button
               onClick={handleCustomAmountSubmit}
-              className="p-2 rounded-lg text-white transition-colors"
+              className="flex-shrink-0 p-2 rounded-lg text-white transition-colors"
               style={{ backgroundColor: '#6366f1' }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#6366f1'}

@@ -95,9 +95,28 @@ export default function TransactionModal({
     }
   }, [initialData, visible]);
 
+  // Only show categories that match the selected transaction type
+  const categoriesForType = categoriesWithSubcategories.filter(
+    c => c.type === transactionType,
+  );
+
   const selectedCategoryData = categoriesWithSubcategories.find(
     c => c.id === selectedCategory,
   );
+
+  // Switch transaction type and keep the category in sync with it.
+  // For income, auto-select the matching category so the user doesn't have to
+  // pick it manually; for expense, clear any income category that no longer applies.
+  const handleTransactionTypeChange = (type: 'EXPENSE' | 'INCOME') => {
+    if (type === transactionType) return;
+    setTransactionType(type);
+    setSelectedSubcategory('');
+
+    const matching = categoriesWithSubcategories.filter(c => c.type === type);
+    setSelectedCategory(
+      type === 'INCOME' && matching.length > 0 ? matching[0].id : '',
+    );
+  };
 
   const selectedSubcategoryData = selectedCategoryData?.subcategories.find(
     s => s.id === selectedSubcategory,
@@ -270,7 +289,7 @@ export default function TransactionModal({
           {/* Transaction Type Toggle */}
         <div className="flex space-x-2">
           <button
-            onClick={() => setTransactionType('EXPENSE')}
+            onClick={() => handleTransactionTypeChange('EXPENSE')}
             className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg border-2 transition-colors ${
               transactionType === 'EXPENSE'
                 ? 'border-red-400 bg-red-400 text-white'
@@ -291,7 +310,7 @@ export default function TransactionModal({
             <span className="font-medium">Expense</span>
           </button>
           <button
-            onClick={() => setTransactionType('INCOME')}
+            onClick={() => handleTransactionTypeChange('INCOME')}
             className={`flex-1 flex items-center justify-center py-3 px-4 rounded-lg border-2 transition-colors ${
               transactionType === 'INCOME'
                 ? 'border-green-500 bg-green-500 text-white'
@@ -377,7 +396,7 @@ export default function TransactionModal({
                   </div>
                 ) : undefined
               }
-              options={categoriesWithSubcategories.map(category => ({
+              options={categoriesForType.map(category => ({
                 value: category.id,
                 label: category.name,
                 icon: (
