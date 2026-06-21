@@ -183,9 +183,10 @@ class GoalService {
       data.monthlyTarget = Number(frontendGoal.autoContribute.toFixed(2));
     }
 
-    if (frontendGoal.type === 'debt' && frontendGoal.originalAmount) {
-      data.originalAmount = Number(frontendGoal.originalAmount.toFixed(2));
-    }
+    // Do NOT send originalAmount: the backend has no such field and its
+    // ValidationPipe (forbidNonWhitelisted) rejects it with a 400. For debt
+    // goals the original amount is the canonical targetAmount (set above);
+    // transformBackendGoal reads it back via `originalAmount || targetAmount`.
 
     // Add debt-specific fields
     if (frontendGoal.interestRate !== undefined) {

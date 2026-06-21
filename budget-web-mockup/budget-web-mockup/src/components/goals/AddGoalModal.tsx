@@ -175,9 +175,8 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
       if ((formData.current ?? 0) > (formData.originalAmount ?? 0)) {
         newErrors.current = 'Current debt cannot exceed original amount';
       }
-      if (!formData.deadline) {
-        newErrors.deadline = 'Deadline is required for debt goals';
-      }
+      // Deadline is optional for debt goals (e.g. revolving credit-card debt
+      // with no payoff date). If provided, the future-date check below applies.
     } else {
       if (!formData.target || formData.target <= 0) {
         newErrors.target = 'Target amount must be greater than 0';
@@ -445,7 +444,7 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
             {/* Deadline */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">
-                Deadline {formData.type !== 'debt' && '(Optional)'}
+                Deadline (Optional)
               </label>
               <DatePicker
                 value={formData.deadline?.split('T')[0] || ''}
@@ -640,7 +639,7 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
             {/* Target Amount */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">
-                {formData.type === 'debt' ? 'Original Amount' : formData.type === 'spending' ? 'Monthly Budget' : 'Target Amount'}
+                {formData.type === 'debt' ? 'Original Amount' : formData.type === 'spending' ? 'Budget' : 'Target Amount'}
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
@@ -648,18 +647,25 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
                 </span>
                 <input
                   type="number"
-                  value={formData.target || ''}
-                  onChange={(e) => updateFormData('target', parseFloat(e.target.value))}
+                  value={formData.type === 'debt' ? (formData.originalAmount ?? '') : (formData.target ?? '')}
+                  onChange={(e) =>
+                    updateFormData(
+                      formData.type === 'debt' ? 'originalAmount' : 'target',
+                      e.target.value === '' ? undefined : parseFloat(e.target.value)
+                    )
+                  }
                   placeholder="0.00"
                   step="0.01"
                   className={`w-full pl-8 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                    errors.target
+                    errors.target || errors.originalAmount
                       ? 'border-red-300'
                       : 'border-gray-300'
                   }`}
                 />
               </div>
-              {errors.target && <p className="mt-1.5 text-sm text-red-600">{errors.target}</p>}
+              {(errors.target || errors.originalAmount) && (
+                <p className="mt-1.5 text-sm text-red-600">{errors.target || errors.originalAmount}</p>
+              )}
             </div>
 
             {/* Current/Starting Amount */}
@@ -691,25 +697,30 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
                   </span>
                   <input
                     type="number"
-                    value={formData.current || ''}
-                    onChange={(e) => updateFormData('current', parseFloat(e.target.value))}
+                    value={formData.current ?? ''}
+                    onChange={(e) => updateFormData('current', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                     placeholder="0.00"
                     step="0.01"
-                    className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full pl-8 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      errors.current ? 'border-red-300' : 'border-gray-300'
+                    }`}
                   />
                 </div>
+                {errors.current && <p className="mt-1.5 text-sm text-red-600">{errors.current}</p>}
               </div>
             )}
 
             {/* Deadline/Target Date */}
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">
-                {formData.type === 'spending' ? 'Budget Period (Optional)' : 'Target Date'}
+                {formData.type === 'spending' ? 'Budget Period (Optional)' : 'Target Date (Optional)'}
               </label>
               <DatePicker
                 value={formData.deadline?.split('T')[0] || ''}
                 onChange={(val) => updateFormData('deadline', val)}
+                error={!!errors.deadline}
               />
+              {errors.deadline && <p className="mt-1.5 text-sm text-red-600">{errors.deadline}</p>}
             </div>
 
             {/* Priority */}

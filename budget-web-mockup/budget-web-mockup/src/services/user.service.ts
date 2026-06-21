@@ -104,6 +104,14 @@ export interface HomeSummaryResponse {
     totalExpensesAllocated: number;
     leftToSpendSafe: number;
   };
+  // One-time, dismissible notification emitted by the backend after an
+  // auto-rollover occurs. Distinct from income.rolloverAvailable (the spendable
+  // amount): the notification drives the banner and clears on dismiss.
+  rolloverNotification?: {
+    amount: number;
+    fromPeriod?: string;
+    createdAt?: string;
+  } | null;
 }
 
 export const userService = new UserService();

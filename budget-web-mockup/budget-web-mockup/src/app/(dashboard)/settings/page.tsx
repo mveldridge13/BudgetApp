@@ -7,7 +7,7 @@ import { useUser } from '@/hooks/useUser';
 import { authService } from '@/services/auth.service';
 import CustomDropdown from '@/components/ui/CustomDropdown';
 
-type TabId = 'profile' | 'notifications' | 'appearance' | 'billing' | 'security';
+type TabId = 'profile' | 'notifications' | 'appearance' | 'billing' | 'modules' | 'security';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   {
@@ -43,6 +43,15 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'modules',
+    label: 'Additional Modules',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
       </svg>
     ),
   },
@@ -393,6 +402,45 @@ export default function SettingsPage() {
           </div>
           <div className="text-center py-8 text-sm text-gray-500">
             Billing options will be available here soon.
+          </div>
+        </div>
+      )}
+
+      {/* Additional Modules tab */}
+      {activeTab === 'modules' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">Additional Modules</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Enable optional features to tailor the app to how you use it.</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3h14a1 1 0 011 1v3a4 4 0 01-4 4h-1.528a4.002 4.002 0 01-2.944 2.92V17h3a1 1 0 011 1v2a1 1 0 01-1 1H7a1 1 0 01-1-1v-2a1 1 0 011-1h3v-3.08A4.002 4.002 0 017.528 11H6a4 4 0 01-4-4V4a1 1 0 011-1z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Poker Tracker</p>
+                <p className="text-sm text-gray-500">Track poker tournaments, events, and profitability.</p>
+              </div>
+            </div>
+            <button
+              onClick={() =>
+                updateSettings({
+                  modules: { ...settings.modules, pokerTracker: !settings.modules.pokerTracker },
+                })
+              }
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                settings.modules.pokerTracker ? 'bg-indigo-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.modules.pokerTracker ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
         </div>
       )}

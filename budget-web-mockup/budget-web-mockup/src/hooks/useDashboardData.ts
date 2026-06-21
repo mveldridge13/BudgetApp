@@ -17,6 +17,9 @@ interface DashboardData {
   goals: GoalDisplay[];
   homeSummary: HomeSummaryResponse | null;
   rolloverAmount: number;
+  rolloverNotification: HomeSummaryResponse['rolloverNotification'];
+  baseIncome: number;
+  daysRemaining: number;
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
@@ -34,6 +37,10 @@ export function useDashboardData(): DashboardData {
   const [discretionaryExpenses, setDiscretionaryExpenses] = useState(0);
   const [goalsExpenses, setGoalsExpenses] = useState(0);
   const [rolloverAmount, setRolloverAmount] = useState(0);
+  const [rolloverNotification, setRolloverNotification] =
+    useState<HomeSummaryResponse['rolloverNotification']>(null);
+  const [baseIncome, setBaseIncome] = useState(0);
+  const [daysRemaining, setDaysRemaining] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -58,6 +65,9 @@ export function useDashboardData(): DashboardData {
       setDiscretionaryExpenses(summary.outflows.discretionary.spentSoFar);
       setGoalsExpenses(summary.outflows.goals.paidSoFar);
       setRolloverAmount(summary.income.rolloverAvailable || 0);
+      setRolloverNotification(summary.rolloverNotification || null);
+      setBaseIncome(summary.income.baseIncome || 0);
+      setDaysRemaining(summary.period.daysRemaining || 0);
 
       // Handle response that wraps goals in an object
       const goalsArray = Array.isArray(goalsData)
@@ -79,6 +89,25 @@ export function useDashboardData(): DashboardData {
 
   useEffect(() => {
     fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Refetch when the tab regains focus / becomes visible, mirroring the mobile
+  // app's navigation focus listener (HomeContainer focus listener). This keeps
+  // the backend as the single source of truth across devices: a rollover
+  // dismissed or allocated in the mobile app is reflected here when the user
+  // returns to this tab, without a manual reload — and vice versa.
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboardData();
+      }
+    };
+    window.addEventListener('focus', handleVisible);
+    document.addEventListener('visibilitychange', handleVisible);
+    return () => {
+      window.removeEventListener('focus', handleVisible);
+      document.removeEventListener('visibilitychange', handleVisible);
+    };
   }, [fetchDashboardData]);
 
   // Calculate total savings from goals
@@ -108,6 +137,9 @@ export function useDashboardData(): DashboardData {
     goals,
     homeSummary,
     rolloverAmount,
+    rolloverNotification,
+    baseIncome,
+    daysRemaining,
     isLoading,
     error,
     refresh: fetchDashboardData,

@@ -5,11 +5,16 @@ import { storage } from '@/lib/storage';
 import { API_CONFIG } from '@/config/api.config';
 import { useAuth } from './AuthContext';
 
+interface ModuleSettings {
+  pokerTracker: boolean;
+}
+
 interface AppSettings {
   currency: string;
   notifications: boolean;
   darkMode: boolean;
   compactView: boolean;
+  modules: ModuleSettings;
 }
 
 interface AppSettingsContextType {
@@ -23,6 +28,9 @@ const defaultSettings: AppSettings = {
   notifications: true,
   darkMode: false,
   compactView: false,
+  modules: {
+    pokerTracker: false,
+  },
 };
 
 const AppSettingsContext = createContext<AppSettingsContextType | undefined>(undefined);
@@ -37,7 +45,13 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     const savedSettings = storage.get<AppSettings>(API_CONFIG.storageKeys.appSettings);
     if (savedSettings) {
-      setSettings({ ...defaultSettings, ...savedSettings });
+      // Deep-merge `modules` so new modules added later keep their defaults
+      // even when older saved settings predate them.
+      setSettings({
+        ...defaultSettings,
+        ...savedSettings,
+        modules: { ...defaultSettings.modules, ...savedSettings.modules },
+      });
     }
     setIsLoaded(true);
   }, []);

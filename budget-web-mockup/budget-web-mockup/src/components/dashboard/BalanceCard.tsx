@@ -5,6 +5,8 @@ import {formatCurrency} from '@/lib/formatters';
 
 interface RolloverBannerData {
   amount: number;
+  fromPeriod?: string;
+  date?: string;
 }
 
 interface BalanceCardProps {
@@ -19,6 +21,12 @@ interface BalanceCardProps {
   rolloverBanner?: RolloverBannerData | null;
   onAllocateRollover?: () => void;
   onDismissRollover?: () => void;
+  // Spendable rollover folded into this period's balance (income.rolloverAvailable).
+  // Distinct from rolloverBanner (the one-time notification).
+  rolloverAvailable?: number;
+  baseIncome?: number;
+  // Days left in the current pay period; used to show the roll-to-next preview.
+  daysRemaining?: number;
 }
 
 export default function BalanceCard({
@@ -33,6 +41,9 @@ export default function BalanceCard({
   rolloverBanner,
   onAllocateRollover,
   onDismissRollover,
+  rolloverAvailable = 0,
+  baseIncome = 0,
+  daysRemaining = 0,
 }: BalanceCardProps) {
   // Get locale based on currency
   const getLocale = (curr: string) => {
@@ -58,6 +69,11 @@ export default function BalanceCard({
   const isOverBudget = leftToSpend < 0;
   const isCloseToLimit = percentageRemaining < 20 && percentageRemaining >= 0;
   const isLowBalance = percentageRemaining < 50 && percentageRemaining >= 20;
+
+  // Mirror mobile: surface the spendable rollover folded into this period's
+  // balance, and preview the surplus that will roll on the last day of the period.
+  const hasRollover = rolloverAvailable > 0;
+  const shouldShowRolloverPreview = daysRemaining === 1 && leftToSpend > 0;
 
   // Determine progress bar color (aligned with mobile app BalanceCard.js)
   const getProgressBarColor = () => {
@@ -97,6 +113,11 @@ export default function BalanceCard({
         <p className="text-4xl font-bold text-gray-900 tracking-tight">
           {format(balance)}
         </p>
+        {hasRollover && (
+          <p className="text-sm text-gray-500 mt-1">
+            {format(baseIncome)} + {format(rolloverAvailable)} rollover
+          </p>
+        )}
       </div>
 
       {/* Rollover Banner - shown after auto-rollover occurs */}
@@ -153,6 +174,13 @@ export default function BalanceCard({
           <p className="text-xs text-gray-500 font-medium">
             {percentageRemaining}% of income remaining
           </p>
+
+          {/* Rollover Preview - shown on the last day of the pay period */}
+          {shouldShowRolloverPreview && (
+            <p className="text-xs font-medium mt-2" style={{color: '#14B8A6'}}>
+              {format(leftToSpend)} scheduled to roll to next period
+            </p>
+          )}
         </div>
         <div className="rounded-xl p-5" style={{backgroundColor: '#FEF2F2'}}>
           <p className="text-xs font-medium text-gray-500 mb-2">

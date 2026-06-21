@@ -19,9 +19,16 @@ export default function DashboardPage() {
     goalsExpenses,
     goals,
     rolloverAmount,
+    rolloverNotification,
+    baseIncome,
+    daysRemaining,
     isLoading,
     refresh,
   } = useDashboardData();
+
+  // Amount offered when allocating from the banner — the notification amount,
+  // matching mobile (falls back to spendable rollover if no notification).
+  const allocatableRollover = rolloverNotification?.amount ?? rolloverAmount;
 
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const currency = user?.currency || 'AUD';
@@ -64,7 +71,10 @@ export default function DashboardPage() {
           goalsExpenses={goalsExpenses}
           isLoading={isLoading}
           currency={currency}
-          rolloverBanner={rolloverAmount > 0 ? { amount: rolloverAmount } : null}
+          rolloverAvailable={rolloverAmount}
+          baseIncome={baseIncome}
+          daysRemaining={daysRemaining}
+          rolloverBanner={rolloverNotification}
           onAllocateRollover={() => setShowAllocationModal(true)}
           onDismissRollover={handleDismissRollover}
         />
@@ -93,7 +103,7 @@ export default function DashboardPage() {
         visible={showAllocationModal}
         onClose={() => setShowAllocationModal(false)}
         onConfirm={handleAllocateRollover}
-        availableAmount={rolloverAmount}
+        availableAmount={allocatableRollover}
         goals={goals}
       />
     </div>
