@@ -23,14 +23,9 @@ interface AnalyticsResponse {
   monthlyTrends?: MonthlyTrend[];
 }
 
-type Range = '1M' | '3M' | '6M' | '1Y';
-
-const RANGES: { id: Range; label: string; months: number }[] = [
-  { id: '1M', label: '1M', months: 1 },
-  { id: '3M', label: '3M', months: 3 },
-  { id: '6M', label: '6M', months: 6 },
-  { id: '1Y', label: '1Y', months: 12 },
-];
+// Rolling window length in days. Day-based (not month arithmetic) so it always
+// covers the same span regardless of how many days the calendar months have.
+const ROLLING_DAYS = 30;
 
 const INCOME_COLOR = '#34D399';
 const EXPENSE_COLOR = '#F87171';
@@ -40,7 +35,6 @@ interface CashFlowCardProps {
 }
 
 export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
-  const [range, setRange] = useState<Range>('6M');
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,11 +43,11 @@ export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const months = RANGES.find((r) => r.id === range)?.months ?? 6;
         const now = new Date();
-        const startDate = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).toISOString();
+        const start = new Date(now);
+        start.setDate(start.getDate() - ROLLING_DAYS);
         const data = await transactionService.getAnalytics({
-          startDate,
+          startDate: start.toISOString(),
           endDate: now.toISOString(),
         });
         if (!cancelled) setAnalytics(data as AnalyticsResponse);
@@ -68,45 +62,29 @@ export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, []);
 
   const chartData = useMemo(() => {
-    const months = RANGES.find((r) => r.id === range)?.months ?? 6;
-    const labelOptions: Intl.DateTimeFormatOptions =
-      months <= 1
-        ? { day: 'numeric', month: 'short' }
-        : months >= 12
-          ? { month: 'short', year: '2-digit' }
-          : { month: 'short' };
     return (
       analytics?.monthlyTrends?.map((trend) => ({
-        label: new Date(trend.month).toLocaleDateString('en-AU', labelOptions),
+        label: new Date(trend.month).toLocaleDateString('en-AU', {
+          day: 'numeric',
+          month: 'short',
+        }),
         income: trend.income || 0,
         expenses: trend.expenses || 0,
       })) || []
     );
-  }, [analytics, range]);
+  }, [analytics]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">Cash Flow</h3>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-          {RANGES.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => setRange(r.id)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                range === r.id
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
+        <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded-lg px-2.5 py-1">
+          Last 30 days
+        </span>
       </div>
 
       {/* Chart */}
