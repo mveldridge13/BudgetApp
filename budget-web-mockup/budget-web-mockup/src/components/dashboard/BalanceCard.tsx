@@ -1,7 +1,9 @@
 'use client';
 
-import { ArrowRightCircle, X } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRightCircle, X, ChevronRight, ListChecks } from 'lucide-react';
 import {formatCurrency} from '@/lib/formatters';
+import type { CommittedItem } from '@/services/user.service';
 
 interface RolloverBannerData {
   amount: number;
@@ -14,6 +16,7 @@ interface BalanceCardProps {
   leftToSpend: number;
   totalExpenses: number;
   committedExpenses: number;
+  committedItems?: CommittedItem[];
   discretionaryExpenses: number;
   goalsExpenses?: number;
   isLoading: boolean;
@@ -34,6 +37,7 @@ export default function BalanceCard({
   leftToSpend,
   totalExpenses,
   committedExpenses,
+  committedItems = [],
   discretionaryExpenses,
   goalsExpenses = 0,
   isLoading,
@@ -45,6 +49,8 @@ export default function BalanceCard({
   baseIncome = 0,
   daysRemaining = 0,
 }: BalanceCardProps) {
+  const [showCommittedModal, setShowCommittedModal] = useState(false);
+
   // Get locale based on currency
   const getLocale = (curr: string) => {
     const localeMap: Record<string, string> = {
@@ -63,6 +69,28 @@ export default function BalanceCard({
 
   const locale = getLocale(currency);
   const format = (amount: number) => formatCurrency(amount, currency, locale);
+
+  // Committed breakdown derived values (for the modal).
+  const committedPaid = committedItems
+    .filter((i) => i.status === 'PAID')
+    .reduce((sum, i) => sum + i.amount, 0);
+  const committedRemaining = committedExpenses - committedPaid;
+
+  const statusMeta = (status: string | null) => {
+    switch (status) {
+      case 'PAID':
+        return { label: 'Paid', dot: '#10B981', text: 'text-emerald-700', bg: 'bg-emerald-50' };
+      case 'OVERDUE':
+        return { label: 'Overdue', dot: '#EF4444', text: 'text-red-700', bg: 'bg-red-50' };
+      default:
+        return { label: 'Upcoming', dot: '#F59E0B', text: 'text-amber-700', bg: 'bg-amber-50' };
+    }
+  };
+
+  const formatBillDate = (iso: string | null) => {
+    if (!iso) return null;
+    return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  };
   // Calculate percentage remaining (leftToSpend / balance * 100)
   const percentageRemaining =
     balance > 0 ? Math.round((leftToSpend / balance) * 100) : 0;
@@ -196,19 +224,29 @@ export default function BalanceCard({
           <div
             className="mt-4 pt-4 space-y-2.5"
             style={{borderTop: '1px solid rgba(254, 202, 202, 0.5)'}}>
-            <div className="flex justify-between items-center">
+            <button
+              type="button"
+              onClick={() => committedExpenses > 0 && setShowCommittedModal(true)}
+              disabled={committedExpenses <= 0}
+              className={`group w-full flex justify-between items-center ${
+                committedExpenses > 0 ? 'cursor-pointer' : 'cursor-default'
+              }`}
+              title={committedExpenses > 0 ? 'View committed breakdown' : undefined}>
               <div className="flex items-center">
                 <div
                   className="w-2 h-2 rounded-full mr-2.5"
                   style={{backgroundColor: '#F59E0B'}}></div>
-                <span className="text-xs text-gray-500 font-medium">
+                <span className="text-xs text-gray-500 font-medium group-hover:text-gray-700">
                   Committed
                 </span>
+                {committedExpenses > 0 && (
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 ml-1 group-hover:text-gray-600" />
+                )}
               </div>
               <span className="text-xs font-semibold text-gray-900">
                 {format(committedExpenses)}
               </span>
-            </div>
+            </button>
             <div className="flex justify-between items-center">
               <div className="flex items-center">
                 <div
@@ -240,6 +278,95 @@ export default function BalanceCard({
           </div>
         </div>
       </div>
+
+      {/* Committed Breakdown Modal */}
+      {showCommittedModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <ListChecks className="w-5 h-5" style={{ color: '#F59E0B' }} />
+                <h3 className="text-lg font-semibold text-gray-900">Committed This Period</h3>
+              </div>
+              <button
+                onClick={() => setShowCommittedModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Summary Stats */}
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Total</p>
+                  <p className="text-lg font-semibold text-gray-900">{format(committedExpenses)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Paid</p>
+                  <p className="text-lg font-semibold text-gray-900">{format(committedPaid)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Remaining</p>
+                  <p className="text-lg font-semibold text-gray-900">{format(committedRemaining)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {committedItems.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <ListChecks className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm font-medium">No committed bills this period</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {committedItems.map((item) => {
+                    const meta = statusMeta(item.status);
+                    const dueLabel = formatBillDate(item.dueDate);
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <div
+                          className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                          style={{ backgroundColor: meta.dot }}></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="font-semibold text-gray-900 truncate">{item.description}</p>
+                            <p className="font-semibold text-gray-900 shrink-0">{format(item.amount)}</p>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="text-xs text-gray-500 truncate">
+                              {item.categoryName || 'Uncategorized'}
+                              {dueLabel ? ` • Due ${dueLabel}` : ''}
+                            </p>
+                            <span
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0 ${meta.bg} ${meta.text}`}>
+                              {meta.label}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowCommittedModal(false)}
+                className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

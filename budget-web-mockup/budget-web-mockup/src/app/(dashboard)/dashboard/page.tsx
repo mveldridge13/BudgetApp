@@ -15,6 +15,7 @@ export default function DashboardPage() {
     leftToSpend,
     totalExpenses,
     committedExpenses,
+    committedItems,
     discretionaryExpenses,
     goalsExpenses,
     goals,
@@ -67,6 +68,7 @@ export default function DashboardPage() {
           leftToSpend={leftToSpend}
           totalExpenses={totalExpenses}
           committedExpenses={committedExpenses}
+          committedItems={committedItems}
           discretionaryExpenses={discretionaryExpenses}
           goalsExpenses={goalsExpenses}
           isLoading={isLoading}

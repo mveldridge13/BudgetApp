@@ -71,6 +71,19 @@ class UserService {
 }
 
 // Home summary types
+
+// A single committed bill/obligation in the current pay period. `status` is the
+// computed display status (PAID / UPCOMING / OVERDUE).
+export interface CommittedItem {
+  id: string;
+  description: string;
+  amount: number;
+  status: string | null;
+  date: string;
+  dueDate: string | null;
+  categoryName: string | null;
+}
+
 export interface HomeSummaryResponse {
   period: {
     start: string;
@@ -90,6 +103,7 @@ export interface HomeSummaryResponse {
       plannedTotal: number;
       paidSoFar: number;
       remaining: number;
+      items: CommittedItem[];
     };
     discretionary: {
       spentSoFar: number;

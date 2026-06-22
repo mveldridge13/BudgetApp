@@ -1,6 +1,6 @@
 import {useEffect, useState, useCallback} from 'react';
 import {goalService} from '@/services/goal.service';
-import {userService, HomeSummaryResponse} from '@/services/user.service';
+import {userService, HomeSummaryResponse, CommittedItem} from '@/services/user.service';
 import {GoalDisplay} from '@/types';
 
 interface DashboardData {
@@ -8,6 +8,7 @@ interface DashboardData {
   leftToSpend: number;
   totalExpenses: number;
   committedExpenses: number;
+  committedItems: CommittedItem[];
   discretionaryExpenses: number;
   goalsExpenses: number;
   activeGoal: GoalDisplay | null;
@@ -128,6 +129,7 @@ export function useDashboardData(): DashboardData {
     leftToSpend,
     totalExpenses,
     committedExpenses,
+    committedItems: homeSummary?.outflows.committed.items ?? [],
     discretionaryExpenses,
     goalsExpenses,
     activeGoal,
