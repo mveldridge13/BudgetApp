@@ -77,7 +77,7 @@ export interface CreateGoalData {
   targetAmount: number;
   currentAmount?: number;
   originalAmount?: number;
-  targetDate?: string;
+  targetDate?: string | null;
   category?: GoalCategory | string;
   originalCategory?: string;
   type?: GoalType;
@@ -98,7 +98,7 @@ export interface UpdateGoalData {
   targetAmount?: number;
   currentAmount?: number;
   originalAmount?: number;
-  targetDate?: string;
+  targetDate?: string | null;
   category?: GoalCategory | string;
   originalCategory?: string;
   type?: GoalType;

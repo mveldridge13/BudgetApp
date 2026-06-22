@@ -148,14 +148,23 @@ export default function DebtSimulator({
                 <h3 className="text-sm font-semibold text-gray-900">Payoff Timeline</h3>
                 {/* Legend */}
                 <div className="flex items-center gap-4 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-6 h-0.5 bg-indigo-500"></div>
-                    <span className="text-gray-600">Current Track</span>
-                  </div>
-                  {monthlyPayment > 0 && Math.abs(monthlyPayment - minimumPayment) > 0.01 && (
+                  {minimumPayment > 0 ? (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-6 h-0.5 bg-indigo-500"></div>
+                        <span className="text-gray-600">Current Track</span>
+                      </div>
+                      {monthlyPayment > 0 && Math.abs(monthlyPayment - minimumPayment) > 0.01 && (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-6 h-0.5 bg-green-500" style={{ borderTop: '2px dashed #10b981', background: 'none' }}></div>
+                          <span className="text-gray-600">Simulation</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
                     <div className="flex items-center gap-1.5">
                       <div className="w-6 h-0.5 bg-green-500" style={{ borderTop: '2px dashed #10b981', background: 'none' }}></div>
-                      <span className="text-gray-600">Simulation</span>
+                      <span className="text-gray-600">Payoff Plan</span>
                     </div>
                   )}
                 </div>
@@ -165,31 +174,36 @@ export default function DebtSimulator({
                   {/* Graph */}
                   <div className="bg-white rounded-lg p-4 mb-4">
                     {(() => {
-                      const minimumSchedule = getPayoffSchedule(minimumPayment);
                       const simulationSchedule = monthlyPayment > 0 ? getPayoffSchedule(monthlyPayment) : null;
 
-                      // Check if payment is too low (schedule only has month 0)
-                      const minimumTooLow = minimumSchedule.length === 1;
-                      const simulationTooLow = simulationSchedule && simulationSchedule.length === 1;
-
-                      // If minimum payment is too low, show error
-                      if (minimumTooLow) {
-                        const requiredMinimum = minimumSchedule[0].interest + 0.01;
+                      // The warning must reflect the amount the user actually
+                      // entered, not the (possibly unset / $0) minimum payment.
+                      // A schedule length of 1 means the payment can't even cover
+                      // the first month's interest, so the balance never falls.
+                      const simulationTooLow = !simulationSchedule || simulationSchedule.length === 1;
+                      if (simulationTooLow) {
+                        const interestCharge = simulationSchedule ? simulationSchedule[0].interest : 0;
+                        const requiredMinimum = interestCharge + 0.01;
                         return (
                           <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
                             <p className="text-sm font-medium text-red-900 mb-2">Payment Too Low</p>
                             <p className="text-xs text-red-700">
-                              The minimum payment (${minimumPayment.toFixed(2)}) is less than the monthly interest charge (${minimumSchedule[0].interest.toFixed(2)}).
+                              Your monthly payment (${monthlyPayment.toFixed(2)}) is less than the monthly interest charge (${interestCharge.toFixed(2)}).
                               The balance will never decrease. Minimum required: ${requiredMinimum.toFixed(2)}
                             </p>
                           </div>
                         );
                       }
 
+                      // A "current track" line only applies when a real minimum
+                      // payment is set and it actually reduces the balance.
+                      const minimumSchedule = minimumPayment > 0 ? getPayoffSchedule(minimumPayment) : null;
+                      const hasMinimumTrack = !!minimumSchedule && minimumSchedule.length > 1;
+
                       const maxBalance = principal;
                       const maxMonths = Math.max(
-                        minimumSchedule.length,
-                        simulationSchedule?.length || 0
+                        hasMinimumTrack ? minimumSchedule!.length : 0,
+                        simulationSchedule!.length
                       );
 
                       const chartWidth = 600;
@@ -198,11 +212,12 @@ export default function DebtSimulator({
                       const graphWidth = chartWidth - padding.left - padding.right;
                       const graphHeight = chartHeight - padding.top - padding.bottom;
 
-                      // Check if user has entered a simulation payment
-                      const hasSimulation = simulationSchedule && Math.abs(monthlyPayment - minimumPayment) > 0.01;
+                      // Show a distinct (green dashed) simulation line only when
+                      // there's a different minimum "current track" to compare to.
+                      const hasSimulation = hasMinimumTrack && Math.abs(monthlyPayment - minimumPayment) > 0.01;
 
                       // Helper to create path from schedule
-                      const createPath = (schedule: typeof minimumSchedule) => {
+                      const createPath = (schedule: NonNullable<typeof simulationSchedule>) => {
                         const sampleRate = Math.max(1, Math.ceil(schedule.length / 24));
                         const sampledSchedule = schedule.filter((_, i) => i % sampleRate === 0 || i === schedule.length - 1);
 
@@ -219,11 +234,11 @@ export default function DebtSimulator({
                         return { pathD, points };
                       };
 
-                      const minimumPath = createPath(minimumSchedule);
-                      const simulationPath = simulationSchedule ? createPath(simulationSchedule) : null;
+                      const simulationPath = createPath(simulationSchedule!);
+                      const minimumPath = hasMinimumTrack ? createPath(minimumSchedule!) : null;
 
-                      // Area fill path - use simulation if exists, otherwise minimum
-                      const primaryPath = simulationPath || minimumPath;
+                      // The user's payoff track is always the primary curve.
+                      const primaryPath = simulationPath;
                       const areaD = `${primaryPath.pathD} L ${primaryPath.points[primaryPath.points.length - 1].x} ${chartHeight - padding.bottom} L ${padding.left} ${chartHeight - padding.bottom} Z`;
 
                       return (
@@ -257,8 +272,8 @@ export default function DebtSimulator({
                           {/* Gradient definition */}
                           <defs>
                             <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                              <stop offset="0%" stopColor={hasSimulation ? "#10b981" : "#6366f1"} stopOpacity="0.3" />
-                              <stop offset="100%" stopColor={hasSimulation ? "#10b981" : "#6366f1"} stopOpacity="0.05" />
+                              <stop offset="0%" stopColor={hasSimulation || !hasMinimumTrack ? "#10b981" : "#6366f1"} stopOpacity="0.3" />
+                              <stop offset="100%" stopColor={hasSimulation || !hasMinimumTrack ? "#10b981" : "#6366f1"} stopOpacity="0.05" />
                             </linearGradient>
                           </defs>
 
@@ -269,19 +284,34 @@ export default function DebtSimulator({
                             opacity="0.4"
                           />
 
-                          {/* Minimum payment line (blue solid) */}
-                          <path
-                            d={minimumPath.pathD}
-                            fill="none"
-                            stroke="#6366f1"
-                            strokeWidth={hasSimulation ? "2.5" : "3"}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity={hasSimulation ? "0.7" : "1"}
-                          />
+                          {/* Current track line (indigo solid) - only when a real minimum is set */}
+                          {minimumPath && (
+                            <path
+                              d={minimumPath.pathD}
+                              fill="none"
+                              stroke="#6366f1"
+                              strokeWidth={hasSimulation ? "2.5" : "3"}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              opacity={hasSimulation ? "0.7" : "1"}
+                            />
+                          )}
 
-                          {/* Simulation line (green dotted) - only show if user entered a payment */}
-                          {simulationPath && hasSimulation && (
+                          {/* Simulation line (green dashed) - when comparing against a minimum track */}
+                          {hasSimulation && (
+                            <path
+                              d={simulationPath.pathD}
+                              fill="none"
+                              stroke="#10b981"
+                              strokeWidth="3"
+                              strokeDasharray="6 4"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          )}
+
+                          {/* Single payoff line (green dashed) - when there's no minimum track to compare */}
+                          {!hasMinimumTrack && (
                             <path
                               d={simulationPath.pathD}
                               fill="none"

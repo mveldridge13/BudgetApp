@@ -175,9 +175,10 @@ class GoalService {
       data.description = frontendGoal.description;
     }
 
-    if (frontendGoal.deadline) {
-      data.targetDate = frontendGoal.deadline;
-    }
+    // Send the date when set, or explicitly null to clear it. Without the
+    // null, an update simply omits targetDate and the backend keeps the old
+    // value, so clearing the (optional) deadline never persisted.
+    data.targetDate = frontendGoal.deadline ? frontendGoal.deadline : null;
 
     if (frontendGoal.autoContribute && frontendGoal.autoContribute > 0) {
       data.monthlyTarget = Number(frontendGoal.autoContribute.toFixed(2));

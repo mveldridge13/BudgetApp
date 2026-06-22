@@ -32,8 +32,8 @@ const RANGES: { id: Range; label: string; months: number }[] = [
   { id: '1Y', label: '1Y', months: 12 },
 ];
 
-const INCOME_COLOR = '#10B981';
-const EXPENSE_COLOR = '#EF4444';
+const INCOME_COLOR = '#34D399';
+const EXPENSE_COLOR = '#F87171';
 
 interface CashFlowCardProps {
   currency?: string;
@@ -161,6 +161,8 @@ export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
                 name="Income"
                 stroke={INCOME_COLOR}
                 strokeWidth={2.5}
+                strokeDasharray="2 4"
+                strokeLinecap="round"
                 fill="url(#cashflow-income)"
                 activeDot={{ r: 4 }}
               />
@@ -170,6 +172,8 @@ export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
                 name="Expenses"
                 stroke={EXPENSE_COLOR}
                 strokeWidth={2.5}
+                strokeDasharray="2 4"
+                strokeLinecap="round"
                 fill="url(#cashflow-expenses)"
                 activeDot={{ r: 4 }}
               />
