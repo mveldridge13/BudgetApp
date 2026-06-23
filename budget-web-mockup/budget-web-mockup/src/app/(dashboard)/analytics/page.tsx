@@ -2,8 +2,8 @@
 
 import {useState, useEffect, useCallback} from 'react';
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,6 +17,7 @@ import {userService} from '@/services/user.service';
 import {getPayPeriodStatusText} from '@/utils/payPeriodService';
 import Modal from '@/components/ui/Modal';
 import DatePicker from '@/components/ui/DatePicker';
+import CategoryDonut from '@/components/analytics/CategoryDonut';
 
 // Re-export for convenience (backend now handles pay period filtering)
 
@@ -76,6 +77,7 @@ interface TransactionAnalytics {
   netIncome?: number;
   transactionCount?: number;
   averageTransaction?: number;
+  averagePeriodSpending?: number;
   previousPeriodExpenses?: number;
   previousPeriodDiscretionary?: number;
   expensesPercentageChange?: number;
@@ -125,7 +127,9 @@ interface IncomeAnalytics {
   insights?: IncomeInsights;
 }
 
-type PeriodType = 'daily' | 'weekly' | 'monthly';
+// Time horizons: 7D (short-term signal), 30D (behavioural trend — the default),
+// 12M (financial overview). 7D/30D are daily points; 12M is monthly aggregates.
+type PeriodType = '7d' | '30d' | '12m';
 type TabType = 'spending' | 'income' | 'bills';
 
 // Bills analytics response type (from backend)
@@ -174,7 +178,7 @@ interface BillsAnalyticsResponse {
 export default function AnalyticsPage() {
   // State
   const [selectedTab, setSelectedTab] = useState<TabType>('spending');
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('daily');
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('30d');
   const [comparisonMode, setComparisonMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -214,23 +218,26 @@ export default function AnalyticsPage() {
       // Date ranges intentionally match the mobile app (AnalyticsContainer) so
       // the backend returns identically-grouped monthlyTrends across platforms.
       switch (selectedPeriod) {
-        case 'daily': {
+        case '7d': {
+          // Rolling 7 days (today included) — 7 daily points.
           const start = new Date(now);
           start.setDate(start.getDate() - 6);
           startDate = start.toISOString();
           break;
         }
-        case 'weekly': {
+        case '30d': {
+          // Rolling 30 days — 30 daily points (the behavioural-trend default).
           const start = new Date(now);
-          start.setDate(start.getDate() - 27);
+          start.setDate(start.getDate() - 29);
           startDate = start.toISOString();
           break;
         }
-        case 'monthly':
+        case '12m':
         default:
+          // Last 12 calendar months — 12 monthly aggregates.
           startDate = new Date(
             now.getFullYear(),
-            now.getMonth() - 4,
+            now.getMonth() - 11,
             1,
           ).toISOString();
           break;
@@ -294,30 +301,8 @@ export default function AnalyticsPage() {
       let start: Date;
       let end: Date;
 
-      if (selectedPeriod === 'weekly') {
-        // Week containing the date (Sunday–Saturday)
-        const startOfWeek = new Date(base);
-        startOfWeek.setDate(base.getDate() - base.getDay());
-        start = new Date(
-          startOfWeek.getFullYear(),
-          startOfWeek.getMonth(),
-          startOfWeek.getDate(),
-          0,
-          0,
-          0,
-          0,
-        );
-        end = new Date(
-          startOfWeek.getFullYear(),
-          startOfWeek.getMonth(),
-          startOfWeek.getDate() + 6,
-          23,
-          59,
-          59,
-          999,
-        );
-      } else if (selectedPeriod === 'monthly') {
-        // First to last day of the month
+      if (selectedPeriod === '12m') {
+        // First to last day of the month (the highest-spend month).
         start = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
         end = new Date(
           base.getFullYear(),
@@ -329,7 +314,7 @@ export default function AnalyticsPage() {
           999,
         );
       } else {
-        // Single day
+        // 7d / 30d — a single day (the highest-spend day).
         start = new Date(
           base.getFullYear(),
           base.getMonth(),
@@ -496,19 +481,19 @@ export default function AnalyticsPage() {
 
   // Build chart data from monthlyTrends (contains discretionary data)
   const chartData =
-    analytics?.monthlyTrends?.map((trend, index) => {
+    analytics?.monthlyTrends?.map(trend => {
       const date = new Date(trend.month);
       let label;
 
-      if (selectedPeriod === 'monthly') {
+      if (selectedPeriod === '12m') {
         label = date.toLocaleDateString('en-AU', {month: 'short'});
-      } else if (selectedPeriod === 'weekly') {
-        label = `W${index + 1}`;
+      } else if (selectedPeriod === '7d') {
+        label = date.toLocaleDateString('en-AU', {weekday: 'short'});
       } else {
-        // Daily period - use short day labels
+        // 30d — day + short month (axis is thinned so labels stay readable)
         label = date.toLocaleDateString('en-AU', {
-          weekday: 'short',
           day: 'numeric',
+          month: 'short',
         });
       }
 
@@ -523,7 +508,7 @@ export default function AnalyticsPage() {
 
   const statistics = {
     currentTotal: analytics?.totalExpenses || 0,
-    averageSpending: analytics?.averageTransaction || 0,
+    averageSpending: analytics?.averagePeriodSpending || 0,
     percentageChange: analytics?.expensesPercentageChange || 0,
     currentDiscretionary: totalDiscretionaryExpenses,
     averageDiscretionary: averageDiscretionaryPerPeriod,
@@ -686,9 +671,9 @@ export default function AnalyticsPage() {
           {/* Period Selector */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex space-x-2">
-                {(['daily', 'weekly', 'monthly'] as PeriodType[]).map(
-                  period => (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex space-x-2">
+                  {(['7d', '30d', '12m'] as PeriodType[]).map(period => (
                     <button
                       key={period}
                       onClick={() => setSelectedPeriod(period)}
@@ -697,10 +682,17 @@ export default function AnalyticsPage() {
                           ? 'bg-indigo-500 text-white'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}>
-                      {period.charAt(0).toUpperCase() + period.slice(1)}
+                      {period.toUpperCase()}
                     </button>
-                  ),
-                )}
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400">
+                  {selectedPeriod === '7d'
+                    ? 'Last 7 days'
+                    : selectedPeriod === '30d'
+                    ? 'Rolling 30 days'
+                    : 'Last 12 months'}
+                </p>
               </div>
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
@@ -728,9 +720,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
-                {selectedPeriod.charAt(0).toUpperCase() +
-                  selectedPeriod.slice(1)}{' '}
-                Average
+                {selectedPeriod === '12m' ? 'Monthly Average' : 'Daily Average'}
               </p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(statistics.averageSpending)}
@@ -786,20 +776,63 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
+          {/* Spending Over Time & Spending by Category, side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Spending Chart */}
           {chartData.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-6 flex flex-col">
+              <h3 className="text-base font-semibold text-gray-900 mb-4">
                 Spending Over Time
               </h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+              <div className="flex-1 flex items-center">
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={chartData}
+                    margin={{top: 8, right: 20, left: 8, bottom: 4}}>
+                    <defs>
+                      <linearGradient
+                        id="expensesFill"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="#6366F1"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#6366F1"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="discretionaryFill"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="#10B981"
+                          stopOpacity={0.25}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#10B981"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                     <XAxis
                       dataKey="date"
                       tick={{fontSize: 12, fill: '#6B7280'}}
                       tickLine={false}
+                      interval={selectedPeriod === '30d' ? 4 : 0}
+                      minTickGap={8}
                     />
                     <YAxis
                       tick={{fontSize: 12, fill: '#6B7280'}}
@@ -815,28 +848,31 @@ export default function AnalyticsPage() {
                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                       }}
                     />
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="expenses"
                       stroke="#6366F1"
                       strokeWidth={3}
+                      fill="url(#expensesFill)"
                       dot={{fill: '#6366F1', strokeWidth: 2, r: 4}}
                       activeDot={{r: 6}}
                       name="Expenses"
                     />
                     {comparisonMode && (
-                      <Line
+                      <Area
                         type="monotone"
                         dataKey="discretionary"
                         stroke="#10B981"
                         strokeWidth={2}
                         strokeDasharray="5 5"
+                        fill="url(#discretionaryFill)"
                         dot={{fill: '#10B981', strokeWidth: 2, r: 3}}
                         name="Discretionary"
                       />
                     )}
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             </div>
           )}
@@ -845,44 +881,15 @@ export default function AnalyticsPage() {
           {analytics?.categoryBreakdown &&
             analytics.categoryBreakdown.length > 0 && (
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">
                   Spending by Category
                 </h3>
-                <div className="space-y-4">
-                  {analytics.categoryBreakdown.slice(0, 6).map(category => (
-                    <div key={category.categoryId} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{
-                              backgroundColor:
-                                category.categoryColor || '#6366F1',
-                            }}
-                          />
-                          <span className="text-sm font-medium text-gray-900">
-                            {category.categoryName}
-                          </span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {formatCurrency(category.amount)}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all"
-                          style={{
-                            width: `${category.percentage}%`,
-                            backgroundColor:
-                              category.categoryColor || '#6366F1',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-center py-2">
+                  <CategoryDonut categories={analytics.categoryBreakdown} />
                 </div>
               </div>
             )}
+          </div>
 
           {/* Key Insights */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
