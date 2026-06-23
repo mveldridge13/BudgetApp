@@ -314,7 +314,10 @@ export default function DatePicker({
             <button
               type="button"
               onClick={() => {
-                const t = new Date();
+                // Normalize to midnight so the day-granular isDisabledDay check
+                // doesn't reject "today" because of the current time of day.
+                const now = new Date();
+                const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 if (!isDisabledDay(t)) {
                   onChange(toISO(t));
                   setIsOpen(false);
