@@ -598,27 +598,29 @@ export default function AnalyticsPage() {
     });
   })();
 
-  // The category whose slice is selected, plus its subcategories grouped by name
-  // (the backend returns one entry per transaction).
+  // The category whose slice is selected, plus its individual line items (the
+  // backend returns one subcategory entry per transaction).
   const selectedDonutCategory =
     discretionaryCategories.find(
       c => c.categoryId === selectedDonutCategoryId,
     ) ?? null;
 
-  const selectedSubcategories = (() => {
+  const selectedLineItems = (() => {
     if (!selectedDonutCategory?.subcategories) return [];
-    const map = new Map<
-      string,
-      {name: string; amount: number; count: number}
-    >();
-    for (const sub of selectedDonutCategory.subcategories) {
-      const name = sub.subcategoryName || 'Other';
-      const entry = map.get(name) ?? {name, amount: 0, count: 0};
-      entry.amount += sub.amount;
-      entry.count += sub.transactionCount;
-      map.set(name, entry);
-    }
-    return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+    return selectedDonutCategory.subcategories
+      .map((sub, i) => {
+        const tx = sub.transactions?.[0];
+        return {
+          key: `${sub.subcategoryId ?? sub.subcategoryName ?? 'item'}-${i}`,
+          label:
+            tx?.description ||
+            tx?.merchant ||
+            sub.subcategoryName ||
+            'Other',
+          amount: sub.amount,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
   })();
 
   if (isLoading) {
@@ -1637,28 +1639,22 @@ export default function AnalyticsPage() {
                           </span>
                         </div>
                         <div className="space-y-2 max-h-56 overflow-y-auto">
-                          {selectedSubcategories.length > 0 ? (
-                            selectedSubcategories.map(sub => (
+                          {selectedLineItems.length > 0 ? (
+                            selectedLineItems.map(item => (
                               <div
-                                key={sub.name}
+                                key={item.key}
                                 className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
                                 <span className="text-sm text-gray-700 truncate">
-                                  {sub.name}
-                                  {sub.count > 1 && (
-                                    <span className="text-xs text-gray-400">
-                                      {' '}
-                                      · {sub.count}
-                                    </span>
-                                  )}
+                                  {item.label}
                                 </span>
                                 <span className="text-sm font-medium text-gray-900 shrink-0 ml-2">
-                                  {formatCurrency(sub.amount)}
+                                  {formatCurrency(item.amount)}
                                 </span>
                               </div>
                             ))
                           ) : (
                             <p className="text-sm text-gray-500 py-4 text-center">
-                              No subcategory detail for this category.
+                              No line items for this category.
                             </p>
                           )}
                         </div>

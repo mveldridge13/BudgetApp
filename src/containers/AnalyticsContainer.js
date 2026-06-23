@@ -23,6 +23,8 @@ const AnalyticsContainer = () => {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // The day the breakdown modal should open on (the highest-discretionary period).
+  const [breakdownInitialDate, setBreakdownInitialDate] = useState(null);
 
   // Backend data - this is all we need
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -834,6 +836,10 @@ const AnalyticsContainer = () => {
 
   const handleDiscretionaryClick = useCallback(() => {
     if (isPro) {
+      // Open the breakdown anchored to the highest-discretionary period (so it
+      // shows that day's data, not today's).
+      const highest = processedData?.statistics?.highestDiscretionaryPeriod;
+      setBreakdownInitialDate(highest?.date ? new Date(highest.date) : null);
       setShowBreakdown(true);
     } else {
       Alert.alert(
@@ -845,7 +851,7 @@ const AnalyticsContainer = () => {
         ],
       );
     }
-  }, [isPro]);
+  }, [isPro, processedData]);
 
   const handleCloseBreakdown = useCallback(() => {
     setShowBreakdown(false);
@@ -1007,6 +1013,7 @@ const AnalyticsContainer = () => {
     isPro,
     proFeatures,
     showBreakdown,
+    breakdownInitialDate,
 
     // ✅ UPDATED: Backend-calculated statistics with real discretionary data
     statistics: processedData.statistics,

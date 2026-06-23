@@ -116,6 +116,13 @@ export interface DiscretionarySubcategory {
   amount: number;
   transactionCount: number;
   percentage: number; // share within the parent category
+  transactions?: {
+    id: string;
+    date: string;
+    amount: number;
+    description?: string;
+    merchant?: string;
+  }[];
 }
 
 export interface DiscretionaryBreakdownCategory {

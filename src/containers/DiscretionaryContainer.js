@@ -8,6 +8,7 @@ const DiscretionaryContainer = ({
   visible,
   onClose,
   selectedPeriod = 'daily', // Default to daily for discretionary breakdown
+  initialDate = null, // Day to open on (e.g. the highest-discretionary period)
 }) => {
   // ==============================================
   // BUSINESS LOGIC STATE MANAGEMENT
@@ -26,6 +27,19 @@ const DiscretionaryContainer = ({
   // Refs for component lifecycle management
   const isMountedRef = useRef(true);
   const isLoadingRef = useRef(false);
+
+  // When the modal opens with a target day (e.g. the highest-discretionary
+  // period), jump to it. Later in-modal calendar changes are preserved.
+  // initialDate is parsed from a date-only string (UTC midnight), so read its
+  // UTC calendar parts to build the intended local day in any timezone.
+  useEffect(() => {
+    if (visible && initialDate) {
+      const d = new Date(initialDate);
+      setSelectedDate(
+        new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+      );
+    }
+  }, [visible, initialDate]);
 
   // ==============================================
   // TIMEZONE-SAFE DATE UTILITIES
@@ -154,13 +168,15 @@ const DiscretionaryContainer = ({
           );
       }
 
-      // Try both date-only and datetime formats for the API
       const result = {
         startDate: formatDateForAPI(startDate),
         endDate: formatDateForAPI(endDate),
-        // Alternative: include time if your API supports it
         startDateTime: formatDateTimeForAPI(startDate),
         endDateTime: formatDateTimeForAPI(endDate),
+        // Unambiguous UTC instants for the API — the backend buckets these into
+        // the user's calendar day. This is the contract the web already uses.
+        startISO: startDate.toISOString(),
+        endISO: endDate.toISOString(),
       };
 
       return result;
@@ -190,10 +206,10 @@ const DiscretionaryContainer = ({
         // ✅ FIXED: Use timezone-safe date range creation
         const dateRange = createLocalDateRange(selectedDate, selectedPeriod);
 
-        // Try with datetime format since date-only isn't working
+        // Send unambiguous UTC instants; the backend resolves the user's day.
         const filters = {
-          startDate: dateRange.startDateTime, // Use full datetime
-          endDate: dateRange.endDateTime, // Use full datetime
+          startDate: dateRange.startISO,
+          endDate: dateRange.endISO,
         };
 
         // ✅ FIXED: Use the new TrendAPIService method

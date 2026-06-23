@@ -265,6 +265,19 @@ export const AppSettingsProvider = ({children}) => {
   // CONTEXT VALUE
   // ==============================================
 
+  // ⚠️ TEMP (testing): force Pro on so all gated features are accessible.
+  // Remove this override to restore the real backend-driven subscription state.
+  const PRO_OVERRIDE = true;
+  const effectiveIsPro = PRO_OVERRIDE ? true : isPro;
+  const effectiveProFeatures = PRO_OVERRIDE
+    ? {
+        spendingVelocityDetails: true,
+        advancedAnalytics: true,
+        exportData: true,
+        aiAssistant: true,
+      }
+    : proFeatures;
+
   const contextValue = {
     // State
     appSettings,
@@ -272,9 +285,9 @@ export const AppSettingsProvider = ({children}) => {
     userProfile,
 
     // Subscription state (synced from backend)
-    isPro,
+    isPro: effectiveIsPro,
     proExpiresAt,
-    proFeatures,
+    proFeatures: effectiveProFeatures,
 
     // Loading states
     isLoading,

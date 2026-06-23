@@ -251,6 +251,7 @@ const AnalyticsScreen = ({
   isPro,
   proFeatures,
   showBreakdown,
+  breakdownInitialDate,
 
   // Calculated statistics
   statistics,
@@ -1288,6 +1289,7 @@ const AnalyticsScreen = ({
         visible={showBreakdown}
         onClose={onCloseBreakdown}
         selectedPeriod={selectedPeriod}
+        initialDate={breakdownInitialDate}
       />
 
       {/* ✅ NEW: Spending Velocity Modal */}
