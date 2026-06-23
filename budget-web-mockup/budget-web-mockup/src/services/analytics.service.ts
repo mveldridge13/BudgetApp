@@ -1,13 +1,6 @@
-import { api } from './api';
-import { transactionService } from './transaction.service';
-import { goalService } from './goal.service';
-import { budgetService } from './budget.service';
+import {transactionService} from './transaction.service';
+import {goalService} from './goal.service';
 import {
-  TransactionAnalytics,
-  BillsAnalytics,
-  DiscretionaryBreakdown,
-  GoalsSummary,
-  BudgetAnalytics,
   DateRangeFilter,
   TransactionFilters,
 } from '@/types';
@@ -44,24 +37,43 @@ export interface SpendingTrend {
 }
 
 class AnalyticsService {
-  async getDashboardSummary(filters?: DateRangeFilter): Promise<DashboardSummary> {
+  async getDashboardSummary(
+    filters?: DateRangeFilter,
+  ): Promise<DashboardSummary> {
     const transactionFilters = filters as TransactionFilters | undefined;
-    const [transactionAnalytics, billsAnalytics, discretionaryBreakdown, goalsSummary] =
-      await Promise.all([
-        transactionService.getAnalytics(transactionFilters),
-        transactionService.getBillsAnalytics(transactionFilters),
-        transactionService.getDiscretionaryBreakdown(transactionFilters),
-        goalService.getGoalsSummary(filters),
-      ]);
+    const [
+      transactionAnalytics,
+      billsAnalytics,
+      discretionaryBreakdown,
+      goalsSummary,
+    ] = await Promise.all([
+      transactionService.getAnalytics(transactionFilters),
+      transactionService.getBillsAnalytics(transactionFilters),
+      transactionService.getDiscretionaryBreakdown(transactionFilters),
+      goalService.getGoalsSummary(filters),
+    ]);
 
-    console.log('[Analytics] transactionAnalytics:', JSON.stringify(transactionAnalytics, null, 2));
-    console.log('[Analytics] billsAnalytics:', JSON.stringify(billsAnalytics, null, 2));
-    console.log('[Analytics] discretionaryBreakdown:', JSON.stringify(discretionaryBreakdown, null, 2));
-    console.log('[Analytics] goalsSummary:', JSON.stringify(goalsSummary, null, 2));
+    console.log(
+      '[Analytics] transactionAnalytics:',
+      JSON.stringify(transactionAnalytics, null, 2),
+    );
+    console.log(
+      '[Analytics] billsAnalytics:',
+      JSON.stringify(billsAnalytics, null, 2),
+    );
+    console.log(
+      '[Analytics] discretionaryBreakdown:',
+      JSON.stringify(discretionaryBreakdown, null, 2),
+    );
+    console.log(
+      '[Analytics] goalsSummary:',
+      JSON.stringify(goalsSummary, null, 2),
+    );
 
     // Map API response fields to expected format
     const totalExpenses = transactionAnalytics.totalExpenses || 0;
-    const discretionaryExpenses = discretionaryBreakdown.totalDiscretionary || 0;
+    const discretionaryExpenses =
+      discretionaryBreakdown.totalDiscretionaryAmount || 0;
     const committedExpenses = totalExpenses - discretionaryExpenses; // Committed = total - discretionary
     const budgetLimit = transactionAnalytics.totalIncome || 0;
     const leftToSpend = budgetLimit - totalExpenses;
@@ -74,7 +86,8 @@ class AnalyticsService {
       discretionaryExpenses,
       leftToSpend: Math.max(leftToSpend, 0),
       budgetLimit,
-      percentageUsed: budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0,
+      percentageUsed:
+        budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0,
       upcomingBills: billsAnalytics.totalUpcoming || 0,
       overdueAmount: billsAnalytics.totalOverdue || 0,
       activeGoals: goalsSummary.activeGoals || 0,
@@ -82,20 +95,31 @@ class AnalyticsService {
     };
   }
 
-  async getSpendingByCategory(filters?: DateRangeFilter): Promise<SpendingByCategory[]> {
+  async getSpendingByCategory(
+    filters?: DateRangeFilter,
+  ): Promise<SpendingByCategory[]> {
     const transactionFilters = filters as TransactionFilters | undefined;
     const analytics = await transactionService.getAnalytics(transactionFilters);
 
     const categoryBreakdown = analytics.categoryBreakdown || [];
 
-    return categoryBreakdown.map((cat: { categoryId: string; categoryName: string; categoryColor?: string; amount: number; percentage: number; transactionCount?: number }) => ({
-      categoryId: cat.categoryId,
-      categoryName: cat.categoryName,
-      categoryColor: cat.categoryColor || '#6366F1',
-      amount: cat.amount || 0,
-      percentage: cat.percentage || 0,
-      transactionCount: cat.transactionCount || 0,
-    }));
+    return categoryBreakdown.map(
+      (cat: {
+        categoryId: string;
+        categoryName: string;
+        categoryColor?: string;
+        amount: number;
+        percentage: number;
+        transactionCount?: number;
+      }) => ({
+        categoryId: cat.categoryId,
+        categoryName: cat.categoryName,
+        categoryColor: cat.categoryColor || '#6366F1',
+        amount: cat.amount || 0,
+        percentage: cat.percentage || 0,
+        transactionCount: cat.transactionCount || 0,
+      }),
+    );
   }
 
   async getSpendingTrend(filters?: DateRangeFilter): Promise<SpendingTrend[]> {
@@ -105,7 +129,7 @@ class AnalyticsService {
     // Use dailyTrend from analytics
     const dailyTrend = analytics.dailyTrend || [];
 
-    return dailyTrend.map((day) => ({
+    return dailyTrend.map(day => ({
       date: day.date,
       income: day.income || 0,
       expenses: day.expenses || 0,
@@ -122,9 +146,10 @@ class AnalyticsService {
     const transactionFilters = filters as TransactionFilters | undefined;
     const analytics = await transactionService.getAnalytics(transactionFilters);
     const savings = analytics.totalIncome - analytics.totalExpenses;
-    const savingsRate = analytics.totalIncome > 0
-      ? Math.round((savings / analytics.totalIncome) * 100)
-      : 0;
+    const savingsRate =
+      analytics.totalIncome > 0
+        ? Math.round((savings / analytics.totalIncome) * 100)
+        : 0;
 
     return {
       totalIncome: analytics.totalIncome,

@@ -10,6 +10,7 @@ interface RequestOptions {
   headers?: Record<string, string>;
   timeout?: number;
   skipAuthRefresh?: boolean; // Prevent infinite refresh loops
+  skipUnwrap?: boolean; // Return the raw JSON body without auto-unwrapping (data/transactions/etc.)
 }
 
 class ApiClient {
@@ -152,7 +153,7 @@ class ApiClient {
     endpoint: string,
     options: RequestOptions = {}
   ): Promise<T> {
-    const { method = 'GET', body, headers = {}, timeout = this.defaultTimeout, skipAuthRefresh = false } = options;
+    const { method = 'GET', body, headers = {}, timeout = this.defaultTimeout, skipAuthRefresh = false, skipUnwrap = false } = options;
 
     const token = tokenStorage.getToken();
     const requestHeaders: Record<string, string> = {
@@ -229,6 +230,13 @@ class ApiClient {
       }
 
       const data = await response.json();
+
+      // Some endpoints (e.g. discretionary-breakdown) return a rich object that
+      // itself contains a `transactions` key — the heuristics below would wrongly
+      // unwrap it. Callers can opt out to receive the full body.
+      if (skipUnwrap) {
+        return data as T;
+      }
 
       // Handle different response formats (matching mobile app behavior)
       if (data.data !== undefined) {
@@ -312,9 +320,13 @@ class ApiClient {
   }
 
   // HTTP method helpers
-  async get<T>(endpoint: string, params?: Record<string, unknown>): Promise<T> {
+  async get<T>(
+    endpoint: string,
+    params?: Record<string, unknown>,
+    options?: { skipUnwrap?: boolean }
+  ): Promise<T> {
     const queryString = params ? this.buildQueryString(params) : '';
-    return this.request<T>(`${endpoint}${queryString}`);
+    return this.request<T>(`${endpoint}${queryString}`, options);
   }
 
   async post<T>(endpoint: string, body?: unknown): Promise<T> {

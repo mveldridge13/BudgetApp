@@ -110,13 +110,45 @@ export interface BillsAnalytics {
   overdueBills: Transaction[];
 }
 
+export interface DiscretionarySubcategory {
+  subcategoryId?: string;
+  subcategoryName: string;
+  amount: number;
+  transactionCount: number;
+  percentage: number; // share within the parent category
+}
+
+export interface DiscretionaryBreakdownCategory {
+  categoryId: string;
+  categoryName: string;
+  categoryIcon?: string;
+  categoryColor?: string;
+  amount: number;
+  transactionCount: number;
+  percentage: number;
+  // Backend returns one entry per transaction; group by name for a clean list.
+  subcategories?: DiscretionarySubcategory[];
+}
+
+// Matches backend DiscretionaryBreakdownDto: discretionary-only and scoped to a
+// single period (the day/week/month containing selectedDate/endDate).
 export interface DiscretionaryBreakdown {
-  totalDiscretionary: number;
-  totalCommitted: number;
-  categories: {
-    categoryId: string;
-    categoryName: string;
-    amount: number;
-    isDiscretionary: boolean;
-  }[];
+  selectedDate: string;
+  selectedPeriod: 'daily' | 'weekly' | 'monthly';
+  totalDiscretionaryAmount: number;
+  categoryBreakdown: DiscretionaryBreakdownCategory[];
+  previousPeriod?: {
+    date: string;
+    totalDiscretionaryAmount: number;
+    percentageChange: number;
+    topCategories: { categoryName: string; amount: number }[];
+  };
+  summary?: {
+    transactionCount: number;
+    topSpendingCategory?: {
+      categoryName: string;
+      amount: number;
+      percentage: number;
+    };
+  };
 }

@@ -93,9 +93,13 @@ class TransactionService {
   async getDiscretionaryBreakdown(
     filters?: TransactionFilters,
   ): Promise<DiscretionaryBreakdown> {
+    // skipUnwrap: the response is a rich object that also contains a top-level
+    // `transactions` key; the api client's auto-unwrap would otherwise return
+    // only that array and drop categoryBreakdown/totalDiscretionaryAmount.
     return api.get<DiscretionaryBreakdown>(
       '/transactions/discretionary-breakdown',
       filters,
+      { skipUnwrap: true },
     );
   }
 
