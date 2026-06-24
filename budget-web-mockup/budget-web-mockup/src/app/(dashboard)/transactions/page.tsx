@@ -35,7 +35,8 @@ export default function TransactionsPage() {
     return transactions.filter(
       (t) =>
         (t.description || '').toLowerCase().includes(q) ||
-        (t.categoryName || '').toLowerCase().includes(q),
+        (t.categoryName || '').toLowerCase().includes(q) ||
+        (t.subcategoryName || '').toLowerCase().includes(q),
     );
   }, [transactions, query]);
 

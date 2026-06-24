@@ -1,15 +1,23 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Search, ArrowLeftRight, Target, Tag } from 'lucide-react';
+import Fuse from 'fuse.js';
 import { transactionService, categoryService, goalService } from '@/services';
 import type { Transaction, Category, GoalDisplay } from '@/types';
 
 const MAX_PER_GROUP = 5;
 
+// Shared fuzzy-match config: typo-tolerant but still precise, and matches
+// anywhere in the string (not just near the start).
+const FUSE_OPTIONS = { threshold: 0.3, ignoreLocation: true, minMatchCharLength: 2 };
+
 export default function GlobalSearch() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams.get('q') || '';
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,6 +47,14 @@ export default function GlobalSearch() {
     }
   };
 
+  // Mirror the active search term from the URL. This clears the input when the
+  // user navigates to a page without a search filter (or clears the filter),
+  // and keeps it in sync when viewing results for a given term.
+  useEffect(() => {
+    setQuery(urlQuery);
+    setOpen(false);
+  }, [pathname, urlQuery]);
+
   // Close the dropdown when clicking outside.
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -50,19 +66,59 @@ export default function GlobalSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return { transactions: [], goals: [], categories: [] };
-    const match = (value?: string) => (value || '').toLowerCase().includes(q);
+  // The raw /transactions response only carries categoryId/subcategoryId; the
+  // human-readable names live on the categories list, so resolve them here.
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach((c) => map.set(c.id, c.name));
+    return map;
+  }, [categories]);
 
+  const txnCategoryName = (t: Transaction) =>
+    t.categoryName ||
+    categoryNameById.get((t.categoryId || t.category) as string);
+  const txnSubcategoryName = (t: Transaction) =>
+    t.subcategoryName ||
+    categoryNameById.get((t.subcategoryId || t.subcategory) as string);
+
+  // Enrich transactions with resolved category names so Fuse can match on them.
+  const enrichedTransactions = useMemo(
+    () =>
+      transactions.map((t) => ({
+        ...t,
+        searchCategoryName: txnCategoryName(t) || '',
+        searchSubcategoryName: txnSubcategoryName(t) || '',
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transactions, categoryNameById],
+  );
+
+  const txnFuse = useMemo(
+    () =>
+      new Fuse(enrichedTransactions, {
+        ...FUSE_OPTIONS,
+        keys: ['description', 'searchCategoryName', 'searchSubcategoryName'],
+      }),
+    [enrichedTransactions],
+  );
+  const goalFuse = useMemo(
+    () => new Fuse(goals, { ...FUSE_OPTIONS, keys: ['title'] }),
+    [goals],
+  );
+  const categoryFuse = useMemo(
+    () => new Fuse(categories, { ...FUSE_OPTIONS, keys: ['name'] }),
+    [categories],
+  );
+
+  const results = useMemo(() => {
+    const q = query.trim();
+    if (!q) return { transactions: [], goals: [], categories: [] };
     return {
-      transactions: transactions
-        .filter((t) => match(t.description) || match(t.categoryName))
-        .slice(0, MAX_PER_GROUP),
-      goals: goals.filter((g) => match(g.title)).slice(0, MAX_PER_GROUP),
-      categories: categories.filter((c) => match(c.name)).slice(0, MAX_PER_GROUP),
+      transactions: txnFuse.search(q).slice(0, MAX_PER_GROUP).map((r) => r.item),
+      goals: goalFuse.search(q).slice(0, MAX_PER_GROUP).map((r) => r.item),
+      categories: categoryFuse.search(q).slice(0, MAX_PER_GROUP).map((r) => r.item),
     };
-  }, [query, transactions, goals, categories]);
+  }, [query, txnFuse, goalFuse, categoryFuse]);
 
   const hasResults =
     results.transactions.length > 0 ||
@@ -103,6 +159,12 @@ export default function GlobalSearch() {
             if (e.key === 'Escape') {
               setOpen(false);
               e.currentTarget.blur();
+            } else if (e.key === 'Enter') {
+              const term = query.trim();
+              if (!term) return;
+              setOpen(false);
+              e.currentTarget.blur();
+              router.push(`/search?q=${encodeURIComponent(term)}`);
             }
           }}
           className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -133,8 +195,11 @@ export default function GlobalSearch() {
                       <ArrowLeftRight className="w-4 h-4 text-gray-400 shrink-0" />
                       <span className="flex-1 truncate text-sm text-gray-900">
                         {t.description || 'Transaction'}
-                        {t.categoryName && (
-                          <span className="text-gray-400"> · {t.categoryName}</span>
+                        {(txnSubcategoryName(t) || txnCategoryName(t)) && (
+                          <span className="text-gray-400">
+                            {' · '}
+                            {txnSubcategoryName(t) || txnCategoryName(t)}
+                          </span>
                         )}
                       </span>
                       <span className="text-sm font-medium text-gray-700 shrink-0">
@@ -187,6 +252,17 @@ export default function GlobalSearch() {
                   ))}
                 </div>
               )}
+
+              <div className="border-t border-gray-100 mt-1 pt-1">
+                <button
+                  onClick={() => go(`/search?q=${q}`)}
+                  className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-gray-50 transition-colors">
+                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="flex-1 truncate text-sm font-medium text-indigo-600">
+                    See all results for &ldquo;{query.trim()}&rdquo;
+                  </span>
+                </button>
+              </div>
             </>
           )}
         </div>
