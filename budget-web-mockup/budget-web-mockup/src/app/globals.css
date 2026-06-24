@@ -26,6 +26,15 @@ body {
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* Hide the scrollbar but keep scrolling (used by dropdown menus). */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE / old Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome / Safari */
+}
+
 /* Dropdown animation */
 @keyframes dropdownIn {
   from {

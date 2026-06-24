@@ -735,7 +735,7 @@ const HomeContainer = ({navigation}) => {
 
       console.log('🎲 loadTournaments START - Platform:', Platform.OS);
 
-      // 🔄 CACHE-FIRST: Load from cache immediately
+      // 🔄 CACHE-FIRST: Load from cache immediately for an instant first paint.
       const cached = await TournamentCache.get();
       if (cached && cached.data) {
         console.log('🎲 Using cached tournaments:', {
@@ -744,14 +744,13 @@ const HomeContainer = ({navigation}) => {
           isStale: cached.isStale,
         });
         setTournaments(cached.data);
-
-        // If cache is fresh, we're done
-        if (!cached.isStale) {
-          return;
-        }
+        // NOTE: do NOT early-return when the cache is fresh. We always
+        // revalidate against the backend below (stale-while-revalidate) so
+        // changes made on another device/platform (e.g. the web app) show up
+        // on the next load instead of being hidden behind the cache TTL.
       }
 
-      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      // 🌐 BACKGROUND SYNC: always fetch from API and reconcile.
       try {
         const tournamentsResponse = await TrendAPIService.getTournaments();
         console.log(
@@ -1384,10 +1383,20 @@ const HomeContainer = ({navigation}) => {
 
       // Reload transactions to pick up any changes made in other screens (like Analytics bill updates)
       loadTransactions();
+
+      // Reload tournaments so poker changes made elsewhere (e.g. the web app)
+      // show up when returning to this screen.
+      loadTournaments();
     });
 
     return unsubscribe;
-  }, [navigation, loadHomeSummary, loadRolloverAmount, loadTransactions]);
+  }, [
+    navigation,
+    loadHomeSummary,
+    loadRolloverAmount,
+    loadTransactions,
+    loadTournaments,
+  ]);
 
   // ==============================================
   // PAY PERIOD TRANSITION DETECTION

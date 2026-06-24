@@ -1,7 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+
+// Approximate popup size, used to keep it on-screen before it renders.
+const POPUP_WIDTH = 320; // matches w-80
+const POPUP_HEIGHT = 360;
+
+// useLayoutEffect warns during SSR; fall back to useEffect on the server.
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 interface DatePickerProps {
   /** Value as an ISO date string (YYYY-MM-DD), or '' when empty. */
@@ -67,6 +76,10 @@ export default function DatePicker({
   const [viewYear, setViewYear] = useState((selected || today).getFullYear());
   const [viewMonth, setViewMonth] = useState((selected || today).getMonth());
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  // Fixed viewport coords for the portal'd popup (so no ancestor `overflow`
+  // can clip it, e.g. inside a scrollable modal).
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   // When opening, snap the view back to the selected date (or today).
   useEffect(() => {
@@ -80,9 +93,11 @@ export default function DatePicker({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = e.target as Node;
+      // The popup is portal'd to <body>, so check it separately.
+      const inTrigger = containerRef.current?.contains(target);
+      const inPopup = popupRef.current?.contains(target);
+      if (!inTrigger && !inPopup) setIsOpen(false);
     }
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') setIsOpen(false);
@@ -94,6 +109,36 @@ export default function DatePicker({
       document.removeEventListener('keydown', handleEscape);
     };
   }, []);
+
+  // Position the popup relative to the trigger, flipping above / shifting
+  // horizontally as needed so it always stays within the viewport.
+  useIsomorphicLayoutEffect(() => {
+    if (!isOpen || !containerRef.current) {
+      setCoords(null);
+      return;
+    }
+    const compute = () => {
+      const rect = containerRef.current!.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let left = rect.left;
+      if (left + POPUP_WIDTH > vw - 8) left = vw - POPUP_WIDTH - 8;
+      if (left < 8) left = 8;
+      let top = rect.bottom + 8;
+      if (top + POPUP_HEIGHT > vh - 8) {
+        const above = rect.top - POPUP_HEIGHT - 8;
+        top = above >= 8 ? above : Math.max(8, vh - POPUP_HEIGHT - 8);
+      }
+      setCoords({ top, left });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    window.addEventListener('scroll', compute, true);
+    return () => {
+      window.removeEventListener('resize', compute);
+      window.removeEventListener('scroll', compute, true);
+    };
+  }, [isOpen]);
 
   const isDisabledDay = (date: Date) => {
     if (minDate && date < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate())) return true;
@@ -161,10 +206,11 @@ export default function DatePicker({
         <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
       </button>
 
-      {isOpen && (
+      {isOpen && coords && typeof document !== 'undefined' && createPortal(
         <div
-          className="absolute left-0 mt-2 w-80 bg-white border border-gray-100 rounded-xl shadow-lg p-2.5 z-50"
-          style={{ animation: 'dropdownIn 0.15s ease-out forwards' }}
+          ref={popupRef}
+          className="fixed w-80 bg-white border border-gray-100 rounded-xl shadow-lg p-2.5 z-[60]"
+          style={{ top: coords.top, left: coords.left, animation: 'dropdownIn 0.15s ease-out forwards' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-1">
@@ -341,7 +387,8 @@ export default function DatePicker({
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

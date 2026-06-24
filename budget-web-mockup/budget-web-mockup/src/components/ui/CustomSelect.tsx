@@ -131,14 +131,13 @@ export default function CustomSelect({
         createPortal(
           <div
             ref={menuRef}
-            className="fixed z-[60] bg-white border border-gray-200 rounded-xl shadow-lg overflow-y-auto py-1"
+            className="no-scrollbar fixed z-[60] bg-white border border-gray-200 rounded-xl shadow-lg overflow-y-auto py-1"
             style={{
               top: position.openUp ? undefined : position.top,
               bottom: position.openUp ? window.innerHeight - position.top : undefined,
               left: position.left,
               width: position.width,
               maxHeight: position.maxHeight,
-              scrollbarWidth: 'thin',
               animation: 'dropdownIn 0.15s ease-out forwards',
             }}
           >
