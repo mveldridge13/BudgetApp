@@ -96,15 +96,18 @@ export const AppSettingsProvider = ({children}) => {
         setAppSettings(defaultAppSettings);
       }
 
-      // Process module settings
-      if (storedModuleSettings) {
-        setModuleSettings({
-          ...defaultModuleSettings,
-          ...JSON.parse(storedModuleSettings),
-        });
-      } else {
-        setModuleSettings(defaultModuleSettings);
-      }
+      // Process module settings. Precedence: backend profile (source of truth,
+      // so toggles sync across devices/platforms) > local cache > defaults.
+      const cachedModules = storedModuleSettings
+        ? JSON.parse(storedModuleSettings)
+        : {};
+      const profileModules =
+        (cachedProfile && cachedProfile.profile && cachedProfile.profile.moduleSettings) || {};
+      setModuleSettings({
+        ...defaultModuleSettings,
+        ...cachedModules,
+        ...profileModules,
+      });
 
       // Note: isPro and proFeatures are synced from backend via updateSubscriptionStatus
       // They will be updated when HomeContainer loads the home summary
@@ -141,6 +144,19 @@ export const AppSettingsProvider = ({children}) => {
         DateService.initializeFromProfile(freshProfile);
         // Update CurrencyService with fresh currency
         CurrencyService.initializeFromProfile(freshProfile);
+        // Hydrate module toggles from the backend (source of truth) so changes
+        // made on another device/platform are reflected here.
+        if (freshProfile.moduleSettings) {
+          const mergedModules = {
+            ...defaultModuleSettings,
+            ...freshProfile.moduleSettings,
+          };
+          setModuleSettings(mergedModules);
+          await AsyncStorage.setItem(
+            'moduleSettings',
+            JSON.stringify(mergedModules),
+          );
+        }
       }
     } catch (error) {
       console.error('Error refreshing user profile:', error);
@@ -176,11 +192,28 @@ export const AppSettingsProvider = ({children}) => {
     async newModuleSettings => {
       try {
         const updatedSettings = {...moduleSettings, ...newModuleSettings};
+        // Optimistically persist locally (works offline and is instant).
         await AsyncStorage.setItem(
           'moduleSettings',
           JSON.stringify(updatedSettings),
         );
         setModuleSettings(updatedSettings);
+
+        // Sync to the backend so module toggles carry across devices and
+        // platforms. Send only the changed keys; the backend merges
+        // last-write-wins so other modules are never clobbered.
+        if (TrendAPIService.isAuthenticated()) {
+          try {
+            await TrendAPIService.updateUserProfile({
+              moduleSettings: newModuleSettings,
+            });
+          } catch (syncError) {
+            console.error(
+              'Error syncing module settings to backend:',
+              syncError,
+            );
+          }
+        }
       } catch (error) {
         console.error('Error updating module settings:', error);
         throw error;

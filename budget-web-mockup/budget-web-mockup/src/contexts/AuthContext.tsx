@@ -15,6 +15,10 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  // Background profile mutations (currency, name, module toggles, etc.). Kept
+  // separate from `isLoading` so they don't trip the ProtectedRoute auth gate,
+  // which would unmount/remount the page and lose local UI state.
+  isUpdatingProfile?: boolean;
   error: string | null;
 }
 
@@ -135,7 +139,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateProfile = useCallback(async (data: UpdateProfileData) => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    // Use a dedicated flag, not `isLoading`, so a background profile update
+    // doesn't trigger the full-screen auth gate (which remounts the page).
+    setState((prev) => ({ ...prev, isUpdatingProfile: true, error: null }));
 
     try {
       const updatedProfile = await authService.updateProfile(data);
@@ -143,13 +149,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState((prev) => ({
         ...prev,
         user: { ...prev.user!, ...updatedProfile },
-        isLoading: false,
+        isUpdatingProfile: false,
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Update failed';
       setState((prev) => ({
         ...prev,
-        isLoading: false,
+        isUpdatingProfile: false,
         error: message,
       }));
       throw error;

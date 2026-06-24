@@ -36,6 +36,8 @@ export interface User {
   nextPayDate?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Per-user feature module toggles (backend `moduleSettings` JSON column).
+  moduleSettings?: Record<string, boolean>;
 }
 
 export interface UserProfile {
@@ -60,6 +62,8 @@ export interface UpdateProfileData {
   nextPayDate?: string;
   setupComplete?: boolean;
   hasSeenWelcome?: boolean;
+  // Partial module toggles; backend merges last-write-wins per module.
+  moduleSettings?: Record<string, boolean>;
 }
 
 export interface ChangePasswordData {

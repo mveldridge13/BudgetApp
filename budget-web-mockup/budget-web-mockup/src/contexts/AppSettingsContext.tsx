@@ -56,13 +56,18 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     setIsLoaded(true);
   }, []);
 
-  // Sync currency from user profile (backend is source of truth)
+  // Sync currency and module toggles from the user profile (backend is the
+  // source of truth, so settings carry across devices and platforms).
   useEffect(() => {
-    if (user?.currency && !initializedFromUser.current) {
-      setSettings((prev) => ({ ...prev, currency: user.currency }));
+    if (user && !initializedFromUser.current) {
+      setSettings((prev) => ({
+        ...prev,
+        ...(user.currency ? { currency: user.currency } : {}),
+        modules: { ...prev.modules, ...(user.moduleSettings || {}) },
+      }));
       initializedFromUser.current = true;
     }
-  }, [user?.currency]);
+  }, [user]);
 
   // Save non-backend settings to storage when they change
   useEffect(() => {
@@ -78,6 +83,16 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
         await updateProfile({ currency: updates.currency });
       } catch (error) {
         console.error('Failed to update currency on backend:', error);
+        throw error;
+      }
+    }
+    // Persist module toggles to the backend so they sync across devices and
+    // platforms (the backend merges last-write-wins per module).
+    if (updates.modules) {
+      try {
+        await updateProfile({ moduleSettings: { ...updates.modules } });
+      } catch (error) {
+        console.error('Failed to update module settings on backend:', error);
         throw error;
       }
     }
