@@ -19,7 +19,7 @@ const AnalyticsContainer = () => {
   const {isPro, proFeatures, moduleSettings} = useAppSettings();
 
   // UI state only
-  const [selectedPeriod, setSelectedPeriod] = useState('daily');
+  const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [comparisonMode, setComparisonMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -82,23 +82,26 @@ const AnalyticsContainer = () => {
     let startDate, endDate;
 
     switch (selectedPeriod) {
-      case 'daily':
+      case '7d':
+        // Rolling 7 days (today included) — 7 daily points.
         startDate = new Date(now);
         startDate.setDate(startDate.getDate() - 6);
         endDate = new Date(now);
         break;
-      case 'weekly':
+      case '30d':
+        // Rolling 30 days — 30 daily points (the behavioural-trend default).
         startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 27);
+        startDate.setDate(startDate.getDate() - 29);
         endDate = new Date(now);
         break;
-      case 'monthly':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 4, 1);
+      case '12m':
+        // Last 12 calendar months — 12 monthly aggregates.
+        startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
         endDate = new Date(now);
         break;
       default:
         startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 6);
+        startDate.setDate(startDate.getDate() - 29);
         endDate = new Date(now);
     }
 
@@ -655,17 +658,20 @@ const AnalyticsContainer = () => {
 
     // ✅ UPDATED: Use backend monthlyTrends with discretionary data
     const chartData =
-      analyticsData.monthlyTrends?.map((trend, index) => {
+      analyticsData.monthlyTrends?.map(trend => {
         const date = new Date(trend.month);
         let label;
 
-        if (selectedPeriod === 'monthly') {
+        if (selectedPeriod === '12m') {
           label = date.toLocaleDateString('en-US', {month: 'short'});
-        } else if (selectedPeriod === 'weekly') {
-          label = `W${index + 1}`;
-        } else {
-          // Daily period - use short day labels
+        } else if (selectedPeriod === '7d') {
           label = date.toLocaleDateString('en-US', {weekday: 'short'});
+        } else {
+          // 30d — day + short month (axis is thinned so labels stay readable)
+          label = date.toLocaleDateString('en-US', {
+            day: 'numeric',
+            month: 'short',
+          });
         }
 
         return {
@@ -685,11 +691,19 @@ const AnalyticsContainer = () => {
     // CHART DATA FORMATTING - MOVED FROM UI COMPONENT
     // ============================================================================
 
+    // 30d packs 30 daily points; chart-kit has no label-thinning, so blank all
+    // but roughly every 5th label (mirrors the web chart's interval) to stop
+    // the date labels overlapping. Other periods keep every label.
+    const labelInterval = selectedPeriod === '30d' ? 5 : 1;
+    const thinnedLabels = finalChartData.map((item, index) =>
+      index % labelInterval === 0 ? item.label : '',
+    );
+
     // Format data specifically for react-native-chart-kit
     const formattedChartData =
       finalChartData.length > 0
         ? {
-            labels: finalChartData.map(item => item.label),
+            labels: thinnedLabels,
             datasets: [
               {
                 data: finalChartData.map(item => item.amount),
@@ -746,7 +760,8 @@ const AnalyticsContainer = () => {
       previousDiscretionary: previousDiscretionary,
       percentageChange: analyticsData.expensesPercentageChange || 0,
       discretionaryPercentageChange: discretionaryPercentageChange,
-      averageSpending: analyticsData.averageTransaction || 0,
+      // Per-period average (matches web) — NOT averageTransaction.
+      averageSpending: analyticsData.averagePeriodSpending || 0,
       averageDiscretionary: averageDiscretionaryPerPeriod, // ✅ FIXED: Use backend calculation
       highestSpendingPeriod:
         finalChartData.length > 0

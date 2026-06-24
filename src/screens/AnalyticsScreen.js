@@ -409,25 +409,34 @@ const AnalyticsScreen = ({
           <>
             {/* Period Selector */}
             <View style={styles.selectorContainer}>
-              <View style={styles.periodButtons}>
-                {['daily', 'weekly', 'monthly'].map(period => (
-                  <TouchableOpacity
-                    key={period}
-                    onPress={() => onPeriodChange(period)}
-                    style={[
-                      styles.periodButton,
-                      selectedPeriod === period && styles.periodButtonActive,
-                    ]}>
-                    <Text
+              <View>
+                <View style={styles.periodButtons}>
+                  {['7d', '30d', '12m'].map(period => (
+                    <TouchableOpacity
+                      key={period}
+                      onPress={() => onPeriodChange(period)}
                       style={[
-                        styles.periodButtonText,
-                        selectedPeriod === period &&
-                          styles.periodButtonTextActive,
+                        styles.periodButton,
+                        selectedPeriod === period && styles.periodButtonActive,
                       ]}>
-                      {period.charAt(0).toUpperCase() + period.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.periodButtonText,
+                          selectedPeriod === period &&
+                            styles.periodButtonTextActive,
+                        ]}>
+                        {period.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.periodCaption}>
+                  {selectedPeriod === '7d'
+                    ? 'Last 7 days'
+                    : selectedPeriod === '30d'
+                    ? 'Rolling 30 days'
+                    : 'Last 12 months'}
+                </Text>
               </View>
 
               <TouchableOpacity
@@ -457,9 +466,7 @@ const AnalyticsScreen = ({
 
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>
-                  {selectedPeriod.charAt(0).toUpperCase() +
-                    selectedPeriod.slice(1)}{' '}
-                  Average
+                  {selectedPeriod === '12m' ? 'Monthly' : 'Daily'} Average
                 </Text>
                 <Text style={styles.statValue}>
                   ${statistics.averageSpending.toFixed(2)}
@@ -1359,8 +1366,14 @@ const styles = StyleSheet.create({
   },
   periodButtons: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 6,
     gap: 8,
+  },
+  periodCaption: {
+    fontSize: 12,
+    fontFamily: 'System',
+    color: colors.textSecondary || '#9CA3AF',
+    marginBottom: 16,
   },
   periodButton: {
     paddingVertical: 8,

@@ -7,7 +7,7 @@ import SpendingVelocityBreakdown from '../components/SpendingVelocityBreakdown';
 const SpendingVelocityContainer = ({
   visible,
   onClose,
-  selectedPeriod = 'monthly', // Default to monthly for velocity analysis
+  selectedPeriod = '12m', // Default to the longest horizon for velocity analysis
 }) => {
   // ==============================================
   // BUSINESS LOGIC STATE MANAGEMENT
@@ -72,8 +72,8 @@ const SpendingVelocityContainer = ({
         let startDate, endDate;
 
         switch (selectedPeriod) {
-          case 'daily':
-            // Last 7 days for daily patterns
+          case '7d':
+            // Last 7 days of patterns for the short-term horizon
             startDate = new Date(
               now.getFullYear(),
               now.getMonth(),
@@ -81,8 +81,8 @@ const SpendingVelocityContainer = ({
             );
             endDate = new Date(now);
             break;
-          case 'weekly':
-            // Last 4 weeks for weekly patterns
+          case '30d':
+            // Last 4 weeks of patterns for the mid-term horizon
             startDate = new Date(
               now.getFullYear(),
               now.getMonth(),
@@ -90,7 +90,7 @@ const SpendingVelocityContainer = ({
             );
             endDate = new Date(now);
             break;
-          case 'monthly':
+          case '12m':
           default:
             // Last 3 months for comprehensive patterns
             startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
@@ -176,8 +176,8 @@ const SpendingVelocityContainer = ({
         let startDate, endDate;
 
         switch (selectedPeriod) {
-          case 'daily':
-            // Last 30 days for daily burn rate context
+          case '7d':
+            // Last 30 days of burn-rate context for the short-term horizon
             startDate = new Date(
               now.getFullYear(),
               now.getMonth(),
@@ -185,8 +185,8 @@ const SpendingVelocityContainer = ({
             );
             endDate = new Date(now);
             break;
-          case 'weekly':
-            // Last 12 weeks for weekly context
+          case '30d':
+            // Last 12 weeks of burn-rate context for the mid-term horizon
             startDate = new Date(
               now.getFullYear(),
               now.getMonth(),
@@ -194,7 +194,7 @@ const SpendingVelocityContainer = ({
             );
             endDate = new Date(now);
             break;
-          case 'monthly':
+          case '12m':
           default:
             // Last 6 months for comprehensive analysis
             startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1);

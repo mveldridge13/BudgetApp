@@ -426,11 +426,10 @@ const DiscretionaryBreakdown = ({
   // ✅ PERIOD LABEL HELPER
   const getCurrentPeriodLabel = () => {
     switch (selectedPeriod) {
-      case 'daily':
+      case '7d':
+      case '30d':
         return 'today';
-      case 'weekly':
-        return 'this week';
-      case 'monthly':
+      case '12m':
         return 'this month';
       default:
         return 'this period';
@@ -443,22 +442,15 @@ const DiscretionaryBreakdown = ({
 
     const displayPeriod = {
       label:
-        selectedPeriod === 'daily'
+        selectedPeriod === '12m'
           ? selectedDate?.toLocaleDateString('en-US', {
-              weekday: 'short',
-              day: 'numeric',
-            }) || 'Today'
-          : selectedPeriod === 'weekly'
-          ? `Week of ${
-              selectedDate?.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              }) || 'This Week'
-            }`
-          : selectedDate?.toLocaleDateString('en-US', {
               month: 'long',
               year: 'numeric',
-            }) || 'This Month',
+            }) || 'This Month'
+          : selectedDate?.toLocaleDateString('en-US', {
+              weekday: 'short',
+              day: 'numeric',
+            }) || 'Today',
       discretionaryAmount: 0,
     };
 
