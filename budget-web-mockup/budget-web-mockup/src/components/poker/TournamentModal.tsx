@@ -18,6 +18,7 @@ interface FormState {
   venue: string;
   dateStart: string; // yyyy-mm-dd
   dateEnd: string; // yyyy-mm-dd
+  startingBankroll: string;
   accommodationCost: string;
   foodBudget: string;
   otherExpenses: string;
@@ -29,6 +30,7 @@ const EMPTY: FormState = {
   venue: '',
   dateStart: '',
   dateEnd: '',
+  startingBankroll: '',
   accommodationCost: '',
   foodBudget: '',
   otherExpenses: '',
@@ -70,6 +72,9 @@ export default function TournamentModal({
         venue: editingTournament.venue || '',
         dateStart: editingTournament.dateStart?.split('T')[0] || '',
         dateEnd: editingTournament.dateEnd?.split('T')[0] || '',
+        startingBankroll: editingTournament.startingBankroll
+          ? String(editingTournament.startingBankroll)
+          : '',
         accommodationCost: editingTournament.accommodationCost
           ? String(editingTournament.accommodationCost)
           : '',
@@ -115,6 +120,7 @@ export default function TournamentModal({
       venue: form.venue.trim() || null,
       dateStart: new Date(form.dateStart).toISOString(),
       dateEnd: form.dateEnd ? new Date(form.dateEnd).toISOString() : null,
+      startingBankroll: toNum(form.startingBankroll) ?? 0,
       accommodationCost: toNum(form.accommodationCost) ?? 0,
       foodBudget: toNum(form.foodBudget) ?? 0,
       otherExpenses: toNum(form.otherExpenses) ?? 0,
@@ -134,6 +140,18 @@ export default function TournamentModal({
   if (!visible) return null;
 
   const canSave = !!form.name.trim() && !saving;
+
+  // Live preview: how much of the starting bankroll is left for buy-ins after
+  // this trip's shared costs. Buy-ins/rebuys are logged per-event afterwards,
+  // so this is an estimate at setup time.
+  const startingBankrollNum = toNum(form.startingBankroll) ?? 0;
+  const tripCostsNum =
+    (toNum(form.accommodationCost) ?? 0) +
+    (toNum(form.foodBudget) ?? 0) +
+    (toNum(form.otherExpenses) ?? 0);
+  const availableForBuyIns = startingBankrollNum - tripCostsNum;
+  const fmtMoney = (n: number) =>
+    n.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -227,6 +245,29 @@ export default function TournamentModal({
             </div>
           </div>
 
+          {/* Bankroll */}
+          <div>
+            <p className="text-sm font-semibold text-gray-900 mb-3">Bankroll</p>
+            <label className={labelClass}>Starting Bankroll</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                $
+              </span>
+              <input
+                type="number"
+                value={form.startingBankroll}
+                onChange={(e) => update('startingBankroll', e.target.value)}
+                placeholder="0.00"
+                step="0.01"
+                className={moneyInputClass}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-gray-500">
+              The roll you brought to this trip. Accommodation, food, buy-ins and
+              rebuys are all drawn from it.
+            </p>
+          </div>
+
           {/* Shared expenses */}
           <div>
             <p className="text-sm font-semibold text-gray-900 mb-3">
@@ -259,6 +300,24 @@ export default function TournamentModal({
               ))}
             </div>
           </div>
+
+          {/* Live bankroll preview */}
+          {startingBankrollNum > 0 && (
+            <div
+              className={`rounded-lg px-4 py-3 flex items-center justify-between ${
+                availableForBuyIns < 0 ? 'bg-red-50' : 'bg-indigo-50'
+              }`}>
+              <span className="text-sm font-medium text-gray-600">
+                Available for buy-ins
+              </span>
+              <span
+                className={`text-sm font-semibold ${
+                  availableForBuyIns < 0 ? 'text-red-600' : 'text-indigo-600'
+                }`}>
+                ${fmtMoney(availableForBuyIns)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

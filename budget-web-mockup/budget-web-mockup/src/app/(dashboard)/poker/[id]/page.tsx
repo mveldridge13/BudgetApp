@@ -88,6 +88,12 @@ export default function TournamentDetailPage() {
 
   const budget = tournament ? pokerService.totalBudget(tournament) : 0;
 
+  // Current (running) bankroll = starting roll + net result so far. Derived from
+  // the same `summary.net` the page shows, so the two never disagree. Trip costs,
+  // buy-ins, rebuys and winnings all roll into it via netProfit.
+  const startingBankroll = tournament?.startingBankroll ?? 0;
+  const currentBankroll = startingBankroll + summary.net;
+
   const openAddEvent = () =>
     setEventModal({open: true, editing: null, isCloseOut: false});
   const openEditEvent = (event: PokerTournamentEvent) =>
@@ -211,6 +217,41 @@ export default function TournamentDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Current bankroll */}
+      {startingBankroll > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0">
+                <Wallet className="w-6 h-6 text-indigo-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Current Bankroll
+                </p>
+                <p
+                  className={`text-2xl font-bold ${
+                    currentBankroll < 0 ? 'text-red-600' : 'text-gray-900'
+                  }`}>
+                  {formatMoney(currentBankroll)}
+                </p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm text-gray-500">
+                Started {formatMoney(startingBankroll)}
+              </p>
+              <p
+                className={`text-sm font-semibold ${
+                  summary.net >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                {formatMoney(summary.net, true)} this trip
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Performance summary */}
       {events.length > 0 && (

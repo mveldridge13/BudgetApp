@@ -31,6 +31,7 @@ export interface PokerTournament {
   venue?: string;
   dateStart: string; // ISO
   dateEnd?: string; // ISO
+  startingBankroll: number; // the roll brought to this trip; everything is drawn from it
   accommodationCost: number;
   foodBudget: number;
   otherExpenses: number;
@@ -48,6 +49,7 @@ export interface PokerTournament {
   eventsPlayed?: number;
   eventsWon?: number;
   roi?: number;
+  endingBankroll?: number; // startingBankroll + netProfit
 
   events?: PokerTournamentEvent[];
 }
@@ -81,6 +83,7 @@ export interface TournamentInput {
   venue?: string | null;
   dateStart: string; // ISO
   dateEnd?: string | null; // ISO or null to clear
+  startingBankroll?: number;
   accommodationCost?: number;
   foodBudget?: number;
   otherExpenses?: number;
