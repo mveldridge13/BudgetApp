@@ -3,6 +3,8 @@
 import {useState, useEffect, useMemo} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {goalService} from '@/services/goal.service';
+import {transactionService} from '@/services/transaction.service';
+import {categoryService} from '@/services/category.service';
 import {GoalDisplay} from '@/types';
 import {
   Plus,
@@ -262,21 +264,115 @@ export default function GoalsPage() {
     amount: number,
     paymentSource: string,
   ) => {
+    const timestamp = new Date().toISOString();
+    const isWithdrawal = amount < 0;
+
     try {
       // Create contribution
       await goalService.addContribution(goalId, {
         amount: Math.abs(amount),
-        type: amount < 0 ? 'WITHDRAWAL' : 'MANUAL',
-        date: new Date().toISOString(),
-        description:
-          amount < 0
-            ? `Withdrawal from goal`
-            : `${paymentSource === 'income' ? 'Income' : 'Manual'} payment`,
+        type: isWithdrawal ? 'WITHDRAWAL' : 'MANUAL',
+        date: timestamp,
+        description: isWithdrawal
+          ? `Withdrawal from goal`
+          : `${paymentSource === 'income' ? 'Income' : 'Manual'} payment`,
       });
+
+      // Mirror mobile: create a TRANSFER transaction for MANUAL contributions so
+      // the payment is visible in the transaction list. TRANSFER (not EXPENSE) is
+      // used so it's not double-counted in spending totals — the contribution is
+      // already tracked via the goal's income payments.
+      if (!isWithdrawal) {
+        await createGoalPaymentTransaction(goalId, Math.abs(amount), timestamp);
+      }
+
       await loadGoals();
     } catch (error) {
       console.error('Error updating progress:', error);
       throw error;
+    }
+  };
+
+  /**
+   * Creates a TRANSFER transaction recording a manual goal payment, matching the
+   * mobile app. Resolves (and lazily creates) the "Other" → "Debt Payment"
+   * category/subcategory used by mobile so the entry is categorized consistently.
+   * Failure here is non-fatal — the contribution already succeeded.
+   */
+  const createGoalPaymentTransaction = async (
+    goalId: string,
+    amount: number,
+    timestamp: string,
+  ) => {
+    try {
+      const targetGoal = goals.find(g => g.id === goalId);
+      if (!targetGoal) return;
+
+      let categoryId: string | null = null;
+      let subcategoryId: string | undefined = undefined;
+
+      try {
+        const categories = await categoryService.getCategories();
+
+        // Prefer the "Other" parent category (which holds "Debt Payment").
+        let otherCategory = categories.find(
+          c => !c.parentId && c.name?.toLowerCase() === 'other',
+        );
+
+        if (!otherCategory) {
+          otherCategory = await categoryService.createCategory({
+            name: 'Other',
+            type: 'EXPENSE',
+            icon: 'ellipsis-horizontal-outline',
+            color: '#A8A8A8',
+          });
+        }
+
+        // Find or create the "Debt Payment" subcategory under "Other".
+        let debtPaymentSubcategory = categories.find(
+          c => c.parentId === otherCategory!.id && c.name?.toLowerCase().includes('debt'),
+        );
+
+        if (otherCategory && !debtPaymentSubcategory) {
+          debtPaymentSubcategory = await categoryService.createCategory({
+            name: 'Debt Payment',
+            type: 'EXPENSE',
+            icon: 'card-outline',
+            color: '#A8A8A8',
+            parentId: otherCategory.id,
+          });
+        }
+
+        const billsCategory = categories.find(c =>
+          c.name?.toLowerCase().includes('bill'),
+        );
+        const fallbackCategory =
+          categories.find(c => c.type === 'EXPENSE') || categories[0];
+
+        const selectedCategory = otherCategory || billsCategory || fallbackCategory;
+        categoryId = selectedCategory?.id ?? null;
+        subcategoryId = debtPaymentSubcategory?.id;
+      } catch (catError) {
+        console.warn('Failed to resolve categories for goal payment:', catError);
+      }
+
+      if (!categoryId) return;
+
+      await transactionService.createTransaction({
+        amount,
+        categoryId,
+        subcategoryId,
+        description: `Payment to ${targetGoal.title}`,
+        type: 'TRANSFER',
+        date: timestamp,
+        recurrence: 'none',
+      });
+    } catch (transactionError) {
+      // Non-fatal: the contribution succeeded; the transaction is supplementary.
+      console.error(
+        'Failed to create transaction for goal payment:',
+        transactionError,
+      );
     }
   };
 

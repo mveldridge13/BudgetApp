@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useMemo} from 'react';
+import {useState, useMemo, useEffect} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useTransactions} from '@/hooks/useTransactions';
@@ -25,6 +25,23 @@ export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
+
+  // Refetch when the tab regains focus so payments/cards created on another
+  // device (e.g. a goal payment made on mobile) appear here. Mirrors the mobile
+  // app's nav-focus refetch and the dashboard's existing focus listener.
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') {
+        refresh();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [refresh]);
 
   // Filter by the global search query (?q=...).
   const searchParams = useSearchParams();
