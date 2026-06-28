@@ -108,6 +108,19 @@ export default function SearchPage() {
       maximumFractionDigits: 2,
     })}`;
 
+  // Format a transaction date for the results list. Returns '' for missing or
+  // unparseable dates so the row omits the date rather than showing "Invalid Date".
+  const formatDate = (date?: string) => {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -155,12 +168,19 @@ export default function SearchPage() {
                       href={`/transactions?q=${q}`}
                       className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
                       <ArrowLeftRight className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span className="flex-1 truncate text-sm text-gray-900">
-                        {t.description || 'Transaction'}
-                        {(txnSubcategoryName(t) || txnCategoryName(t)) && (
-                          <span className="text-gray-400">
-                            {' · '}
-                            {txnSubcategoryName(t) || txnCategoryName(t)}
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate text-sm text-gray-900">
+                          {t.description || 'Transaction'}
+                          {(txnSubcategoryName(t) || txnCategoryName(t)) && (
+                            <span className="text-gray-400">
+                              {' · '}
+                              {txnSubcategoryName(t) || txnCategoryName(t)}
+                            </span>
+                          )}
+                        </span>
+                        {formatDate(t.date) && (
+                          <span className="block text-xs text-gray-400">
+                            {formatDate(t.date)}
                           </span>
                         )}
                       </span>
