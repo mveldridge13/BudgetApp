@@ -7,6 +7,9 @@ import type {
   PokerLifetimeAnalytics,
   PokerTournamentAnalytics,
   TournamentStatus,
+  PokerBankroll,
+  PokerBankrollTransaction,
+  BankrollTransactionInput,
 } from '@/types';
 
 // Backend responses come in loose envelopes — `{tournament}`, `{event}`,
@@ -121,6 +124,33 @@ class PokerService {
     return api.get<PokerTournamentAnalytics>(
       `/poker/tournaments/${tournamentId}/analytics`,
     );
+  }
+
+  // ── Bankroll (global deposit/withdraw ledger, siloed from budget) ─────────
+  async getBankroll(): Promise<PokerBankroll> {
+    // skipUnwrap: the response has a `transactions` key, which the api client
+    // would otherwise auto-unwrap — returning just the array, not the picture.
+    return api.get<PokerBankroll>('/poker/bankroll', undefined, {
+      skipUnwrap: true,
+    });
+  }
+
+  async addBankrollTransaction(
+    data: BankrollTransactionInput,
+  ): Promise<PokerBankrollTransaction> {
+    const res = await api.post<unknown>(
+      '/poker/bankroll/transactions',
+      clean({...data}),
+    );
+    // Raw DTO, or {data}-wrapped — normalize either way.
+    if (res && typeof res === 'object' && 'data' in res) {
+      return (res as {data: PokerBankrollTransaction}).data;
+    }
+    return res as PokerBankrollTransaction;
+  }
+
+  async deleteBankrollTransaction(id: string): Promise<void> {
+    await api.delete(`/poker/bankroll/transactions/${id}`);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

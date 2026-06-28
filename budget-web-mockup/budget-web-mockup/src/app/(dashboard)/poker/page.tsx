@@ -8,6 +8,7 @@ import {pokerService} from '@/services/poker.service';
 import TournamentCard from '@/components/poker/TournamentCard';
 import TournamentModal from '@/components/poker/TournamentModal';
 import PokerStatsSummary from '@/components/poker/PokerStatsSummary';
+import BankrollPanel from '@/components/poker/BankrollPanel';
 import {Spinner} from '@/components/ui';
 import type {PokerTournament, TournamentInput, TournamentStatus} from '@/types';
 
@@ -106,6 +107,9 @@ export default function PokerPage() {
           </button>
         </div>
       )}
+
+      {/* Global bankroll — independent of tournaments, always shown */}
+      <BankrollPanel />
 
       {isLoading && tournaments.length === 0 ? (
         <div className="flex items-center justify-center py-12">

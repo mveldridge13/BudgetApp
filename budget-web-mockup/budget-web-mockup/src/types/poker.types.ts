@@ -31,7 +31,6 @@ export interface PokerTournament {
   venue?: string;
   dateStart: string; // ISO
   dateEnd?: string; // ISO
-  startingBankroll: number; // the roll brought to this trip; everything is drawn from it
   accommodationCost: number;
   foodBudget: number;
   otherExpenses: number;
@@ -49,7 +48,6 @@ export interface PokerTournament {
   eventsPlayed?: number;
   eventsWon?: number;
   roi?: number;
-  endingBankroll?: number; // startingBankroll + netProfit
 
   events?: PokerTournamentEvent[];
 }
@@ -83,7 +81,6 @@ export interface TournamentInput {
   venue?: string | null;
   dateStart: string; // ISO
   dateEnd?: string | null; // ISO or null to clear
-  startingBankroll?: number;
   accommodationCost?: number;
   foodBudget?: number;
   otherExpenses?: number;
@@ -147,4 +144,48 @@ export interface PokerTournamentAnalytics {
   biggestWin: number;
   bestFinish?: number;
   worstFinish?: number;
+}
+
+// ── Global bankroll (deposit/withdraw ledger + computed picture) ────────────
+// The bankroll is siloed from the budget. The ledger holds ONLY deposits and
+// withdrawals; play results (buy-ins/winnings/trip costs) come from the
+// tournament tables via the backend. Current bankroll B = D − W + N.
+
+export type PokerBankrollTransactionType = 'DEPOSIT' | 'WITHDRAWAL';
+
+// BUILDING  : net profit below original capital (incl. losses) — keep building.
+// IN_PROFIT : recouped capital, profit between 1x and 2x capital.
+// FREEROLL  : playing on house money (withdrawals ≥ deposits) OR profit ≥ 2x capital.
+export type PokerBankrollStatus = 'BUILDING' | 'IN_PROFIT' | 'FREEROLL';
+
+export interface PokerBankrollTransaction {
+  id: string;
+  userId: string;
+  type: PokerBankrollTransactionType;
+  amount: number;
+  note?: string;
+  date: string; // ISO
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PokerBankroll {
+  totalDeposits: number; // D
+  totalWithdrawals: number; // W
+  lifetimeNetProfit: number; // N
+  currentBankroll: number; // B = D − W + N
+  originalCapital: number; // C = D
+  capitalAtRisk: number; // max(0, D − W)
+  capitalRecouped: number; // min(W, D)
+  status: PokerBankrollStatus;
+  isFreerolling: boolean;
+  suggestedWithdrawal: number;
+  transactions: PokerBankrollTransaction[];
+}
+
+export interface BankrollTransactionInput {
+  type: PokerBankrollTransactionType;
+  amount: number;
+  note?: string | null;
+  date?: string; // ISO; defaults to now on the server
 }
