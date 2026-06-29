@@ -62,7 +62,8 @@ export default function Header() {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Account menu"
+              className="p-1 rounded-full hover:bg-gray-100 transition-colors"
             >
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <span className="text-blue-600 font-medium text-sm">
@@ -70,22 +71,6 @@ export default function Header() {
                   {user?.lastName?.[0] || ''}
                 </span>
               </div>
-              <span className="hidden md:block text-sm font-medium text-gray-700">
-                {user?.firstName || 'User'}
-              </span>
-              <svg
-                className={`w-4 h-4 text-gray-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
             </button>
 
             {/* Dropdown */}

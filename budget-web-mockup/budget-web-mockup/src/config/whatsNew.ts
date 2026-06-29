@@ -15,6 +15,8 @@ export interface WhatsNewEntry {
   title: string;
   /** Bullet points describing what changed. */
   items: string[];
+  /** Optional known issues to flag to testers (shown in a separate section). */
+  knownIssues?: string[];
 }
 
 // Newest first. The first entry's `version` drives the auto-popup.
@@ -26,6 +28,9 @@ export const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
     items: [
       'Send Feedback: report bugs or ideas any time using the Feedback option in the sidebar.',
       'Additional Modules: Optional trackers that extend Trend with specialised features. Enable them anytime from Settings.',
+    ],
+    knownIssues: [
+      'Change Photo (Settings → Profile) is not working yet — coming soon.',
     ],
   },
 ];

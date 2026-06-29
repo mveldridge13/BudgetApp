@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Check } from 'lucide-react';
+import { Sparkles, Check, AlertTriangle } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { WHATS_NEW_ENTRIES } from '@/config/whatsNew';
 
@@ -30,6 +30,25 @@ export default function WhatsNewModal({ isOpen, onClose }: WhatsNewModalProps) {
                 </li>
               ))}
             </ul>
+
+            {entry.knownIssues && entry.knownIssues.length > 0 && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                    Known issues
+                  </h4>
+                </div>
+                <ul className="space-y-1.5">
+                  {entry.knownIssues.map((issue, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-amber-800 leading-relaxed">
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-amber-500" />
+                      <span>{issue}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ))}
       </div>
