@@ -11,6 +11,12 @@ import {exportTransactionsToCsv} from '@/lib/exportTransactions';
 import {Transaction, UpdateTransactionData} from '@/types';
 
 export default function TransactionsPage() {
+  // Global search query (?q=...). When searching, treat the list as a
+  // historical record: drop the pay-period restriction so transactions from
+  // any period (e.g. an income from a past month) can be found.
+  const searchParams = useSearchParams();
+  const query = (searchParams.get('q') || '').trim();
+
   const {
     transactions,
     summary,
@@ -21,7 +27,7 @@ export default function TransactionsPage() {
     updateTransaction,
     deleteTransaction,
     refresh,
-  } = useTransactions({ usePayPeriod: true });
+  } = useTransactions({ usePayPeriod: !query });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
@@ -43,9 +49,7 @@ export default function TransactionsPage() {
     };
   }, [refresh]);
 
-  // Filter by the global search query (?q=...).
-  const searchParams = useSearchParams();
-  const query = (searchParams.get('q') || '').trim();
+  // Filter the loaded transactions by the global search query (?q=...).
   const filteredTransactions = useMemo(() => {
     if (!query) return transactions;
     const q = query.toLowerCase();

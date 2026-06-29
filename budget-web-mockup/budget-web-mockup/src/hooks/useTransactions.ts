@@ -312,7 +312,7 @@ export function useTransactions(
       fetchTransactions(initialFilters);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriesLoaded, payPeriodLoaded, payPeriod]);
+  }, [categoriesLoaded, payPeriodLoaded, payPeriod, usePayPeriod]);
 
   return {
     transactions,
