@@ -191,11 +191,10 @@ export function calculatePayPeriodBoundaries(
   if (!nextPayDate) return null;
 
   let periodStart: Date;
-  let periodEnd: Date;
 
   // Period ends the day BEFORE the next pay date
   const dayBeforeNextPay = subDays(nextPayDate, 1);
-  periodEnd = endOfDay(dayBeforeNextPay);
+  const periodEnd = endOfDay(dayBeforeNextPay);
 
   const isNew = isNewPayPeriod(nextPayDateString);
 

@@ -88,7 +88,7 @@ export default function OverallProgress({ goals, isLoading }: OverallProgressPro
 
       {/* Progress text */}
       <p className="text-center text-sm text-gray-700">
-        You've achieved <span className="font-semibold">{formatCurrency(totalCurrent)}</span> of
+        You&apos;ve achieved <span className="font-semibold">{formatCurrency(totalCurrent)}</span> of
         your <span className="font-semibold">{formatCurrency(totalTarget)}</span> goal
       </p>
     </div>
