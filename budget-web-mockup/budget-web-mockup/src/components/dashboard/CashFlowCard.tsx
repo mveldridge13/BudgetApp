@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
+import useSWR from 'swr';
 import {
   AreaChart,
   Area,
@@ -34,35 +35,24 @@ interface CashFlowCardProps {
   currency?: string;
 }
 
-export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
-  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+// Rolling 30-day analytics for the cash flow chart. Cached by SWR so revisiting
+// the dashboard renders the chart instantly and revalidates in the background.
+async function fetchCashFlow(): Promise<AnalyticsResponse> {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - ROLLING_DAYS);
+  return (await transactionService.getAnalytics({
+    startDate: start.toISOString(),
+    endDate: now.toISOString(),
+  })) as AnalyticsResponse;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const now = new Date();
-        const start = new Date(now);
-        start.setDate(start.getDate() - ROLLING_DAYS);
-        const data = await transactionService.getAnalytics({
-          startDate: start.toISOString(),
-          endDate: now.toISOString(),
-        });
-        if (!cancelled) setAnalytics(data as AnalyticsResponse);
-      } catch (error) {
-        console.error('Failed to load cash flow data:', error);
-        if (!cancelled) setAnalytics(null);
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
-    fetchData();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+export default function CashFlowCard({ currency = 'AUD' }: CashFlowCardProps) {
+  const { data: analytics, isLoading } = useSWR<AnalyticsResponse>(
+    'dashboard-cashflow-30d',
+    fetchCashFlow,
+    { keepPreviousData: true },
+  );
 
   const chartData = useMemo(() => {
     return (
