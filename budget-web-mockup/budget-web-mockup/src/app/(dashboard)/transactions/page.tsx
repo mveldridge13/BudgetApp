@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useMemo, useEffect, useRef} from 'react';
+import {useState, useMemo, useEffect} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useTransactions} from '@/hooks/useTransactions';
@@ -64,24 +64,6 @@ export default function TransactionsPage() {
         (t.subcategoryName || '').toLowerCase().includes(q),
     );
   }, [transactions, query, txnId]);
-
-  // When arriving via a search result deep link (?txn=<id>), open that
-  // transaction's card directly once it has loaded. The ref ensures we only
-  // auto-open once per id, so closing the card doesn't immediately reopen it.
-  const autoOpenedTxnRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!txnId) {
-      autoOpenedTxnRef.current = null;
-      return;
-    }
-    if (autoOpenedTxnRef.current === txnId) return;
-    const target = transactions.find((t) => t.id === txnId);
-    if (target) {
-      setEditingTransaction(target);
-      setIsModalOpen(true);
-      autoOpenedTxnRef.current = txnId;
-    }
-  }, [txnId, transactions]);
 
   const handleSaveTransaction = async (data: unknown) => {
     try {
