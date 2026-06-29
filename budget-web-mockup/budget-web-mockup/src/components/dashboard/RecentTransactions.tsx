@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { useTransactions } from '@/hooks/useTransactions';
+import { useRecentTransactions } from '@/hooks/useRecentTransactions';
 import { formatCurrency, formatDateShort } from '@/lib/formatters';
 import { CategoryIcon } from '@/components/ui';
 
@@ -12,7 +12,7 @@ interface RecentTransactionsProps {
 }
 
 export default function RecentTransactions({ currency = 'AUD', limit = 5 }: RecentTransactionsProps) {
-  const { transactions, isLoading } = useTransactions({ usePayPeriod: true });
+  const { transactions, isLoading } = useRecentTransactions();
 
   const recent = useMemo(
     () =>
