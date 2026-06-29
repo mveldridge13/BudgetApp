@@ -201,7 +201,7 @@ export default function TransactionsPage() {
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>Showing a single transaction from search</span>
           <Link href="/transactions" className="font-medium text-indigo-600 hover:text-indigo-700">
-            View all
+            Clear
           </Link>
         </div>
       ) : query && (
