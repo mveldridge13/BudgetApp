@@ -364,6 +364,10 @@ export default function GoalsPage() {
         subcategoryId,
         description: `Payment to ${targetGoal.title}`,
         type: 'TRANSFER',
+        // Paying from the goal card IS the payment, so mark it PAID. This also
+        // makes it match the backend pay-period query's "PAID → filter by date"
+        // branch, so the card shows in the (pay-period-scoped) transaction list.
+        status: 'PAID',
         date: timestamp,
         recurrence: 'none',
       });

@@ -672,7 +672,10 @@ const useGoalData = checkNetworkConnectivity => {
                     type: transactionType,
                     date: updateTimestamp,
                     recurrence: 'none', // Must be 'none' (lowercase) to appear in daily transactions
-                    // One-off transactions have no status (only recurring transactions use UPCOMING/PAID/OVERDUE)
+                    // Paying from the goal card IS the payment, so mark it PAID. This
+                    // mirrors the web app and lets the payment match the backend
+                    // pay-period query's "PAID -> filter by date" branch.
+                    status: 'PAID',
                   };
 
                   await TrendAPIService.createTransaction(transactionData);

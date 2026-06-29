@@ -192,11 +192,17 @@ export default function TransactionList({
 
     // Determine payment status based on backend status field
     const getPaymentStatus = () => {
-      // Only show status for recurring transactions that are not paid
-      if (frequency === 'One-time') return null;
+      // One-off paid transactions (e.g. a goal payment made from the goal card)
+      // get a green "Paid" badge. Recurring bills indicate paid via the action
+      // button below, so we don't double up with a badge for those.
+      if (frequency === 'One-time') {
+        return transaction.status === 'PAID'
+          ? { label: 'Paid', color: '#10B981' }
+          : null;
+      }
       if (transaction.status === 'PAID') return null;
 
-      // Show status based on backend's status field
+      // Recurring, not yet paid: show status based on backend's status field.
       if (transaction.status === 'OVERDUE') {
         return { label: 'Overdue', color: '#EF4444' };
       } else if (transaction.status === 'UPCOMING') {
@@ -238,33 +244,31 @@ export default function TransactionList({
                 {transaction.description}
               </h4>
               {frequency !== 'One-time' && (
-                <>
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    style={{ color: '#4CAF50' }}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  {paymentStatus && (
-                    <span
-                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{
-                        color: paymentStatus.color,
-                        backgroundColor: `${paymentStatus.color}15`
-                      }}
-                    >
-                      {paymentStatus.label}
-                    </span>
-                  )}
-                </>
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  style={{ color: '#4CAF50' }}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              )}
+              {paymentStatus && (
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    color: paymentStatus.color,
+                    backgroundColor: `${paymentStatus.color}15`
+                  }}
+                >
+                  {paymentStatus.label}
+                </span>
               )}
             </div>
             <p className="text-sm text-gray-600">
