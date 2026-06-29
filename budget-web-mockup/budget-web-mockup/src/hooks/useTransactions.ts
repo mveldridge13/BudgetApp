@@ -301,6 +301,14 @@ export function useTransactions(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoriesLoaded, categories.length]);
 
+  // When the scope flips between the all-history search view and the
+  // pay-period view, drop the previously loaded rows so the list shows a
+  // loading state instead of briefly rendering the other scope's transactions.
+  useEffect(() => {
+    setTransactions([]);
+    setIsLoading(true);
+  }, [usePayPeriod]);
+
   // Initial fetch - wait for categories and pay period to load first
   // Include payPeriod in deps to ensure we refetch when period is available
   useEffect(() => {
