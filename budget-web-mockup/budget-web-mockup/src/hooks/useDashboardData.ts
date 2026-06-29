@@ -1,4 +1,4 @@
-import {useEffect, useState, useCallback} from 'react';
+import useSWR from 'swr';
 import {goalService} from '@/services/goal.service';
 import {userService, HomeSummaryResponse, CommittedItem} from '@/services/user.service';
 import {GoalDisplay} from '@/types';
@@ -26,90 +26,40 @@ interface DashboardData {
   refresh: () => Promise<void>;
 }
 
+interface DashboardPayload {
+  summary: HomeSummaryResponse;
+  goals: GoalDisplay[];
+}
+
+// Fetch home summary and goals in parallel — the backend is the single source
+// of truth for all the dashboard figures.
+async function fetchDashboard(): Promise<DashboardPayload> {
+  const [summary, goalsData] = await Promise.all([
+    userService.getHomeSummary(),
+    goalService.getGoals(),
+  ]);
+
+  // Handle responses that wrap goals in an object.
+  const goals = Array.isArray(goalsData)
+    ? goalsData
+    : (goalsData as {goals?: GoalDisplay[]}).goals || [];
+
+  return {summary, goals};
+}
+
 export function useDashboardData(): DashboardData {
-  const [goals, setGoals] = useState<GoalDisplay[]>([]);
-  const [homeSummary, setHomeSummary] = useState<HomeSummaryResponse | null>(
-    null,
+  // SWR caches by key, so navigating away and back renders instantly from
+  // cache while it revalidates in the background. revalidateOnFocus (default)
+  // replaces the old manual focus/visibility refetch listener, keeping the
+  // backend as the single source of truth across tabs/devices.
+  const {data, error, isLoading, mutate} = useSWR<DashboardPayload>(
+    'dashboard-summary',
+    fetchDashboard,
+    {keepPreviousData: true},
   );
-  const [balance, setBalance] = useState(0);
-  const [leftToSpend, setLeftToSpend] = useState(0);
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [committedExpenses, setCommittedExpenses] = useState(0);
-  const [discretionaryExpenses, setDiscretionaryExpenses] = useState(0);
-  const [goalsExpenses, setGoalsExpenses] = useState(0);
-  const [rolloverAmount, setRolloverAmount] = useState(0);
-  const [rolloverNotification, setRolloverNotification] =
-    useState<HomeSummaryResponse['rolloverNotification']>(null);
-  const [baseIncome, setBaseIncome] = useState(0);
-  const [daysRemaining, setDaysRemaining] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Fetch home summary and goals in parallel
-      const [summary, goalsData] = await Promise.all([
-        userService.getHomeSummary(),
-        goalService.getGoals(),
-      ]);
-
-      setHomeSummary(summary);
-
-      // Use backend-calculated values (single source of truth)
-      setBalance(summary.income.totalInflow);
-      setLeftToSpend(summary.totals.leftToSpendSafe);
-      setTotalExpenses(summary.totals.totalExpensesAllocated);
-      setCommittedExpenses(summary.outflows.committed.plannedTotal);
-      setDiscretionaryExpenses(summary.outflows.discretionary.spentSoFar);
-      setGoalsExpenses(summary.outflows.goals.paidSoFar);
-      setRolloverAmount(summary.income.rolloverAvailable || 0);
-      setRolloverNotification(summary.rolloverNotification || null);
-      setBaseIncome(summary.income.baseIncome || 0);
-      setDaysRemaining(summary.period.daysRemaining || 0);
-
-      // Handle response that wraps goals in an object
-      const goalsArray = Array.isArray(goalsData)
-        ? goalsData
-        : (goalsData as {goals?: GoalDisplay[]}).goals || [];
-
-      setGoals(goalsArray);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err
-          : new Error('Failed to fetch dashboard data'),
-      );
-      console.error('Failed to fetch dashboard data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  // Refetch when the tab regains focus / becomes visible, mirroring the mobile
-  // app's navigation focus listener (HomeContainer focus listener). This keeps
-  // the backend as the single source of truth across devices: a rollover
-  // dismissed or allocated in the mobile app is reflected here when the user
-  // returns to this tab, without a manual reload — and vice versa.
-  useEffect(() => {
-    const handleVisible = () => {
-      if (document.visibilityState === 'visible') {
-        fetchDashboardData();
-      }
-    };
-    window.addEventListener('focus', handleVisible);
-    document.addEventListener('visibilitychange', handleVisible);
-    return () => {
-      window.removeEventListener('focus', handleVisible);
-      document.removeEventListener('visibilitychange', handleVisible);
-    };
-  }, [fetchDashboardData]);
+  const summary = data?.summary ?? null;
+  const goals = data?.goals ?? [];
 
   // Calculate total savings from goals
   const totalSavings = goals.reduce(
@@ -125,25 +75,28 @@ export function useDashboardData(): DashboardData {
   const activeGoal = goals.find(goal => goal.isActive) || null;
 
   return {
-    balance,
-    leftToSpend,
-    totalExpenses,
-    committedExpenses,
-    committedItems: homeSummary?.outflows.committed.items ?? [],
-    discretionaryExpenses,
-    goalsExpenses,
+    // Use backend-calculated values (single source of truth)
+    balance: summary?.income.totalInflow ?? 0,
+    leftToSpend: summary?.totals.leftToSpendSafe ?? 0,
+    totalExpenses: summary?.totals.totalExpensesAllocated ?? 0,
+    committedExpenses: summary?.outflows.committed.plannedTotal ?? 0,
+    committedItems: summary?.outflows.committed.items ?? [],
+    discretionaryExpenses: summary?.outflows.discretionary.spentSoFar ?? 0,
+    goalsExpenses: summary?.outflows.goals.paidSoFar ?? 0,
     activeGoal,
     totalSavings,
     activeGoalsCount,
     completedGoalsCount,
     goals,
-    homeSummary,
-    rolloverAmount,
-    rolloverNotification,
-    baseIncome,
-    daysRemaining,
+    homeSummary: summary,
+    rolloverAmount: summary?.income.rolloverAvailable ?? 0,
+    rolloverNotification: summary?.rolloverNotification ?? null,
+    baseIncome: summary?.income.baseIncome ?? 0,
+    daysRemaining: summary?.period.daysRemaining ?? 0,
     isLoading,
-    error,
-    refresh: fetchDashboardData,
+    error: error instanceof Error ? error : error ? new Error('Failed to fetch dashboard data') : null,
+    refresh: async () => {
+      await mutate();
+    },
   };
 }
