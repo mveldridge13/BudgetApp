@@ -1,8 +1,10 @@
 // services/TrendAPIService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Keychain from 'react-native-keychain';
+import sanitizeInput from '../utils/sanitizer';
 
 const API_CONFIG = {
-  baseURL: 'http://192.168.1.48:3001/api/v1', // Updated with correct IP
+  baseURL: 'https://trendapp.co/api/v1', // AWS Production Backend (HTTPS)
   timeout: 30000, // Increased timeout for mobile devices
 };
 
@@ -10,11 +12,68 @@ class TrendAPIService {
   constructor() {
     this.baseURL = API_CONFIG.baseURL;
     this.token = null;
+    this.refreshToken = null;
+    // Token refresh state (prevents concurrent refresh requests)
+    this.isRefreshing = false;
+    this.refreshPromise = null;
+    // Proactive token refresh
+    this.tokenExpiry = null; // Timestamp when access token expires
+    this.refreshTimer = null; // Timer for proactive refresh
+    this.REFRESH_BUFFER = 2 * 60 * 1000; // Refresh 2 minutes before expiry
+    // Login rate limiting (client-side backup - server enforces stricter limits)
+    this.loginAttempts = 0;
+    this.lastFailedAttempt = 0;
+    this.lockoutDuration = 5 * 60 * 1000; // 5 minutes
+    this.maxAttempts = 3; // Maximum login attempts before lockout
   }
 
   async initialize() {
     try {
-      this.token = await AsyncStorage.getItem('trend_auth_token');
+      // 🔐 SECURE: Try loading access token from Keychain
+      const credentials = await Keychain.getGenericPassword({
+        service: 'com.trendbudget.auth',
+      });
+
+      if (credentials) {
+        this.token = credentials.password;
+        // Extract expiry from loaded token for proactive refresh
+        this.tokenExpiry = this.decodeTokenExpiry(this.token);
+        console.log('🔐 Access token loaded from secure Keychain');
+      }
+
+      // 🔐 SECURE: Try loading refresh token from Keychain
+      const refreshCredentials = await Keychain.getGenericPassword({
+        service: 'com.trendbudget.refresh',
+      });
+
+      if (refreshCredentials) {
+        this.refreshToken = refreshCredentials.password;
+        console.log('🔐 Refresh token loaded from secure Keychain');
+      }
+
+      // 🔄 MIGRATION: Check old AsyncStorage location for existing users
+      if (!this.token) {
+        const oldToken = await AsyncStorage.getItem('trend_auth_token');
+        if (oldToken) {
+          console.log('🔄 Migrating token from AsyncStorage to secure Keychain');
+
+          // Save to Keychain
+          await this.saveToken(oldToken);
+
+          // Remove from old insecure location
+          await AsyncStorage.removeItem('trend_auth_token');
+
+          this.token = oldToken;
+          console.log('✅ Token migration completed successfully');
+        }
+      }
+
+      if (!this.token) {
+        console.log('No authentication token found');
+      } else {
+        // Schedule proactive refresh for loaded token
+        this.scheduleProactiveRefresh();
+      }
       return true;
     } catch (error) {
       console.error('Failed to initialize API service:', error);
@@ -25,10 +84,51 @@ class TrendAPIService {
   async saveToken(token) {
     try {
       this.token = token;
-      await AsyncStorage.setItem('trend_auth_token', token);
+
+      // Extract and store token expiry for proactive refresh
+      this.tokenExpiry = this.decodeTokenExpiry(token);
+      if (this.tokenExpiry) {
+        console.log(`🔐 Token expires at: ${new Date(this.tokenExpiry).toISOString()}`);
+      }
+
+      // Schedule proactive refresh before token expires
+      this.scheduleProactiveRefresh();
+
+      // 🔐 SECURE: Save access token to iOS Keychain (hardware-encrypted)
+      // AFTER_FIRST_UNLOCK (not WHEN_UNLOCKED) so the proactive refresh timer
+      // can persist rotated tokens while the app is backgrounded / device is
+      // locked. WHEN_UNLOCKED throws errSecInteractionNotAllowed in that case,
+      // leaving the new tokens only in memory and the Keychain copy stale.
+      // THIS_DEVICE_ONLY keeps auth tokens out of iCloud Keychain sync.
+      await Keychain.setGenericPassword('trend_user', token, {
+        service: 'com.trendbudget.auth',
+        accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+      });
+
+      console.log('🔐 Access token saved to secure Keychain');
       return true;
     } catch (error) {
-      console.error('Failed to save token:', error);
+      console.error('Failed to save access token:', error);
+      return false;
+    }
+  }
+
+  async saveRefreshToken(refreshToken) {
+    try {
+      this.refreshToken = refreshToken;
+
+      // 🔐 SECURE: Save refresh token to iOS Keychain (separate entry)
+      // See saveToken: AFTER_FIRST_UNLOCK allows background persistence of the
+      // rotated refresh token; THIS_DEVICE_ONLY keeps it off iCloud Keychain.
+      await Keychain.setGenericPassword('trend_refresh', refreshToken, {
+        service: 'com.trendbudget.refresh',
+        accessible: Keychain.ACCESSIBLE.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+      });
+
+      console.log('🔐 Refresh token saved to secure Keychain');
+      return true;
+    } catch (error) {
+      console.error('Failed to save refresh token:', error);
       return false;
     }
   }
@@ -36,16 +136,128 @@ class TrendAPIService {
   async clearToken() {
     try {
       this.token = null;
+      this.refreshToken = null;
+      this.tokenExpiry = null;
+
+      // Cancel any scheduled proactive refresh
+      this.cancelScheduledRefresh();
+
+      // 🔐 SECURE: Remove access token from Keychain
+      await Keychain.resetGenericPassword({
+        service: 'com.trendbudget.auth',
+      });
+
+      // 🔐 SECURE: Remove refresh token from Keychain
+      await Keychain.resetGenericPassword({
+        service: 'com.trendbudget.refresh',
+      });
+
+      // 🔄 CLEANUP: Also remove from old AsyncStorage location (if it exists)
       await AsyncStorage.removeItem('trend_auth_token');
+
+      console.log('🔐 All tokens cleared from secure storage');
       return true;
     } catch (error) {
-      console.error('Failed to clear token:', error);
+      console.error('Failed to clear tokens:', error);
       return false;
     }
   }
 
   isAuthenticated() {
     return !!this.token;
+  }
+
+  // ============================================================================
+  // PROACTIVE TOKEN REFRESH METHODS
+  // ============================================================================
+
+  /**
+   * Decode JWT token to extract expiry timestamp
+   * @param {string} token - JWT access token
+   * @returns {number|null} - Expiry timestamp in milliseconds, or null if invalid
+   */
+  decodeTokenExpiry(token) {
+    try {
+      if (!token) {
+        return null;
+      }
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return null;
+      }
+      const payload = parts[1];
+      // Add padding if needed for base64 decoding
+      const paddedPayload = payload + '='.repeat((4 - (payload.length % 4)) % 4);
+      // eslint-disable-next-line no-undef
+      const decoded = JSON.parse(atob(paddedPayload));
+      return decoded.exp ? decoded.exp * 1000 : null; // Convert to milliseconds
+    } catch (error) {
+      console.error('🔄 Failed to decode token expiry:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Schedule a proactive token refresh before the token expires
+   * This prevents 401 errors by refreshing ahead of time
+   */
+  scheduleProactiveRefresh() {
+    // Clear any existing timer
+    this.cancelScheduledRefresh();
+
+    if (!this.tokenExpiry || !this.token) {
+      return;
+    }
+
+    const now = Date.now();
+    const refreshTime = this.tokenExpiry - this.REFRESH_BUFFER;
+    const delay = refreshTime - now;
+
+    if (delay <= 0) {
+      // Token already expired or about to expire, refresh immediately
+      console.log('🔄 Token expired or expiring soon, refreshing immediately');
+      this.tryRefreshToken();
+      return;
+    }
+
+    console.log(`🔄 Scheduling proactive refresh in ${Math.round(delay / 1000)}s (token expires at ${new Date(this.tokenExpiry).toISOString()})`);
+    this.refreshTimer = setTimeout(() => {
+      console.log('🔄 Proactive token refresh triggered');
+      this.tryRefreshToken();
+    }, delay);
+  }
+
+  /**
+   * Cancel any scheduled proactive refresh
+   */
+  cancelScheduledRefresh() {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  /**
+   * Check and refresh token when app comes to foreground
+   * Called by BiometricAuth when app state changes to 'active'
+   */
+  async checkAndRefreshOnForeground() {
+    if (!this.token || !this.tokenExpiry) {
+      return;
+    }
+
+    const now = Date.now();
+    const timeUntilExpiry = this.tokenExpiry - now;
+
+    // If token expires in less than 5 minutes, refresh now
+    if (timeUntilExpiry < 5 * 60 * 1000) {
+      console.log('🔄 Token expiring soon, refreshing on foreground');
+      await this.tryRefreshToken();
+    } else {
+      // Re-schedule proactive refresh (timer may have been cleared while in background)
+      console.log('🔄 App foregrounded, re-scheduling proactive refresh');
+      this.scheduleProactiveRefresh();
+    }
   }
 
   // Helper method to build query string
@@ -72,6 +284,7 @@ class TrendAPIService {
       body = null,
       requiresAuth = true,
       headers = {},
+      skipAuthRefresh = false, // Skip refresh on retry to prevent infinite loop
     } = options;
 
     const url = `${this.baseURL}${endpoint}`;
@@ -103,19 +316,44 @@ class TrendAPIService {
       const response = await fetch(url, requestConfig);
       clearTimeout(timeoutId);
 
-      if (response.status === 401) {
+      // Handle 401 Unauthorized - attempt token refresh
+      if (response.status === 401 && !skipAuthRefresh) {
+        console.log('🔄 Received 401, attempting token refresh...');
+        const refreshed = await this.tryRefreshToken();
+        if (refreshed) {
+          // Retry original request with new token
+          console.log('🔄 Token refreshed, retrying original request...');
+          return this.makeRequest(endpoint, {...options, skipAuthRefresh: true});
+        }
+        // Refresh failed - clear tokens and throw auth error
         await this.clearToken();
-        throw new Error('Authentication required');
+        throw new Error('Session expired. Please login again.');
+      }
+
+      // Handle 429 Too Many Requests (rate limiting)
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        const retryAfter = response.headers.get('Retry-After') || '60';
+        throw new Error(
+          errorData.message ||
+            `Too many requests. Please wait ${retryAfter} seconds before trying again.`,
+        );
       }
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`API Error ${response.status}:`, errorText);
-        throw new Error(`API Error ${response.status}: ${errorText}`);
+        // Try to parse as JSON for better error messages (e.g., account lockout)
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.message || `API Error ${response.status}: ${errorText}`);
+        } catch {
+          throw new Error(`API Error ${response.status}: ${errorText}`);
+        }
       }
 
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
+        // Parse JSON response
         const data = await response.json();
         return data;
       } else {
@@ -123,17 +361,6 @@ class TrendAPIService {
       }
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error(`🌐 API Request failed: ${method} ${url}`, {
-        errorMessage: error.message,
-        errorName: error.name,
-        stack: error.stack,
-        url: url,
-        method: method,
-        isNetworkError:
-          error.name === 'TypeError' && error.message.includes('fetch'),
-        isTimeoutError:
-          error.name === 'AbortError' || error.message.includes('timeout'),
-      });
 
       // Enhance error message for better debugging
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -153,17 +380,92 @@ class TrendAPIService {
     }
   }
 
+  /**
+   * Attempt to refresh the access token using the refresh token
+   * Handles concurrent refresh requests by waiting for the first one to complete
+   */
+  async tryRefreshToken() {
+    // If no refresh token, can't refresh
+    if (!this.refreshToken) {
+      console.log('🔄 No refresh token available');
+      return false;
+    }
+
+    // If already refreshing, wait for that to complete
+    if (this.isRefreshing) {
+      console.log('🔄 Refresh already in progress, waiting...');
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = this._doRefreshToken();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+    }
+  }
+
+  async _doRefreshToken() {
+    try {
+      console.log('🔄 Calling /auth/refresh endpoint...');
+      const response = await fetch(`${this.baseURL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: this.refreshToken,
+        }),
+      });
+
+      if (!response.ok) {
+        console.log('🔄 Refresh token request failed:', response.status);
+        return false;
+      }
+
+      const data = await response.json();
+
+      // Save new access token
+      if (data.access_token) {
+        await this.saveToken(data.access_token);
+        console.log('🔄 New access token saved');
+      }
+
+      // Handle token rotation - save new refresh token if provided
+      if (data.refresh_token) {
+        await this.saveRefreshToken(data.refresh_token);
+        console.log('🔄 Refresh token rotated and saved');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('🔄 Token refresh failed:', error);
+      return false;
+    }
+  }
+
   // ============================================================================
   // AUTHENTICATION METHODS
   // ============================================================================
 
   async login(email, password) {
     try {
-      console.log('🔐 Login attempt:', {
-        baseURL: this.baseURL,
-        email: email.trim(),
-        timestamp: new Date().toISOString(),
-      });
+      // Check if user is locked out due to too many failed attempts
+      const now = Date.now();
+      const timeSinceLastAttempt = now - this.lastFailedAttempt;
+
+      if (this.loginAttempts >= this.maxAttempts && timeSinceLastAttempt < this.lockoutDuration) {
+        const remainingTime = Math.ceil((this.lockoutDuration - timeSinceLastAttempt) / 60000);
+        throw new Error(`Too many login attempts. Please try again in ${remainingTime} minute(s).`);
+      }
+
+      // Reset attempts if lockout period has passed
+      if (timeSinceLastAttempt >= this.lockoutDuration) {
+        this.loginAttempts = 0;
+      }
 
       const response = await this.makeRequest('/auth/login', {
         method: 'POST',
@@ -174,34 +476,25 @@ class TrendAPIService {
         requiresAuth: false,
       });
 
-      console.log('🔐 Login response received:', {
-        hasResponse: !!response,
-        hasAccessToken: !!(response && response.access_token),
-        hasUser: !!(response && response.user),
-      });
-
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
+
+        // 🔐 Save refresh token for automatic session renewal
+        if (response.refresh_token) {
+          await this.saveRefreshToken(response.refresh_token);
+        }
+
+        // Reset login attempts on successful login
+        this.loginAttempts = 0;
         return {
           success: true,
           user: response.user,
           token: response.access_token,
         };
       } else {
-        console.error('🔐 Invalid response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('🔐 Login request failed:', {
-        message: error.message,
-        name: error.name,
-        baseURL: this.baseURL,
-        isNetworkError:
-          error.message.includes('fetch') ||
-          error.message.includes('Network') ||
-          error.message.includes('timeout'),
-      });
-
       // Provide more user-friendly error messages
       let userMessage = error.message;
       if (
@@ -217,6 +510,18 @@ class TrendAPIService {
         error.message.includes('Unauthorized')
       ) {
         userMessage = 'Invalid email or password.';
+      } else if (error.message.includes('locked') || error.message.includes('attempts remaining')) {
+        // Account lockout - pass through the server's message
+        userMessage = error.message;
+      } else if (error.message.includes('Too many requests')) {
+        // Rate limiting - pass through the server's message
+        userMessage = error.message;
+      }
+
+      // Increment login attempts on failed login (except for rate limit/lockout errors)
+      if (!error.message.includes('Too many') && !error.message.includes('locked')) {
+        this.loginAttempts++;
+        this.lastFailedAttempt = Date.now();
       }
 
       return {
@@ -231,11 +536,11 @@ class TrendAPIService {
       const response = await this.makeRequest('/auth/register', {
         method: 'POST',
         body: {
-          firstName: userData.firstName.trim(),
-          lastName: userData.lastName.trim(),
-          email: userData.email.trim(),
-          password: userData.password,
-          username: userData.username?.trim(),
+          firstName: sanitizeInput.name(userData.firstName),
+          lastName: sanitizeInput.name(userData.lastName),
+          email: sanitizeInput.email(userData.email),
+          password: userData.password, // Don't sanitize password
+          username: userData.username ? sanitizeInput.text(userData.username) : undefined,
           currency: userData.currency || 'USD',
           timezone: userData.timezone || 'UTC',
         },
@@ -244,31 +549,49 @@ class TrendAPIService {
 
       if (response && response.access_token) {
         await this.saveToken(response.access_token);
+
+        // 🔐 Save refresh token for automatic session renewal
+        if (response.refresh_token) {
+          await this.saveRefreshToken(response.refresh_token);
+        }
+
         return {
           success: true,
           user: response.user,
           token: response.access_token,
         };
       } else {
-        console.error('Invalid registration response format:', response);
         throw new Error('Invalid response format');
       }
     } catch (error) {
-      console.error('Registration request failed:', error.message);
+      let userMessage = error.message;
+      // Handle rate limiting for registration
+      if (error.message.includes('Too many requests')) {
+        userMessage = error.message;
+      }
       return {
         success: false,
-        error: error.message,
+        error: userMessage,
       };
     }
   }
 
   async logout() {
     try {
-      await this.makeRequest('/auth/logout', {
-        method: 'POST',
-      });
+      // 🔐 Send refresh token to backend to revoke it
+      if (this.refreshToken) {
+        await this.makeRequest('/auth/logout', {
+          method: 'POST',
+          body: {
+            refresh_token: this.refreshToken,
+          },
+          skipAuthRefresh: true, // Don't try to refresh during logout
+        });
+        console.log('🔐 Refresh token revoked on server');
+      }
     } catch (error) {
-      console.warn('Logout API call failed:', error);
+      // Logout endpoint may fail, but still clear local state
+      console.log('🔐 Backend logout failed (continuing with local cleanup):', error.message);
     } finally {
       await this.clearToken();
     }
@@ -279,9 +602,23 @@ class TrendAPIService {
   }
 
   async updateUserProfile(profileData) {
+    // Create a sanitized copy
+    const sanitizedData = {...profileData};
+
+    // Sanitize text fields if present
+    if (sanitizedData.firstName) {
+      sanitizedData.firstName = sanitizeInput.name(sanitizedData.firstName);
+    }
+    if (sanitizedData.lastName) {
+      sanitizedData.lastName = sanitizeInput.name(sanitizedData.lastName);
+    }
+    if (sanitizedData.email) {
+      sanitizedData.email = sanitizeInput.email(sanitizedData.email);
+    }
+
     return this.makeRequest('/auth/profile', {
       method: 'PUT',
-      body: profileData,
+      body: sanitizedData,
     });
   }
 
@@ -307,9 +644,37 @@ class TrendAPIService {
     return this.makeRequest('/users/income');
   }
 
+  /**
+   * Get home summary for Balance Card
+   * Single source of truth for all balance calculations
+   * Returns: period, income, outflows (committed, discretionary, goals), totals
+   */
+  async getHomeSummary() {
+    return this.makeRequest('/home/summary');
+  }
+
   async deactivateAccount() {
     return this.makeRequest('/users/profile', {
       method: 'DELETE',
+    });
+  }
+
+  async deleteAccount() {
+    return this.makeRequest('/users/account', {
+      method: 'DELETE',
+    });
+  }
+
+  async changePassword(passwordData) {
+    return this.makeRequest('/auth/change-password', {
+      method: 'POST',
+      body: passwordData,
+    });
+  }
+
+  async exportUserData() {
+    return this.makeRequest('/users/export-data', {
+      method: 'POST',
     });
   }
 
@@ -328,6 +693,14 @@ class TrendAPIService {
   async createTransaction(transactionData) {
     const {category, ...cleanedData} = transactionData;
 
+    // Sanitize text fields
+    if (cleanedData.description) {
+      cleanedData.description = sanitizeInput.text(cleanedData.description);
+    }
+    if (cleanedData.notes) {
+      cleanedData.notes = sanitizeInput.description(cleanedData.notes);
+    }
+
     const response = await this.makeRequest('/transactions', {
       method: 'POST',
       body: cleanedData,
@@ -341,13 +714,20 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected create response format:', response);
       return response;
     }
   }
 
   async updateTransaction(id, transactionData) {
     const {category, ...cleanedData} = transactionData;
+
+    // Sanitize text fields
+    if (cleanedData.description) {
+      cleanedData.description = sanitizeInput.text(cleanedData.description);
+    }
+    if (cleanedData.notes) {
+      cleanedData.notes = sanitizeInput.description(cleanedData.notes);
+    }
 
     const response = await this.makeRequest(`/transactions/${id}`, {
       method: 'PATCH',
@@ -378,7 +758,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected getById response format:', response);
       return response;
     }
   }
@@ -527,10 +906,19 @@ class TrendAPIService {
   }
 
   async createGoal(goalData) {
-    console.log('🔍 CREATE_GOAL: Starting with data:', goalData);
-
     // Create a clean copy to avoid mutating the input
     const cleanGoalData = {...goalData};
+
+    // Sanitize text fields
+    if (cleanGoalData.name) {
+      cleanGoalData.name = sanitizeInput.text(cleanGoalData.name);
+    }
+    if (cleanGoalData.description) {
+      cleanGoalData.description = sanitizeInput.description(cleanGoalData.description);
+    }
+    if (cleanGoalData.notes) {
+      cleanGoalData.notes = sanitizeInput.description(cleanGoalData.notes);
+    }
 
     // Convert string targetAmount to number if needed
     if (typeof cleanGoalData.targetAmount === 'string') {
@@ -544,11 +932,6 @@ class TrendAPIService {
       isNaN(cleanGoalData.targetAmount) ||
       cleanGoalData.targetAmount <= 0
     ) {
-      console.error('🔍 CREATE_GOAL: Invalid targetAmount:', {
-        original: goalData.targetAmount,
-        cleaned: cleanGoalData.targetAmount,
-        type: typeof cleanGoalData.targetAmount,
-      });
       throw new Error(
         'Invalid targetAmount: must be a valid number greater than 0',
       );
@@ -565,22 +948,10 @@ class TrendAPIService {
       cleanGoalData.currentAmount = 0;
     }
 
-    console.log('🔍 CREATE_GOAL: Cleaned data:', {
-      targetAmount: cleanGoalData.targetAmount,
-      currentAmount: cleanGoalData.currentAmount,
-      name: cleanGoalData.name,
-    });
-
     try {
-      console.log(
-        '🔍 CREATE_GOAL: Making API request to:',
-        `${this.baseURL}/goals`,
-      );
-
       // Add a custom timeout for goal creation (shorter than default)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('🔍 CREATE_GOAL: Request timed out after 5 seconds');
         controller.abort();
       }, 5000); // 5 second timeout
 
@@ -591,7 +962,6 @@ class TrendAPIService {
       });
 
       clearTimeout(timeoutId);
-      console.log('🔍 CREATE_GOAL: API response received:', response);
 
       // Handle different possible response formats
       if (response?.goal) {
@@ -601,11 +971,9 @@ class TrendAPIService {
       } else if (response && typeof response === 'object' && response.id) {
         return response;
       } else {
-        console.warn('Unexpected create goal response format:', response);
         return response;
       }
     } catch (error) {
-      console.error('CreateGoal API error:', error.message);
       throw error;
     }
   }
@@ -620,25 +988,25 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected getGoalById response format:', response);
       return response;
     }
   }
 
   async updateGoal(id, goalData) {
     // FIXED: Better validation with proper error handling
-    console.log('🔍 UPDATE_GOAL: Starting with data:', {
-      id,
-      targetAmount: goalData.targetAmount,
-      currentAmount: goalData.currentAmount,
-      types: {
-        targetAmount: typeof goalData.targetAmount,
-        currentAmount: typeof goalData.currentAmount,
-      },
-    });
-
     // Create a clean copy to avoid mutating the input
     const cleanGoalData = {...goalData};
+
+    // Sanitize text fields
+    if (cleanGoalData.name) {
+      cleanGoalData.name = sanitizeInput.text(cleanGoalData.name);
+    }
+    if (cleanGoalData.description) {
+      cleanGoalData.description = sanitizeInput.description(cleanGoalData.description);
+    }
+    if (cleanGoalData.notes) {
+      cleanGoalData.notes = sanitizeInput.description(cleanGoalData.notes);
+    }
 
     // FIXED: Convert and validate targetAmount
     if (cleanGoalData.targetAmount !== undefined) {
@@ -652,10 +1020,6 @@ class TrendAPIService {
         !isFinite(cleanGoalData.targetAmount) ||
         cleanGoalData.targetAmount <= 0
       ) {
-        console.error(
-          '🔍 ❌ CRITICAL: Invalid targetAmount:',
-          goalData.targetAmount,
-        );
         throw new Error(
           'Invalid targetAmount: must be a valid number greater than 0',
         );
@@ -674,25 +1038,14 @@ class TrendAPIService {
         !isFinite(cleanGoalData.currentAmount) ||
         cleanGoalData.currentAmount < 0
       ) {
-        console.warn(
-          '🔍 ⚠️ Invalid currentAmount, setting to 0:',
-          goalData.currentAmount,
-        );
         cleanGoalData.currentAmount = 0;
       }
     }
-
-    console.log('🔍 UPDATE_GOAL: Cleaned data:', {
-      targetAmount: cleanGoalData.targetAmount,
-      currentAmount: cleanGoalData.currentAmount,
-    });
 
     const response = await this.makeRequest(`/goals/${id}`, {
       method: 'PUT',
       body: cleanGoalData,
     });
-
-    console.log('🔍 UPDATE_GOAL: Backend response:', response);
 
     if (response?.goal) {
       return response.goal;
@@ -701,7 +1054,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected updateGoal response format:', response);
       return response || {id, ...cleanGoalData};
     }
   }
@@ -713,18 +1065,11 @@ class TrendAPIService {
   }
 
   async addGoalContribution(goalId, contributionData) {
-    console.log(
-      '🔍 TREND_API: Adding goal contribution for goal',
-      goalId,
-      'data:',
-      contributionData,
-    );
     const response = await this.makeRequest(`/goals/${goalId}/contributions`, {
       method: 'POST',
       body: contributionData,
     });
 
-    console.log('🔍 TREND_API: Goal contribution response:', response);
     if (response?.contribution) {
       return response.contribution;
     } else if (response?.data) {
@@ -735,11 +1080,23 @@ class TrendAPIService {
   }
 
   async getGoalContributions(goalId, filters = {}) {
-    const queryString = this.buildQueryString(filters);
-    const endpoint = queryString
-      ? `/goals/${goalId}/contributions?${queryString}`
-      : `/goals/${goalId}/contributions`;
-    return this.makeRequest(endpoint);
+    try {
+      const queryString = this.buildQueryString(filters);
+      const endpoint = queryString
+        ? `/goals/${goalId}/contributions?${queryString}`
+        : `/goals/${goalId}/contributions`;
+      return this.makeRequest(endpoint);
+    } catch (error) {
+      // Handle 404 errors gracefully for deleted/non-existent goals
+      if (
+        error.message?.includes('404') ||
+        error.message?.includes('Goal not found')
+      ) {
+        return []; // Return empty array instead of throwing error
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getGoalAnalytics(goalId) {
@@ -913,15 +1270,14 @@ class TrendAPIService {
   // ============================================================================
 
   async createTournament(tournamentData) {
-
     // Create a clean copy to avoid mutating the input
     const cleanTournamentData = {...tournamentData};
 
     // Map frontend field names to backend expected names
     const mappedData = {
-      name: cleanTournamentData.name,
-      location: cleanTournamentData.location,
-      venue: cleanTournamentData.venue || null,
+      name: sanitizeInput.text(cleanTournamentData.name),
+      location: sanitizeInput.text(cleanTournamentData.location),
+      venue: cleanTournamentData.venue ? sanitizeInput.text(cleanTournamentData.venue) : null,
       dateStart: cleanTournamentData.dateStart || cleanTournamentData.startDate,
       dateEnd:
         cleanTournamentData.dateEnd || cleanTournamentData.endDate || null,
@@ -934,7 +1290,7 @@ class TrendAPIService {
         cleanTournamentData.foodBudget || cleanTournamentData.food || 0,
       ),
       otherExpenses: parseFloat(cleanTournamentData.otherExpenses || 0),
-      notes: cleanTournamentData.notes || null,
+      notes: cleanTournamentData.notes ? sanitizeInput.description(cleanTournamentData.notes) : null,
     };
 
     // Validate required fields
@@ -957,13 +1313,11 @@ class TrendAPIService {
       throw new Error('End date cannot be before start date');
     }
 
-
     try {
       const response = await this.makeRequest('/poker/tournaments', {
         method: 'POST',
         body: mappedData,
       });
-
 
       // Handle different possible response formats
       if (response?.tournament) {
@@ -973,7 +1327,6 @@ class TrendAPIService {
       } else if (response && typeof response === 'object' && response.id) {
         return response;
       } else {
-        console.warn('Unexpected create tournament response format:', response);
         return response;
       }
     } catch (error) {
@@ -1000,7 +1353,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected getTournamentById response format:', response);
       return response;
     }
   }
@@ -1012,18 +1364,19 @@ class TrendAPIService {
     const mappedData = {};
 
     if (cleanTournamentData.name !== undefined) {
-      mappedData.name = cleanTournamentData.name;
+      mappedData.name = sanitizeInput.text(cleanTournamentData.name);
     }
     if (cleanTournamentData.location !== undefined) {
-      mappedData.location = cleanTournamentData.location;
+      mappedData.location = sanitizeInput.text(cleanTournamentData.location);
     }
     if (cleanTournamentData.venue !== undefined) {
-      mappedData.venue = cleanTournamentData.venue;
+      mappedData.venue = sanitizeInput.text(cleanTournamentData.venue);
     }
     if (cleanTournamentData.dateStart || cleanTournamentData.startDate) {
       mappedData.dateStart =
         cleanTournamentData.dateStart || cleanTournamentData.startDate;
     }
+
     if (cleanTournamentData.dateEnd || cleanTournamentData.endDate) {
       mappedData.dateEnd =
         cleanTournamentData.dateEnd || cleanTournamentData.endDate;
@@ -1052,7 +1405,7 @@ class TrendAPIService {
       );
     }
     if (cleanTournamentData.notes !== undefined) {
-      mappedData.notes = cleanTournamentData.notes;
+      mappedData.notes = sanitizeInput.description(cleanTournamentData.notes);
     }
 
     const response = await this.makeRequest(`/poker/tournaments/${id}`, {
@@ -1067,7 +1420,6 @@ class TrendAPIService {
     } else if (response && typeof response === 'object' && response.id) {
       return response;
     } else {
-      console.warn('Unexpected updateTournament response format:', response);
       return response || {id, ...mappedData};
     }
   }
@@ -1145,7 +1497,6 @@ class TrendAPIService {
         },
       );
 
-
       if (response?.event) {
         return response.event;
       } else if (response?.data) {
@@ -1153,7 +1504,6 @@ class TrendAPIService {
       } else if (response && typeof response === 'object' && response.id) {
         return response;
       } else {
-        console.warn('Unexpected create event response format:', response);
         return response;
       }
     } catch (error) {
@@ -1204,7 +1554,6 @@ class TrendAPIService {
       );
     }
 
-
     const response = await this.makeRequest(
       `/poker/tournaments/events/${eventId}`,
       {
@@ -1212,7 +1561,6 @@ class TrendAPIService {
         body: cleanEventData,
       },
     );
-
 
     if (response?.event) {
       return response.event;
@@ -1252,6 +1600,77 @@ class TrendAPIService {
   }
 
   // ============================================================================
+  // ROLLOVER METHODS
+  // ============================================================================
+
+  async getRolloverAmount() {
+    return this.makeRequest('/users/rollover');
+  }
+
+  async processRollover(rolloverData) {
+    return this.makeRequest('/users/rollover', {
+      method: 'PUT',
+      body: {
+        rolloverAmount: rolloverData.amount,
+        lastRolloverDate: new Date().toISOString(),
+      },
+    });
+  }
+
+  async createRolloverEntry(rolloverEntryData) {
+    return this.makeRequest('/users/rollover/entries', {
+      method: 'POST',
+      body: rolloverEntryData,
+    });
+  }
+
+  async getRolloverHistory(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/users/rollover/history?${queryString}`
+      : '/users/rollover/history';
+    return this.makeRequest(endpoint);
+  }
+
+  async getRolloverEntries(filters = {}) {
+    const queryString = this.buildQueryString(filters);
+    const endpoint = queryString
+      ? `/users/rollover/history?${queryString}`
+      : '/users/rollover/history';
+    return this.makeRequest(endpoint);
+  }
+
+  /**
+   * Dismiss rollover notification banner
+   * Marks notification as dismissed, funds stay in spendable pool
+   */
+  async dismissRolloverNotification() {
+    return this.makeRequest('/users/rollover/notification', {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Allocate rollover funds to goals (atomic operation)
+   * Backend validates allocations don't exceed available rollover, then atomically:
+   * - Creates contributions
+   * - Deducts from user.rolloverAmount
+   * - Dismisses notification (if fully allocated) or updates amount (if partial)
+   *
+   * @param {Array} goalAllocations - Array of { goalId, amount } objects
+   * @param {string} description - Description for the contributions
+   */
+  async allocateRolloverToGoals(goalAllocations, description) {
+    return this.makeRequest('/goals/rollover-contribution', {
+      method: 'POST',
+      body: {
+        goalAllocations,
+        description,
+      },
+    });
+  }
+
+  // ============================================================================
   // UTILITY METHODS
   // ============================================================================
 
@@ -1263,9 +1682,47 @@ class TrendAPIService {
     return this.getUserProfile();
   }
 
-  // Helper method to refresh authentication
+  getCurrentUserId() {
+    if (!this.isAuthenticated() || !this.token) {
+      return null;
+    }
+
+    try {
+      // Decode JWT token to get user ID
+      const tokenParts = this.token.split('.');
+      if (tokenParts.length !== 3) {
+        return null;
+      }
+
+      // Decode the payload (second part)
+      const payload = tokenParts[1];
+
+      // Add padding if needed
+      const paddedPayload = payload + '='.repeat((4 - payload.length % 4) % 4);
+
+      // Decode base64
+      // eslint-disable-next-line no-undef
+      const decoded = atob(paddedPayload);
+      const payloadObj = JSON.parse(decoded);
+
+      return payloadObj.sub || payloadObj.id || payloadObj.userId || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Helper method to refresh authentication (uses refresh token)
   async refreshAuth() {
     try {
+      // First try to refresh the token if we have a refresh token
+      if (this.refreshToken) {
+        const refreshed = await this.tryRefreshToken();
+        if (refreshed) {
+          return true;
+        }
+      }
+
+      // If no refresh token or refresh failed, try to validate current token
       const profile = await this.getUserProfile();
       return !!profile;
     } catch (error) {
@@ -1280,6 +1737,8 @@ class TrendAPIService {
       baseURL: this.baseURL,
       isAuthenticated: this.isAuthenticated(),
       hasToken: !!this.token,
+      hasRefreshToken: !!this.refreshToken,
+      isRefreshing: this.isRefreshing,
     };
   }
 }

@@ -9,20 +9,27 @@ import {
   RefreshControl,
   AppState,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
+import useRolloverAllocation from '../hooks/useRolloverAllocation';
 import AddGoalModal from '../components/AddGoalModal';
 import GoalCard from '../components/GoalCard';
 import {formatCurrencySync} from '../utils/currencyHelper';
 import {useAppSettings} from '../contexts/AppSettingsContext';
+import TrendAPIService from '../services/TrendAPIService';
+import TransactionCache from '../services/TransactionCache';
 
-const GoalsScreen = () => {
+const GoalsScreen = ({route, navigation}) => {
   const insets = useSafeAreaInsets();
+
+  // Extract rollover parameters from route
+  const rolloverParams = route?.params || {};
+  const {fromRollover} = rolloverParams;
 
   // Get currency setting from context
   const {appSettings} = useAppSettings();
@@ -30,8 +37,8 @@ const GoalsScreen = () => {
 
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
-  const [incomeData, setIncomeData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showDebtGestureBanner, setShowDebtGestureBanner] = useState(true);
 
   // Refs to prevent multiple simultaneous loads
   const isLoadingRef = useRef(false);
@@ -39,6 +46,7 @@ const GoalsScreen = () => {
   const isMountedRef = useRef(true);
   const hasLoadedOnce = useRef(false); // Track if we've loaded at least once
   const lastUpdateTime = useRef(0); // Track when we last updated goals
+  const scrollViewRef = useRef(null); // Ref for ScrollView
 
   // Hooks
   const {
@@ -55,9 +63,15 @@ const GoalsScreen = () => {
     getGoalProgress,
     isGoalOverdue,
     completeGoal,
-    // eslint-disable-next-line no-unused-vars
-    updateCounter,
   } = useGoals();
+
+  // Rollover allocation hook
+  const {
+    shouldShowModal: shouldShowRolloverModal,
+    allocateToGoal,
+    cancelRollover,
+    resetRollover,
+  } = useRolloverAllocation(rolloverParams, loadGoals);
 
   // Use ref to store loadGoals to prevent dependency loops
   const loadGoalsRef = useRef();
@@ -75,16 +89,9 @@ const GoalsScreen = () => {
       isLoadingRef.current = true;
 
       try {
-        // Load goals and income data in parallel
-        const [, incomeResult] = await Promise.all([
-          loadGoalsRef.current
-            ? loadGoalsRef.current(force)
-            : Promise.resolve(), // Use ref to prevent dependency loop
-          loadIncomeData(),
-        ]);
-
-        if (isMountedRef.current && incomeResult) {
-          setIncomeData(incomeResult);
+        // Load goals
+        if (loadGoalsRef.current) {
+          await loadGoalsRef.current(force);
         }
 
         hasLoadedOnce.current = true;
@@ -96,21 +103,8 @@ const GoalsScreen = () => {
         }
       }
     },
-    [loadIncomeData], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
+    [], // ✅ FIXED: No dependencies to prevent infinite loops
   );
-
-  const loadIncomeData = useCallback(async () => {
-    try {
-      const storedData = await AsyncStorage.getItem('userSetup');
-      if (storedData) {
-        return JSON.parse(storedData);
-      }
-      return null;
-    } catch (error) {
-      console.warn('Error loading income data:', error);
-      return null;
-    }
-  }, []);
 
   // Initial load on mount
   useEffect(() => {
@@ -119,8 +113,10 @@ const GoalsScreen = () => {
 
     return () => {
       isMountedRef.current = false;
+      // Clean up rollover state when component unmounts
+      resetRollover();
     };
-  }, [loadAllData]);
+  }, [loadAllData, resetRollover]);
 
   // Monitor app state changes for automatic refresh
   useEffect(() => {
@@ -147,43 +143,27 @@ const GoalsScreen = () => {
   // Only reload on focus if data is stale (debounced)
   useFocusEffect(
     useCallback(() => {
-      // Remove the delay - load immediately but silently
       if (isMountedRef.current && !isLoadingRef.current) {
-        // Don't reload if we just updated goals (within 10 seconds)
         const timeSinceUpdate = Date.now() - lastUpdateTime.current;
-        if (timeSinceUpdate < 10000) {
-          console.log(
-            '🔍 GOALS_SCREEN: Skipping reload - recent update within',
-            timeSinceUpdate,
-            'ms',
-          );
-          return;
-        }
 
-        // Only reload if goals are empty OR if we've never loaded before
-        const currentGoalsLength = goals.length;
-        if (
-          !hasLoadedOnce.current ||
-          (currentGoalsLength === 0 && !incomeData)
-        ) {
-          console.log(
-            '🔍 GOALS_SCREEN: Loading data (hasLoadedOnce:',
-            hasLoadedOnce.current,
-            'goals.length:',
-            currentGoalsLength,
-            ')',
-          );
+        // Always reload if:
+        // 1. We've never loaded before
+        // 2. We haven't updated in the last 3 seconds (reduced from 10 to catch quick navigations)
+        if (!hasLoadedOnce.current || timeSinceUpdate >= 3000) {
           loadAllData();
-        } else {
-          console.log(
-            '🔍 GOALS_SCREEN: Skipping reload - already loaded with',
-            currentGoalsLength,
-            'goals',
-          );
         }
       }
-    }, [loadAllData, incomeData, goals.length]),
+      // Note: goals.length removed from deps to prevent infinite loop when global state updates
+    }, [loadAllData]),
   );
+
+  // Handle rollover flow - automatically open Add Goal modal when coming from rollover
+  useEffect(() => {
+    if (shouldShowRolloverModal && !showAddGoal) {
+      clearEditingGoal();
+      setShowAddGoal(true);
+    }
+  }, [shouldShowRolloverModal, showAddGoal, clearEditingGoal]);
 
   // Pull-to-refresh handler
   const onRefresh = useCallback(async () => {
@@ -216,47 +196,47 @@ const GoalsScreen = () => {
   const handleSaveGoal = useCallback(
     async goalData => {
       try {
-        console.log('🔍 GOALS_SCREEN: Saving goal with data:', {
-          title: goalData.title,
-          type: goalData.type,
-          category: goalData.category,
-          target: goalData.target,
-        });
-
         const result = await saveGoal(goalData);
 
         if (result && result.success) {
-          console.log('🔍 GOALS_SCREEN: Goal saved successfully:', {
-            id: result.goal?.id,
-            type: result.goal?.type,
-            category: result.goal?.category,
-          });
-
           setShowAddGoal(false);
           clearEditingGoal();
-          // Reload goals to show the new goal
-          console.log('🔍 GOALS_SCREEN: Reloading goals after save...');
-          try {
-            if (loadGoalsRef.current) {
-              await loadGoalsRef.current(true);
-              console.log('🔍 GOALS_SCREEN: Goals reloaded successfully');
+
+          // Handle rollover allocation if this goal was created from rollover flow
+          if (shouldShowRolloverModal && result.goal?.id) {
+            const rolloverResult = await allocateToGoal(result.goal.id);
+
+            if (!rolloverResult.success) {
+              // Show error but don't fail the goal creation
+              Alert.alert(
+                'Rollover Allocation Failed',
+                rolloverResult.error ||
+                  'Failed to allocate rollover funds to goal. You can add them manually.',
+                [{text: 'OK', style: 'default'}],
+              );
             }
-          } catch (reloadError) {
-            console.error(
-              '🔍 GOALS_SCREEN: Failed to reload goals:',
-              reloadError,
-            );
           }
+
+          // No need to reload goals here - the global state listener already updated them
+          // Reloading causes a visible flash/flicker when the modal closes
+
+          // Update timestamp to prevent useFocusEffect from reloading unnecessarily
+          lastUpdateTime.current = Date.now();
+
+          // Navigate back to Home if this came from rollover flow
+          if (fromRollover && navigation) {
+            navigation.navigate('Home');
+          }
+
           return {success: true, goal: result.goal};
         } else {
-          console.error('🔍 GOALS_SCREEN: Goal save failed:', result?.error);
           return {
             success: false,
             error: result?.error || 'Failed to save goal. Please try again.',
           };
         }
       } catch (error) {
-        console.error('🔍 GOALS_SCREEN: Goal save error:', error);
+        console.error('Goal save error:', error);
         return {
           success: false,
           error:
@@ -264,15 +244,80 @@ const GoalsScreen = () => {
         };
       }
     },
-    [saveGoal, clearEditingGoal], // ✅ FIXED: Removed loadGoals dependency to prevent infinite loops
+    [
+      saveGoal,
+      clearEditingGoal,
+      shouldShowRolloverModal,
+      allocateToGoal,
+      fromRollover,
+      navigation,
+    ],
   );
 
   const handleDeleteGoal = useCallback(
-    async goalId => {
+    async goal => {
       try {
-        await deleteGoal(goalId);
+        // Check for linked transactions
+        let linkedTransactions = [];
+        try {
+          const response = await TrendAPIService.getTransactions({
+            linkedGoalId: goal.id,
+          });
+          linkedTransactions = Array.isArray(response)
+            ? response
+            : response?.transactions || response?.data || [];
+        } catch (fetchError) {
+          console.warn('Error fetching linked transactions:', fetchError);
+        }
+
+        // Build confirmation message
+        let message = `Are you sure you want to delete "${goal.title}"? This action cannot be undone.`;
+        if (linkedTransactions.length > 0) {
+          message += `\n\nThis will also delete ${linkedTransactions.length} linked recurring transaction${linkedTransactions.length > 1 ? 's' : ''}.`;
+        }
+
+        // Show confirmation alert
+        Alert.alert('Delete Goal', message, [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Delete linked transactions first
+                let deletedTransactions = false;
+                const currentUserId = TrendAPIService.getCurrentUserId();
+                for (const transaction of linkedTransactions) {
+                  const txId = transaction.id || transaction._id;
+                  if (txId) {
+                    try {
+                      await TrendAPIService.deleteTransaction(txId);
+                      // Also remove from local cache
+                      if (currentUserId) {
+                        await TransactionCache.removeTransaction(currentUserId, txId);
+                      }
+                      deletedTransactions = true;
+                    } catch (txError) {
+                      console.warn('Error deleting linked transaction:', txError);
+                    }
+                  }
+                }
+                // Emit event to refresh transactions in HomeContainer
+                if (deletedTransactions) {
+                  DeviceEventEmitter.emit('transactionsChanged');
+                }
+                // Then delete the goal
+                await deleteGoal(goal.id);
+              } catch (error) {
+                console.warn('Error deleting goal:', error);
+                Alert.alert('Error', 'Failed to delete goal. Please try again.');
+              }
+            },
+          },
+        ]);
       } catch (error) {
-        console.warn('Error deleting goal:', error);
+        console.warn('Error in delete goal flow:', error);
+        Alert.alert('Error', 'Something went wrong. Please try again.');
       }
     },
     [deleteGoal],
@@ -281,33 +326,24 @@ const GoalsScreen = () => {
   const handleToggleBalanceDisplay = useCallback(
     async goalId => {
       try {
-        console.log(
-          '🎯 GoalsScreen: Toggling balance display for goal:',
-          goalId,
-        );
-        const result = await toggleGoalBalanceDisplay(goalId);
-        console.log('🎯 GoalsScreen: Toggle result:', result);
-
-        // Log the updated goals state
-        const updatedGoal = goals.find(g => g.id === goalId);
-        console.log('🎯 GoalsScreen: Updated goal state:', {
-          id: updatedGoal?.id,
-          title: updatedGoal?.title,
-          showOnBalanceCard: updatedGoal?.showOnBalanceCard,
-        });
+        await toggleGoalBalanceDisplay(goalId);
       } catch (error) {
         console.warn('Error toggling balance display:', error);
       }
     },
-    [toggleGoalBalanceDisplay, goals],
+    [toggleGoalBalanceDisplay],
   );
 
   const handleUpdateProgress = useCallback(
     async (goalId, amount, paymentSource = 'income') => {
+      console.log('🔍 GOALS_SCREEN: ===== handleUpdateProgress CALLED =====');
+      console.log('🔍 GOALS_SCREEN: goalId:', goalId);
+      console.log('🔍 GOALS_SCREEN: amount:', amount);
+      console.log('🔍 GOALS_SCREEN: paymentSource:', paymentSource);
+
       try {
         await updateGoalProgress(goalId, amount, paymentSource);
-        lastUpdateTime.current = Date.now(); // Mark when we updated
-        console.log('🔍 GOALS_SCREEN: Goal progress updated successfully');
+        lastUpdateTime.current = Date.now();
       } catch (error) {
         console.warn('Error updating progress:', error);
         Alert.alert(
@@ -338,9 +374,14 @@ const GoalsScreen = () => {
   );
 
   const handleCloseAddGoal = useCallback(() => {
+    // If user cancels goal creation during rollover flow, cancel the rollover
+    if (shouldShowRolloverModal) {
+      cancelRollover();
+    }
+
     setShowAddGoal(false);
     clearEditingGoal();
-  }, [clearEditingGoal]);
+  }, [clearEditingGoal, shouldShowRolloverModal, cancelRollover]);
 
   const formatCurrency = useCallback(
     amount => {
@@ -348,6 +389,18 @@ const GoalsScreen = () => {
     },
     [currency],
   );
+
+  // Handler for when a GoalCard expands for input
+  const handleGoalCardExpand = useCallback(() => {
+    // Add a delay to allow the card to expand, then scroll to show it
+    setTimeout(() => {
+      if (scrollViewRef.current) {
+        // Scroll to a position that ensures the expanded card is visible
+        // This scrolls to near the end but leaves some buffer space
+        scrollViewRef.current.scrollToEnd({animated: true});
+      }
+    }, 250);
+  }, []);
 
   // Memoize expensive calculations
   const activeGoals = React.useMemo(() => {
@@ -393,6 +446,19 @@ const GoalsScreen = () => {
     return grouped;
   }, [activeGoals]);
 
+  // Filter non-debt active goals for Active tab (exclude debt goals)
+  const nonDebtActiveGoals = React.useMemo(() => {
+    return activeGoals.filter(goal => goal.type !== 'debt');
+  }, [activeGoals]);
+
+  // Get only debt goals
+  const debtGoals = React.useMemo(() => {
+    return groupedActiveGoals.debt;
+  }, [groupedActiveGoals.debt]);
+
+  // Check if we should show the Debt Goals tab
+  const hasDebtGoals = debtGoals.length > 0;
+
   // Render goal cards for a specific type
   const renderGoalsByType = (typeGoals, type) => {
     if (typeGoals.length === 0) {
@@ -437,6 +503,7 @@ const GoalsScreen = () => {
             getGoalProgress={getGoalProgress}
             isOverdue={isGoalOverdue(goal)}
             formatCurrency={formatCurrency}
+            onExpand={handleGoalCardExpand}
           />
         ))}
       </View>
@@ -461,36 +528,11 @@ const GoalsScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, {paddingTop: insets.top + 20}]}>
-        <Text style={styles.headerTitle}>Goals</Text>
-        <Text style={styles.headerSubtitle}>
-          Track your financial objectives
-        </Text>
-
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Icon name="target" size={16} color={colors.textWhite} />
-              <Text style={styles.statLabel}>Active Goals</Text>
-            </View>
-            <Text style={styles.statValue}>{activeGoals.length}</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Icon name="eye" size={16} color={colors.textWhite} />
-              <Text style={styles.statLabel}>On Balance Card</Text>
-            </View>
-            <Text style={styles.statValue}>{balanceCardGoals.length}</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Icon name="calendar" size={16} color={colors.textWhite} />
-              <Text style={styles.statLabel}>This Month</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {formatCurrency(currentMonthContributions)}
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Goals</Text>
+            <Text style={styles.headerSubtitle}>
+              Track your financial objectives
             </Text>
           </View>
         </View>
@@ -506,9 +548,23 @@ const GoalsScreen = () => {
               styles.tabText,
               activeTab === 'active' && styles.activeTabText,
             ]}>
-            Active Goals ({activeGoals.length})
+            Active ({nonDebtActiveGoals.length})
           </Text>
         </TouchableOpacity>
+
+        {hasDebtGoals && (
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'debt' && styles.activeTab]}
+            onPress={() => setActiveTab('debt')}>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'debt' && styles.activeTabText,
+              ]}>
+              Debt Goals ({debtGoals.length})
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
@@ -525,9 +581,12 @@ const GoalsScreen = () => {
 
       {/* Content */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -538,11 +597,32 @@ const GoalsScreen = () => {
         }>
         {activeTab === 'active' && (
           <>
-            {/* Active Goals - Grouped by Type */}
-            {activeGoals.length > 0 ? (
+            {/* Quick Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Active Goals</Text>
+                <Text style={styles.statValue}>
+                  {nonDebtActiveGoals.length}
+                </Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>On Balance Card</Text>
+                <Text style={styles.statValue}>{balanceCardGoals.length}</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>This Month</Text>
+                <Text style={styles.statValue}>
+                  {formatCurrency(currentMonthContributions)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Active Goals - Grouped by Type (excluding debt) */}
+            {nonDebtActiveGoals.length > 0 ? (
               <View style={styles.goalsSection}>
                 {renderGoalsByType(groupedActiveGoals.spending, 'spending')}
-                {renderGoalsByType(groupedActiveGoals.debt, 'debt')}
                 {renderGoalsByType(groupedActiveGoals.savings, 'savings')}
               </View>
             ) : (
@@ -560,6 +640,52 @@ const GoalsScreen = () => {
               </View>
             )}
           </>
+        )}
+
+        {activeTab === 'debt' && (
+          <View style={styles.goalsSection}>
+            {/* Swipe Gesture Banner */}
+            {showDebtGestureBanner && debtGoals.length > 0 && (
+              <View style={styles.gestureBanner}>
+                <View style={styles.gestureBannerContent}>
+                  <Icon
+                    name="info"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.gestureBannerIcon}
+                  />
+                  <View style={styles.gestureBannerTextContainer}>
+                    <Text style={styles.gestureBannerTitle}>Swipe Gestures</Text>
+                    <Text style={styles.gestureBannerText}>
+                      Swipe left to see Payment History • Swipe right to Make a Payment
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowDebtGestureBanner(false)}
+                    style={styles.gestureBannerClose}>
+                    <Icon name="x" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {debtGoals.length > 0 ? (
+              <>{renderGoalsByType(debtGoals, 'debt')}</>
+            ) : (
+              <View style={styles.emptyState}>
+                <Icon
+                  name="trending-down"
+                  size={48}
+                  color={colors.textSecondary}
+                  style={styles.emptyIcon}
+                />
+                <Text style={styles.emptyTitle}>No Debt Goals</Text>
+                <Text style={styles.emptySubtitle}>
+                  Create a debt goal to track loan or credit card payments
+                </Text>
+              </View>
+            )}
+          </View>
         )}
 
         {activeTab === 'completed' && (
@@ -610,26 +736,20 @@ const GoalsScreen = () => {
   );
 };
 
-// Styles remain the same...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: 'System',
-    fontWeight: '400',
-    color: colors.textSecondary,
-  },
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
@@ -646,64 +766,73 @@ const styles = StyleSheet.create({
     color: colors.textWhite,
     opacity: 0.9,
     letterSpacing: -0.1,
-    marginBottom: 20,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 24,
     gap: 12,
   },
   statCard: {
     flex: 1,
-    backgroundColor: colors.overlayLight,
+    backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.overlayDark,
-  },
-  statIconContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   statLabel: {
     fontSize: 12,
-    fontWeight: '300',
     fontFamily: 'System',
-    color: colors.textWhite,
-    opacity: 0.9,
+    color: colors.textSecondary || '#6B7280',
+    marginBottom: 8,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '300',
+    fontSize: 18,
+    fontWeight: '700',
     fontFamily: 'System',
-    color: colors.textWhite,
-    letterSpacing: -0.3,
+    color: colors.text || '#1F2937',
   },
   tabContainer: {
-    backgroundColor: colors.surface,
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.background || '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   tab: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    marginHorizontal: 4,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary || '#6366F1',
   },
   activeTab: {
+    backgroundColor: colors.primary || '#6366F1',
     borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
+    borderBottomColor: colors.primary || '#6366F1',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: 'System',
-    color: colors.textSecondary,
+    color: colors.textSecondary || '#6B7280',
   },
   activeTabText: {
-    color: colors.primary,
+    color: colors.textWhite || '#FFFFFF',
+    fontWeight: '600',
   },
   content: {
     flex: 1,
@@ -811,6 +940,41 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  gestureBanner: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  gestureBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  gestureBannerIcon: {
+    marginRight: 12,
+  },
+  gestureBannerTextContainer: {
+    flex: 1,
+  },
+  gestureBannerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  gestureBannerText: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  gestureBannerClose: {
+    padding: 4,
+    marginLeft: 8,
   },
 });
 

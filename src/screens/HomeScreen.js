@@ -4,6 +4,7 @@ import {
   View,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Text,
 } from 'react-native';
@@ -34,6 +35,21 @@ const HomeScreen = ({
   totalIncomePayments = 0,
   totalAdditionalIncome = 0,
   currency = 'AUD',
+  isNewPayPeriodForUI = false,
+
+  // Backend home summary (single source of truth for balance card)
+  homeSummary = null,
+  onRefreshHomeSummary = () => {},
+
+  // Pull-to-refresh
+  refreshing = false,
+  onRefresh = () => {},
+
+  // Rollover props
+  rolloverAmount = 0,
+  rolloverBanner = null,
+  onDismissRolloverBanner = null,
+  onReassignRollover = null,
 
   // Tournament/Poker props
   tournaments = [],
@@ -193,6 +209,12 @@ const HomeScreen = ({
           onGoalsPress={onGoalsPress}
           currency={currency}
           transactions={transactions}
+          rolloverAmount={rolloverAmount}
+          rolloverBanner={rolloverBanner}
+          onDismissRolloverBanner={onDismissRolloverBanner}
+          onReassignRollover={onReassignRollover}
+          isNewPayPeriodForUI={isNewPayPeriodForUI}
+          homeSummary={homeSummary}
         />
       </View>
 
@@ -205,7 +227,15 @@ const HomeScreen = ({
         showsVerticalScrollIndicator={false}
         scrollEnabled={scrollEnabled}
         keyboardShouldPersistTaps="handled"
-        removeClippedSubviews={false}>
+        removeClippedSubviews={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }>
         {/* Poker/Tournament Section - Show if poker module is enabled */}
         {pokerTrackerEnabled && (
           <PokerSection
@@ -221,22 +251,17 @@ const HomeScreen = ({
           />
         )}
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading transactions...</Text>
-          </View>
-        ) : (
-          <TransactionList
-            transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
-            selectedDate={selectedDate}
-            onDeleteTransaction={onDeleteTransaction}
-            onEditTransaction={handleEditTransaction}
-            onSwipeStart={handleSwipeStart}
-            onSwipeEnd={handleSwipeEnd}
-            transactionRef={onboarding?.transactionRef}
-            onTransactionLayout={() => {}} // Handled by onboarding hook
-          />
-        )}
+        <TransactionList
+          transactions={transactions} // ✅ UPDATED: Pre-resolved transactions (no categories prop)
+          selectedDate={selectedDate}
+          payPeriod={homeSummary?.period} // Pass pay period for filtering recurring transactions
+          onDeleteTransaction={onDeleteTransaction}
+          onEditTransaction={handleEditTransaction}
+          onSwipeStart={handleSwipeStart}
+          onSwipeEnd={handleSwipeEnd}
+          transactionRef={onboarding?.transactionRef}
+          onTransactionLayout={() => {}} // Handled by onboarding hook
+        />
       </ScrollView>
 
       {/* ==============================================
@@ -270,34 +295,29 @@ const HomeScreen = ({
 
       {/* ==============================================
           ONBOARDING OVERLAYS
+          Always mounted to allow fade-out animations
           ============================================== */}
-      {onboarding?.showBalanceCardSpotlight && (
-        <BalanceCardSpotlight
-          visible={onboarding.showBalanceCardSpotlight}
-          onNext={handleBalanceCardSpotlightNext}
-          onSkip={handleBalanceCardSpotlightSkip}
-          balanceCardLayout={onboarding.balanceCardLayout}
-          incomeData={incomeData}
-        />
-      )}
+      <BalanceCardSpotlight
+        visible={onboarding?.showBalanceCardSpotlight || false}
+        onNext={handleBalanceCardSpotlightNext}
+        onSkip={handleBalanceCardSpotlightSkip}
+        balanceCardLayout={onboarding?.balanceCardLayout}
+        incomeData={incomeData}
+      />
 
-      {onboarding?.showAddTransactionSpotlight && (
-        <AddTransactionSpotlight
-          visible={onboarding.showAddTransactionSpotlight}
-          onNext={handleAddTransactionSpotlightNext}
-          onSkip={handleAddTransactionSpotlightSkip}
-          floatingButtonLayout={onboarding.floatingButtonLayout}
-        />
-      )}
+      <AddTransactionSpotlight
+        visible={onboarding?.showAddTransactionSpotlight || false}
+        onNext={handleAddTransactionSpotlightNext}
+        onSkip={handleAddTransactionSpotlightSkip}
+        floatingButtonLayout={onboarding?.floatingButtonLayout}
+      />
 
-      {onboarding?.showTransactionSwipeSpotlight && (
-        <TransactionSwipeSpotlight
-          visible={onboarding.showTransactionSwipeSpotlight}
-          onNext={handleTransactionSwipeSpotlightNext}
-          onSkip={handleTransactionSwipeSpotlightSkip}
-          transactionLayout={onboarding.transactionLayout}
-        />
-      )}
+      <TransactionSwipeSpotlight
+        visible={onboarding?.showTransactionSwipeSpotlight || false}
+        onNext={handleTransactionSwipeSpotlightNext}
+        onSkip={handleTransactionSwipeSpotlightSkip}
+        transactionLayout={onboarding?.transactionLayout}
+      />
     </View>
   );
 };

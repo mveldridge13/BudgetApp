@@ -47,6 +47,12 @@ const IncomeSetupContainer = ({navigation, route}) => {
     try {
       // Primary: Load income from backend
       const userProfile = await TrendAPIService.getIncomeProfile();
+      console.log('💰 IncomeSetup EDIT MODE - Backend data:', {
+        income: userProfile?.income,
+        incomeFrequency: userProfile?.incomeFrequency,
+        nextPayDate: userProfile?.nextPayDate,
+        nextPayDateType: typeof userProfile?.nextPayDate,
+      });
 
       if (userProfile?.income) {
         setIncome(userProfile.income.toString());
@@ -58,11 +64,30 @@ const IncomeSetupContainer = ({navigation, route}) => {
       }
 
       if (userProfile?.nextPayDate) {
+        // Parse the date and create a local date (ignoring time component)
         const backendDate = new Date(userProfile.nextPayDate);
-        if (!isNaN(backendDate.getTime())) {
-          setNextPayDate(backendDate);
+        const localDate = new Date(backendDate.getFullYear(), backendDate.getMonth(), backendDate.getDate());
+        console.log('💰 IncomeSetup - Processing nextPayDate:', {
+          original: userProfile.nextPayDate,
+          parsed: backendDate,
+          localDate: localDate,
+          parsedLocalDate: backendDate.toLocaleDateString(),
+          localDateLocal: localDate.toLocaleDateString(),
+          parsedLocalTime: backendDate.toLocaleString(),
+          userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezoneOffset: backendDate.getTimezoneOffset(),
+          isValid: !isNaN(localDate.getTime()),
+          currentNextPayDate: nextPayDate,
+        });
+        if (!isNaN(localDate.getTime())) {
+          setNextPayDate(localDate);
           setHasSelectedDate(true);
+          console.log('💰 IncomeSetup - Set nextPayDate to:', localDate);
+        } else {
+          console.error('💰 IncomeSetup - Invalid date from backend:', userProfile.nextPayDate);
         }
+      } else {
+        console.log('💰 IncomeSetup - No nextPayDate from backend');
       }
 
       // Secondary: Load from AsyncStorage for any missing data
@@ -115,7 +140,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
         );
       }
     }
-  }, [isEditMode]);
+  }, [isEditMode, nextPayDate]);
 
   /**
    * Save income data to backend and AsyncStorage
@@ -161,7 +186,7 @@ const IncomeSetupContainer = ({navigation, route}) => {
       const profileUpdateData = {
         income: incomeAmount,
         incomeFrequency: selectedFrequency.toUpperCase(), // Convert to WEEKLY/FORTNIGHTLY/MONTHLY
-        nextPayDate: nextPayDate.toISOString(), // ✅ Send full DateTime format
+        nextPayDate: new Date(nextPayDate.getFullYear(), nextPayDate.getMonth(), nextPayDate.getDate(), 12, 0, 0).toISOString(), // ✅ Send as noon local time to avoid timezone issues
         setupComplete: true,
       };
 
@@ -172,7 +197,10 @@ const IncomeSetupContainer = ({navigation, route}) => {
         incomeType: typeof incomeAmount,
         incomeFrequency: selectedFrequency.toUpperCase(),
         nextPayDate: nextPayDate.toISOString().split('T')[0],
+        nextPayDateFull: nextPayDate.toISOString(),
+        nextPayDateLocal: nextPayDate.toLocaleDateString(),
         setupComplete: true,
+        hasSelectedDate: hasSelectedDate,
       });
 
       // Validate income amount
@@ -355,9 +383,19 @@ const IncomeSetupContainer = ({navigation, route}) => {
    * Handle date selection
    */
   const handleDateChange = useCallback(selectedDate => {
+    console.log('💰 IncomeSetup - Date changed:', {
+      previousDate: nextPayDate,
+      previousDateLocal: nextPayDate.toLocaleDateString(),
+      newDate: selectedDate,
+      newDateISO: selectedDate.toISOString(),
+      newDateLocal: selectedDate.toLocaleDateString(),
+      newDateLocaleString: selectedDate.toLocaleString(),
+      userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      today: new Date().toLocaleDateString(),
+    });
     setNextPayDate(selectedDate);
     setHasSelectedDate(true);
-  }, []);
+  }, [nextPayDate]);
 
   /**
    * Handle cancel action

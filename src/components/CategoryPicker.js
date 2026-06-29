@@ -165,24 +165,40 @@ const CategoryPicker = ({
   };
 
   // ==============================================
-  // SUBCATEGORY VIEWING/SELECTION - ENABLED
-  // Creation functionality remains disabled
+  // SUBCATEGORY VIEWING/SELECTION/CREATION - ENABLED
   // ==============================================
 
-  const handleAddSubcategoryPress = () => {
-    // Show message that creation is disabled
-    Alert.alert(
-      'Feature Not Available',
-      'Subcategory creation is not yet implemented. You can select from existing subcategories.',
-      [{text: 'OK'}],
-    );
+  const handleAddSubcategoryPress = async () => {
+    if (!onAddSubcategory) {
+      Alert.alert(
+        'Feature Not Available',
+        'Subcategory creation is not available in this context.',
+        [{text: 'OK'}],
+      );
+      return;
+    }
+
+    try {
+      const subcategoryData = {
+        name: 'New Subcategory', // This would come from a modal/form
+        icon: 'albums-outline',
+        color: currentSubcategoryData?.color || '#4ECDC4',
+      };
+
+      const result = await onAddSubcategory(currentSubcategoryData.id, subcategoryData);
+      if (result) {
+        onSubcategoryAdded(result);
+        // Auto-select the newly created subcategory
+        setTimeout(() => {
+          handleSubcategoryPress(result.id);
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error creating subcategory:', error);
+      Alert.alert('Error', 'Failed to create subcategory. Please try again.');
+    }
   };
 
-  // eslint-disable-next-line no-unused-vars
-  const handleSubcategoryCreated = async subcategoryData => {
-    console.warn('⚠️ Subcategory creation not yet implemented');
-    return null;
-  };
 
   // ==============================================
   // HELPER FUNCTIONS (UI Only)
@@ -372,18 +388,14 @@ const CategoryPicker = ({
                     renderSubcategoryOption(subcategory),
                   )}
 
-                  {/* Add Subcategory Button - Disabled but shows message */}
+                  {/* Add Subcategory Button */}
                   <TouchableOpacity
                     style={styles.addCategoryButton}
                     onPress={handleAddSubcategoryPress}
                     activeOpacity={0.7}>
-                    <Icon name="add" size={20} color={colors.textSecondary} />
-                    <Text
-                      style={[
-                        styles.addCategoryText,
-                        {color: colors.textSecondary},
-                      ]}>
-                      Add Subcategory (Coming Soon)
+                    <Icon name="add" size={20} color={colors.primary} />
+                    <Text style={styles.addCategoryText}>
+                      Add Subcategory
                     </Text>
                   </TouchableOpacity>
                 </ScrollView>

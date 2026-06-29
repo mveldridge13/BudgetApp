@@ -40,7 +40,7 @@ const TournamentCard = ({
     accommodationCost,
     foodBudget,
     otherExpenses,
-    fullTournament: tournament
+    fullTournament: tournament,
   });
 
   // Calculate total budget
@@ -184,7 +184,7 @@ const TournamentCard = ({
 
   // Format dates
   const formatDate = (date) => {
-    if (!date) return '';
+    if (!date) {return '';}
     const d = new Date(date);
     return d.toLocaleDateString('en-AU', {
       day: 'numeric',
@@ -200,10 +200,10 @@ const TournamentCard = ({
   const now = new Date();
   const start = new Date(dateStart);
   const end = dateEnd ? new Date(dateEnd) : start;
-  
+
   let status = 'upcoming';
   let statusColor = colors.warning;
-  
+
   if (now >= start && now <= end) {
     status = 'active';
     statusColor = colors.success;
@@ -302,7 +302,7 @@ const TournamentCard = ({
             <Icon name="calendar" size={16} color={colors.textSecondary} />
             <Text style={styles.infoText}>{dateRange}</Text>
           </View>
-          
+
           <View style={[styles.statusBadge, {backgroundColor: statusColor + '20'}]}>
             <Icon name={getStatusIcon()} size={12} color={statusColor} />
             <Text style={[styles.statusText, {color: statusColor}]}>

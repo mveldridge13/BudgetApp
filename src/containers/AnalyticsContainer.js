@@ -2,22 +2,29 @@ import React, {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import {AppState, Alert, Dimensions} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import TrendAPIService from '../services/TrendAPIService';
 import billsAnalyticsCache from '../services/BillsAnalyticsCache';
 import incomeAnalyticsCache from '../services/IncomeAnalyticsCache';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import {colors} from '../styles';
+import PayPeriodService from '../services/PayPeriodService';
+
+// Cache keys to match useTransactions hook
+const TRANSACTIONS_KEY = 'transactions';
 
 const AnalyticsContainer = () => {
-  // Get Pro status and module settings from context
-  const {isPro, moduleSettings} = useAppSettings();
+  // Get Pro status, features, and module settings from context
+  const {isPro, proFeatures, moduleSettings} = useAppSettings();
 
   // UI state only
-  const [selectedPeriod, setSelectedPeriod] = useState('daily');
+  const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [comparisonMode, setComparisonMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // The day the breakdown modal should open on (the highest-discretionary period).
+  const [breakdownInitialDate, setBreakdownInitialDate] = useState(null);
 
   // Backend data - this is all we need
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -32,8 +39,6 @@ const AnalyticsContainer = () => {
   const isLoadingRef = useRef(false);
   const lastActiveDate = useRef(new Date().toDateString());
   const isMountedRef = useRef(true);
-
-
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -77,23 +82,26 @@ const AnalyticsContainer = () => {
     let startDate, endDate;
 
     switch (selectedPeriod) {
-      case 'daily':
+      case '7d':
+        // Rolling 7 days (today included) — 7 daily points.
         startDate = new Date(now);
         startDate.setDate(startDate.getDate() - 6);
         endDate = new Date(now);
         break;
-      case 'weekly':
+      case '30d':
+        // Rolling 30 days — 30 daily points (the behavioural-trend default).
         startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 27);
+        startDate.setDate(startDate.getDate() - 29);
         endDate = new Date(now);
         break;
-      case 'monthly':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 4, 1);
+      case '12m':
+        // Last 12 calendar months — 12 monthly aggregates.
+        startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
         endDate = new Date(now);
         break;
       default:
         startDate = new Date(now);
-        startDate.setDate(startDate.getDate() - 6);
+        startDate.setDate(startDate.getDate() - 29);
         endDate = new Date(now);
     }
 
@@ -157,16 +165,21 @@ const AnalyticsContainer = () => {
 
       console.log('📋 Fetching bills analytics from backend...');
 
-      // Try backend bills analytics first
-      const billsResponse = await TrendAPIService.getBillsAnalytics();
+      // Use pay period filtering fallback since backend uses calendar month filtering
+      console.log(
+        '📋 Using pay period filtering fallback for better bill analytics',
+      );
+      await loadBillsAnalyticsFallback();
+      return;
 
-      if (isMountedRef.current && billsResponse) {
-        setBillsAnalytics(billsResponse);
-
-        // Cache the response for future use
-        await billsAnalyticsCache.set(billsResponse);
-        console.log('📋 Bills analytics cached successfully');
-      }
+      // Backend endpoint exists but uses calendar month filtering - skip it
+      // const billsResponse = await TrendAPIService.getBillsAnalytics();
+      // if (isMountedRef.current && billsResponse) {
+      //   setBillsAnalytics(billsResponse);
+      //   // Cache the response for future use
+      //   await billsAnalyticsCache.set(billsResponse);
+      //   console.log('📋 Bills analytics cached successfully');
+      // }
     } catch (err) {
       console.error('Error loading bills analytics from backend:', err);
 
@@ -189,19 +202,26 @@ const AnalyticsContainer = () => {
     }
   }, [isOnline, loadBillsAnalyticsFallback]);
 
-  // Temporary fallback processing until backend implements bills-analytics endpoint
+  // Pay period based bills analytics processing
   const loadBillsAnalyticsFallback = useCallback(async () => {
     try {
-      // Get all transactions with due dates (bills)
-      const response = await TrendAPIService.getTransactions();
-      const allTransactions = response?.transactions || [];
+      // Get all transactions with due dates (bills) and user profile for pay period calculation
+      const [transactionResponse, userProfile] = await Promise.all([
+        TrendAPIService.getTransactions(),
+        TrendAPIService.getUserProfile(),
+      ]);
 
-      console.log('📋 Bills Analytics: Fetched transactions:', {
-        responseType: typeof response,
+      const allTransactions = transactionResponse?.transactions || [];
+
+      console.log('📋 Bills Analytics: Fetched data:', {
+        responseType: typeof transactionResponse,
         transactionsType: typeof allTransactions,
         isArray: Array.isArray(allTransactions),
         length: allTransactions?.length || 0,
         sample: allTransactions?.slice(0, 2) || 'no data',
+        hasUserProfile: !!userProfile,
+        hasNextPayDate: !!userProfile?.nextPayDate,
+        hasIncomeFrequency: !!userProfile?.incomeFrequency,
       });
 
       // Check if transactions data is valid
@@ -242,48 +262,127 @@ const AnalyticsContainer = () => {
           recurrence: tx.recurrence,
           status: tx.status,
         })),
+        // Show some non-bill transactions for comparison
+        sampleNonBills: allTransactions
+          .filter(
+            tx => !tx.dueDate && (!tx.recurrence || tx.recurrence === 'none'),
+          )
+          .slice(0, 3)
+          .map(tx => ({
+            id: tx.id,
+            description: tx.description,
+            amount: tx.amount,
+            dueDate: tx.dueDate,
+            recurrence: tx.recurrence,
+            status: tx.status,
+          })),
       });
 
-      // Process bills analytics client-side (temporary)
+      // Calculate pay period boundaries using PayPeriodService (single source of truth)
       const now = new Date();
-      const oneWeekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
+      let periodStart, periodEnd;
 
-      const monthlyBills = billTransactions.filter(bill => {
+      if (userProfile?.nextPayDate && userProfile?.incomeFrequency) {
+        try {
+          // Use PayPeriodService for consistent period calculation across the app
+          const boundaries = PayPeriodService.calculatePayPeriodBoundaries(
+            userProfile.nextPayDate,
+            userProfile.incomeFrequency,
+            false, // Don't use current period for new period in analytics
+          );
+
+          if (boundaries) {
+            periodStart = boundaries.start;
+            periodEnd = boundaries.end;
+
+            console.log('📋 Bills Analytics: Pay period calculated:', {
+              frequency: userProfile.incomeFrequency,
+              periodStart: periodStart.toISOString(),
+              periodEnd: periodEnd.toISOString(),
+              today: now.toISOString(),
+            });
+          } else {
+            throw new Error('Failed to calculate pay period boundaries');
+          }
+        } catch (periodError) {
+          console.error(
+            '📋 Bills Analytics: Error calculating pay period:',
+            periodError,
+          );
+          // Fallback to current month if pay period calculation fails
+          periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodEnd = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999,
+          );
+        }
+      } else {
+        console.warn(
+          '📋 Bills Analytics: Missing pay schedule data, falling back to current month',
+        );
+        // Fallback to current month if no pay schedule data
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
+      }
+
+      // Filter bills by pay period instead of calendar month
+      const payPeriodBills = billTransactions.filter(bill => {
         if (!bill.dueDate) {
           return false;
         }
         const billDate = new Date(bill.dueDate);
-        return (
-          billDate.getMonth() === currentMonth &&
-          billDate.getFullYear() === currentYear
-        );
+        return billDate >= periodStart && billDate <= periodEnd;
       });
 
       // Categorize bills by status
-      const paidBillsList = monthlyBills.filter(bill => bill.status === 'PAID');
-      const unpaidBillsList = monthlyBills.filter(
+      const paidBillsList = payPeriodBills.filter(
+        bill => bill.status === 'PAID',
+      );
+      const unpaidBillsList = payPeriodBills.filter(
         bill => bill.status === 'UPCOMING',
       );
-      const overdueBillsList = monthlyBills.filter(bill => {
+      const overdueBillsList = payPeriodBills.filter(bill => {
         if (bill.status === 'PAID') {
           return false;
         }
-        return new Date(bill.dueDate) < now;
+        // Only include bills that are past due (before today, not including today)
+        const billDueDate = new Date(bill.dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+        billDueDate.setHours(0, 0, 0, 0); // Start of due date
+
+        return billDueDate < today; // Strictly before today
       });
 
-      // Upcoming bills (next 7 days)
-      const upcomingBills = monthlyBills.filter(bill => {
+      // Upcoming bills (all unpaid bills from today onwards)
+      const upcomingBills = payPeriodBills.filter(bill => {
         if (bill.status === 'PAID') {
           return false;
         }
-        const dueDate = new Date(bill.dueDate);
-        return dueDate >= now && dueDate <= oneWeekFromNow;
+        const billDueDate = new Date(bill.dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Start of today
+        billDueDate.setHours(0, 0, 0, 0); // Start of due date
+
+        // Include all bills due from today onwards (no 7-day limit)
+        return billDueDate >= today;
       });
 
       // Calculate amounts
-      const totalAmount = monthlyBills.reduce(
+      const totalAmount = payPeriodBills.reduce(
         (sum, bill) => sum + Math.abs(bill.amount),
         0,
       );
@@ -305,7 +404,7 @@ const AnalyticsContainer = () => {
         totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
 
       const fallbackAnalytics = {
-        totalBills: monthlyBills.length,
+        totalBills: payPeriodBills.length,
         paidBills: paidBillsList.length,
         unpaidBills: unpaidBillsList.length,
         overdueBills: overdueBillsList.length,
@@ -328,12 +427,24 @@ const AnalyticsContainer = () => {
         progress,
       };
 
+      console.log('📋 Bills Analytics: Pay period filtering results:', {
+        totalBillTransactions: billTransactions.length,
+        payPeriodBills: payPeriodBills.length,
+        paidBills: paidBillsList.length,
+        unpaidBills: unpaidBillsList.length,
+        overdueBills: overdueBillsList.length,
+        upcomingBills: upcomingBills.length,
+        totalAmount,
+        periodStart: periodStart?.toISOString(),
+        periodEnd: periodEnd?.toISOString(),
+      });
+
       if (isMountedRef.current) {
         setBillsAnalytics(fallbackAnalytics);
 
-        // Cache the fallback results for future use
+        // Cache the pay period results for future use
         await billsAnalyticsCache.set(fallbackAnalytics);
-        console.log('📋 Fallback bills analytics cached successfully');
+        console.log('📋 Pay period bills analytics cached successfully');
       }
     } catch (fallbackErr) {
       console.error('Error in bills analytics fallback:', fallbackErr);
@@ -432,6 +543,17 @@ const AnalyticsContainer = () => {
       }
     }
   }, [isOnline]);
+
+  // Simple cache invalidation - let existing systems handle the refresh
+  const invalidateTransactionCache = useCallback(async () => {
+    try {
+      // Just clear the cache - useTransactions hook will handle background refresh
+      await AsyncStorage.removeItem(TRANSACTIONS_KEY);
+      console.log('🗑️ Transaction cache cleared - will refresh on next access');
+    } catch (error) {
+      console.error('Error clearing transaction cache:', error);
+    }
+  }, []);
 
   // Load analytics from backend - let backend do ALL the work
   const loadAnalyticsData = useCallback(
@@ -536,17 +658,20 @@ const AnalyticsContainer = () => {
 
     // ✅ UPDATED: Use backend monthlyTrends with discretionary data
     const chartData =
-      analyticsData.monthlyTrends?.map((trend, index) => {
+      analyticsData.monthlyTrends?.map(trend => {
         const date = new Date(trend.month);
         let label;
 
-        if (selectedPeriod === 'monthly') {
+        if (selectedPeriod === '12m') {
           label = date.toLocaleDateString('en-US', {month: 'short'});
-        } else if (selectedPeriod === 'weekly') {
-          label = `W${index + 1}`;
-        } else {
-          // Daily period - use short day labels
+        } else if (selectedPeriod === '7d') {
           label = date.toLocaleDateString('en-US', {weekday: 'short'});
+        } else {
+          // 30d — day + short month (axis is thinned so labels stay readable)
+          label = date.toLocaleDateString('en-US', {
+            day: 'numeric',
+            month: 'short',
+          });
         }
 
         return {
@@ -566,11 +691,19 @@ const AnalyticsContainer = () => {
     // CHART DATA FORMATTING - MOVED FROM UI COMPONENT
     // ============================================================================
 
+    // 30d packs 30 daily points; chart-kit has no label-thinning, so blank all
+    // but roughly every 5th label (mirrors the web chart's interval) to stop
+    // the date labels overlapping. Other periods keep every label.
+    const labelInterval = selectedPeriod === '30d' ? 5 : 1;
+    const thinnedLabels = finalChartData.map((item, index) =>
+      index % labelInterval === 0 ? item.label : '',
+    );
+
     // Format data specifically for react-native-chart-kit
     const formattedChartData =
       finalChartData.length > 0
         ? {
-            labels: finalChartData.map(item => item.label),
+            labels: thinnedLabels,
             datasets: [
               {
                 data: finalChartData.map(item => item.amount),
@@ -612,16 +745,23 @@ const AnalyticsContainer = () => {
         ? totalDiscretionaryExpenses / analyticsData.monthlyTrends.length
         : 0;
 
+    // Calculate discretionary percentage change
+    const previousDiscretionary = analyticsData.previousPeriodDiscretionary || 0;
+    const discretionaryPercentageChange = previousDiscretionary > 0
+      ? ((totalDiscretionaryExpenses - previousDiscretionary) / previousDiscretionary) * 100
+      : 0;
+
     // Use backend statistics with calculated discretionary data
     const statistics = {
       // Spending statistics
       currentTotal: analyticsData.totalExpenses || 0,
-      currentDiscretionary: totalDiscretionaryExpenses, // ✅ FIXED: Use backend calculation
-      previousTotal: 0, // Backend enhancement needed
-      previousDiscretionary: 0,
-      percentageChange: 0, // Backend enhancement needed
-      discretionaryPercentageChange: 0,
-      averageSpending: analyticsData.averageTransaction || 0,
+      currentDiscretionary: totalDiscretionaryExpenses,
+      previousTotal: analyticsData.previousPeriodExpenses || 0,
+      previousDiscretionary: previousDiscretionary,
+      percentageChange: analyticsData.expensesPercentageChange || 0,
+      discretionaryPercentageChange: discretionaryPercentageChange,
+      // Per-period average (matches web) — NOT averageTransaction.
+      averageSpending: analyticsData.averagePeriodSpending || 0,
       averageDiscretionary: averageDiscretionaryPerPeriod, // ✅ FIXED: Use backend calculation
       highestSpendingPeriod:
         finalChartData.length > 0
@@ -711,6 +851,10 @@ const AnalyticsContainer = () => {
 
   const handleDiscretionaryClick = useCallback(() => {
     if (isPro) {
+      // Open the breakdown anchored to the highest-discretionary period (so it
+      // shows that day's data, not today's).
+      const highest = processedData?.statistics?.highestDiscretionaryPeriod;
+      setBreakdownInitialDate(highest?.date ? new Date(highest.date) : null);
       setShowBreakdown(true);
     } else {
       Alert.alert(
@@ -722,7 +866,7 @@ const AnalyticsContainer = () => {
         ],
       );
     }
-  }, [isPro]);
+  }, [isPro, processedData]);
 
   const handleCloseBreakdown = useCallback(() => {
     setShowBreakdown(false);
@@ -742,6 +886,70 @@ const AnalyticsContainer = () => {
       setRefreshing(false);
     },
     [loadAnalyticsData, loadBillsAnalytics, loadIncomeAnalytics, refreshing],
+  );
+
+  // ============================================================================
+  // BILL ACTION HANDLERS - FOLLOWING CACHE-FIRST, BACKGROUND SYNC PATTERN
+  // ============================================================================
+
+  const handleBillDelete = useCallback(
+    async bill => {
+      try {
+        // 1. Background sync - delete the actual transaction (NO optimistic updates)
+        if (isOnline) {
+          await TrendAPIService.deleteTransaction(bill.id);
+          console.log('✅ Bill deleted from backend:', bill.id);
+        } else {
+          console.log('📱 Offline - bill deletion will sync when online');
+          // TODO: Add to offline queue following established pattern
+        }
+
+        // 2. Invalidate related caches - background sync will handle refresh
+        await billsAnalyticsCache.invalidate();
+        await invalidateTransactionCache();
+        console.log('🗑️ Bills and transaction caches invalidated');
+
+        // 3. Immediate refresh to show changes
+        await loadBillsAnalytics(true);
+      } catch (error) {
+        console.error('Error deleting bill:', error);
+
+        Alert.alert('Error', 'Failed to delete bill. Please try again.', [
+          {text: 'OK'},
+        ]);
+      }
+    },
+    [isOnline, loadBillsAnalytics, invalidateTransactionCache],
+  );
+
+  const handleBillMarkPaid = useCallback(
+    async bill => {
+      try {
+        // 1. Background sync - update the actual transaction status (NO optimistic updates)
+        if (isOnline) {
+          await TrendAPIService.updateTransaction(bill.id, {status: 'PAID'});
+          console.log('✅ Bill marked as paid in backend:', bill.id);
+        } else {
+          console.log('📱 Offline - bill status update will sync when online');
+          // TODO: Add to offline queue following established pattern
+        }
+
+        // 2. Invalidate related caches - background sync will handle refresh
+        await billsAnalyticsCache.invalidate();
+        await invalidateTransactionCache();
+        console.log('💳 Bills and transaction caches invalidated');
+
+        // 3. Immediate refresh to show changes
+        await loadBillsAnalytics(true);
+      } catch (error) {
+        console.error('Error marking bill as paid:', error);
+
+        Alert.alert('Error', 'Failed to mark bill as paid. Please try again.', [
+          {text: 'OK'},
+        ]);
+      }
+    },
+    [isOnline, loadBillsAnalytics, invalidateTransactionCache],
   );
 
   useEffect(() => {
@@ -818,7 +1026,9 @@ const AnalyticsContainer = () => {
     comparisonMode,
     refreshing,
     isPro,
+    proFeatures,
     showBreakdown,
+    breakdownInitialDate,
 
     // ✅ UPDATED: Backend-calculated statistics with real discretionary data
     statistics: processedData.statistics,
@@ -826,7 +1036,7 @@ const AnalyticsContainer = () => {
     // ✅ NEW: Spending velocity data from backend
     spendingVelocity: processedData.spendingVelocity,
 
-    // ✅ NEW: Backend bills analytics data - direct pass-through
+    // ✅ NEW: Backend bills analytics data - cache-first, background sync
     billsAnalytics: billsAnalytics,
 
     // ✅ NEW: Backend income analytics data - direct pass-through
@@ -841,6 +1051,10 @@ const AnalyticsContainer = () => {
     onDiscretionaryClick: handleDiscretionaryClick,
     onCloseBreakdown: handleCloseBreakdown,
     onRefresh: handleRefresh,
+
+    // Bill action handlers
+    onBillDelete: handleBillDelete,
+    onBillMarkPaid: handleBillMarkPaid,
 
     // Helper for breakdown component
     isRecurringTransaction,

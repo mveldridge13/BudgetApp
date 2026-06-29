@@ -12,6 +12,7 @@ import HomeContainer from '../containers/HomeContainer'; // ✅ CHANGED: Import 
 import AnalyticsContainer from '../containers/AnalyticsContainer'; // ✅ CHANGED: Import AnalyticsContainer instead of AnalyticsScreen
 import GoalsScreen from '../screens/GoalsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ProfileDetailsScreen from '../screens/ProfileDetailsScreen';
 import ModulesScreen from '../screens/ModulesScreen';
 import BiometricWrapper from '../components/BiometricWrapper';
 import TournamentDetailsContainer from '../containers/TournamentDetailsContainer';
@@ -124,10 +125,18 @@ function AuthScreen({navigation}) {
 
 // Welcome Screen Wrapper
 function WelcomeScreen({navigation}) {
-  const handleWelcomeComplete = async () => {
+  const handleWelcomeComplete = async (onboardingData) => {
     try {
-      // NEW: Update backend instead of AsyncStorage
-      await TrendAPIService.updateUserProfile({hasSeenWelcome: true});
+      const updates = {hasSeenWelcome: true};
+
+      // Add detected timezone if provided
+      if (onboardingData?.detectedTimezone) {
+        updates.timezone = onboardingData.detectedTimezone;
+        console.log('🌍 AppNavigator: Setting user timezone to:', onboardingData.detectedTimezone);
+      }
+
+      // Update backend instead of AsyncStorage
+      await TrendAPIService.updateUserProfile(updates);
       navigation.navigate('IncomeSetup', {isFirstTime: true});
     } catch (error) {
       console.error('Error saving welcome status:', error);
@@ -170,10 +179,13 @@ export default function AppNavigator() {
 
       // Cache the profile so SettingsScreen and other screens can use it immediately
       if (userProfile) {
-        await UserProfileCache.set(userProfile);
-        console.log(
-          '🔍 APP_NAVIGATOR: Cached user profile for immediate screen access',
-        );
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          await UserProfileCache.set(userProfile, currentUserId);
+          console.log(
+            '🔍 APP_NAVIGATOR: Cached user profile for immediate screen access',
+          );
+        }
       }
 
       if (!userProfile.hasSeenWelcome) {
@@ -233,6 +245,13 @@ export default function AppNavigator() {
         component={MainTabs}
         options={{
           gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="ProfileDetails"
+        component={ProfileDetailsScreen}
+        options={{
+          gestureEnabled: true,
         }}
       />
       <Stack.Screen

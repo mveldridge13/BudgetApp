@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
+import IonIcon from 'react-native-vector-icons/Ionicons';
 import {colors} from '../styles';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 
@@ -36,7 +37,9 @@ const ModulesScreen = ({navigation}) => {
       id: 'poker-tracker',
       title: 'Poker Tracker',
       description: 'Track poker tournaments, cash games, and gambling performance',
-      icon: 'award',
+      // Ionicons trophy — matches the web module icon and the in-app poker UI.
+      icon: 'trophy',
+      iconSet: 'ionicons',
       enabled: pokerTrackerEnabled,
       onToggle: handlePokerTrackerToggle,
       comingSoon: false,
@@ -80,11 +83,19 @@ const ModulesScreen = ({navigation}) => {
                   disabled={module.comingSoon && !module.enabled}>
                   <View style={styles.moduleInfo}>
                     <View style={styles.moduleIconContainer}>
-                      <Icon
-                        name={module.icon}
-                        size={20}
-                        color={module.enabled ? colors.primary : colors.textSecondary}
-                      />
+                      {module.iconSet === 'ionicons' ? (
+                        <IonIcon
+                          name={module.icon}
+                          size={20}
+                          color={module.enabled ? colors.primary : colors.textSecondary}
+                        />
+                      ) : (
+                        <Icon
+                          name={module.icon}
+                          size={20}
+                          color={module.enabled ? colors.primary : colors.textSecondary}
+                        />
+                      )}
                     </View>
                     <View style={styles.moduleText}>
                       <View style={styles.moduleTitleRow}>

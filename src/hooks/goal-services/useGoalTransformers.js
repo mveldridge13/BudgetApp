@@ -190,11 +190,15 @@ const useGoalTransformers = () => {
         const deadlineDate = new Date(frontendGoal.deadline);
         if (!isNaN(deadlineDate.getTime()) && deadlineDate > new Date()) {
           backendGoal.targetDate = deadlineDate.toISOString();
-          console.log('🔍 Added targetDate:', backendGoal.targetDate);
         }
       } catch (error) {
         console.warn('🔍 Invalid deadline date:', frontendGoal.deadline);
       }
+    } else {
+      // Explicitly clear the deadline when it has been removed. Without sending
+      // null the backend treats the omitted field as "unchanged" (Prisma no-op),
+      // so clearing an optional deadline would never persist.
+      backendGoal.targetDate = null;
     }
 
     // Add monthly contribution if provided
@@ -206,7 +210,6 @@ const useGoalTransformers = () => {
       );
       if (monthlyTarget > 0) {
         backendGoal.monthlyTarget = monthlyTarget.toFixed(2);
-        console.log('🔍 Added monthlyTarget:', backendGoal.monthlyTarget);
       }
     }
 

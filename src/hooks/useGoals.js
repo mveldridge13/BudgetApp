@@ -37,7 +37,9 @@ const useGoals = () => {
   // Subscribe to global state changes
   useEffect(() => {
     const listener = newGoals => {
-      setGoalsLocal(newGoals);
+      // Create a new array reference to ensure React detects the change
+      // This is critical when multiple components share the same global state
+      setGoalsLocal([...newGoals]);
     };
     globalGoalsListeners.add(listener);
 
@@ -125,6 +127,26 @@ const useGoals = () => {
     [goalDataModule, setLoadingWithTimeout, clearLoadingTimeout], // ✅ FIXED: Removed goals dependency to prevent infinite loops
   );
 
+  // Clear goals state when user changes (real fix for data contamination)
+  const currentUserIdRef = useRef(null);
+  useEffect(() => {
+    const newUserId = TrendAPIService.getCurrentUserId();
+
+    // If user ID changed (user switched accounts), clear goals state
+    if (currentUserIdRef.current && currentUserIdRef.current !== newUserId) {
+      console.log('🔄 useGoals: User switched, clearing goals state');
+      setGoals([]); // Clear contaminated goals immediately
+      hasInitiallyLoaded.current = false; // Reset load state
+
+      // Force fresh load for new user
+      if (loadGoalsRef.current) {
+        loadGoalsRef.current(true, true);
+      }
+    }
+
+    currentUserIdRef.current = newUserId;
+  });
+
   // Only call loadGoals on mount - using ref to avoid dependencies
   const hasCalledInitialLoad = useRef(false);
   const loadGoalsRef = useRef();
@@ -182,7 +204,11 @@ const useGoals = () => {
         setGoals(updatedGoals);
 
         // Save to cache immediately to ensure persistence across screen navigation
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('No user ID available for goals cache');
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           // Force a synchronous state update to ensure immediate UI reflection
@@ -202,16 +228,22 @@ const useGoals = () => {
   );
 
   const updateGoalProgress = useCallback(
-    async (goalId, amount, paymentSource = 'income') => {
+    async (goalId, amount, paymentSource = 'income', contributionType = 'MANUAL') => {
       console.log(
-        '🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress',
+        '🔍 USE_GOALS: ===== updateGoalProgress CALLED =====',
       );
+      console.log('🔍 USE_GOALS: goalId:', goalId);
+      console.log('🔍 USE_GOALS: amount:', amount);
+      console.log('🔍 USE_GOALS: paymentSource:', paymentSource);
+      console.log('🔍 USE_GOALS: Delegating to goalDataModule.updateGoalProgress');
+
       return goalDataModule.updateGoalProgress(
         goalId,
         amount,
         paymentSource,
         goals,
         setGoals,
+        contributionType,
       );
     },
     [goalDataModule, goals, setGoals],
@@ -269,11 +301,16 @@ const useGoals = () => {
           throw new Error('Invalid categories data');
         }
 
-        // Get FRESH goals data from cache to avoid stale state
-        console.log('🔍 UPDATE_SPENDING_GOALS: Loading goals from cache...');
-        const cacheResult = await loadGoalsFromCache();
-        let updatedGoals = [...cacheResult.goals];
-        console.log('🔍 UPDATE_SPENDING_GOALS: Loaded goals from cache:', {
+        // Use current goals state (already filtered by API response)
+        // Don't load from cache as it may contain deleted goals
+        console.log('🔍 UPDATE_SPENDING_GOALS: Using current goals state...');
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          console.warn('🔍 UPDATE_SPENDING_GOALS: No user ID available for goals cache');
+          return {success: true};
+        }
+        let updatedGoals = [...goals];
+        console.log('🔍 UPDATE_SPENDING_GOALS: Using goals from state:', {
           totalGoals: updatedGoals.length,
           spendingGoals: updatedGoals.filter(g => g.type === 'spending').length,
         });
@@ -527,7 +564,7 @@ const useGoals = () => {
         }
 
         // STEP 4: Save the updated goals
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           // Update state immediately and synchronously
@@ -543,7 +580,7 @@ const useGoals = () => {
         return {success: false, error: error.message};
       }
     },
-    [loadGoalsFromCache, saveGoalsToCache, goals.length, setGoals],
+    [goals, saveGoalsToCache, setGoals],
   );
 
   const completeGoal = useCallback(
@@ -588,7 +625,11 @@ const useGoals = () => {
             : goal,
         );
 
-        const saveResult = await saveGoalsToCache(updatedGoals, false);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (!currentUserId) {
+          throw new Error('No user ID available for goals cache');
+        }
+        const saveResult = await saveGoalsToCache(updatedGoals, currentUserId, false);
 
         if (saveResult.success) {
           setGoals(saveResult.goals);
@@ -605,7 +646,7 @@ const useGoals = () => {
   );
 
   const addGoalContribution = useCallback(
-    async (goalId, amount) => {
+    async (goalId, amount, contributionType = 'MANUAL') => {
       try {
         if (!goalId) {
           throw new Error('Goal ID is required');
@@ -640,8 +681,8 @@ const useGoals = () => {
           }
         }
 
-        // Update progress locally
-        return await updateGoalProgress(goalId, parsedAmount);
+        // Update progress locally with contribution type
+        return await updateGoalProgress(goalId, parsedAmount, 'income', contributionType);
       } catch (error) {
         console.error('Error adding goal contribution:', error);
         return {success: false, error: error.message};

@@ -7,17 +7,16 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  Switch,
   Alert,
   Share,
 } from 'react-native';
+import CustomToggle from '../components/CustomToggle';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import TrendAPIService from '../services/TrendAPIService';
-import UserProfileCache from '../services/UserProfileCache';
 import BiometricAuth from '../services/BiometricAuth';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import {formatCurrencySync} from '../utils/currencyHelper';
@@ -30,8 +29,8 @@ const SettingsScreen = ({navigation}) => {
     appSettings,
     userProfile,
     isPro,
+    proExpiresAt,
     updateAppSettings,
-    updateProStatus,
     refreshUserProfile,
     toggleAppSetting,
   } = useAppSettings();
@@ -104,24 +103,24 @@ const SettingsScreen = ({navigation}) => {
     }, [refreshUserProfile, loadAdditionalData]),
   );
 
-  // Toggle Pro status
-  const handleTogglePro = useCallback(async () => {
-    try {
-      const newProStatus = !isPro;
-      await updateProStatus(newProStatus);
-
+  // Handle Pro subscription info
+  const handleProPress = useCallback(() => {
+    if (isPro) {
+      const expiryText = proExpiresAt
+        ? `Your subscription is active until ${new Date(proExpiresAt).toLocaleDateString()}.`
+        : 'Your subscription is active.';
+      Alert.alert('Pro Subscription', expiryText, [{text: 'OK'}]);
+    } else {
       Alert.alert(
-        'Pro Status Updated',
-        `Pro features are now ${
-          newProStatus ? 'enabled' : 'disabled'
-        }. This change will take effect throughout the app.`,
-        [{text: 'OK'}],
+        'Upgrade to Pro',
+        'Unlock advanced analytics, spending velocity details, data export, and more!',
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {text: 'Learn More', onPress: () => console.log('TODO: Open subscription screen')},
+        ],
       );
-    } catch (error) {
-      console.error('Error toggling Pro status:', error);
-      Alert.alert('Error', 'Failed to update Pro status. Please try again.');
     }
-  }, [isPro, updateProStatus]);
+  }, [isPro, proExpiresAt]);
 
   // Settings handlers
   const handleToggleSetting = useCallback(
@@ -185,11 +184,11 @@ const SettingsScreen = ({navigation}) => {
     [appSettings, updateAppSettings, toggleAppSetting],
   );
 
-  const handleEditProfile = useCallback(async () => {
-    // Clear cache before editing to ensure fresh data when returning
-    await UserProfileCache.clear();
-    navigation.navigate('IncomeSetup', {editMode: true});
-  }, [navigation]);
+  const handleEditProfile = useCallback(() => {
+    navigation.navigate('ProfileDetails', {
+      userProfile: userProfile,
+    });
+  }, [navigation, userProfile]);
 
   const handleCurrencySelection = useCallback(() => {
     const currencies = [
@@ -450,7 +449,10 @@ const SettingsScreen = ({navigation}) => {
 
           <View style={styles.settingCard}>
             {isPro !== null ? (
-              <View style={styles.settingRow}>
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={handleProPress}
+                activeOpacity={0.7}>
                 <View style={styles.settingInfo}>
                   <View
                     style={[
@@ -461,27 +463,20 @@ const SettingsScreen = ({navigation}) => {
                   </View>
                   <View style={styles.settingText}>
                     <View style={styles.settingLabelRow}>
-                      <Text style={styles.settingLabel}>Pro Mode</Text>
+                      <Text style={styles.settingLabel}>
+                        {isPro ? 'Pro Subscription' : 'Upgrade to Pro'}
+                      </Text>
                       {isPro && <ProBadge />}
                     </View>
                     <Text style={styles.settingDescription}>
                       {isPro
                         ? 'Advanced analytics and features enabled'
-                        : 'Enable to test Pro features and analytics'}
+                        : 'Unlock advanced analytics and more'}
                     </Text>
                   </View>
                 </View>
-                <Switch
-                  value={isPro || false}
-                  onValueChange={handleTogglePro}
-                  trackColor={{
-                    false: colors.border,
-                    true: colors.warning,
-                  }}
-                  thumbColor={isPro ? colors.textWhite : colors.textSecondary}
-                  ios_backgroundColor={colors.border}
-                />
-              </View>
+                <Icon name="chevron-right" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
             ) : (
               <View style={styles.settingRow}>
                 <View style={styles.settingInfo}>
@@ -529,19 +524,10 @@ const SettingsScreen = ({navigation}) => {
                       </Text>
                     </View>
                   </View>
-                  <Switch
+                  <CustomToggle
                     value={appSettings.notifications || false}
                     onValueChange={() => handleToggleSetting('notifications')}
-                    trackColor={{
-                      false: colors.border,
-                      true: colors.primary,
-                    }}
-                    thumbColor={
-                      appSettings.notifications
-                        ? colors.textWhite
-                        : colors.textSecondary
-                    }
-                    ios_backgroundColor={colors.border}
+                    activeColor={colors.primary}
                   />
                 </View>
 
@@ -561,19 +547,10 @@ const SettingsScreen = ({navigation}) => {
                       </Text>
                     </View>
                   </View>
-                  <Switch
+                  <CustomToggle
                     value={appSettings.biometricAuth || false}
                     onValueChange={() => handleToggleSetting('biometricAuth')}
-                    trackColor={{
-                      false: colors.border,
-                      true: colors.primary,
-                    }}
-                    thumbColor={
-                      appSettings.biometricAuth
-                        ? colors.textWhite
-                        : colors.textSecondary
-                    }
-                    ios_backgroundColor={colors.border}
+                    activeColor={colors.primary}
                   />
                 </View>
 

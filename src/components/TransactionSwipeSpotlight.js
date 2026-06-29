@@ -60,19 +60,22 @@ const TransactionSwipeSpotlight = ({
         toValue: 0,
         duration: 300,
         useNativeDriver: true,
-      }).start(() => setShowContent(false));
+      }).start(() => {
+        // Defer state update to avoid React warning
+        setTimeout(() => setShowContent(false), 0);
+      });
     }
   }, [visible, fadeAnim, pulseAnim]);
 
   const handleNext = () => {
-    setShowContent(false);
+    // Don't set showContent to false here - let the visible prop change trigger the fade-out animation
     if (onNext) {
       onNext();
     }
   };
 
   const handleSkip = () => {
-    setShowContent(false);
+    // Don't set showContent to false here - let the visible prop change trigger the fade-out animation
     if (onSkip) {
       onSkip();
     }

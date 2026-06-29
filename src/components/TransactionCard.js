@@ -293,6 +293,10 @@ const TransactionCard = ({
   const isRecurring =
     transaction.recurrence && transaction.recurrence !== 'none';
 
+  // Check if this is a non-editable transaction (TRANSFER or ROLLOVER)
+  const isNonEditable =
+    transaction.type === 'TRANSFER' || transaction.type === 'ROLLOVER';
+
   if (isDeleting) {
     return null;
   }
@@ -345,8 +349,11 @@ const TransactionCard = ({
             },
           ]}>
           <View
-            style={[styles.card, isRecurring && styles.recurringCard]}
-            {...panResponder.panHandlers}>
+            style={[
+              styles.card,
+              isRecurring && styles.recurringCard,
+            ]}
+            {...(!isNonEditable && panResponder.panHandlers)}>
             <View style={styles.iconContainer}>
               <View
                 style={[
@@ -391,9 +398,19 @@ const TransactionCard = ({
               )}
             </View>
 
-            <Text style={[styles.amount, {color: getAmountColor()}]}>
-              {getAmountDisplay()}
-            </Text>
+            <View style={styles.amountContainer}>
+              {isNonEditable && (
+                <Icon
+                  name="lock-closed"
+                  size={14}
+                  color={colors.textSecondary}
+                  style={styles.lockIcon}
+                />
+              )}
+              <Text style={[styles.amount, {color: getAmountColor()}]}>
+                {getAmountDisplay()}
+              </Text>
+            </View>
           </View>
         </Animated.View>
       </View>
@@ -535,6 +552,14 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     letterSpacing: -0.1,
     marginTop: 2,
+  },
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  lockIcon: {
+    marginRight: 2,
   },
   amount: {
     fontSize: 16,

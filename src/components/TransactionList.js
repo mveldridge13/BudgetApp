@@ -9,6 +9,7 @@ const STORAGE_KEY = '@transaction_filter_due_today';
 const TransactionList = ({
   transactions, // ✅ Now contains pre-resolved categoryData
   selectedDate,
+  payPeriod, // { start: 'YYYY-MM-DD', end: 'YYYY-MM-DD' } for filtering recurring transactions
   onDeleteTransaction,
   onEditTransaction,
   onSwipeStart,
@@ -17,7 +18,6 @@ const TransactionList = ({
   onTransactionLayout,
 }) => {
   const [showDueToday, setShowDueToday] = useState(false);
-  const [isLoadingPreference, setIsLoadingPreference] = useState(true);
 
   // Load filter preference from AsyncStorage on component mount
   useEffect(() => {
@@ -29,8 +29,6 @@ const TransactionList = ({
         }
       } catch (error) {
         console.warn('Failed to load filter preference:', error);
-      } finally {
-        setIsLoadingPreference(false);
       }
     };
 
@@ -58,9 +56,17 @@ const TransactionList = ({
     }
   }, [transactions.length, transactionRef, onTransactionLayout]);
 
-  // Filter transactions for the selected date
+  // Filter transactions for the selected date (excluding TRANSFER and ROLLOVER types)
   const dailyTransactions = transactions.filter(transaction => {
     if (transaction.recurrence && transaction.recurrence !== 'none') {
+      return false;
+    }
+    // Exclude TRANSFER transactions - they have their own section
+    if (transaction.type === 'TRANSFER') {
+      return false;
+    }
+    // Exclude ROLLOVER transactions - they're for analytics only
+    if (transaction.type === 'ROLLOVER') {
       return false;
     }
     const transactionDate = new Date(transaction.date);
@@ -74,16 +80,57 @@ const TransactionList = ({
     return isSameDay(transactionDate, selectedDate);
   });
 
+  // Filter TRANSFER transactions for the selected date (goal payments)
+  const transferTransactions = transactions.filter(transaction => {
+    if (transaction.recurrence && transaction.recurrence !== 'none') {
+      return false;
+    }
+    // Only include TRANSFER type transactions
+    if (transaction.type !== 'TRANSFER') {
+      return false;
+    }
+    const transactionDate = new Date(transaction.date);
+    const isSameDay = (date1, date2) => {
+      return (
+        date1.getDate() === date2.getDate() &&
+        date1.getMonth() === date2.getMonth() &&
+        date1.getFullYear() === date2.getFullYear()
+      );
+    };
+    return isSameDay(transactionDate, selectedDate);
+  });
+
+  // Helper to check if a date is within pay period
+  const isWithinPayPeriod = (dateStr) => {
+    if (!payPeriod?.start || !payPeriod?.end ||!dateStr) {
+      return true; // If no pay period info, show all
+    }
+    const date = new Date(dateStr);
+    const start = new Date(payPeriod.start);
+    const end = new Date(payPeriod.end);
+    // Set times to start/end of day for proper comparison
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    date.setHours(12, 0, 0, 0); // Noon to avoid timezone edge cases
+    return date >= start && date <= end;
+  };
+
   // Filter and group recurring transactions by frequency
+  // Only show recurring transactions with dueDate within current pay period
   const getRecurringTransactionsByFrequency = () => {
     const recurringTransactions = transactions.filter(transaction => {
-      return (
-        transaction.recurrence &&
-        transaction.recurrence !== 'none' &&
-        ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
-          transaction.recurrence,
-        )
-      );
+      // Must be a recurring transaction
+      if (!transaction.recurrence || transaction.recurrence === 'none') {
+        return false;
+      }
+      if (!['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
+        transaction.recurrence,
+      )) {
+        return false;
+      }
+      // Filter by pay period using dueDate (or date if no dueDate)
+      const relevantDate = transaction.dueDate || transaction.date;
+      return isWithinPayPeriod(relevantDate);
     });
 
     // Group by recurrence type
@@ -201,21 +248,9 @@ const TransactionList = ({
           <Text style={styles.sectionTitle}>Today's Transactions</Text>
           <TouchableOpacity
             onPress={handleToggleFilter}
-            disabled={isLoadingPreference}
-            style={[
-              styles.toggleButton,
-              isLoadingPreference && styles.toggleButtonDisabled,
-            ]}>
-            <Text
-              style={[
-                styles.toggleText,
-                isLoadingPreference && styles.toggleTextDisabled,
-              ]}>
-              {isLoadingPreference
-                ? 'Loading...'
-                : showDueToday
-                ? 'View All'
-                : 'Due Today'}
+            style={styles.toggleButton}>
+            <Text style={styles.toggleText}>
+              {showDueToday ? 'View All' : 'Due Today'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -233,6 +268,22 @@ const TransactionList = ({
           </View>
         )}
       </View>
+
+      {/* Transfer Transactions Section - Only show if there are transfers */}
+      {transferTransactions.length > 0 && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, styles.sectionTitleStandalone]}>
+            Goal Payments
+          </Text>
+          <FlatList
+            data={transferTransactions}
+            renderItem={renderTransactionItem}
+            keyExtractor={item => item.id}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+          />
+        </View>
+      )}
 
       {/* Recurring Transactions Sections - Grouped by Frequency */}
       {showDueToday ? (
@@ -329,12 +380,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: colors.textPrimary,
-  },
-  toggleButtonDisabled: {
-    opacity: 0.5,
-  },
-  toggleTextDisabled: {
-    color: colors.textSecondary,
   },
   transactionItemContainer: {
     marginBottom: 8,

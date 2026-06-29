@@ -24,6 +24,15 @@ const BalanceCard = ({
   currency = 'AUD',
   // Transactions for expense breakdown
   transactions = [],
+  // Rollover props
+  rolloverAmount = 0,
+  rolloverBanner = null,
+  onDismissRolloverBanner = null,
+  onReassignRollover = null,
+  // Pay period UI state (calculated by HomeContainer)
+  isNewPayPeriodForUI = false,
+  // Backend home summary (single source of truth)
+  homeSummary = null,
 }) => {
   const formatCurrency = amount => {
     return formatCurrencySync(amount, currency);
@@ -37,6 +46,21 @@ const BalanceCard = ({
     return `${month} ${day}`;
   };
 
+  // Use the pay period state calculated by HomeContainer (maintains separation of concerns)
+  const isNewPayPeriod = isNewPayPeriodForUI;
+
+  // Get pay period status text (simplified - no countdown)
+  const getPayPeriodStatus = () => {
+    if (!incomeData?.nextPayDate) {
+      return null;
+    }
+
+    if (isNewPayPeriod) {
+      return 'New period started!';
+    }
+
+    return null; // No countdown display
+  };
 
   // Filter goals that should be shown on balance card
   const balanceCardGoals = goals.filter(goal => goal.showOnBalanceCard);
@@ -73,32 +97,191 @@ const BalanceCard = ({
     return sum;
   }, 0);
 
-  // Calculate expense breakdown with memoization
+  // Check if rollover preview should be shown (1 day before new pay period)
+  const shouldShowRolloverPreview = useMemo(() => {
+    if (!incomeData?.nextPayDate || adjustedLeftToSpend <= 0) {
+      return false;
+    }
+
+    try {
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      // Get today's date
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+
+      // Get tomorrow's date
+      const tomorrow = new Date(todayStart);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // Get pay date start (without time)
+      const payDateStart = new Date(
+        nextPayDate.getFullYear(),
+        nextPayDate.getMonth(),
+        nextPayDate.getDate(),
+      );
+
+      // Show preview if tomorrow is the pay date (i.e., today is 1 day before)
+      return tomorrow.getTime() === payDateStart.getTime();
+    } catch (error) {
+      return false;
+    }
+  }, [incomeData?.nextPayDate, adjustedLeftToSpend]);
+
+  // Calculate expense breakdown with memoization - filter to current pay period only
+  // Uses homeSummary.period from backend as single source of truth for period dates
   const expenseBreakdown = useMemo(() => {
+    if (!Array.isArray(transactions)) {
+      return getExpenseBreakdownSync([]);
+    }
+
+    // Use backend's period dates if available (YYYY-MM-DD strings)
+    // This ensures alignment with backend pay period calculations
+    if (homeSummary?.period?.start && homeSummary?.period?.end) {
+      try {
+        // Parse period dates as local dates at start/end of day
+        const periodStart = new Date(homeSummary.period.start + 'T00:00:00');
+        const periodEnd = new Date(homeSummary.period.end + 'T23:59:59.999');
+
+        // Filter transactions to current pay period only
+        const currentPeriodTransactions = transactions.filter(transaction => {
+          try {
+            const transactionDate = new Date(transaction.date);
+            if (isNaN(transactionDate.getTime())) {
+              return false;
+            }
+            return (
+              transactionDate >= periodStart && transactionDate <= periodEnd
+            );
+          } catch (error) {
+            return false;
+          }
+        });
+
+        return getExpenseBreakdownSync(currentPeriodTransactions);
+      } catch (error) {
+        return getExpenseBreakdownSync(transactions); // Fallback to all transactions
+      }
+    }
+
+    // Fallback: return all transactions if no period data
     return getExpenseBreakdownSync(transactions);
-  }, [transactions]);
+  }, [transactions, homeSummary?.period?.start, homeSummary?.period?.end]);
 
-  // Calculate values
-  const incomeAmount = incomeData?.income || 0;
-  const leftToSpend = incomeAmount - totalExpenses;
+  // Calculate values - prefer backend homeSummary when available
+  const incomeAmount =
+    homeSummary?.income?.totalInflow ??
+    (incomeData?.income || 0) + rolloverAmount;
+
+  // Use backend leftToSpendSafe as single source of truth
   const adjustedLeftToSpend =
-    leftToSpend -
-    totalGoalContributions -
-    totalIncomePayments -
-    localIncomePayments;
-  const percentageRemaining =
-    incomeAmount > 0 ? Math.round((leftToSpend / incomeAmount) * 100) : 0;
+    homeSummary?.totals?.leftToSpendSafe ??
+    incomeAmount -
+      totalExpenses -
+      totalGoalContributions -
+      totalIncomePayments -
+      localIncomePayments;
 
-  // Additional calculated metrics
-  const dailyBudget =
-    incomeData?.frequency === 'weekly'
-      ? adjustedLeftToSpend / 7
-      : incomeData?.frequency === 'fortnightly'
-      ? adjustedLeftToSpend / 14
-      : adjustedLeftToSpend / 30;
+  // leftToSpend is only used for over-budget detection
+  const leftToSpend = homeSummary
+    ? adjustedLeftToSpend
+    : incomeAmount - totalExpenses;
+
+  // Use adjustedLeftToSpend for percentage to match displayed value (consistency fix)
+  const percentageRemaining =
+    incomeAmount > 0
+      ? Math.round((adjustedLeftToSpend / incomeAmount) * 100)
+      : 0;
+
+  // Additional calculated metrics - prefer backend daysRemaining
+  const getDaysUntilNextPay = () => {
+    // Use backend value if available
+    if (homeSummary?.period?.daysRemaining) {
+      return Math.max(1, homeSummary.period.daysRemaining);
+    }
+
+    if (!incomeData?.nextPayDate) {
+      // Fallback to frequency-based calculation
+      return incomeData?.frequency === 'weekly'
+        ? 7
+        : incomeData?.frequency === 'fortnightly'
+        ? 14
+        : 30;
+    }
+
+    try {
+      // Parse nextPayDate as local date
+      let nextPayDate;
+      if (incomeData.nextPayDate.includes('T')) {
+        const dateOnly = incomeData.nextPayDate.split('T')[0];
+        nextPayDate = new Date(dateOnly + 'T12:00:00');
+      } else {
+        nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
+      }
+
+      // Get today's date
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+
+      // Get pay date start (without time)
+      const payDateStart = new Date(
+        nextPayDate.getFullYear(),
+        nextPayDate.getMonth(),
+        nextPayDate.getDate(),
+      );
+
+      // Calculate days remaining
+      const timeDiff = payDateStart.getTime() - todayStart.getTime();
+      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+      return Math.max(1, daysDiff); // Minimum 1 day to avoid division by zero
+    } catch (error) {
+      // Fallback to frequency-based calculation
+      return incomeData?.frequency === 'weekly'
+        ? 7
+        : incomeData?.frequency === 'fortnightly'
+        ? 14
+        : 30;
+    }
+  };
+
+  const daysUntilNextPay = getDaysUntilNextPay();
+  const dailyBudget = adjustedLeftToSpend / daysUntilNextPay;
+
+  // Calculate weekly budget based on pay frequency
+  const weeklyBudget = (() => {
+    const frequency = incomeData?.frequency?.toLowerCase();
+
+    if (frequency === 'weekly') {
+      // For weekly pay: weekly budget is the current remaining amount
+      return adjustedLeftToSpend;
+    } else if (frequency === 'fortnightly') {
+      // For fortnightly pay: calculate weekly portion of remaining budget
+      return dailyBudget * Math.min(7, daysUntilNextPay);
+    } else {
+      // For monthly or other frequencies: standard 7-day calculation
+      return dailyBudget * 7;
+    }
+  })();
 
   const isOverBudget = leftToSpend < 0;
-  const isCloseToLimit = percentageRemaining < 20 && percentageRemaining > 0;
+  const isCloseToLimit = percentageRemaining < 20 && percentageRemaining >= 0;
+  const isLowBalance = percentageRemaining < 50 && percentageRemaining >= 20;
   const isGoalImpact = totalGoalContributions > 0 && adjustedLeftToSpend < 500;
 
   // Calculate goal progress for display
@@ -139,6 +322,15 @@ const BalanceCard = ({
           <Text style={styles.frequencyDisplay}>
             Paid {incomeData.frequency}
           </Text>
+          {getPayPeriodStatus() && (
+            <Text
+              style={[
+                styles.payPeriodStatus,
+                isNewPayPeriod && styles.newPeriodStatus,
+              ]}>
+              {getPayPeriodStatus()}
+            </Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -149,29 +341,51 @@ const BalanceCard = ({
         collapsable={false}>
         <View style={styles.balanceRow}>
           <View style={styles.balanceItem}>
-            <Text style={styles.balanceLabel}>BALANCE</Text>
-            <Text style={styles.totalIncome}>
-              {loading ? '$0.00' : formatCurrency(incomeAmount)}
-            </Text>
+            <Text style={styles.balanceLabel}>STARTING FUNDS</Text>
+            {loading ? (
+              <Text style={styles.totalIncome}>$0.00</Text>
+            ) : rolloverAmount > 0 ? (
+              <View style={styles.incomeBreakdown}>
+                <Text style={styles.totalIncome}>
+                  {formatCurrency(incomeAmount)}
+                </Text>
+                <Text style={styles.incomeBreakdownText}>
+                  {formatCurrency(incomeData?.income || 0)} +{' '}
+                  {formatCurrency(rolloverAmount)} rollover
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.totalIncome}>
+                {formatCurrency(incomeAmount)}
+              </Text>
+            )}
           </View>
           <View style={[styles.balanceItem, styles.balanceItemRight]}>
-            <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
+            <Text style={styles.balanceLabel}>ALLOCATED THIS PERIOD</Text>
             <Text style={styles.balanceAmount}>
-              {formatCurrency(totalExpenses)}
+              {formatCurrency(
+                homeSummary?.totals?.totalExpensesAllocated ?? totalExpenses,
+              )}
             </Text>
 
-            {/* Expense Breakdown */}
+            {/* Expense Breakdown: Committed (planned), Discretionary (spent), Goals (paid) */}
             {!loading &&
-              expenseBreakdown &&
-              (expenseBreakdown.committed > 0 ||
-                expenseBreakdown.discretionary > 0) && (
+              (homeSummary?.outflows?.committed?.plannedTotal > 0 ||
+                homeSummary?.outflows?.discretionary?.spentSoFar > 0 ||
+                homeSummary?.outflows?.goals?.paidSoFar > 0 ||
+                expenseBreakdown?.committed > 0 ||
+                expenseBreakdown?.discretionary > 0) && (
                 <View style={styles.expenseBreakdown}>
                   <View style={styles.expenseBreakdownRow}>
                     <Text style={styles.expenseBreakdownLabel}>
                       └─ Committed:
                     </Text>
                     <Text style={styles.expenseBreakdownAmount}>
-                      {formatCurrency(expenseBreakdown.committed)}
+                      {formatCurrency(
+                        homeSummary?.outflows?.committed?.plannedTotal ??
+                          expenseBreakdown?.committed ??
+                          0,
+                      )}
                     </Text>
                   </View>
                   <View style={styles.expenseBreakdownRow}>
@@ -179,13 +393,72 @@ const BalanceCard = ({
                       └─ Discretionary:
                     </Text>
                     <Text style={styles.expenseBreakdownAmount}>
-                      {formatCurrency(expenseBreakdown.discretionary)}
+                      {formatCurrency(
+                        homeSummary?.outflows?.discretionary?.spentSoFar ??
+                          expenseBreakdown?.discretionary ??
+                          0,
+                      )}
                     </Text>
                   </View>
+                  {homeSummary?.outflows?.goals?.paidSoFar > 0 && (
+                    <View style={styles.expenseBreakdownRow}>
+                      <Text style={styles.expenseBreakdownLabel}>
+                        └─ Goals:
+                      </Text>
+                      <Text style={styles.expenseBreakdownAmount}>
+                        {formatCurrency(homeSummary.outflows.goals.paidSoFar)}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
           </View>
         </View>
+
+        {/* Rollover Banner - shown after auto-rollover occurs */}
+        {rolloverBanner && (
+          <View style={styles.rolloverBanner}>
+            <View style={styles.rolloverBannerContent}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('🔄 Arrow pressed! Props:', {
+                    hasCallback: !!onReassignRollover,
+                    amount: rolloverBanner?.amount,
+                  });
+                  if (onReassignRollover && rolloverBanner?.amount) {
+                    console.log(
+                      '🔄 Calling onReassignRollover with:',
+                      rolloverBanner.amount,
+                    );
+                    onReassignRollover(rolloverBanner.amount);
+                  } else {
+                    console.log('🔄 Missing callback or amount');
+                  }
+                }}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Icon
+                  name="arrow-right-circle"
+                  size={20}
+                  color={colors.textWhite}
+                />
+              </TouchableOpacity>
+              <View style={styles.rolloverBannerText}>
+                <Text style={styles.rolloverBannerTitle}>
+                  {formatCurrency(rolloverBanner.amount)} has been rolled into
+                  this period
+                </Text>
+              </View>
+              {onDismissRolloverBanner && (
+                <TouchableOpacity
+                  style={styles.rolloverBannerDismiss}
+                  onPress={onDismissRolloverBanner}
+                  hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                  <Icon name="x" size={16} color={colors.textWhite} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Goals Section - Only show if user has enabled goals */}
         {balanceCardGoals.length > 0 && (
@@ -271,16 +544,25 @@ const BalanceCard = ({
         )}
 
         <View style={styles.leftToSpendSection}>
-          <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
+          <View style={styles.leftToSpendHeader}>
+            <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
+          </View>
           <View style={styles.leftAmountRow}>
-            <Text
-              style={[
-                styles.leftAmount,
-                isOverBudget && styles.overBudgetText,
-                isCloseToLimit && styles.warningText,
-              ]}>
-              {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
-            </Text>
+            <View style={styles.leftAmountContainer}>
+              <Text
+                style={[
+                  styles.leftAmount,
+                  isOverBudget && styles.overBudgetText,
+                ]}>
+                {loading ? '$0.00' : formatCurrency(adjustedLeftToSpend)}
+              </Text>
+              {shouldShowRolloverPreview && !loading && (
+                <Text style={styles.rolloverPreviewText}>
+                  {formatCurrency(adjustedLeftToSpend)} scheduled to roll to
+                  next period
+                </Text>
+              )}
+            </View>
             {totalAdditionalIncome > 0 && (
               <View style={styles.adjustedAmountContainer}>
                 <Text style={styles.adjustedLabel}>Additional income:</Text>
@@ -299,7 +581,8 @@ const BalanceCard = ({
                   width: `${Math.max(0, Math.min(100, percentageRemaining))}%`,
                 },
                 isOverBudget && styles.overBudgetBar,
-                isCloseToLimit && styles.warningBar,
+                isCloseToLimit && styles.overBudgetBar,
+                isLowBalance && styles.warningBar,
               ]}
             />
           </View>
@@ -313,7 +596,8 @@ const BalanceCard = ({
 
             {!loading && dailyBudget > 0 && (
               <Text style={styles.dailyBudgetText}>
-                {formatCurrency(dailyBudget)}/day
+                {formatCurrency(dailyBudget)}/day (
+                {formatCurrency(weeklyBudget)}/week)
               </Text>
             )}
           </View>
@@ -329,12 +613,6 @@ const BalanceCard = ({
           {isOverBudget && (
             <Text style={styles.statusWarning}>
               ⚠️ Over budget by {formatCurrency(Math.abs(leftToSpend))}
-            </Text>
-          )}
-
-          {isCloseToLimit && !isGoalImpact && (
-            <Text style={styles.statusWarning}>
-              💡 Low balance - consider reducing expenses
             </Text>
           )}
 
@@ -413,6 +691,20 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     letterSpacing: -0.1,
   },
+  payPeriodStatus: {
+    fontSize: 11,
+    fontWeight: '400',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.8,
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
+  newPeriodStatus: {
+    color: colors.progressGreen,
+    fontWeight: '500',
+    opacity: 1,
+  },
   balanceCard: {
     backgroundColor: colors.overlayLight,
     borderRadius: 16,
@@ -486,6 +778,18 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.textWhite,
     letterSpacing: -0.5,
+  },
+  incomeBreakdown: {
+    alignItems: 'flex-start',
+  },
+  incomeBreakdownText: {
+    fontSize: 12,
+    fontWeight: '300',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+    marginTop: 2,
+    letterSpacing: -0.2,
   },
   goalsSection: {
     marginBottom: 20,
@@ -609,18 +913,36 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.overlayLight,
   },
+  leftToSpendHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
   leftAmountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     marginBottom: 10,
   },
+  leftAmountContainer: {
+    alignItems: 'flex-start',
+  },
   leftAmount: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '300',
     fontFamily: 'System',
     color: colors.textWhite,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+  },
+  rolloverPreviewText: {
+    fontSize: 12,
+    fontWeight: '300',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    opacity: 0.7,
+    marginTop: 2,
+    letterSpacing: -0.2,
   },
   adjustedAmountContainer: {
     alignItems: 'flex-end',
@@ -746,6 +1068,34 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
+  },
+  rolloverBanner: {
+    marginVertical: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  rolloverBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  rolloverBannerText: {
+    flex: 1,
+  },
+  rolloverBannerTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textWhite,
+    textAlign: 'center',
+  },
+  rolloverBannerDismiss: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: colors.overlayLight,
   },
 });
 

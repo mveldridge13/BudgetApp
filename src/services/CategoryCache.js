@@ -1,17 +1,25 @@
 // services/CategoryCache.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const CACHE_KEY = 'categories_cache';
+const CACHE_KEY_PREFIX = 'categories_cache_';
 const CACHE_TTL = 60 * 60 * 1000; // 60 minutes (longer TTL since categories change less frequently)
 
 class CategoryCache {
+  getCacheKey(userId) {
+    if (!userId) {
+      throw new Error('CategoryCache: userId is required for user-specific cache');
+    }
+    return `${CACHE_KEY_PREFIX}${userId}`;
+  }
+
   /**
    * Get cached category data
    * @returns {Promise<{data: array, timestamp: number, age: number, isStale: boolean} | null>}
    */
-  async get() {
+  async get(userId) {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (!cached) {
         return null;
       }
@@ -20,13 +28,6 @@ class CategoryCache {
       const age = Date.now() - timestamp;
       const isStale = age > CACHE_TTL;
 
-      console.log('📂 CategoryCache: Retrieved cache', {
-        age: Math.round(age / 1000 / 60), // minutes
-        isStale,
-        categoryCount: data?.length || 0,
-        mainCategories: data?.filter(c => !c.parentId)?.length || 0,
-        subcategories: data?.filter(c => c.parentId)?.length || 0,
-      });
 
       return {
         data: data || [],
@@ -35,7 +36,6 @@ class CategoryCache {
         isStale,
       };
     } catch (error) {
-      console.error('📂 CategoryCache: Get error:', error);
       return null;
     }
   }
@@ -45,24 +45,17 @@ class CategoryCache {
    * @param {array} data - Category data to cache
    * @returns {Promise<boolean>}
    */
-  async set(data) {
+  async set(data, userId) {
     try {
+      const cacheKey = this.getCacheKey(userId);
       const cacheData = {
         data: data || [],
         timestamp: Date.now(),
       };
 
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-      console.log('📂 CategoryCache: Data cached successfully', {
-        timestamp: cacheData.timestamp,
-        categoryCount: data?.length || 0,
-        mainCategories: data?.filter(c => !c.parentId)?.length || 0,
-        subcategories: data?.filter(c => c.parentId)?.length || 0,
-        dataSize: JSON.stringify(data).length,
-      });
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
       return true;
     } catch (error) {
-      console.error('📂 CategoryCache: Set error:', error);
       return false;
     }
   }
@@ -71,13 +64,12 @@ class CategoryCache {
    * Clear category cache
    * @returns {Promise<boolean>}
    */
-  async clear() {
+  async clear(userId) {
     try {
-      await AsyncStorage.removeItem(CACHE_KEY);
-      console.log('📂 CategoryCache: Cache cleared');
+      const cacheKey = this.getCacheKey(userId);
+      await AsyncStorage.removeItem(cacheKey);
       return true;
     } catch (error) {
-      console.error('📂 CategoryCache: Clear error:', error);
       return false;
     }
   }
@@ -86,8 +78,8 @@ class CategoryCache {
    * Check if cached data exists and is fresh
    * @returns {Promise<boolean>}
    */
-  async isFresh() {
-    const cached = await this.get();
+  async isFresh(userId) {
+    const cached = await this.get(userId);
     return cached && !cached.isStale;
   }
 
@@ -95,8 +87,8 @@ class CategoryCache {
    * Get cache age in minutes
    * @returns {Promise<number | null>}
    */
-  async getAge() {
-    const cached = await this.get();
+  async getAge(userId) {
+    const cached = await this.get(userId);
     return cached ? Math.round(cached.age / 1000 / 60) : null;
   }
 
@@ -105,9 +97,10 @@ class CategoryCache {
    * This keeps the data but marks it as stale for background refresh
    * @returns {Promise<boolean>}
    */
-  async invalidate() {
+  async invalidate(userId) {
     try {
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      const cacheKey = this.getCacheKey(userId);
+      const cached = await AsyncStorage.getItem(cacheKey);
       if (cached) {
         const {data} = JSON.parse(cached);
         const cacheData = {
@@ -115,13 +108,11 @@ class CategoryCache {
           timestamp: 0, // Mark as stale but keep data
         };
 
-        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-        console.log('📂 CategoryCache: Cache invalidated');
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
         return true;
       }
       return false;
     } catch (error) {
-      console.error('📂 CategoryCache: Invalidate error:', error);
       return false;
     }
   }
@@ -130,9 +121,9 @@ class CategoryCache {
    * Get cache statistics for debugging
    * @returns {Promise<object>}
    */
-  async getStats() {
+  async getStats(userId) {
     try {
-      const cached = await this.get();
+      const cached = await this.get(userId);
       if (!cached) {
         return {
           exists: false,
@@ -167,7 +158,6 @@ class CategoryCache {
         })),
       };
     } catch (error) {
-      console.error('📂 CategoryCache: Stats error:', error);
       return {
         exists: false,
         error: error.message,
@@ -184,9 +174,9 @@ class CategoryCache {
    * @param {object} category - Category data to add/update
    * @returns {Promise<boolean>}
    */
-  async upsertCategory(category) {
+  async upsertCategory(category, userId) {
     try {
-      const cached = await this.get();
+      const cached = await this.get(userId);
       let categories = cached?.data || [];
 
       // Find existing category by ID
@@ -198,22 +188,13 @@ class CategoryCache {
           ...categories[existingIndex],
           ...category,
         };
-        console.log(
-          '📂 CategoryCache: Category updated in cache:',
-          category.name,
-        );
       } else {
         // Add new category
         categories.push(category);
-        console.log(
-          '📂 CategoryCache: Category added to cache:',
-          category.name,
-        );
       }
 
-      return await this.set(categories);
+      return await this.set(categories, userId);
     } catch (error) {
-      console.error('📂 CategoryCache: Upsert error:', error);
       return false;
     }
   }
@@ -223,25 +204,19 @@ class CategoryCache {
    * @param {string|number} categoryId - ID of category to remove
    * @returns {Promise<boolean>}
    */
-  async removeCategory(categoryId) {
+  async removeCategory(categoryId, userId) {
     try {
-      const cached = await this.get();
+      const cached = await this.get(userId);
       let categories = cached?.data || [];
 
       const filteredCategories = categories.filter(c => c.id !== categoryId);
 
       if (filteredCategories.length !== categories.length) {
-        console.log(
-          '📂 CategoryCache: Category removed from cache:',
-          categoryId,
-        );
-        return await this.set(filteredCategories);
+        return await this.set(filteredCategories, userId);
       }
 
-      console.log('📂 CategoryCache: Category not found in cache:', categoryId);
       return true;
     } catch (error) {
-      console.error('📂 CategoryCache: Remove error:', error);
       return false;
     }
   }

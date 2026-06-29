@@ -13,7 +13,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import Svg, {Path, G} from 'react-native-svg';
+import Svg, {Path, G, Text as SvgText} from 'react-native-svg';
 import {colors} from '../styles';
 import CalendarModal from './CalendarModal';
 
@@ -209,14 +209,13 @@ const DiscretionaryBreakdown = ({
     const centerY = chartHeight / 2;
 
     const currentData = breakdownData?.categories || [];
-    const totalTransactions = breakdownData?.totalTransactions || 0;
 
     if (!currentData || currentData.length === 0) {
       return (
         <View style={[styles.chartContainer, {height: chartHeight}]}>
           <View style={styles.donutCenterContent}>
             <Text style={styles.donutCenterNumber}>0</Text>
-            <Text style={styles.donutCenterLabel}>Expenses</Text>
+            <Text style={styles.donutCenterLabel}>Categories</Text>
           </View>
           <Text style={styles.noDataText}>No category data available</Text>
         </View>
@@ -233,7 +232,7 @@ const DiscretionaryBreakdown = ({
         <View style={[styles.chartContainer, {height: chartHeight}]}>
           <View style={styles.donutCenterContent}>
             <Text style={styles.donutCenterNumber}>0</Text>
-            <Text style={styles.donutCenterLabel}>Expenses</Text>
+            <Text style={styles.donutCenterLabel}>Categories</Text>
           </View>
           <Text style={styles.noDataText}>No spending data available</Text>
         </View>
@@ -350,12 +349,36 @@ const DiscretionaryBreakdown = ({
                   />
                 );
               })}
+
+              {/* Per-slice percentage labels, sitting on each section (matches web) */}
+              {segments.map((segment, index) => {
+                const percentage = (segment.angle / 360) * 100;
+                if (percentage < 7) {
+                  return null;
+                }
+                const midAngle = (segment.startAngle + segment.endAngle) / 2;
+                const rad = toRadians(midAngle - 90);
+                const labelRadius = (radius + innerRadius) / 2;
+                return (
+                  <SvgText
+                    key={`label-${index}`}
+                    x={Math.cos(rad) * labelRadius}
+                    y={Math.sin(rad) * labelRadius}
+                    fill="#ffffff"
+                    fontSize="13"
+                    fontWeight="700"
+                    textAnchor="middle"
+                    alignmentBaseline="central">
+                    {`${Math.round(percentage)}%`}
+                  </SvgText>
+                );
+              })}
             </G>
           </Svg>
 
           <View style={styles.donutCenterContent}>
-            <Text style={styles.donutCenterNumber}>{totalTransactions}</Text>
-            <Text style={styles.donutCenterLabel}>Expenses</Text>
+            <Text style={styles.donutCenterNumber}>{currentData.length}</Text>
+            <Text style={styles.donutCenterLabel}>Categories</Text>
           </View>
         </View>
       </View>
@@ -403,11 +426,10 @@ const DiscretionaryBreakdown = ({
   // ✅ PERIOD LABEL HELPER
   const getCurrentPeriodLabel = () => {
     switch (selectedPeriod) {
-      case 'daily':
+      case '7d':
+      case '30d':
         return 'today';
-      case 'weekly':
-        return 'this week';
-      case 'monthly':
+      case '12m':
         return 'this month';
       default:
         return 'this period';
@@ -420,22 +442,15 @@ const DiscretionaryBreakdown = ({
 
     const displayPeriod = {
       label:
-        selectedPeriod === 'daily'
+        selectedPeriod === '12m'
           ? selectedDate?.toLocaleDateString('en-US', {
-              weekday: 'short',
-              day: 'numeric',
-            }) || 'Today'
-          : selectedPeriod === 'weekly'
-          ? `Week of ${
-              selectedDate?.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              }) || 'This Week'
-            }`
-          : selectedDate?.toLocaleDateString('en-US', {
               month: 'long',
               year: 'numeric',
-            }) || 'This Month',
+            }) || 'This Month'
+          : selectedDate?.toLocaleDateString('en-US', {
+              weekday: 'short',
+              day: 'numeric',
+            }) || 'Today',
       discretionaryAmount: 0,
     };
 
@@ -477,7 +492,6 @@ const DiscretionaryBreakdown = ({
   }
 
   const currentData = breakdownData?.categories || [];
-  const totalAmount = breakdownData?.totalAmount || 0;
   const period = breakdownData?.period;
 
   return (
@@ -557,10 +571,6 @@ const DiscretionaryBreakdown = ({
                         Category Breakdown
                       </Text>
                       {currentData.map((item, index) => {
-                        const percentage =
-                          totalAmount > 0
-                            ? ((item.amount / totalAmount) * 100).toFixed(1)
-                            : '0.0';
                         const iconName = getCategoryIcon(item.name);
                         const isExpanded =
                           expandedCategories?.has?.(item.name) || false;
@@ -603,9 +613,6 @@ const DiscretionaryBreakdown = ({
                                   <Text style={styles.categoryAmount}>
                                     ${item.amount?.toFixed(2) || '0.00'}
                                   </Text>
-                                  <Text style={styles.categoryPercentage}>
-                                    {percentage}%
-                                  </Text>
                                 </View>
                                 {/* ✅ FIXED: Show chevron only if subcategories exist */}
                                 {canExpand && (
@@ -645,11 +652,6 @@ const DiscretionaryBreakdown = ({
                                       <View style={styles.subcategoryRight}>
                                         <Text style={styles.subcategoryAmount}>
                                           ${(subItem.amount || 0).toFixed(2)}
-                                        </Text>
-                                        <Text
-                                          style={styles.subcategoryPercentage}>
-                                          {(subItem.percentage || 0).toFixed(1)}
-                                          %
                                         </Text>
                                       </View>
                                     </View>

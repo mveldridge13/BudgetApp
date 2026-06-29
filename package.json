@@ -1,6 +1,7 @@
 {
-  "name": "BudgetApp",
-  "version": "0.0.1",
+  "name": "trend-budget",
+  "version": "1.0.0",
+  "description": "Personal finance and budget tracking app",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -10,6 +11,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.4.1",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/datetimepicker": "^8.4.1",
     "@react-native-community/netinfo": "^11.4.1",
@@ -19,6 +21,7 @@
     "@react-navigation/native": "^7.1.9",
     "@react-navigation/stack": "^7.3.2",
     "@reduxjs/toolkit": "^2.8.2",
+    "@sentry/react-native": "^8.0.0",
     "date-fns": "^4.1.0",
     "lodash": "^4.17.21",
     "react": "19.0.0",
@@ -28,6 +31,8 @@
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.25.0",
     "react-native-image-picker": "^8.2.1",
+    "react-native-keychain": "^10.0.0",
+    "react-native-purchases": "^10.2.1",
     "react-native-push-notification": "^8.1.1",
     "react-native-safe-area-context": "^5.4.1",
     "react-native-screens": "^4.11.1",
@@ -52,6 +57,7 @@
     "@types/jest": "^29.5.13",
     "@types/react": "^19.0.0",
     "@types/react-test-renderer": "^19.0.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "eslint": "^8.19.0",
     "jest": "^29.6.3",
     "prettier": "2.8.8",

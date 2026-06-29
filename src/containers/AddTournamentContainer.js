@@ -138,10 +138,6 @@ const AddTournamentContainer = ({
       return false;
     }
 
-    if (!location.trim()) {
-      Alert.alert('Validation Error', 'Location is required.');
-      return false;
-    }
 
     if (!startDate) {
       Alert.alert('Validation Error', 'Start date is required.');
@@ -155,7 +151,7 @@ const AddTournamentContainer = ({
     }
 
     return true;
-  }, [tournamentName, location, startDate, endDate]);
+  }, [tournamentName, startDate, endDate]);
 
   // ==============================================
   // BUSINESS LOGIC - SAVE TOURNAMENT

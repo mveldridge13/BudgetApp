@@ -7,7 +7,8 @@ import DiscretionaryBreakdown from '../components/DiscretionaryBreakdown';
 const DiscretionaryContainer = ({
   visible,
   onClose,
-  selectedPeriod = 'daily', // Default to daily for discretionary breakdown
+  selectedPeriod = '7d', // Default to a single day for discretionary breakdown
+  initialDate = null, // Day to open on (e.g. the highest-discretionary period)
 }) => {
   // ==============================================
   // BUSINESS LOGIC STATE MANAGEMENT
@@ -26,6 +27,19 @@ const DiscretionaryContainer = ({
   // Refs for component lifecycle management
   const isMountedRef = useRef(true);
   const isLoadingRef = useRef(false);
+
+  // When the modal opens with a target day (e.g. the highest-discretionary
+  // period), jump to it. Later in-modal calendar changes are preserved.
+  // initialDate is parsed from a date-only string (UTC midnight), so read its
+  // UTC calendar parts to build the intended local day in any timezone.
+  useEffect(() => {
+    if (visible && initialDate) {
+      const d = new Date(initialDate);
+      setSelectedDate(
+        new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+      );
+    }
+  }, [visible, initialDate]);
 
   // ==============================================
   // TIMEZONE-SAFE DATE UTILITIES
@@ -65,8 +79,9 @@ const DiscretionaryContainer = ({
       let startDate, endDate;
 
       switch (period) {
-        case 'daily':
-          // Start at 00:00:00 of selected day, end at 23:59:59 of same day
+        case '7d':
+        case '30d':
+          // 7d / 30d — a single day (the highest-spend day), matching web.
           startDate = new Date(
             baseDate.getFullYear(),
             baseDate.getMonth(),
@@ -86,34 +101,8 @@ const DiscretionaryContainer = ({
             999,
           );
           break;
-        case 'weekly':
-          // Week containing the selected date (Sunday to Saturday)
-          const startOfWeek = new Date(baseDate);
-          startOfWeek.setDate(baseDate.getDate() - baseDate.getDay());
-          startDate = new Date(
-            startOfWeek.getFullYear(),
-            startOfWeek.getMonth(),
-            startOfWeek.getDate(),
-            0,
-            0,
-            0,
-            0,
-          );
-
-          const endOfWeek = new Date(startOfWeek);
-          endOfWeek.setDate(startOfWeek.getDate() + 6);
-          endDate = new Date(
-            endOfWeek.getFullYear(),
-            endOfWeek.getMonth(),
-            endOfWeek.getDate(),
-            23,
-            59,
-            59,
-            999,
-          );
-          break;
-        case 'monthly':
-          // First day of month to last day of month
+        case '12m':
+          // First day of month to last day of month (the highest-spend month).
           startDate = new Date(
             baseDate.getFullYear(),
             baseDate.getMonth(),
@@ -154,13 +143,15 @@ const DiscretionaryContainer = ({
           );
       }
 
-      // Try both date-only and datetime formats for the API
       const result = {
         startDate: formatDateForAPI(startDate),
         endDate: formatDateForAPI(endDate),
-        // Alternative: include time if your API supports it
         startDateTime: formatDateTimeForAPI(startDate),
         endDateTime: formatDateTimeForAPI(endDate),
+        // Unambiguous UTC instants for the API — the backend buckets these into
+        // the user's calendar day. This is the contract the web already uses.
+        startISO: startDate.toISOString(),
+        endISO: endDate.toISOString(),
       };
 
       return result;
@@ -190,11 +181,10 @@ const DiscretionaryContainer = ({
         // ✅ FIXED: Use timezone-safe date range creation
         const dateRange = createLocalDateRange(selectedDate, selectedPeriod);
 
-        // Try with datetime format since date-only isn't working
+        // Send unambiguous UTC instants; the backend resolves the user's day.
         const filters = {
-          startDate: dateRange.startDateTime, // Use full datetime
-          endDate: dateRange.endDateTime, // Use full datetime
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          startDate: dateRange.startISO,
+          endDate: dateRange.endISO,
         };
 
         // ✅ FIXED: Use the new TrendAPIService method
@@ -357,18 +347,14 @@ const DiscretionaryContainer = ({
       const date = selectedDate;
 
       switch (period) {
-        case 'daily':
+        case '7d':
+        case '30d':
           return date.toLocaleDateString('en-US', {
             weekday: 'short',
             day: 'numeric',
             month: 'short',
           });
-        case 'weekly':
-          return `Week of ${date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-          })}`;
-        case 'monthly':
+        case '12m':
           return date.toLocaleDateString('en-US', {
             month: 'long',
             year: 'numeric',

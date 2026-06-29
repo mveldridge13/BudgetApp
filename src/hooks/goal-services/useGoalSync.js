@@ -54,7 +54,11 @@ const useGoalSync = () => {
       }
 
       // Save updated goals and update state
-      await saveGoalsToCache(updatedGoals);
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (!currentUserId) {
+        throw new Error('No user ID available for goals cache');
+      }
+      await saveGoalsToCache(updatedGoals, currentUserId);
       setGoals(updatedGoals);
 
       return {success: true, syncedCount};

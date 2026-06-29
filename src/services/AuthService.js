@@ -1,4 +1,6 @@
 import TrendAPI from './TrendAPIService';
+import DateService from './DateService';
+import CurrencyService from './CurrencyService';
 
 /**
  * Authentication Service
@@ -77,11 +79,21 @@ class AuthService {
   // Register new user
   async register(userData) {
     try {
+      // Auto-detect user's timezone for new registrations
+      const detectedTimezone = DateService.detectUserTimezone();
+
+      // Auto-detect user's currency based on timezone/region
+      const detectedCurrency = CurrencyService.detectUserCurrency();
+
       const result = await TrendAPI.register({
         firstName: userData.firstName,
         lastName: userData.lastName,
         email: userData.email,
         password: userData.password,
+        // Use provided timezone from onboarding, or auto-detect as fallback
+        timezone: userData.timezone || detectedTimezone,
+        // Use provided currency from onboarding, or auto-detect as fallback
+        currency: userData.currency || detectedCurrency,
       });
 
       if (result.success) {
@@ -110,11 +122,41 @@ class AuthService {
   // Logout user
   async logout() {
     try {
+      // Get current user ID before clearing token
+      const currentUserId = TrendAPI.getCurrentUserId();
+
       // Call backend logout (if endpoint exists)
       try {
         await TrendAPI.logout();
       } catch (error) {
         // Ignore logout endpoint errors
+      }
+
+      // Clear ALL cache data (old global keys + user-specific keys) to prevent contamination
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+
+        // Clear old global cache keys that were causing contamination
+        await AsyncStorage.removeItem('user_profile_cache_v1'); // Old global key
+        await AsyncStorage.removeItem('categories_cache'); // Old global key
+        await AsyncStorage.removeItem('goals'); // Goals cache key
+
+        // Clear user-specific caches if we have user ID
+        if (currentUserId) {
+          const UserProfileCache = require('./UserProfileCache').default;
+          const CategoryCache = require('./CategoryCache').default;
+          const TransactionCache = require('./TransactionCache').default;
+
+          await UserProfileCache.clear(currentUserId);
+          await CategoryCache.clear(currentUserId);
+          await TransactionCache.clear(currentUserId);
+
+          // Clear user-specific goals cache
+          await AsyncStorage.removeItem(`goals_${currentUserId}`);
+        }
+
+      } catch (cacheError) {
+        console.warn('🔄 AuthService: Error clearing caches:', cacheError);
       }
 
       // Clear local user data
@@ -126,6 +168,58 @@ class AuthService {
       this.currentUser = null;
       await TrendAPI.clearToken();
       return {success: true};
+    }
+  }
+
+  /**
+   * Check and update timezone for existing users who have "UTC"
+   * This is a one-time fix for users created before timezone detection
+   */
+  async updateTimezoneIfNeeded() {
+    if (!this.isAuthenticated()) {
+      return {success: false, error: 'Not authenticated'};
+    }
+
+    try {
+      // Get current user profile to check timezone
+      const userProfile = await TrendAPI.getUserProfile();
+
+      if (userProfile?.timezone === 'UTC') {
+
+        // Detect user's actual timezone
+        const detectedTimezone = DateService.detectUserTimezone();
+
+        // Update user profile with detected timezone
+        const updateResult = await TrendAPI.updateUserProfile({
+          timezone: detectedTimezone,
+        });
+
+        if (updateResult.success) {
+          // Update DateService with new timezone immediately
+          DateService.setTimezone(detectedTimezone);
+
+
+          return {
+            success: true,
+            previousTimezone: 'UTC',
+            newTimezone: detectedTimezone,
+            message: `Timezone updated from UTC to ${detectedTimezone}`,
+          };
+        } else {
+          console.error('🌍 AuthService: Failed to update user timezone:', updateResult.error);
+          return {success: false, error: updateResult.error};
+        }
+      } else {
+        return {
+          success: true,
+          alreadySet: true,
+          currentTimezone: userProfile?.timezone,
+          message: 'Timezone already configured',
+        };
+      }
+    } catch (error) {
+      console.error('🌍 AuthService: Error checking/updating timezone:', error);
+      return {success: false, error: error.message};
     }
   }
 

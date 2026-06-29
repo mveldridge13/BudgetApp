@@ -72,7 +72,7 @@ const AddGoalModal = ({
     title: '',
     type: 'savings',
     target: '',
-    current: '0',
+    current: '',
     originalAmount: '',
     deadline: '',
     category: 'Other',
@@ -84,6 +84,9 @@ const AddGoalModal = ({
   const [showDateModal, setShowDateModal] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
+  // Calendar picker mode: 'calendar' (day grid) or 'monthYear' (month/year picker)
+  const [pickerMode, setPickerMode] = useState('calendar');
+  const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
 
   // Track modal visibility state for proper animation control
   const [modalVisible, setModalVisible] = useState(false);
@@ -127,7 +130,7 @@ const AddGoalModal = ({
           title: editingGoal.title || '',
           type: editingGoal.type || 'savings',
           target: editingGoal.target?.toString() || '',
-          current: editingGoal.current?.toString() || '0',
+          current: editingGoal.current?.toString() || '',
           originalAmount: editingGoal.originalAmount?.toString() || '',
           deadline: editingGoal.deadline || '',
           category: editingGoal.category || 'Other',
@@ -140,7 +143,7 @@ const AddGoalModal = ({
           title: '',
           type: 'savings',
           target: '',
-          current: '0',
+          current: '',
           originalAmount: '',
           deadline: '',
           category: 'Other',
@@ -213,10 +216,9 @@ const AddGoalModal = ({
       }
     }
 
-    if (!formData.deadline) {
-      newErrors.deadline = 'Deadline is required';
-    } else {
-      // Better date comparison to avoid timezone issues
+    // Deadline is optional for all goal types (debt included, e.g. revolving
+    // credit-card debt with no payoff date). If provided, it must be in the future.
+    if (formData.deadline) {
       const deadlineDate = new Date(formData.deadline);
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Reset time to start of day
@@ -244,14 +246,9 @@ const AddGoalModal = ({
     try {
       setSaving(true);
 
-      // Add debugging to see what form data we have
-      console.log('🔍 MODAL - Raw form data:', formData);
-
-      // Helper function to safely parse numbers - FIXED to preserve decimals
+      // Helper function to safely parse numbers - preserves decimals
       const parseNumberSafely = (value, fallback = 0) => {
-        console.log('🔍 PARSE: Input value:', value, 'type:', typeof value);
         if (value === null || value === undefined || value === '') {
-          console.log('🔍 PARSE: Empty value, returning fallback:', fallback);
           return fallback;
         }
 
@@ -264,14 +261,6 @@ const AddGoalModal = ({
             ? fallback
             : Math.round(parsed * 100) / 100;
 
-        console.log(
-          '🔍 PARSE: Cleaned value:',
-          cleanValue,
-          'parsed:',
-          parsed,
-          'result:',
-          result,
-        );
         return result;
       };
 
@@ -282,7 +271,6 @@ const AddGoalModal = ({
         category: formData.category,
         priority: formData.priority,
         deadline: formData.deadline,
-        current: parseNumberSafely(formData.current, 0),
         isActive: true,
       };
 
@@ -291,40 +279,28 @@ const AddGoalModal = ({
         // For debt goals, use originalAmount as the target amount
         goalData.originalAmount = parseNumberSafely(formData.originalAmount, 0);
         goalData.target = goalData.originalAmount; // Backend expects targetAmount
-        console.log('🔍 MODAL - Debt goal processed:');
-        console.log(
-          '🔍 MODAL - originalAmount:',
+        // Use the remaining balance the user entered ("Current Debt Remaining").
+        // If it's left at the default (blank/0) on a NEW goal, assume the full
+        // original amount is still owed.
+        const parsedCurrent = parseNumberSafely(
+          formData.current,
           goalData.originalAmount,
-          typeof goalData.originalAmount,
         );
-        console.log(
-          '🔍 MODAL - target:',
-          goalData.target,
-          typeof goalData.target,
-        );
+        goalData.current =
+          !editingGoal && parsedCurrent === 0
+            ? goalData.originalAmount
+            : parsedCurrent;
       } else {
+        // For savings/spending goals, use current from form
+        goalData.current = parseNumberSafely(formData.current, 0);
         // For savings/spending goals, use target
         goalData.target = parseNumberSafely(formData.target, 0);
-        console.log('🔍 MODAL - Non-debt goal processed:');
-        console.log(
-          '🔍 MODAL - target:',
-          goalData.target,
-          typeof goalData.target,
-        );
       }
 
       // Add auto contribution if specified
       if (formData.autoContribute) {
         goalData.autoContribute = parseNumberSafely(formData.autoContribute, 0);
       }
-
-      console.log('🔍 MODAL - Processed goal data:', goalData);
-      console.log(
-        '🔍 MODAL - Target amount:',
-        goalData.target,
-        'Type:',
-        typeof goalData.target,
-      );
 
       let result;
       try {
@@ -423,6 +399,34 @@ const AddGoalModal = ({
     setCurrentMonth(newMonth);
   };
 
+  const monthsShort = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  const handleMonthYearPress = () => {
+    setPickerYear(currentMonth.getFullYear());
+    setPickerMode('monthYear');
+  };
+
+  const handleMonthSelect = monthIndex => {
+    setCurrentMonth(new Date(pickerYear, monthIndex, 1));
+    setPickerMode('calendar');
+  };
+
+  const goToPreviousYear = () => setPickerYear(prev => prev - 1);
+  const goToNextYear = () => setPickerYear(prev => prev + 1);
+
   const handleDateSelect = dateObj => {
     if (dateObj.isPast) {
       return;
@@ -447,6 +451,7 @@ const AddGoalModal = ({
       setSelectedDate(null);
       setCurrentMonth(new Date());
     }
+    setPickerMode('calendar');
     setShowDateModal(true);
   };
 
@@ -517,41 +522,41 @@ const AddGoalModal = ({
               contentContainerStyle={styles.contentContainer}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled">
-              {/* Goal Type Selection */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Goal Type</Text>
-                <View style={styles.typeGrid}>
+              {/* Goal Type Selection - Tabbed Design */}
+              <View style={styles.tabSection}>
+                <View style={styles.tabContainer}>
                   {GOAL_TYPES.map(type => (
                     <TouchableOpacity
                       key={type.id}
                       style={[
-                        styles.typeCard,
-                        formData.type === type.id && styles.typeCardActive,
+                        styles.tabButton,
+                        formData.type === type.id && styles.tabButtonActive,
                       ]}
                       onPress={() => updateFormData('type', type.id)}
                       activeOpacity={0.7}>
                       <Icon
                         name={type.icon}
-                        size={20}
+                        size={16}
                         color={
                           formData.type === type.id
-                            ? colors.primary
+                            ? colors.textWhite
                             : colors.textSecondary
                         }
+                        style={styles.tabIcon}
                       />
                       <Text
                         style={[
-                          styles.typeLabel,
-                          formData.type === type.id && styles.typeLabelActive,
+                          styles.tabText,
+                          formData.type === type.id && styles.tabTextActive,
                         ]}>
                         {type.label}
-                      </Text>
-                      <Text style={styles.typeDescription}>
-                        {type.description}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+                <Text style={styles.typeHint}>
+                  {GOAL_TYPES.find(t => t.id === formData.type)?.description}
+                </Text>
               </View>
 
               {/* Goal Title */}
@@ -675,7 +680,9 @@ const AddGoalModal = ({
 
               {/* Deadline */}
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Target Deadline</Text>
+                <Text style={styles.sectionTitle}>
+                  Target Deadline (Optional)
+                </Text>
                 <TouchableOpacity
                   style={[
                     styles.dateInput,
@@ -856,89 +863,174 @@ const AddGoalModal = ({
               <View style={styles.calendarModalOverlay}>
                 <View style={styles.modalContent}>
                   <View style={styles.calendarContainer}>
-                    {/* Calendar Header */}
-                    <View style={styles.calendarHeader}>
-                      <TouchableOpacity
-                        onPress={() => navigateMonth(-1)}
-                        style={styles.navButton}>
-                        <Text style={styles.navButtonText}>‹</Text>
-                      </TouchableOpacity>
-
-                      <View style={styles.monthYearContainer}>
-                        <Text style={styles.calendarMonthText}>
-                          {currentMonth.toLocaleDateString('en-US', {
-                            month: 'long',
-                            year: 'numeric',
-                          })}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity
-                        onPress={() => navigateMonth(1)}
-                        style={styles.navButton}>
-                        <Text style={styles.navButtonText}>›</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Day labels */}
-                    <View style={styles.dayLabelsContainer}>
-                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                        <Text key={index} style={styles.dayLabel}>
-                          {day}
-                        </Text>
-                      ))}
-                    </View>
-
-                    {/* Calendar Grid */}
-                    <View style={styles.calendarGrid}>
-                      {generateCalendarDays().map((dayObj, index) => {
-                        const isToday = dayObj?.isToday;
-                        const isSelected = dayObj?.isSelected;
-                        const isPast = dayObj?.isPast;
-
-                        return (
+                    {pickerMode === 'calendar' ? (
+                      <>
+                        {/* Calendar Header */}
+                        <View style={styles.calendarHeader}>
                           <TouchableOpacity
-                            key={index}
-                            style={[
-                              styles.dayCell,
-                              !dayObj && styles.emptyDayCell,
-                              isToday && styles.todayCell,
-                              isSelected && styles.selectedCell,
-                            ]}
-                            disabled={!dayObj || isPast}
-                            onPress={() => dayObj && handleDateSelect(dayObj)}>
-                            {dayObj && (
-                              <Text
-                                style={[
-                                  styles.dayText,
-                                  isToday && styles.todayText,
-                                  isSelected && styles.selectedText,
-                                  isPast && styles.pastText,
-                                ]}>
-                                {dayObj.day}
-                              </Text>
-                            )}
+                            onPress={() => navigateMonth(-1)}
+                            style={styles.navButton}>
+                            <Text style={styles.navButtonText}>‹</Text>
                           </TouchableOpacity>
-                        );
-                      })}
-                    </View>
 
-                    {/* Action buttons */}
-                    <View style={styles.calendarActions}>
-                      <TouchableOpacity
-                        onPress={() => setShowDateModal(false)}
-                        style={styles.calendarCancelButton}>
-                        <Text style={styles.calendarCancelButtonText}>
-                          Cancel
-                        </Text>
-                      </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.monthYearButton}
+                            onPress={handleMonthYearPress}
+                            activeOpacity={0.7}>
+                            <Text style={styles.calendarMonthText}>
+                              {currentMonth.toLocaleDateString('en-US', {
+                                month: 'long',
+                                year: 'numeric',
+                              })}
+                            </Text>
+                          </TouchableOpacity>
 
-                      <TouchableOpacity
-                        onPress={() => setShowDateModal(false)}
-                        style={styles.doneButton}>
-                        <Text style={styles.doneButtonText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
+                          <TouchableOpacity
+                            onPress={() => navigateMonth(1)}
+                            style={styles.navButton}>
+                            <Text style={styles.navButtonText}>›</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Day labels */}
+                        <View style={styles.dayLabelsContainer}>
+                          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(
+                            (day, index) => (
+                              <Text key={index} style={styles.dayLabel}>
+                                {day}
+                              </Text>
+                            ),
+                          )}
+                        </View>
+
+                        {/* Calendar Grid */}
+                        <View style={styles.calendarGrid}>
+                          {generateCalendarDays().map((dayObj, index) => {
+                            const isToday = dayObj?.isToday;
+                            const isSelected = dayObj?.isSelected;
+                            const isPast = dayObj?.isPast;
+
+                            return (
+                              <TouchableOpacity
+                                key={index}
+                                style={[
+                                  styles.dayCell,
+                                  !dayObj && styles.emptyDayCell,
+                                  isToday && styles.todayCell,
+                                  isSelected && styles.selectedCell,
+                                ]}
+                                disabled={!dayObj || isPast}
+                                onPress={() =>
+                                  dayObj && handleDateSelect(dayObj)
+                                }>
+                                {dayObj && (
+                                  <Text
+                                    style={[
+                                      styles.dayText,
+                                      isToday && styles.todayText,
+                                      isSelected && styles.selectedText,
+                                      isPast && styles.pastText,
+                                    ]}>
+                                    {dayObj.day}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        {/* Action buttons */}
+                        <View style={styles.calendarActions}>
+                          <TouchableOpacity
+                            onPress={() => setShowDateModal(false)}
+                            style={styles.calendarCancelButton}>
+                            <Text style={styles.calendarCancelButtonText}>
+                              Cancel
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => setShowDateModal(false)}
+                            style={styles.doneButton}>
+                            <Text style={styles.doneButtonText}>Done</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        {/* Year Header */}
+                        <View style={styles.calendarHeader}>
+                          <TouchableOpacity
+                            onPress={goToPreviousYear}
+                            style={styles.navButton}>
+                            <Text style={styles.navButtonText}>‹</Text>
+                          </TouchableOpacity>
+
+                          <View style={styles.monthYearContainer}>
+                            <Text style={styles.calendarMonthText}>
+                              {pickerYear}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            onPress={goToNextYear}
+                            style={styles.navButton}>
+                            <Text style={styles.navButtonText}>›</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Month Grid */}
+                        <View style={styles.monthGrid}>
+                          {monthsShort.map((month, index) => {
+                            const today = new Date();
+                            const isCurrentMonth =
+                              index === today.getMonth() &&
+                              pickerYear === today.getFullYear();
+                            const isSelectedMonth =
+                              index === currentMonth.getMonth() &&
+                              pickerYear === currentMonth.getFullYear();
+
+                            return (
+                              <TouchableOpacity
+                                key={index}
+                                style={[
+                                  styles.monthCell,
+                                  isCurrentMonth && styles.currentMonthCell,
+                                  isSelectedMonth && styles.selectedMonthCell,
+                                ]}
+                                onPress={() => handleMonthSelect(index)}
+                                activeOpacity={0.7}>
+                                <Text
+                                  style={[
+                                    styles.monthCellText,
+                                    isSelectedMonth && styles.selectedMonthText,
+                                    isCurrentMonth && styles.currentMonthText,
+                                  ]}>
+                                  {month}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        {/* Action buttons */}
+                        <View style={styles.calendarActions}>
+                          <TouchableOpacity
+                            onPress={() => setPickerMode('calendar')}
+                            style={styles.calendarCancelButton}>
+                            <Text style={styles.calendarCancelButtonText}>
+                              Back
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => setShowDateModal(false)}
+                            style={styles.doneButton}>
+                            <Text style={styles.doneButtonText}>Done</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
                   </View>
                 </View>
               </View>
@@ -1026,39 +1118,65 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     letterSpacing: -0.2,
   },
-  typeGrid: {
-    gap: 12,
+  tabSection: {
+    marginBottom: 24,
+    marginHorizontal: -20,
+    marginTop: -20,
   },
-  typeCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: colors.border,
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginHorizontal: 4,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    gap: 6,
   },
-  typeCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+  tabButtonActive: {
+    backgroundColor: colors.primary,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -2},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  typeLabel: {
-    fontSize: 14,
+  tabIcon: {
+    marginRight: 0,
+  },
+  tabText: {
+    fontSize: 13,
     fontWeight: '500',
     fontFamily: 'System',
-    color: colors.text,
-    marginTop: 8,
-    marginBottom: 4,
+    color: colors.textSecondary,
   },
-  typeLabelActive: {
-    color: colors.primary,
+  tabTextActive: {
+    color: colors.textWhite,
+    fontWeight: '600',
   },
-  typeDescription: {
+  typeHint: {
     fontSize: 12,
-    fontWeight: '300',
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
-    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 8,
     lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   textInput: {
     backgroundColor: colors.surface,
@@ -1237,6 +1355,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  monthYearButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
   calendarMonthText: {
     fontSize: 18,
     fontWeight: '400',
@@ -1329,6 +1454,39 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 50,
+  },
+  // Month/Year Picker styles
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  monthCell: {
+    width: '30%',
+    paddingVertical: 16,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: colors.overlayLight,
+    alignItems: 'center',
+  },
+  currentMonthCell: {
+    backgroundColor: colors.primary,
+  },
+  selectedMonthCell: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  monthCellText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.text,
+  },
+  currentMonthText: {
+    color: colors.textWhite,
+  },
+  selectedMonthText: {
+    color: colors.primary,
   },
 });
 

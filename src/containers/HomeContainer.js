@@ -14,11 +14,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // import {useFocusEffect} from '@react-navigation/native'; // Removed to eliminate reload delay
 import TrendAPIService from '../services/TrendAPIService';
 import AuthService from '../services/AuthService';
+import DateService from '../services/DateService';
 import HomeScreen from '../screens/HomeScreen';
 import useOnboarding from '../hooks/useOnboarding';
 import useGoals from '../hooks/useGoals';
+import GoalAllocationModal from '../components/GoalAllocationModal';
+import AddGoalModal from '../components/AddGoalModal';
 import TournamentCache from '../services/TournamentCache';
 import CategoryCache from '../services/CategoryCache';
+import UserProfileCache from '../services/UserProfileCache';
+import TransactionCache from '../services/TransactionCache';
+import PayPeriodService from '../services/PayPeriodService';
+import RolloverService from '../services/RolloverService';
 import {useAppSettings} from '../contexts/AppSettingsContext';
 import AddTournamentContainer from './AddTournamentContainer';
 
@@ -31,12 +38,13 @@ const HomeContainer = ({navigation}) => {
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false - show cached data immediately
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [lastActiveDate, setLastActiveDate] = useState(
     new Date().toDateString(),
   );
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [homeSummary, setHomeSummary] = useState(null); // Backend-calculated balance card data
   const [currency, setCurrency] = useState('AUD');
   const [backgroundSyncCount, setBackgroundSyncCount] = useState(0);
   const [userActiveOperations, setUserActiveOperations] = useState(0);
@@ -47,12 +55,28 @@ const HomeContainer = ({navigation}) => {
   const [showAddTournament, setShowAddTournament] = useState(false);
   const [editingTournament, setEditingTournament] = useState(null);
 
+  // Rollover state
+  const [rolloverAmount, setRolloverAmount] = useState(0);
+  const [rolloverBanner, setRolloverBanner] = useState(null); // Derived from homeSummary.rolloverNotification
+  const [showGoalAllocationModal, setShowGoalAllocationModal] = useState(false);
+  const [rolloverAmountToAllocate, setRolloverAmountToAllocate] = useState(0);
+  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
+
+  // Pull-to-refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
   // ==============================================
   // HOOKS
   // ==============================================
   const onboarding = useOnboarding();
-  const {goals, loadGoals: loadGoalsFromHook, updateSpendingGoals} = useGoals();
-  const {moduleSettings} = useAppSettings();
+  const {
+    goals,
+    loadGoals: loadGoalsFromHook,
+    updateSpendingGoals,
+    saveGoal,
+    addGoalContribution,
+  } = useGoals();
+  const {moduleSettings, updateSubscriptionStatus} = useAppSettings();
 
   // Get poker module setting
   const pokerTrackerEnabled = moduleSettings?.pokerTracker || false;
@@ -81,7 +105,10 @@ const HomeContainer = ({navigation}) => {
 
       // Both have due dates - sort by due date ascending (soonest first)
       if (aHasDueDate && bHasDueDate) {
-        return new Date(a.dueDate) - new Date(b.dueDate);
+        const dueDateDiff = new Date(a.dueDate) - new Date(b.dueDate);
+        if (dueDateDiff !== 0) return dueDateDiff;
+        // Same due date - sort by createdAt descending (newest first)
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
       }
 
       // Only a has due date - a comes first
@@ -95,7 +122,10 @@ const HomeContainer = ({navigation}) => {
       }
 
       // Neither has due date - sort by transaction date descending (newest first)
-      return new Date(b.date || 0) - new Date(a.date || 0);
+      const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
+      if (dateDiff !== 0) return dateDiff;
+      // Same date - sort by createdAt descending (newest first)
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
   };
 
@@ -268,6 +298,59 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
+      // Get current user ID for user-specific cache
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (!currentUserId) {
+        console.warn('👤 No user ID available, skipping cache');
+      } else {
+        // 🔄 CACHE-FIRST: Load from cache immediately
+        const cached = await UserProfileCache.get(currentUserId);
+        if (cached && cached.profile) {
+          console.log('👤 Using cached profile data');
+          const cachedProfile = cached.profile;
+          setUserProfile(cachedProfile);
+
+          // Set income data from cache to remove delay
+          if (
+            cachedProfile.income &&
+            cachedProfile.incomeFrequency &&
+            cachedProfile.nextPayDate
+          ) {
+            const cachedIncomeData = {
+              income: cachedProfile.income,
+              monthlyIncome: cachedProfile.income,
+              setupComplete: cachedProfile.setupComplete,
+              frequency: cachedProfile.incomeFrequency,
+              nextPayDate: cachedProfile.nextPayDate,
+            };
+            setIncomeData(cachedIncomeData);
+          }
+
+          // If cache is fresh, we're done
+          if (!cached.isStale) {
+            return;
+          }
+        }
+      }
+
+      // 🌍 Check and update timezone for existing UTC users (one-time fix)
+      try {
+        const timezoneUpdate = await AuthService.updateTimezoneIfNeeded();
+        if (timezoneUpdate.success && !timezoneUpdate.alreadySet) {
+          console.log(
+            '🌍 HomeContainer: Timezone updated successfully:',
+            timezoneUpdate,
+          );
+        }
+      } catch (timezoneError) {
+        console.warn(
+          '🌍 HomeContainer: Timezone update failed (non-critical):',
+          timezoneError,
+        );
+        // Don't fail the entire profile load if timezone update fails
+      }
+
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
       const profile = await TrendAPIService.getUserProfile();
       console.log('👤 Profile received from backend:', {
         platform: Platform.OS,
@@ -277,6 +360,11 @@ const HomeContainer = ({navigation}) => {
         nextPayDate: profile?.nextPayDate,
         setupComplete: profile?.setupComplete,
       });
+
+      // Update cache with fresh data
+      if (currentUserId) {
+        await UserProfileCache.set(profile, currentUserId);
+      }
 
       setUserProfile(profile);
 
@@ -333,6 +421,41 @@ const HomeContainer = ({navigation}) => {
     }
   }, []);
 
+  // Load home summary from backend (single source of truth for balance card)
+  const loadHomeSummary = useCallback(async () => {
+    try {
+      console.log('🏠 loadHomeSummary START');
+
+      if (!AuthService.isAuthenticated()) {
+        return;
+      }
+
+      const summary = await TrendAPIService.getHomeSummary();
+      console.log('🏠 Home summary received:', {
+        period: summary?.period?.frequency,
+        totalInflow: summary?.income?.totalInflow,
+        leftToSpendSafe: summary?.totals?.leftToSpendSafe,
+        committedRemaining: summary?.outflows?.committed?.remaining,
+        discretionarySpent: summary?.outflows?.discretionary?.spentSoFar,
+      });
+
+      setHomeSummary(summary);
+
+      // Sync subscription/Pro status from backend
+      if (summary?.user || summary?.features) {
+        updateSubscriptionStatus(summary.user, summary.features);
+      }
+
+      // Also update totalExpenses for backwards compatibility during transition
+      if (summary?.totals) {
+        setTotalExpenses(summary.totals.totalExpensesAllocated);
+      }
+    } catch (error) {
+      console.error('🏠 Error loading home summary:', error);
+      // Don't fail silently - fallback to local calculation will still work
+    }
+  }, [updateSubscriptionStatus]);
+
   const loadTransactions = useCallback(async () => {
     try {
       console.log('💳 loadTransactions START - Platform:', Platform.OS);
@@ -349,34 +472,122 @@ const HomeContainer = ({navigation}) => {
         return;
       }
 
-      const response = await TrendAPIService.getTransactions({
-        limit: 1000, // Get all transactions for accurate balance calculations
-      });
-      const backendTransactions = response?.transactions || [];
-      const sortedTransactions = sortTransactionsByDate(backendTransactions);
+      // 🔄 CACHE-FIRST: Load from cache immediately
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      const cached = await TransactionCache.get(currentUserId);
 
-      console.log('💳 Transactions loaded:', {
-        platform: Platform.OS,
-        count: sortedTransactions.length,
-        sampleTransactions: sortedTransactions.slice(0, 3).map(t => ({
-          id: t.id,
-          amount: t.amount,
-          type: t.type,
-          date: t.date,
-          description: t.description,
-        })),
-      });
+      if (cached && cached.data) {
+        console.log('💳 Using cached transactions:', {
+          count: cached.data.length,
+          age: Math.round(cached.age / 1000), // seconds
+          isStale: cached.isStale,
+        });
 
-      setTransactions(sortedTransactions);
+        const sortedCached = sortTransactionsByDate(cached.data);
+        setTransactions(sortedCached);
+
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          console.log('💳 Cache is fresh, skipping API call');
+          return;
+        }
+
+        console.log('💳 Cache is stale, fetching fresh data in background');
+      }
+
+      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      try {
+        // Load ALL transactions - filtering happens in TransactionList component
+        // This allows calendar navigation to show transactions for any date
+        const response = await TrendAPIService.getTransactions({
+          limit: 1000,
+        });
+        const backendTransactions = response?.transactions || [];
+        const sortedTransactions = sortTransactionsByDate(backendTransactions);
+
+        console.log('💳 Transactions loaded from API:', {
+          platform: Platform.OS,
+          count: sortedTransactions.length,
+          sampleTransactions: sortedTransactions.slice(0, 3).map(t => ({
+            id: t.id,
+            amount: t.amount,
+            type: t.type,
+            date: t.date,
+            description: t.description,
+          })),
+        });
+
+        // Update cache in background (don't block on this)
+        TransactionCache.set(currentUserId, sortedTransactions).catch(err => {
+          console.warn('💳 Failed to update transaction cache:', err);
+        });
+
+        // Update state with fresh data
+        setTransactions(sortedTransactions);
+      } catch (apiError) {
+        console.error('HomeContainer: Error loading transactions from API:', apiError);
+
+        // If API fails but we have cached data, keep using cached data
+        if (!cached && transactions.length === 0) {
+          // Only clear if we have no cache AND no existing UI data
+          Alert.alert(
+            'Connection Issue',
+            'Unable to load transactions. Please check your connection.',
+            [{text: 'OK'}],
+          );
+          setTransactions([]);
+        } else {
+          console.log('💳 Using cached/existing data due to API failure');
+        }
+      }
     } catch (error) {
-      console.error('HomeContainer: Error loading transactions:', error);
+      console.error('HomeContainer: Error in loadTransactions:', error);
       Alert.alert(
         'Connection Issue',
         'Unable to load transactions. Please check your connection.',
         [{text: 'OK'}],
       );
     }
-  }, [userActiveOperations]);
+  }, [userActiveOperations, sortTransactionsByDate]);
+
+  // Pull-to-refresh handler - bypasses cache and forces fresh data
+  const handleRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      console.log('🔄 Pull-to-refresh: Invalidating caches and reloading...');
+
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (currentUserId) {
+        // Invalidate transaction cache to force fresh fetch
+        await TransactionCache.invalidate(currentUserId);
+      }
+
+      // Reload all data in parallel
+      await Promise.all([
+        loadHomeSummary(),
+        (async () => {
+          // Force reload transactions from API (cache was invalidated)
+          if (!AuthService.isAuthenticated()) return;
+          const response = await TrendAPIService.getTransactions({ limit: 1000 });
+          const backendTransactions = response?.transactions || [];
+          const sortedTransactions = sortTransactionsByDate(backendTransactions);
+          setTransactions(sortedTransactions);
+
+          // Update cache with fresh data
+          if (currentUserId) {
+            await TransactionCache.set(currentUserId, sortedTransactions);
+          }
+        })(),
+        loadGoalsRef.current?.(),
+      ]);
+
+      console.log('🔄 Pull-to-refresh: Complete');
+    } catch (error) {
+      console.error('🔄 Pull-to-refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadHomeSummary, sortTransactionsByDate]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -393,7 +604,13 @@ const HomeContainer = ({navigation}) => {
       console.log('📂 loadCategories START - Platform:', Platform.OS);
 
       // 🔄 CACHE-FIRST: Load from cache immediately
-      const cached = await CategoryCache.get();
+      const currentUserId = TrendAPIService.getCurrentUserId();
+      if (!currentUserId) {
+        console.warn('📂 No user ID available for category cache');
+        return;
+      }
+
+      const cached = await CategoryCache.get(currentUserId);
       if (cached && cached.data) {
         console.log('📂 Using cached categories:', {
           count: cached.data.length,
@@ -422,11 +639,51 @@ const HomeContainer = ({navigation}) => {
         if (backendCategories && Array.isArray(backendCategories)) {
           console.log('📂 Setting categories from API and updating cache');
 
+          // Check if "Other" category exists
+          const otherCategory = backendCategories.find(
+            c => c.name?.toLowerCase() === 'other' && !c.parentId
+          );
+
+          if (!otherCategory) {
+            console.log('📂 "Other" category missing, creating it...');
+            try {
+              // Create "Other" main category
+              const createdOther = await TrendAPIService.createCategory({
+                name: 'Other',
+                description: 'Other financial activities',
+                type: 'EXPENSE',
+                icon: 'ellipsis-horizontal-outline',
+                color: '#A8A8A8',
+              });
+              console.log('📂 Created "Other" category:', createdOther);
+
+              // Create "Debt Payment" subcategory
+              const createdDebtPayment = await TrendAPIService.createCategory({
+                name: 'Debt Payment',
+                description: 'Loan payments, credit cards',
+                type: 'EXPENSE',
+                icon: 'card-outline',
+                color: '#A8A8A8',
+                parentId: createdOther.id,
+              });
+              console.log('📂 Created "Debt Payment" subcategory:', createdDebtPayment);
+
+              // Add to backend categories array
+              backendCategories.push(createdOther);
+
+              // Invalidate cache to force refresh on next load
+              await CategoryCache.invalidate(currentUserId);
+            } catch (createError) {
+              console.error('📂 Failed to create "Other" category:', createError);
+            }
+          }
+
           // Update cache in background
-          CategoryCache.set(backendCategories);
+          CategoryCache.set(backendCategories, currentUserId);
 
           // Update state with transformed categories
-          const transformedCategories = transformCategoriesForUI(backendCategories);
+          const transformedCategories =
+            transformCategoriesForUI(backendCategories);
           setCategories(transformedCategories);
         } else {
           console.warn('📂 Invalid categories response:', backendCategories);
@@ -478,7 +735,7 @@ const HomeContainer = ({navigation}) => {
 
       console.log('🎲 loadTournaments START - Platform:', Platform.OS);
 
-      // 🔄 CACHE-FIRST: Load from cache immediately
+      // 🔄 CACHE-FIRST: Load from cache immediately for an instant first paint.
       const cached = await TournamentCache.get();
       if (cached && cached.data) {
         console.log('🎲 Using cached tournaments:', {
@@ -487,14 +744,13 @@ const HomeContainer = ({navigation}) => {
           isStale: cached.isStale,
         });
         setTournaments(cached.data);
-
-        // If cache is fresh, we're done
-        if (!cached.isStale) {
-          return;
-        }
+        // NOTE: do NOT early-return when the cache is fresh. We always
+        // revalidate against the backend below (stale-while-revalidate) so
+        // changes made on another device/platform (e.g. the web app) show up
+        // on the next load instead of being hidden behind the cache TTL.
       }
 
-      // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+      // 🌐 BACKGROUND SYNC: always fetch from API and reconcile.
       try {
         const tournamentsResponse = await TrendAPIService.getTournaments();
         console.log(
@@ -553,6 +809,7 @@ const HomeContainer = ({navigation}) => {
       const isEditing = transaction.id && !transaction.id?.startsWith('temp_');
       let tempId = null;
       let optimisticTransaction = null;
+      const currentUserId = TrendAPIService.getCurrentUserId(); // Declare outside try block for access in catch
 
       try {
         if (!AuthService.isAuthenticated()) {
@@ -562,13 +819,17 @@ const HomeContainer = ({navigation}) => {
         // 🎯 TRACK USER ACTIVITY: Prevent API hydration overwrites
         setUserActiveOperations(prev => prev + 1);
 
-        // 🎯 CACHE-FIRST: Immediate optimistic update
+        // 🎯 CACHE-FIRST: Immediate optimistic update (UI + Cache)
+
         if (isEditing) {
           optimisticTransaction = {
             ...transaction,
             updatedAt: new Date().toISOString(),
             // Pre-resolve category data to prevent flicker
-            categoryData: resolveCategoryForTransaction(transaction, categoryMap),
+            categoryData: resolveCategoryForTransaction(
+              transaction,
+              categoryMap,
+            ),
           };
 
           setTransactions(prev => {
@@ -579,6 +840,11 @@ const HomeContainer = ({navigation}) => {
             );
             return updated;
           });
+
+          // Update cache immediately for optimistic update
+          TransactionCache.upsertTransaction(currentUserId, optimisticTransaction).catch(err => {
+            console.warn('💳 Failed to update transaction in cache:', err);
+          });
         } else {
           tempId = `temp_${Date.now()}_${Math.random()}`;
           optimisticTransaction = {
@@ -587,7 +853,10 @@ const HomeContainer = ({navigation}) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             // Pre-resolve category data to prevent flicker
-            categoryData: resolveCategoryForTransaction(transaction, categoryMap),
+            categoryData: resolveCategoryForTransaction(
+              transaction,
+              categoryMap,
+            ),
           };
 
           setTransactions(prev => {
@@ -597,6 +866,11 @@ const HomeContainer = ({navigation}) => {
             ]);
             return updated;
           });
+
+          // Update cache immediately for optimistic update
+          TransactionCache.upsertTransaction(currentUserId, optimisticTransaction).catch(err => {
+            console.warn('💳 Failed to add transaction to cache:', err);
+          });
         }
 
         setEditingTransaction(null);
@@ -605,10 +879,6 @@ const HomeContainer = ({navigation}) => {
         startTransition(() => {
           (async () => {
             try {
-              console.log(
-                '🔍 TRANSACTION: Updating spending goals with optimistic data',
-              );
-
               if (isEditing) {
                 const originalTransaction = transactions.find(
                   t => t.id === transaction.id,
@@ -621,10 +891,6 @@ const HomeContainer = ({navigation}) => {
                 await updateSpendingGoals(optimisticTransaction, null);
               }
             } catch (goalError) {
-              console.error(
-                '🔍 TRANSACTION: Failed to update spending goals:',
-                goalError,
-              );
               // Don't fail the transaction save if goal update fails
             }
           })();
@@ -637,21 +903,17 @@ const HomeContainer = ({navigation}) => {
           description: transaction.description,
           categoryId: transaction.categoryId || transaction.category,
           subcategoryId: transaction.subcategoryId || transaction.subcategory,
-          date: transaction.date.toISOString(),
+          date: DateService.prepareForBackend(transaction.date),
           recurrence: transaction.recurrence,
-          dueDate: transaction.dueDate
-            ? transaction.dueDate.toISOString()
-            : null,
+          dueDate: DateService.prepareForBackend(transaction.dueDate),
           status: transaction.status,
         };
-
 
         if (isEditing) {
           // 🎯 EDITS: Background sync (cache-first)
           setTimeout(async () => {
             try {
               setBackgroundSyncCount(prev => prev + 1);
-              console.log('🔍 TRANSACTION: Background sync for edit');
               const savedTransaction = await TrendAPIService.updateTransaction(
                 transaction.id,
                 transactionData,
@@ -666,9 +928,6 @@ const HomeContainer = ({navigation}) => {
                   current.description !== savedTransaction.description ||
                   current.categoryId !== savedTransaction.categoryId
                 ) {
-                  console.log(
-                    '🔍 TRANSACTION: Server data differs, updating UI',
-                  );
                   return sortTransactionsByDate(
                     prev.map(t =>
                       t.id === transaction.id ? savedTransaction : t,
@@ -677,11 +936,14 @@ const HomeContainer = ({navigation}) => {
                 }
                 return prev;
               });
+
+              // Update cache with server response (prevent cache staleness)
+              if (currentUserId) {
+                TransactionCache.upsertTransaction(currentUserId, savedTransaction).catch(err => {
+                  console.warn('💳 Failed to update transaction in cache after sync:', err);
+                });
+              }
             } catch (syncError) {
-              console.error(
-                '🔍 TRANSACTION: Background sync failed:',
-                syncError,
-              );
             } finally {
               setBackgroundSyncCount(prev => Math.max(0, prev - 1));
             }
@@ -689,7 +951,6 @@ const HomeContainer = ({navigation}) => {
         } else {
           // 🎯 CREATION: Synchronous (like before - no flicker)
           try {
-            console.log('🔍 TRANSACTION: Synchronous creation');
             const savedTransaction = await TrendAPIService.createTransaction(
               transactionData,
             );
@@ -702,9 +963,13 @@ const HomeContainer = ({navigation}) => {
               return sortTransactionsByDate(updated);
             });
 
+            // Replace temp transaction in cache with real one
+            TransactionCache.replaceTempTransaction(currentUserId, tempId, savedTransaction).catch(err => {
+              console.warn('💳 Failed to replace temp transaction in cache:', err);
+            });
+
             optimisticTransaction = savedTransaction; // Update for return value
           } catch (createError) {
-            console.error('🔍 TRANSACTION: Creation failed:', createError);
             throw createError; // Let the catch block handle rollback
           }
         }
@@ -712,16 +977,15 @@ const HomeContainer = ({navigation}) => {
         // 🎯 BACKGROUND SYNC: Reload categories without blocking transaction UI
         setTimeout(async () => {
           try {
-            console.log('🔍 TRANSACTION: Background category reload');
             await loadCategories();
           } catch (categoryError) {
-            console.error(
-              'Failed to reload categories after transaction save:',
-              categoryError,
-            );
             // Don't fail the transaction save if category reload fails
           }
         }, 100); // Small delay to ensure transaction UI has updated
+
+        // NOTE: Rollover amount should remain constant during the pay period
+        // It represents money carried over from the previous period and shouldn't change
+        // when adding/removing current period transactions
 
         return {
           success: true,
@@ -732,15 +996,52 @@ const HomeContainer = ({navigation}) => {
       } catch (error) {
         console.error('HomeContainer: Transaction save failed:', error);
 
-        // Rollback optimistic changes
+        // Rollback optimistic changes (UI + Cache)
         if (isEditing) {
           setEditingTransaction(transaction);
-          await loadTransactions();
+
+          // Restore original transaction from cache first
+          if (currentUserId) {
+            try {
+              const cached = await TransactionCache.get(currentUserId);
+              if (cached?.data) {
+                // Find the original transaction in cache (before optimistic update)
+                const originalFromCache = cached.data.find(t => t.id === transaction.id);
+                if (originalFromCache) {
+                  // Restore from cache in UI
+                  setTransactions(prev =>
+                    sortTransactionsByDate(
+                      prev.map(t => (t.id === transaction.id ? originalFromCache : t)),
+                    ),
+                  );
+                } else {
+                  // Cache doesn't have it, reload from server
+                  await loadTransactions();
+                }
+              } else {
+                // No cache, reload from server
+                await loadTransactions();
+              }
+            } catch (cacheError) {
+              console.warn('💳 Failed to restore from cache, reloading from server:', cacheError);
+              await loadTransactions();
+            }
+          } else {
+            // No userId, fallback to server reload
+            await loadTransactions();
+          }
         } else {
           setTransactions(prev => {
             const updated = prev.filter(t => t.id !== tempId);
             return updated;
           });
+
+          // Remove temp transaction from cache
+          if (currentUserId) {
+            TransactionCache.removeTransaction(currentUserId, tempId).catch(err => {
+              console.warn('💳 Failed to remove temp transaction from cache:', err);
+            });
+          }
         }
 
         throw error;
@@ -751,22 +1052,33 @@ const HomeContainer = ({navigation}) => {
         }, 1000); // Keep lock for 1 second after transaction completes
       }
     },
-    [transactions, onboarding, loadTransactions],
+    [transactions, onboarding, loadTransactions, rolloverAmount],
   );
 
   const deleteTransaction = useCallback(async transactionId => {
     let deletedTransaction = null;
+    const currentUserId = TrendAPIService.getCurrentUserId();
 
     try {
       if (!AuthService.isAuthenticated()) {
         throw new Error('User not authenticated');
       }
 
-      // Optimistic removal
+      if (!currentUserId) {
+        throw new Error('User ID not available');
+      }
+
+      // Optimistic removal (UI + Cache)
+
       setTransactions(prev => {
         deletedTransaction = prev.find(t => t.id === transactionId);
         const updated = prev.filter(t => t.id !== transactionId);
         return updated;
+      });
+
+      // Remove from cache immediately
+      TransactionCache.removeTransaction(currentUserId, transactionId).catch(err => {
+        console.warn('💳 Failed to remove transaction from cache:', err);
       });
 
       // Delete on server
@@ -797,16 +1109,39 @@ const HomeContainer = ({navigation}) => {
           );
           // Don't fail the entire transaction delete if goal update fails
         }
+
+        // NOTE: Don't clear rollover cache for current period transactions
+        // Rollover amount should remain constant during the pay period
+        // It only gets recalculated during pay period transitions
       }
     } catch (error) {
       console.error('HomeContainer: Transaction delete failed:', error);
 
-      // Rollback
-      if (deletedTransaction) {
+      // Check if it's a 404 error - transaction already deleted, don't rollback
+      const is404 = error?.message?.includes('404') || error?.status === 404;
+
+      if (is404) {
+        // Transaction doesn't exist on backend - remove from UI and cache instead of rollback
+        if (deletedTransaction && currentUserId) {
+          TransactionCache.removeTransaction(currentUserId, deletedTransaction.id).catch(err => {
+            console.warn('💳 Failed to remove transaction from cache:', err);
+          });
+        }
+      } else if (deletedTransaction) {
+        // Rollback (UI + Cache) for other errors
         setTransactions(prev => {
           const updated = sortTransactionsByDate([deletedTransaction, ...prev]);
           return updated;
         });
+
+        // Re-add to cache (currentUserId already fetched at function start)
+        if (currentUserId) {
+          TransactionCache.upsertTransaction(currentUserId, deletedTransaction).catch(err => {
+            console.warn('💳 Failed to rollback transaction in cache:', err);
+          });
+        } else {
+          console.warn('💳 Cannot rollback transaction in cache - no user ID available');
+        }
       }
 
       throw error;
@@ -864,16 +1199,6 @@ const HomeContainer = ({navigation}) => {
   // ==============================================
   const calculateTotalExpenses = useCallback(() => {
     try {
-      // Reduced logging to prevent console spam
-      // console.log('💰 calculateTotalExpenses START - Platform:', Platform.OS);
-      // console.log('💰 Input data check:', {
-      //   platform: Platform.OS,
-      //   transactionsLength: transactions?.length || 0,
-      //   incomeData: incomeData ? 'exists' : 'null',
-      //   nextPayDate: incomeData?.nextPayDate,
-      //   frequency: incomeData?.frequency,
-      // });
-
       if (!transactions?.length) {
         console.log('💰 No transactions, returning 0');
         return 0;
@@ -887,139 +1212,17 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-      // Parse next pay date with error handling
-      let nextPayDate;
-      try {
-        // Handle both date-only format (YYYY-MM-DD) and full ISO string
-        if (incomeData.nextPayDate.includes('T')) {
-          nextPayDate = new Date(incomeData.nextPayDate);
-        } else {
-          // For date-only format, create date in local timezone at noon to avoid timezone issues
-          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-        }
-
-        if (isNaN(nextPayDate.getTime())) {
-          throw new Error('Invalid date after parsing');
-        }
-
-        console.log('💰 Parsed nextPayDate:', nextPayDate.toISOString());
-      } catch (dateError) {
-        console.error('🧮 Error parsing next pay date:', dateError);
-        nextPayDate = new Date();
-      }
-
-      // Calculate period start and end based on frequency
-      let periodStart;
-      let periodEnd;
-
-      try {
-        // Set period end to the next pay date
-        periodEnd = new Date(nextPayDate);
-        periodEnd.setHours(23, 59, 59, 999);
-
-        // Calculate the PREVIOUS pay date - this becomes the start of the current period
-        if (incomeData.frequency === 'weekly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 7);
-        } else if (incomeData.frequency === 'fortnightly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setDate(periodStart.getDate() - 14);
-        } else if (incomeData.frequency === 'monthly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        } else if (incomeData.frequency === 'sixmonths') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 6);
-        } else if (incomeData.frequency === 'yearly') {
-          periodStart = new Date(nextPayDate);
-          periodStart.setFullYear(periodStart.getFullYear() - 1);
-        } else {
-          // Default to monthly if frequency is unknown
-          periodStart = new Date(nextPayDate);
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        }
-
-        // Set period start to beginning of day to include all transactions from that day
-        periodStart.setHours(0, 0, 0, 0);
-
-        // Ensure periodStart is not invalid
-        if (isNaN(periodStart.getTime())) {
-          throw new Error('Invalid period start date');
-        }
-
-        console.log('💰 Period calculated:', {
-          platform: Platform.OS,
-          frequency: incomeData.frequency,
-          nextPayDate: nextPayDate.toISOString(),
-          periodStart: periodStart.toISOString(),
-          periodEnd: periodEnd.toISOString(),
-          today: new Date().toISOString(),
-        });
-      } catch (periodError) {
-        console.error('🧮 Error calculating period:', periodError);
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - 30);
-        periodEnd = new Date(nextPayDate);
-        periodEnd.setHours(23, 59, 59, 999);
-      }
-
-      // Filter transactions for the period - only count EXPENSE transactions
-      const periodTransactions = transactions.filter(transaction => {
-        try {
-          const transactionDate = new Date(transaction.date);
-          if (isNaN(transactionDate.getTime())) {
-            return false;
-          }
-
-          const inPeriod =
-            transactionDate >= periodStart && transactionDate <= periodEnd;
-          const isExpense = transaction.type === 'EXPENSE' || !transaction.type;
-
-          return inPeriod && isExpense;
-        } catch (error) {
-          console.error('🧮 Error checking transaction:', error, transaction);
-          return false;
-        }
-      });
-
-      console.log('💰 Transaction filtering results:', {
-        platform: Platform.OS,
-        totalTransactions: transactions.length,
-        periodTransactions: periodTransactions.length,
-        allTransactionDates: transactions.map(t => ({
-          date: t.date,
-          type: t.type,
-          amount: t.amount,
-          description: t.description,
-          inPeriod:
-            new Date(t.date) >= periodStart && new Date(t.date) <= periodEnd,
-        })),
-        periodTransactionAmounts: periodTransactions.map(t => ({
-          amount: t.amount,
-          date: t.date,
-          type: t.type,
-          description: t.description,
-        })),
-      });
-
-      // Sum up the expenses for the period
-      const total = periodTransactions.reduce((sum, transaction) => {
-        try {
-          const amount = parseFloat(transaction.amount) || 0;
-          return sum + amount;
-        } catch (error) {
-          console.error(
-            '🧮 Error adding transaction amount:',
-            error,
-            transaction,
-          );
-          return sum;
-        }
-      }, 0);
+      // Use PayPeriodService to calculate total expenses
+      const total = PayPeriodService.calculateTotalExpensesForPeriod(
+        transactions,
+        incomeData.nextPayDate,
+        incomeData.frequency,
+      );
 
       console.log('💰 calculateTotalExpenses RESULT:', {
         platform: Platform.OS,
         total: total,
+        totalTransactionCount: transactions.length,
       });
       return total;
     } catch (error) {
@@ -1053,12 +1256,35 @@ const HomeContainer = ({navigation}) => {
     return 0;
   }, [transactionsSignature, incomeSignature, calculateTotalExpenses]);
 
+  // Calculate if we should show "New period started!" message (for UI display)
+  const isNewPayPeriodForUI = useMemo(() => {
+    return PayPeriodService.shouldShowNewPeriodMessage(
+      incomeData?.nextPayDate,
+      incomeData?.frequency,
+    );
+  }, [incomeData?.nextPayDate, incomeData?.frequency]);
+
   // Update state only when memoized value changes (non-blocking)
   useEffect(() => {
     startTransition(() => {
       setTotalExpenses(totalExpensesValue);
     });
   }, [totalExpensesValue]);
+
+  // Refresh home summary when transactions change (debounced)
+  useEffect(() => {
+    // Skip initial render and when no transactions signature yet
+    if (!transactionsSignature || transactionsSignature === '[]') {
+      return;
+    }
+
+    // Debounce to avoid too many API calls during rapid changes
+    const timeoutId = setTimeout(() => {
+      loadHomeSummary();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [transactionsSignature, loadHomeSummary]);
 
   // ==============================================
   // ADDITIONAL INCOME CALCULATION
@@ -1076,90 +1302,12 @@ const HomeContainer = ({navigation}) => {
         return 0;
       }
 
-      // Parse next pay date with error handling
-      let nextPayDate;
-      try {
-        // Handle both date-only format (YYYY-MM-DD) and full ISO string
-        if (incomeData.nextPayDate.includes('T')) {
-          nextPayDate = new Date(incomeData.nextPayDate);
-        } else if (incomeData.nextPayDate.includes('-')) {
-          // YYYY-MM-DD format
-          nextPayDate = new Date(incomeData.nextPayDate + 'T12:00:00');
-        } else {
-          // Legacy DD/MM/YYYY format
-          const [dayStr, monthStr, yearStr] = incomeData.nextPayDate.split('/');
-          nextPayDate = new Date(
-            2000 + parseInt(yearStr, 10),
-            parseInt(monthStr, 10) - 1,
-            parseInt(dayStr, 10),
-            12,
-            0,
-            0,
-            0,
-          );
-        }
-
-        if (isNaN(nextPayDate.getTime())) {
-          throw new Error('Invalid date after parsing');
-        }
-      } catch (dateError) {
-        console.error(
-          '🧮 Date parsing error for additional income:',
-          dateError,
-        );
-        nextPayDate = new Date(); // Fallback to current date
-      }
-
-      // Calculate period boundaries (same logic as calculateTotalExpenses)
-      let periodStart, periodEnd;
-      periodEnd = new Date(nextPayDate);
-      periodEnd.setHours(23, 59, 59, 999);
-
-      if (incomeData.frequency === 'weekly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - 7);
-      } else if (incomeData.frequency === 'fortnightly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setDate(periodStart.getDate() - 14);
-      } else if (incomeData.frequency === 'monthly') {
-        periodStart = new Date(nextPayDate);
-        periodStart.setMonth(periodStart.getMonth() - 1);
-      } else {
-        // Default to monthly if frequency is unknown
-        periodStart = new Date(nextPayDate);
-        periodStart.setMonth(periodStart.getMonth() - 1);
-      }
-
-      periodStart.setHours(0, 0, 0, 0);
-
-      // Filter transactions for the period - only count INCOME transactions
-      const periodIncomeTransactions = transactions.filter(transaction => {
-        try {
-          const transactionDate = new Date(transaction.date);
-          if (isNaN(transactionDate.getTime())) {
-            return false;
-          }
-
-          const inPeriod =
-            transactionDate >= periodStart && transactionDate <= periodEnd;
-          const isIncome = transaction.type === 'INCOME';
-
-          return inPeriod && isIncome;
-        } catch (error) {
-          console.error(
-            '🧮 Error checking income transaction:',
-            error,
-            transaction,
-          );
-          return false;
-        }
-      });
-
-      // Calculate total additional income
-      const total = periodIncomeTransactions.reduce((sum, transaction) => {
-        const amount = parseFloat(transaction.amount) || 0;
-        return sum + amount;
-      }, 0);
+      // Use PayPeriodService to calculate total additional income
+      const total = PayPeriodService.calculateTotalAdditionalIncomeForPeriod(
+        transactions,
+        incomeData.nextPayDate,
+        incomeData.frequency,
+      );
 
       return total;
     } catch (error) {
@@ -1185,6 +1333,78 @@ const HomeContainer = ({navigation}) => {
       setTotalAdditionalIncome(totalAdditionalIncomeValue);
     });
   }, [totalAdditionalIncomeValue]);
+
+  // ==============================================
+  // ROLLOVER CALCULATION AND MANAGEMENT
+  // ==============================================
+
+  // Load current rollover amount from backend using RolloverService
+  const loadRolloverAmount = useCallback(async () => {
+    try {
+      const rolloverData = await RolloverService.loadRolloverAmount();
+      console.log('🔄 HomeContainer: Loaded rollover data:', rolloverData);
+      setRolloverAmount(rolloverData.rolloverAmount);
+    } catch (error) {
+      console.error('🔄 Error loading rollover amount:', error);
+    }
+  }, []);
+
+  // Load rollover data on component mount
+  useEffect(() => {
+    loadRolloverAmount();
+  }, [loadRolloverAmount]);
+
+  // Derive rollover banner from homeSummary (backend is the source of truth)
+  useEffect(() => {
+    if (homeSummary?.rolloverNotification) {
+      setRolloverBanner({
+        amount: homeSummary.rolloverNotification.amount,
+        fromPeriod: homeSummary.rolloverNotification.fromPeriod,
+        date: homeSummary.rolloverNotification.createdAt,
+      });
+    } else {
+      setRolloverBanner(null);
+    }
+  }, [homeSummary?.rolloverNotification]);
+
+  // Listen for navigation events to refresh data when returning from other screens
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Reload home summary (includes rollover notification from backend)
+      loadHomeSummary();
+
+      // Reload rollover amount
+      loadRolloverAmount();
+
+      // Also reload goals to ensure we have the latest goal data (including contributions)
+      if (loadGoalsRef.current) {
+        loadGoalsRef.current();
+      }
+
+      // Reload transactions to pick up any changes made in other screens (like Analytics bill updates)
+      loadTransactions();
+
+      // Reload tournaments so poker changes made elsewhere (e.g. the web app)
+      // show up when returning to this screen.
+      loadTournaments();
+    });
+
+    return unsubscribe;
+  }, [
+    navigation,
+    loadHomeSummary,
+    loadRolloverAmount,
+    loadTransactions,
+    loadTournaments,
+  ]);
+
+  // ==============================================
+  // PAY PERIOD TRANSITION DETECTION
+  // ==============================================
+
+  // Backend handles pay period transitions automatically via getSummary.
+  // We just need to ensure homeSummary is loaded - the backend processes transitions when called.
+  // No client-side transition logic needed anymore.
 
   // ==============================================
   // EVENT HANDLERS
@@ -1483,8 +1703,13 @@ const HomeContainer = ({navigation}) => {
     try {
       console.log('📂 Reloading categories and invalidating cache...');
 
+      // Get current user ID for cache invalidation
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       // Invalidate cache to force fresh data
-      await CategoryCache.invalidate();
+      if (currentUserId) {
+        await CategoryCache.invalidate(currentUserId);
+      }
 
       // Load categories (will fetch from API since cache is now stale)
       await loadCategories();
@@ -1501,14 +1726,52 @@ const HomeContainer = ({navigation}) => {
       window.debugShowAddTransactionSpotlight =
         onboarding.debugShowAddTransactionSpotlight;
       window.debugResetOnboarding = onboarding.debugResetOnboarding;
+      window.debugCategories = async () => {
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          const stats = await CategoryCache.getStats(currentUserId);
+          const cached = await CategoryCache.get(currentUserId);
+          console.log('📂 Category Debug Stats:', stats);
+          console.log('📂 Raw cached data:', cached?.data);
+          console.log('📂 Transformed categories state:', categories);
+          console.log(
+            '📂 Looking for Shopping category and its subcategories...',
+          );
+          const shopping = categories.find(c =>
+            c.name.toLowerCase().includes('shopping'),
+          );
+          if (shopping) {
+            console.log('📂 Shopping category found:', shopping);
+            console.log('📂 Shopping subcategories:', shopping.subcategories);
+            const sporting = shopping.subcategories?.find(s =>
+              s.name.toLowerCase().includes('sporting'),
+            );
+            if (sporting) {
+              console.log(
+                '📂 ✅ Sporting subcategory found in state:',
+                sporting,
+              );
+            } else {
+              console.log(
+                '📂 ❌ Sporting subcategory NOT found in transformed state',
+              );
+            }
+          } else {
+            console.log('📂 ❌ Shopping category not found');
+          }
+          return {stats, cached: cached?.data, transformed: categories};
+        }
+        return null;
+      };
       console.log(
-        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
+        '🎲 Exposed debug functions: window.reloadTournaments(), window.reloadCategories(), window.debugCategories(), window.debugShowAddTransactionSpotlight(), window.debugResetOnboarding()',
       );
     }
     return () => {
       if (typeof window !== 'undefined') {
         delete window.reloadTournaments;
         delete window.reloadCategories;
+        delete window.debugCategories;
         delete window.debugShowAddTransactionSpotlight;
         delete window.debugResetOnboarding;
       }
@@ -1524,22 +1787,25 @@ const HomeContainer = ({navigation}) => {
   // CALCULATED VALUES WITH CATEGORY RESOLUTION (STABLE MEMOIZED TO PREVENT FLICKER)
   // ==============================================
   const transactionsWithCategories = useMemo(() => {
-    // Don't render transactions until categories are loaded to prevent flicker
-    if (loading || categories.length === 0) {
-      return [];
-    }
-
     // If transactions already have categoryData, use them as-is to prevent re-processing
     const hasResolvedCategories = transactions.some(t => t.categoryData);
     if (hasResolvedCategories) {
       return transactions.map(transaction => ({
         ...transaction,
-        categoryData: transaction.categoryData || resolveCategoryForTransaction(transaction, categoryMap),
+        categoryData:
+          transaction.categoryData ||
+          resolveCategoryForTransaction(transaction, categoryMap),
       }));
     }
 
+    // Process transactions with categories (uses fallback if categories not loaded yet)
     return processTransactionsWithCategories(transactions);
-  }, [loading, transactions, categories, processTransactionsWithCategories, categoryMap]);
+  }, [
+    transactions,
+    categories,
+    processTransactionsWithCategories,
+    categoryMap,
+  ]);
 
   // Debug what we're passing to the Balance Card (commented out to reduce noise)
   /*
@@ -1560,36 +1826,32 @@ const HomeContainer = ({navigation}) => {
   // LIFECYCLE
   // ==============================================
 
-  // Initial data loading
+  // Initial data loading - Cache-first approach (no loading block)
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        setLoading(true);
-
         if (!AuthService.isAuthenticated()) {
           navigation.navigate('Auth');
           return;
         }
 
-        // Load categories first to ensure categoryMap is available for transaction processing
-        await loadCategories();
-
-        // Then load everything else in parallel
+        // Load all data in parallel - cache-first pattern ensures instant display
+        // No blocking loading state - show cached data immediately, sync in background
         await Promise.all([
+          loadCategories(),
           loadUserProfile(),
           loadTransactions(),
           loadGoals(),
           loadTournaments(),
           loadCurrencySetting(),
+          loadHomeSummary(), // Backend-calculated balance card data
         ]);
 
+        // Set loading to false after initial data is loaded (for first-time scenarios)
+        setLoading(false);
       } catch (error) {
         console.error('HomeContainer: Error in loadInitialData:', error);
-      } finally {
-        // Delay setting loading to false to ensure smooth transition
-        setTimeout(() => {
-          setLoading(false);
-        }, 100);
+        setLoading(false);
       }
     };
 
@@ -1638,7 +1900,7 @@ const HomeContainer = ({navigation}) => {
     onboarding.loading,
     onboarding.onboardingStatus,
     incomeData,
-    transactions,
+    transactions.length, // Use length instead of full array to prevent unnecessary re-renders
   ]);
 
   // App state monitoring for date changes
@@ -1655,12 +1917,14 @@ const HomeContainer = ({navigation}) => {
             setSelectedDate(new Date());
           }
 
-          // Reload data for new day
+          // Reload data for new day - backend handles pay period transitions via getSummary
           const reloadForNewDay = async () => {
             try {
               setLoading(true);
 
               if (AuthService.isAuthenticated()) {
+                // Load home summary first - backend processes any pay period transitions
+                await loadHomeSummary();
                 await Promise.all([
                   loadUserProfile(), // ✅ Will reload backend profile data
                   loadTransactions(),
@@ -1688,17 +1952,122 @@ const HomeContainer = ({navigation}) => {
   // State for total income payments from backend
   const [totalIncomePayments, setTotalIncomePayments] = useState(0);
 
-  // Load total income payments from backend
+  // Load total income payments from backend for current pay period only
   const loadTotalIncomePayments = useCallback(async () => {
     try {
-      if (!AuthService.isAuthenticated() || goals.length === 0) {
+      if (
+        !AuthService.isAuthenticated() ||
+        goals.length === 0 ||
+        !incomeData?.nextPayDate
+      ) {
         return;
       }
 
-      console.log('🔍 HOME_CONTAINER: Loading income payments from backend');
+      // Calculate current pay period boundaries using PayPeriodService
+      let periodStart, periodEnd;
+      try {
+        const payPeriodBoundaries =
+          PayPeriodService.calculatePayPeriodBoundaries(
+            incomeData.nextPayDate,
+            incomeData.frequency,
+            true, // useCurrentPeriodForNewPeriod = true
+          );
+
+        if (!payPeriodBoundaries) {
+          console.error(
+            '🔍 HOME_CONTAINER: Failed to calculate pay period boundaries for income payments',
+          );
+          return;
+        }
+
+        periodStart = payPeriodBoundaries.start;
+        periodEnd = payPeriodBoundaries.end;
+
+        console.log(
+          '🔍 HOME_CONTAINER: Pay period boundaries for income payment calculation:',
+          {
+            start: periodStart.toLocaleString(),
+            end: periodEnd.toLocaleString(),
+            nextPayDate: incomeData.nextPayDate,
+            frequency: incomeData.frequency,
+          },
+        );
+      } catch (dateError) {
+        console.error(
+          '🔍 HOME_CONTAINER: Error calculating pay period for income payments:',
+          dateError,
+        );
+        return;
+      }
+
       let totalPayments = 0;
 
-      // Get contributions for all goals and sum up income payments
+      // Get rollover entries for current pay period and add to total payments
+      try {
+        const allRolloverEntries = await RolloverService.loadRolloverEntries();
+
+        // Filter entries to current pay period on frontend
+        const rolloverEntries =
+          allRolloverEntries?.filter(entry => {
+            if (!entry.periodStart || !entry.periodEnd) {
+              return false;
+            }
+
+            const entryStart = new Date(entry.periodStart);
+            const entryEnd = new Date(entry.periodEnd);
+
+            // Check if entry period overlaps with current pay period
+            return (
+              (entryStart >= periodStart && entryStart <= periodEnd) ||
+              (entryEnd >= periodStart && entryEnd <= periodEnd) ||
+              (entryStart <= periodStart && entryEnd >= periodEnd)
+            );
+          }) || [];
+
+        if (rolloverEntries && Array.isArray(rolloverEntries)) {
+          console.log(
+            '🔍 HOME_CONTAINER: Rollover entries for current period:',
+            rolloverEntries.map(entry => ({
+              id: entry.id,
+              amount: entry.amount,
+              type: entry.type,
+              date: entry.date,
+              description: entry.description,
+            })),
+          );
+
+          const rolloverTotal = rolloverEntries.reduce((sum, entry) => {
+            if (entry.type === 'ROLLOVER') {
+              // ROLLOVER entries are for analytics only - don't reduce available spending
+              // The rollover amount is already added to income in BalanceCard
+              console.log(
+                '🔍 HOME_CONTAINER: Skipping ROLLOVER entry (analytics only):',
+                {
+                  amount: entry.amount,
+                  type: entry.type,
+                  description: entry.description,
+                },
+              );
+              return sum; // Don't add to totalPayments to avoid double accounting
+            }
+            return sum;
+          }, 0);
+
+          totalPayments += rolloverTotal;
+          console.log(
+            '🔍 HOME_CONTAINER: Total from rollover entries:',
+            rolloverTotal,
+          );
+        }
+      } catch (rolloverError) {
+        console.warn(
+          '🔍 HOME_CONTAINER: Failed to load rollover entries:',
+          rolloverError,
+        );
+        // Don't fail the entire function if rollover entries can't be loaded
+      }
+
+      // Get contributions for all goals and sum up income payments for current period only
       for (const goal of goals) {
         if (!goal.id.startsWith('local_')) {
           // Only fetch for backend goals
@@ -1710,26 +2079,137 @@ const HomeContainer = ({navigation}) => {
             );
 
             if (allContributions && Array.isArray(allContributions)) {
-              const incomeTotal = allContributions.reduce((sum, contrib) => {
-                if (contrib.type === 'MANUAL') {
-                  // MANUAL contributions subtract from income (money going to goals)
-                  return sum + (contrib.amount || 0);
-                } else if (contrib.type === 'WITHDRAWAL') {
-                  // WITHDRAWAL contributions add back to income (money coming back from goals)
-                  return sum - (contrib.amount || 0);
-                } else {
-                  // Other types (AUTOMATIC, TRANSACTION, INTEREST, WINDFALL) don't affect income
-                  return sum;
-                }
-              }, 0);
+              console.log(
+                `🔍 HOME_CONTAINER: All contributions for goal ${goal.id} (${goal.title}):`,
+                allContributions.map(c => ({
+                  id: c.id,
+                  type: c.type,
+                  amount: c.amount,
+                  date: c.date,
+                  created: new Date(c.date).toLocaleString(),
+                })),
+              );
+
+              // Filter contributions to current pay period only
+              const currentPeriodContributions = allContributions.filter(
+                contrib => {
+                  // LESSON LEARNED: Backend returns 'date' field, not 'contributionDate'
+                  if (!contrib.date) {
+                    return false;
+                  }
+
+                  const contribDate = new Date(contrib.date);
+                  const isInPeriod =
+                    contribDate >= periodStart && contribDate <= periodEnd;
+                  console.log(
+                    `🔍 HOME_CONTAINER: Contribution ${contrib.id} date check:`,
+                    {
+                      date: contrib.date,
+                      parsed: contribDate.toLocaleString(),
+                      periodStart: periodStart.toLocaleString(),
+                      periodEnd: periodEnd.toLocaleString(),
+                      isInPeriod,
+                    },
+                  );
+                  return isInPeriod;
+                },
+              );
+
+              console.log(
+                `🔍 HOME_CONTAINER: Current period contributions for goal ${goal.id}:`,
+                currentPeriodContributions.map(c => ({
+                  id: c.id,
+                  type: c.type,
+                  amount: c.amount,
+                  date: c.date,
+                })),
+              );
+
+              const incomeTotal = currentPeriodContributions.reduce(
+                (sum, contrib) => {
+                  let newSum = sum;
+
+                  // Enhanced logging for debugging rollover issue
+                  console.log(
+                    `🔍 HOME_CONTAINER: Processing contribution for goal ${goal.id}:`,
+                    {
+                      contributionId: contrib.id,
+                      type: contrib.type,
+                      amount: contrib.amount,
+                      date: contrib.date,
+                      description: contrib.description,
+                    },
+                  );
+
+                  if (contrib.type === 'MANUAL') {
+                    // MANUAL contributions subtract from income (money going to goals from current income)
+                    newSum = sum + (contrib.amount || 0);
+                    console.log(
+                      `🔍 HOME_CONTAINER: Adding ${contrib.type} contribution:`,
+                      {
+                        amount: contrib.amount,
+                        previousSum: sum,
+                        newSum,
+                      },
+                    );
+                  } else if (contrib.type === 'ROLLOVER') {
+                    // ROLLOVER contributions are already accounted for in rolloverAmount
+                    // Don't add to totalIncomePayments to avoid double-counting
+                    console.log(
+                      '🔍 HOME_CONTAINER: ✓ SKIPPING ROLLOVER contribution (already in rolloverAmount):',
+                      {
+                        amount: contrib.amount,
+                        type: contrib.type,
+                        description: contrib.description,
+                      },
+                    );
+                  } else if (contrib.type === 'WITHDRAWAL') {
+                    // WITHDRAWAL contributions no longer affect income - just reduce goal amount
+                    console.log(
+                      '🔍 HOME_CONTAINER: Ignoring WITHDRAWAL contribution for income calculation:',
+                      {
+                        amount: contrib.amount,
+                        type: contrib.type,
+                      },
+                    );
+                  } else {
+                    // Other types (AUTOMATIC, TRANSACTION, INTEREST, WINDFALL) don't affect income
+                    console.log(
+                      `🔍 HOME_CONTAINER: Ignoring ${contrib.type} contribution:`,
+                      {
+                        amount: contrib.amount,
+                        sum: newSum,
+                      },
+                    );
+                  }
+                  return newSum;
+                },
+                0,
+              );
+
+              console.log(
+                `🔍 HOME_CONTAINER: Goal ${goal.id} (${goal.title}) income total from ${currentPeriodContributions.length} contributions: ${incomeTotal}`,
+              );
+
               totalPayments += incomeTotal;
             }
           } catch (error) {
-            console.warn(
-              '🔍 HOME_CONTAINER: Failed to load contributions for goal',
-              goal.id,
-              error,
-            );
+            // Handle 404 errors more gracefully (goal might not exist anymore)
+            if (
+              error.message?.includes('404') ||
+              error.message?.includes('Goal not found')
+            ) {
+              console.log(
+                '🔍 HOME_CONTAINER: Goal not found when loading contributions (likely deleted):',
+                goal.id,
+              );
+            } else {
+              console.warn(
+                '🔍 HOME_CONTAINER: Failed to load contributions for goal',
+                goal.id,
+                error,
+              );
+            }
           }
         }
       }
@@ -1742,14 +2222,28 @@ const HomeContainer = ({navigation}) => {
     } catch (error) {
       console.error('🔍 HOME_CONTAINER: Error loading income payments:', error);
     }
-  }, [goals]);
+  }, [goals, incomeData?.nextPayDate, incomeData?.frequency]);
 
   // Load income payments when goals change
   useEffect(() => {
+    console.log(
+      '🔍 HOME_CONTAINER: loadTotalIncomePayments useEffect triggered:',
+      {
+        goalsLength: goals.length,
+        hasNextPayDate: !!incomeData?.nextPayDate,
+        nextPayDate: incomeData?.nextPayDate,
+      },
+    );
+
     if (goals.length > 0) {
+      console.log('🔍 HOME_CONTAINER: Calling loadTotalIncomePayments...');
       loadTotalIncomePayments();
+    } else {
+      console.log(
+        '🔍 HOME_CONTAINER: Skipping loadTotalIncomePayments - no goals loaded yet',
+      );
     }
-  }, [goals.length]); // Remove function dependency, use goals.length instead
+  }, [goals.length, incomeData?.nextPayDate, loadTotalIncomePayments]); // Add nextPayDate dependency to recalculate on pay period changes
 
   // Store current loadTotalIncomePayments in a ref for event handlers
   const loadTotalIncomePaymentsRef = useRef(loadTotalIncomePayments);
@@ -1801,6 +2295,77 @@ const HomeContainer = ({navigation}) => {
     };
   }, []); // Now safe to use empty dependency - handler uses ref
 
+  // Ensure "Other" category exists on app load
+  const hasCheckedOtherCategory = useRef(false);
+  useEffect(() => {
+    const ensureOtherCategory = async () => {
+      if (!categories || categories.length === 0) {
+        return; // Wait for categories to load first
+      }
+
+      if (hasCheckedOtherCategory.current) {
+        return; // Already checked, don't loop
+      }
+
+      const otherCategory = categories.find(
+        c => c.name?.toLowerCase() === 'other' && !c.parentId
+      );
+
+      if (!otherCategory) {
+        console.log('📂 HOME_CONTAINER: "Other" category missing, triggering reload to create it');
+        hasCheckedOtherCategory.current = true;
+        await reloadCategories();
+      } else {
+        hasCheckedOtherCategory.current = true;
+      }
+    };
+
+    ensureOtherCategory();
+  }, [categories, reloadCategories]);
+
+  // Listen for transaction changes (e.g., from debt payments) to reload transactions
+  useEffect(() => {
+    const handleTransactionsChanged = () => {
+      console.log(
+        '💳 HOME_CONTAINER: Transactions changed, reloading transactions',
+      );
+      loadTransactions();
+    };
+
+    // Use React Native DeviceEventEmitter for cross-platform compatibility
+    let subscription;
+    try {
+      const {DeviceEventEmitter} = require('react-native');
+      subscription = DeviceEventEmitter.addListener(
+        'transactionsChanged',
+        handleTransactionsChanged,
+      );
+      console.log(
+        '💳 HOME_CONTAINER: Listening for transactionsChanged events',
+      );
+    } catch (e) {
+      console.warn('DeviceEventEmitter not available, trying web events:', e);
+      // Fallback to web browser events if available
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener(
+          'transactionsChanged',
+          handleTransactionsChanged,
+        );
+      }
+    }
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      } else if (typeof window !== 'undefined' && window.removeEventListener) {
+        window.removeEventListener(
+          'transactionsChanged',
+          handleTransactionsChanged,
+        );
+      }
+    };
+  }, [loadTransactions]);
+
   // Debug: Log tournaments state
   useEffect(() => {
     console.log('🎲 HomeContainer: Tournaments state changed:', {
@@ -1834,13 +2399,45 @@ const HomeContainer = ({navigation}) => {
         categories={categories}
         goals={goals}
         editingTransaction={editingTransaction}
-        loading={loading || onboarding.loading}
+        loading={loading}
         selectedDate={selectedDate}
         totalExpenses={totalExpenses}
         totalIncomePayments={totalIncomePayments}
         totalAdditionalIncome={totalAdditionalIncome}
         currency={currency}
         isBackgroundSyncing={backgroundSyncCount > 0}
+        isNewPayPeriodForUI={isNewPayPeriodForUI}
+        // Backend home summary (single source of truth for balance card)
+        homeSummary={homeSummary}
+        onRefreshHomeSummary={loadHomeSummary}
+        // Pull-to-refresh
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        // Rollover props
+        rolloverAmount={rolloverAmount}
+        rolloverBanner={rolloverBanner}
+        onDismissRolloverBanner={async () => {
+          const result = await RolloverService.confirmRolloverBanner();
+          if (result.success) {
+            setRolloverBanner(null);
+            // Reload rollover amount to ensure UI reflects current backend state
+            await loadRolloverAmount();
+            console.log('🔄 HomeContainer: Rollover confirmed by user');
+          } else {
+            console.error(
+              '🔄 HomeContainer: Failed to confirm rollover:',
+              result.error,
+            );
+          }
+        }}
+        onReassignRollover={amount => {
+          console.log(
+            '🔄 HomeContainer: Rollover reassignment requested:',
+            amount,
+          );
+          setRolloverAmountToAllocate(amount);
+          setShowGoalAllocationModal(true);
+        }}
         // Tournament/Poker props
         tournaments={tournaments}
         pokerSectionExpanded={pokerSectionExpanded}
@@ -1872,6 +2469,111 @@ const HomeContainer = ({navigation}) => {
         onClose={handleCloseAddTournament}
         onSave={handleSaveTournament}
         editingTournament={editingTournament}
+      />
+
+      {/* Goal Allocation Modal for Rollover Reassignment */}
+      <GoalAllocationModal
+        key={`goal-allocation-${goals.length}-${showGoalAllocationModal}`}
+        visible={showGoalAllocationModal}
+        onClose={() => setShowGoalAllocationModal(false)}
+        onConfirm={async allocation => {
+          try {
+            console.log(
+              '🔄 HomeContainer: Goal allocation confirmed:',
+              allocation,
+            );
+            // Use RolloverService to process goal allocations with optimistic updates
+            const result = await RolloverService.processGoalAllocations(
+              allocation.goalAllocations,
+              addGoalContribution,
+              rolloverAmount,
+            );
+
+            if (result.success) {
+              console.log(
+                '🎯 HomeContainer: Goal allocations processed successfully',
+              );
+              // Update rollover amount to reflect the reduction
+              setRolloverAmount(result.newRolloverAmount);
+
+              // Update banner to reflect remaining rollover amount
+              if (result.newRolloverAmount > 0) {
+                // Update banner with new amount
+                const updatedBanner = {
+                  ...rolloverBanner,
+                  amount: result.newRolloverAmount,
+                };
+                setRolloverBanner(updatedBanner);
+                await RolloverService.setRolloverBanner(updatedBanner);
+              } else {
+                // Clear banner if no rollover remaining
+                setRolloverBanner(null);
+                await RolloverService.confirmRolloverBanner();
+              }
+
+              setShowGoalAllocationModal(false);
+            } else {
+              console.error(
+                '🔄 HomeContainer: Goal allocation failed:',
+                result.error,
+              );
+              Alert.alert(
+                'Error',
+                result.error || 'Failed to allocate funds to goals',
+              );
+            }
+          } catch (error) {
+            console.error(
+              '🔄 HomeContainer: Error processing goal allocations:',
+              error,
+            );
+            Alert.alert(
+              'Error',
+              'An unexpected error occurred while allocating funds',
+            );
+          }
+        }}
+        onCreateGoal={() => {
+          // Open AddGoalModal directly
+          setShowAddGoalModal(true);
+        }}
+        availableAmount={rolloverAmountToAllocate}
+        goals={goals}
+        frequency={incomeData?.frequency || 'fortnightly'}
+      />
+
+      {/* Add Goal Modal */}
+      <AddGoalModal
+        visible={showAddGoalModal}
+        onClose={() => setShowAddGoalModal(false)}
+        onSave={async goalData => {
+          try {
+            // Actually save the goal using the useGoals hook
+            const result = await saveGoal(goalData);
+            if (result && result.success) {
+              console.log('🎯 Goal saved successfully, refreshing goals list');
+              setShowAddGoalModal(false);
+              // Force refresh goals to ensure GoalAllocationModal sees the new goal
+              await loadGoals();
+              return {success: true};
+            } else {
+              return {
+                success: false,
+                error: result?.error || 'Failed to save goal',
+              };
+            }
+          } catch (error) {
+            console.error(
+              'HomeContainer: Error saving goal from overlay:',
+              error,
+            );
+            return {
+              success: false,
+              error: error.message || 'Failed to save goal',
+            };
+          }
+        }}
+        navigation={navigation}
       />
     </>
   );

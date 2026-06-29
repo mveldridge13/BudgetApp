@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles/colors';
+import DateService from '../services/DateService';
 
 // eslint-disable-next-line no-unused-vars
 const {width, height} = Dimensions.get('window');
@@ -20,6 +21,16 @@ const WelcomeFlow = ({onComplete}) => {
   const [currentStep, setCurrentStep] = useState(0);
   const scrollViewRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+
+  // Timezone detection state
+  const [detectedTimezone, setDetectedTimezone] = useState(null);
+
+  // Detect timezone on component mount
+  useEffect(() => {
+    const timezone = DateService.detectUserTimezone();
+    setDetectedTimezone(timezone);
+    console.log('🌍 WelcomeFlow: Detected timezone:', timezone);
+  }, []);
 
   const steps = [
     {
@@ -74,7 +85,10 @@ const WelcomeFlow = ({onComplete}) => {
   };
 
   const handleGetStarted = () => {
-    onComplete();
+    // Pass detected timezone silently to parent component
+    onComplete({
+      detectedTimezone,
+    });
   };
 
   const isLastStep = currentStep === steps.length - 1;
@@ -116,6 +130,7 @@ const WelcomeFlow = ({onComplete}) => {
               <Text style={styles.title}>{step.title}</Text>
               <Text style={styles.subtitle}>{step.subtitle}</Text>
               <Text style={styles.description}>{step.description}</Text>
+
             </View>
           </View>
         ))}
@@ -268,6 +283,42 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  // Timezone step styles
+  timezoneButtonsContainer: {
+    marginTop: 32,
+    width: '100%',
+    alignItems: 'center',
+  },
+  timezoneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginVertical: 6,
+    minWidth: 200,
+  },
+  confirmButton: {
+    backgroundColor: colors.primary,
+  },
+  changeButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  changeButtonText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 

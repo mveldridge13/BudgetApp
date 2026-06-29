@@ -1,18 +1,25 @@
 // components/GoalCard.js
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Alert,
-  Switch,
   TextInput,
   ActionSheetIOS,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
+import PaymentHistoryOverlay from './PaymentHistoryOverlay';
+import TrendAPIService from '../services/TrendAPIService';
+import ContributionCache from '../services/ContributionCache';
+
+const SWIPE_THRESHOLD = 120;
+const ACTIVATION_THRESHOLD = 15;
 
 const GoalCard = ({
   goal,
@@ -25,12 +32,24 @@ const GoalCard = ({
   getGoalProgress,
   isOverdue = false,
   formatCurrency,
+  onExpand, // Callback when card expands for input
 }) => {
   const [showProgressUpdate, setShowProgressUpdate] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [paymentSource, setPaymentSource] = useState('income');
-  const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(() => goal?.showOnBalanceCard ?? false);
+  const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(
+    () => goal?.showOnBalanceCard ?? false,
+  );
   const [transactionType, setTransactionType] = useState('add'); // 'add' or 'withdraw'
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [contributions, setContributions] = useState([]);
+  const [loadingContributions, setLoadingContributions] = useState(false);
+
+  // Swipe gesture animation values (only for debt goals)
+  const translateX = useRef(new Animated.Value(0)).current;
+  const makePaymentOpacity = useRef(new Animated.Value(0)).current;
+  const paymentHistoryOpacity = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
 
   // FIXED: Add safe formatCurrency function
   const safeCurrency = amount => {
@@ -45,7 +64,6 @@ const GoalCard = ({
       return `$${(amount || 0).toFixed(2)}`;
     }
   };
-
 
   // Debug logging to track prop changes - TEMPORARILY DISABLED
   // React.useEffect(() => {
@@ -138,18 +156,9 @@ const GoalCard = ({
   };
 
   const handleDeletePress = () => {
-    Alert.alert(
-      'Delete Goal',
-      `Are you sure you want to delete "${safeGoal.title}"? This action cannot be undone.`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => onDelete && onDelete(safeGoal.id),
-        },
-      ],
-    );
+    // Pass the full goal to parent for confirmation handling
+    // Parent will check for linked transactions and show appropriate warning
+    onDelete && onDelete(safeGoal);
   };
 
   const handleCompletePress = () => {
@@ -162,10 +171,14 @@ const GoalCard = ({
     ]);
   };
 
-
   // NEW: Handle custom amount submission
   const handleCustomAmountSubmit = () => {
-    console.log('🔍 BUTTON PRESSED: Custom amount submit');
+    console.log('🔍 GOAL_CARD: ===== Custom amount submit PRESSED =====');
+    console.log('🔍 GOAL_CARD: customAmount:', customAmount);
+    console.log('🔍 GOAL_CARD: paymentSource:', paymentSource);
+    console.log('🔍 GOAL_CARD: transactionType:', transactionType);
+    console.log('🔍 GOAL_CARD: goalId:', safeGoal.id);
+
     const amount = parseFloat(customAmount);
 
     if (isNaN(amount) || amount <= 0) {
@@ -180,27 +193,61 @@ const GoalCard = ({
     if (transactionType === 'withdraw' && amount > safeGoal.current) {
       Alert.alert(
         'Invalid Amount',
-        `You can only withdraw up to ${safeCurrency(safeGoal.current)} from this goal.`,
+        `You can only withdraw up to ${safeCurrency(
+          safeGoal.current,
+        )} from this goal.`,
       );
       return;
     }
 
     const isWithdrawal = transactionType === 'withdraw';
-    const actionText = isDebtGoal ? 'Pay' : (isWithdrawal ? 'Withdraw' : 'Add');
-    const prepositionText = isDebtGoal ? 'toward' : (isWithdrawal ? 'from' : 'to');
-    const sourceText = isWithdrawal ? 'back to Income' : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
+    const actionText = isDebtGoal ? 'Pay' : isWithdrawal ? 'Withdraw' : 'Add';
+    const prepositionText = isDebtGoal
+      ? 'toward'
+      : isWithdrawal
+      ? 'from'
+      : 'to';
+    const sourceText = isWithdrawal
+      ? ''
+      : `from ${paymentSource === 'income' ? 'Income' : paymentSource}`;
 
     Alert.alert(
-      isDebtGoal ? 'Make Payment' : (isWithdrawal ? 'Withdraw Money' : 'Add Contribution'),
-      `${actionText} ${safeCurrency(amount)} ${prepositionText} ${safeGoal.title} ${sourceText}?`,
+      isDebtGoal
+        ? 'Make Payment'
+        : isWithdrawal
+        ? 'Withdraw Money'
+        : 'Add Contribution',
+      `${actionText} ${safeCurrency(amount)} ${prepositionText} ${
+        safeGoal.title
+      } ${sourceText}?`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
           text: actionText,
           onPress: () => {
+            console.log('🔍 GOAL_CARD: ===== Alert confirmed, executing payment =====');
+            console.log('🔍 GOAL_CARD: goalId:', safeGoal.id);
+            console.log('🔍 GOAL_CARD: amount:', amount);
+            console.log('🔍 GOAL_CARD: isWithdrawal:', isWithdrawal);
+            console.log('🔍 GOAL_CARD: paymentSource:', paymentSource);
+            console.log('🔍 GOAL_CARD: onUpdateProgress exists?', !!onUpdateProgress);
+
             // For withdrawals, pass negative amount
             const finalAmount = isWithdrawal ? -amount : amount;
-            onUpdateProgress && onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
+
+            console.log('🔍 GOAL_CARD: Calling onUpdateProgress with finalAmount:', finalAmount);
+
+            if (onUpdateProgress) {
+              onUpdateProgress(safeGoal.id, finalAmount, paymentSource);
+            } else {
+              console.error('🔍 GOAL_CARD: ERROR - onUpdateProgress is not defined!');
+            }
+
+            // Invalidate contribution cache since we added a new contribution
+            ContributionCache.invalidate(safeGoal.id).catch(err => {
+              console.warn('📊 GOAL_CARD: Failed to invalidate contribution cache:', err);
+            });
+
             setCustomAmount('');
             setPaymentSource('income');
             setTransactionType('add');
@@ -217,6 +264,7 @@ const GoalCard = ({
     setPaymentSource('income');
     setTransactionType('add');
     setShowProgressUpdate(false);
+    // Keyboard will dismiss naturally when input loses focus
   };
 
   const getProgressColor = () => {
@@ -238,368 +286,530 @@ const GoalCard = ({
     return goalColor;
   };
 
+  // Swipe gesture functions (only for debt goals)
+  const resetPosition = () => {
+    Animated.parallel([
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 120,
+        friction: 8,
+      }),
+      Animated.timing(makePaymentOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(paymentHistoryOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const performMakePayment = () => {
+    // Reset position first with smooth animation
+    resetPosition();
+
+    // Then trigger the make payment action after animation completes
+    setTimeout(() => {
+      setShowProgressUpdate(true);
+      onExpand && onExpand();
+    }, 200); // Delay to let the reset animation finish smoothly
+  };
+
+  const performPaymentHistory = async () => {
+    resetPosition();
+
+    // Open the payment history overlay
+    setShowPaymentHistory(true);
+
+    // 🔄 CACHE-FIRST: Load from cache immediately
+    try {
+      const cached = await ContributionCache.get(safeGoal.id);
+      if (cached && cached.data) {
+        console.log(
+          '📊 GOAL_CARD: Using cached contributions for goal',
+          safeGoal.id,
+        );
+        setContributions(cached.data);
+        setLoadingContributions(false);
+
+        // If cache is fresh, we're done
+        if (!cached.isStale) {
+          console.log('📊 GOAL_CARD: Cache is fresh, skipping API call');
+          return;
+        }
+
+        console.log(
+          '📊 GOAL_CARD: Cache is stale, fetching fresh data in background',
+        );
+      }
+    } catch (cacheError) {
+      console.warn('📊 GOAL_CARD: Cache read failed:', cacheError);
+    }
+
+    // 🌐 BACKGROUND SYNC: Fetch from API (always for fresh data, or if no cache)
+    setLoadingContributions(true);
+    try {
+      // Only fetch for backend goals (not local goals)
+      if (!safeGoal.id.startsWith('local_')) {
+        console.log(
+          '📊 GOAL_CARD: Fetching contributions from API for goal',
+          safeGoal.id,
+        );
+
+        const response = await TrendAPIService.getGoalContributions(
+          safeGoal.id,
+        );
+        console.log('📊 GOAL_CARD: Received contributions from API:', response);
+
+        // Handle both array response and object with contributions property
+        const contributionsData = Array.isArray(response)
+          ? response
+          : response?.contributions || [];
+
+        // Update cache in background (don't block on this)
+        ContributionCache.set(safeGoal.id, contributionsData).catch(err => {
+          console.warn('📊 GOAL_CARD: Failed to update contributions cache:', err);
+        });
+
+        // Update state with fresh data
+        setContributions(contributionsData);
+        console.log(
+          '📊 GOAL_CARD: Updated contributions state with',
+          contributionsData.length,
+          'items',
+        );
+      } else {
+        // Local goals don't have backend contributions yet
+        console.log('📊 GOAL_CARD: Local goal, no contributions available');
+        setContributions([]);
+      }
+    } catch (error) {
+      console.error('📊 GOAL_CARD: Failed to load payment history from API:', error);
+      // Keep cached data if available (already set above), otherwise empty array
+      if (!contributions || contributions.length === 0) {
+        setContributions([]);
+      }
+    } finally {
+      setLoadingContributions(false);
+    }
+  };
+
+  // Pan responder for swipe gestures (for debt and savings goals)
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Enable swipes for debt and savings goals
+        if (!isDebtGoal && safeGoal.type !== 'savings') {
+          return false;
+        }
+
+        const isHorizontal =
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const hasMinMovement = Math.abs(gestureState.dx) > ACTIVATION_THRESHOLD;
+
+        return isHorizontal && hasMinMovement;
+      },
+      onPanResponderGrant: (evt, gestureState) => {
+        Animated.spring(cardScale, {
+          toValue: 0.98,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 7,
+        }).start();
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const newTranslateX = gestureState.dx;
+        translateX.setValue(newTranslateX);
+
+        if (newTranslateX > 0) {
+          // Right swipe - Make Payment/Add Money (green) - for both debt and savings goals
+          const swipeProgress = Math.min(1, newTranslateX / SWIPE_THRESHOLD);
+          makePaymentOpacity.setValue(swipeProgress);
+          paymentHistoryOpacity.setValue(0);
+        } else if (newTranslateX < 0) {
+          // Left swipe - Payment History (blue)
+          const swipeProgress = Math.min(
+            1,
+            Math.abs(newTranslateX) / SWIPE_THRESHOLD,
+          );
+          paymentHistoryOpacity.setValue(swipeProgress);
+          makePaymentOpacity.setValue(0);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const swipeDistance = gestureState.dx;
+        const swipeVelocity = gestureState.vx;
+
+        Animated.spring(cardScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 150,
+          friction: 7,
+        }).start();
+
+        if (swipeDistance > SWIPE_THRESHOLD || swipeVelocity > 0.5) {
+          // Right swipe - Make Payment/Add Money (for both debt and savings goals)
+          performMakePayment();
+        } else if (swipeDistance < -SWIPE_THRESHOLD || swipeVelocity < -0.5) {
+          // Left swipe - Payment History (for both debt and savings goals)
+          performPaymentHistory();
+        } else {
+          resetPosition();
+        }
+      },
+      onPanResponderTerminate: () => {
+        resetPosition();
+      },
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+    }),
+  ).current;
+
   return (
-    <View style={[styles.container, isCompleted && styles.completedContainer]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.goalInfo}>
-          <View style={styles.titleRow}>
-            <Text style={styles.goalTitle}>{safeGoal.title}</Text>
-            {safeGoal.priority === 'high' && !isCompleted && (
-              <View
-                style={[
-                  styles.priorityBadge,
-                  {backgroundColor: getPriorityColor()},
-                ]}>
-                <Text style={styles.priorityText}>High Priority</Text>
+    <View style={styles.outerContainer}>
+      {/* Make Payment/Add Money Background (Right Swipe - Green) - For both debt and savings goals */}
+      {(isDebtGoal || safeGoal.type === 'savings') && (
+        <Animated.View
+          style={[
+            styles.makePaymentBackground,
+            {
+              opacity: makePaymentOpacity,
+            },
+          ]}>
+          <View style={styles.makePaymentContent}>
+            <Icon name="dollar-sign" size={24} color="#FFFFFF" />
+            <Text style={styles.swipeActionText}>
+              {isDebtGoal ? 'Make Payment' : 'Add/Withdraw'}
+            </Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Payment History Background (Left Swipe - Blue) - For both debt and savings goals */}
+      {(isDebtGoal || safeGoal.type === 'savings') && (
+        <Animated.View
+          style={[
+            styles.paymentHistoryBackground,
+            {
+              opacity: paymentHistoryOpacity,
+            },
+          ]}>
+          <View style={styles.paymentHistoryContent}>
+            <Icon name="list" size={24} color="#FFFFFF" />
+            <Text style={styles.swipeActionText}>Payment History</Text>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Main Card */}
+      <Animated.View
+        style={[
+          {
+            transform:
+              isDebtGoal || safeGoal.type === 'savings'
+                ? [{translateX: translateX}, {scale: cardScale}]
+                : [],
+          },
+        ]}>
+        <View
+          style={[styles.container, isCompleted && styles.completedContainer]}
+          {...(isDebtGoal || safeGoal.type === 'savings'
+            ? panResponder.panHandlers
+            : {})}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.goalInfo}>
+              <View style={styles.titleRow}>
+                <Text style={styles.goalTitle}>{safeGoal.title}</Text>
+                {safeGoal.priority === 'high' && !isCompleted && (
+                  <View
+                    style={[
+                      styles.priorityBadge,
+                      {backgroundColor: getPriorityColor()},
+                    ]}>
+                    <Text style={styles.priorityText}>High Priority</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.goalCategory}>{safeGoal.category}</Text>
+            </View>
+
+            {!isCompleted && (
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => {
+                    setLocalShowOnBalanceCard(!localShowOnBalanceCard);
+                    if (onToggleBalanceDisplay) {
+                      onToggleBalanceDisplay(safeGoal.id);
+                    }
+                  }}
+                  activeOpacity={0.7}>
+                  <Icon
+                    name={localShowOnBalanceCard ? 'eye' : 'eye-off'}
+                    size={16}
+                    color={
+                      localShowOnBalanceCard
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => onEdit && onEdit(goal)}
+                  activeOpacity={0.7}>
+                  <Icon name="edit-3" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={handleDeletePress}
+                  activeOpacity={0.7}>
+                  <Icon name="trash-2" size={16} color={colors.textSecondary} />
+                </TouchableOpacity>
               </View>
             )}
           </View>
-          <Text style={styles.goalCategory}>{safeGoal.category}</Text>
-          {isOverdue && !isCompleted && (
-            <Text style={styles.overdueText}>⚠️ Overdue</Text>
-          )}
-        </View>
 
-        {!isCompleted && (
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => onEdit && onEdit(goal)}
-              activeOpacity={0.7}>
-              <Icon name="edit-3" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleDeletePress}
-              activeOpacity={0.7}>
-              <Icon name="trash-2" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Progress Section */}
-      <View style={styles.progressSection}>
-        <View style={styles.amountRow}>
-          <Text style={styles.currentAmount}>
-            {safeCurrency(safeGoal.current)}
-          </Text>
-          <Text style={styles.targetAmount}>
-            {isDebtGoal
-              ? `of ${safeCurrency(safeGoal.originalAmount)} debt`
-              : `of ${safeCurrency(safeGoal.target)}`}
-          </Text>
-        </View>
-
-        {/* Progress Bar */}
-        <View style={styles.progressContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              {
-                width: `${Math.min(Math.max(progress || 0, 0), 100)}%`,
-                backgroundColor: getProgressColor(),
-              },
-            ]}
-          />
-        </View>
-
-        <View style={styles.progressDetails}>
-          <Text style={styles.progressText}>
-            {(progress || 0).toFixed(0)}% {isDebtGoal ? 'paid off' : 'complete'}
-          </Text>
-          {!isCompleted && daysLeft !== null && (
-            <Text
-              style={[
-                styles.daysLeftText,
-                daysLeft < 30 && {color: colors.danger},
-              ]}>
-              {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
-            </Text>
-          )}
-          {isCompleted && safeGoal.completedDate && (
-            <Text style={styles.completedDate}>
-              Completed {new Date(safeGoal.completedDate).toLocaleDateString()}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {/* Progress Insights - UPDATED: Hidden for spending goals */}
-      {!isCompleted && !isSpendingGoal && (
-        <View style={styles.insightsContainer}>
-          <View style={styles.insightRow}>
-            <Text style={styles.insightLabel}>Monthly needed:</Text>
-            <Text style={styles.insightValue}>
-              {safeCurrency(monthlyNeeded)}
-            </Text>
-          </View>
-          {safeGoal.autoContribute > 0 && (
-            <View style={styles.insightRow}>
-              <Text style={styles.insightLabel}>Auto-contributing:</Text>
-              <Text style={[styles.insightValue, {color: colors.success}]}>
-                {safeCurrency(safeGoal.autoContribute)}
+          {/* Progress Section */}
+          <View style={styles.progressSection}>
+            <View style={styles.amountRow}>
+              <Text style={styles.currentAmount}>
+                {safeCurrency(safeGoal.current)}
+              </Text>
+              <Text style={styles.targetAmount}>
+                {isDebtGoal
+                  ? `of ${safeCurrency(safeGoal.originalAmount)} debt`
+                  : `of ${safeCurrency(safeGoal.target)}`}
               </Text>
             </View>
-          )}
-        </View>
-      )}
 
-      {/* Balance Card Toggle */}
-      {!isCompleted && (
-        <View style={styles.balanceCardToggle}>
-          <View style={styles.toggleInfo}>
-            <Icon name="eye" size={16} color={colors.primary} />
-            <Text style={styles.toggleLabel}>Show on Balance Card</Text>
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
+              <View
+                style={[
+                  styles.progressBar,
+                  {
+                    width: `${Math.min(Math.max(progress || 0, 0), 100)}%`,
+                    backgroundColor: getProgressColor(),
+                  },
+                ]}
+              />
+            </View>
+
+            <View style={styles.progressDetails}>
+              <View style={styles.progressLeftInfo}>
+                <Text style={styles.progressText}>
+                  {(progress || 0).toFixed(0)}%{' '}
+                  {isDebtGoal ? 'paid off' : 'complete'}
+                </Text>
+                {!isCompleted && !isSpendingGoal && monthlyNeeded > 0 && (
+                  <Text style={styles.monthlyNeededText}>
+                    • {safeCurrency(monthlyNeeded)}/mo
+                  </Text>
+                )}
+              </View>
+              {!isCompleted && daysLeft !== null && (
+                <Text
+                  style={[
+                    styles.daysLeftText,
+                    daysLeft < 30 && {color: colors.danger},
+                  ]}>
+                  {daysLeft > 0 ? `${daysLeft} days left` : 'Overdue'}
+                </Text>
+              )}
+              {isCompleted && safeGoal.completedDate && (
+                <Text style={styles.completedDate}>
+                  Completed{' '}
+                  {new Date(safeGoal.completedDate).toLocaleDateString()}
+                </Text>
+              )}
+            </View>
           </View>
-          <Switch
-            value={localShowOnBalanceCard}
-            onValueChange={(newValue) => {
-              setLocalShowOnBalanceCard(newValue);
 
-              // Call parent handler to persist the change
-              if (onToggleBalanceDisplay) {
-                onToggleBalanceDisplay(safeGoal.id);
-              }
-            }}
-            trackColor={{
-              false: colors.border,
-              true: colors.primary,
-            }}
-            thumbColor={
-              localShowOnBalanceCard
-                ? colors.textWhite
-                : colors.textSecondary
-            }
-            ios_backgroundColor={colors.border}
-          />
-        </View>
-      )}
+          {/* Custom Amount Input Section */}
+          {showProgressUpdate && !isCompleted && (
+            <View style={styles.customAmountContainer}>
+              <Text style={styles.customAmountTitle}>
+                {isDebtGoal
+                  ? 'Enter Payment Amount'
+                  : transactionType === 'withdraw'
+                  ? 'Enter Withdrawal Amount'
+                  : 'Enter Contribution Amount'}
+              </Text>
 
-      {localShowOnBalanceCard && !isCompleted && (
-        <Text style={styles.toggleFeedback}>
-          ✓ This goal will appear on your main balance card
-        </Text>
-      )}
-
-      {!localShowOnBalanceCard && !isCompleted && (
-        <Text style={styles.toggleHelp}>
-          Toggle on to track this goal on your main balance card
-        </Text>
-      )}
-
-      {/* NEW: Custom Amount Input Section */}
-      {showProgressUpdate && !isCompleted && (
-        <View style={styles.customAmountContainer}>
-          <Text style={styles.customAmountTitle}>
-            {isDebtGoal ? 'Enter Payment Amount' :
-             (transactionType === 'withdraw' ? 'Enter Withdrawal Amount' : 'Enter Contribution Amount')}
-          </Text>
-
-          {/* Transaction Type Selection for Savings Goals */}
-          {!isDebtGoal && (
-            <View style={styles.transactionTypeContainer}>
-              <Text style={styles.sourceSelectionLabel}>Transaction Type</Text>
-              <View style={styles.transactionTypeButtons}>
-                <TouchableOpacity
-                  style={[
-                    styles.transactionTypeButton,
-                    transactionType === 'add' && styles.transactionTypeButtonActive,
-                  ]}
-                  onPress={() => setTransactionType('add')}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="plus"
-                    size={16}
-                    color={transactionType === 'add' ? colors.textWhite : colors.primary}
-                  />
-                  <Text style={[
-                    styles.transactionTypeButtonText,
-                    transactionType === 'add' && styles.transactionTypeButtonTextActive,
-                  ]}>
-                    Add Money
+              {/* Transaction Type Selection for Savings Goals */}
+              {!isDebtGoal && (
+                <View style={styles.transactionTypeContainer}>
+                  <Text style={styles.sourceSelectionLabel}>
+                    Transaction Type
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.transactionTypeButton,
-                    transactionType === 'withdraw' && styles.transactionTypeButtonActive,
-                  ]}
-                  onPress={() => setTransactionType('withdraw')}
-                  activeOpacity={0.7}>
-                  <Icon
-                    name="minus"
-                    size={16}
-                    color={transactionType === 'withdraw' ? colors.textWhite : colors.danger}
-                  />
-                  <Text style={[
-                    styles.transactionTypeButtonText,
-                    transactionType === 'withdraw' && styles.transactionTypeButtonTextActive,
-                  ]}>
-                    Withdraw
+                  <View style={styles.transactionTypeButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.transactionTypeButton,
+                        transactionType === 'add' &&
+                          styles.transactionTypeButtonActive,
+                      ]}
+                      onPress={() => setTransactionType('add')}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="plus"
+                        size={16}
+                        color={
+                          transactionType === 'add'
+                            ? colors.textWhite
+                            : colors.primary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.transactionTypeButtonText,
+                          transactionType === 'add' &&
+                            styles.transactionTypeButtonTextActive,
+                        ]}>
+                        Add Money
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.transactionTypeButton,
+                        transactionType === 'withdraw' &&
+                          styles.transactionTypeButtonActive,
+                      ]}
+                      onPress={() => setTransactionType('withdraw')}
+                      activeOpacity={0.7}>
+                      <Icon
+                        name="minus"
+                        size={16}
+                        color={
+                          transactionType === 'withdraw'
+                            ? colors.textWhite
+                            : colors.danger
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.transactionTypeButtonText,
+                          transactionType === 'withdraw' &&
+                            styles.transactionTypeButtonTextActive,
+                        ]}>
+                        Withdraw
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Payment Source Selection - only show for additions or debt payments */}
+              {(transactionType === 'add' || isDebtGoal) && (
+                <View style={styles.sourceSelectionContainer}>
+                  <Text style={styles.sourceSelectionLabel}>
+                    Payment Source
                   </Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.sourceSelectionButton}
+                    onPress={() => {
+                      if (Platform.OS === 'ios') {
+                        ActionSheetIOS.showActionSheetWithOptions(
+                          {
+                            options: ['Cancel', 'Income'],
+                            cancelButtonIndex: 0,
+                          },
+                          buttonIndex => {
+                            if (buttonIndex === 1) {
+                              setPaymentSource('income');
+                            }
+                          },
+                        );
+                      } else {
+                        Alert.alert('Select Payment Source', '', [
+                          {text: 'Cancel', style: 'cancel'},
+                          {
+                            text: 'Income',
+                            onPress: () => setPaymentSource('income'),
+                          },
+                        ]);
+                      }
+                    }}
+                    activeOpacity={0.7}>
+                    <Text style={styles.sourceSelectionText}>
+                      {paymentSource === 'income' ? 'Income' : 'Select Source'}
+                    </Text>
+                    <Icon
+                      name="chevron-down"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.customAmountInputRow}>
+                <TextInput
+                  style={styles.customAmountInput}
+                  value={customAmount}
+                  onChangeText={setCustomAmount}
+                  placeholder="0.00"
+                  keyboardType="numeric"
+                  autoFocus={true}
+                  returnKeyType="done"
+                  onSubmitEditing={handleCustomAmountSubmit}
+                  selectTextOnFocus={true}
+                  enablesReturnKeyAutomatically={true}
+                />
+                <View style={styles.customAmountButtons}>
+                  <TouchableOpacity
+                    style={styles.customAmountCancelButton}
+                    onPress={handleCancelCustomAmount}
+                    activeOpacity={0.8}>
+                    <Icon name="x" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.customAmountSubmitButton,
+                      {backgroundColor: goalColor},
+                    ]}
+                    onPress={handleCustomAmountSubmit}
+                    activeOpacity={0.8}>
+                    <Icon name="check" size={16} color={colors.textWhite} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
 
-          {/* Payment Source Selection - only show for additions or debt payments */}
-          {(transactionType === 'add' || isDebtGoal) && (
-            <View style={styles.sourceSelectionContainer}>
-              <Text style={styles.sourceSelectionLabel}>
-                {transactionType === 'withdraw' ? 'Withdraw To' : 'Payment Source'}
-              </Text>
+
+          {/* Complete Goal Button */}
+          {!isCompleted && progress >= 100 && (
             <TouchableOpacity
-              style={styles.sourceSelectionButton}
-              onPress={() => {
-                if (Platform.OS === 'ios') {
-                  ActionSheetIOS.showActionSheetWithOptions(
-                    {
-                      options: ['Cancel', 'Income'],
-                      cancelButtonIndex: 0,
-                    },
-                    (buttonIndex) => {
-                      if (buttonIndex === 1) {
-                        setPaymentSource('income');
-                      }
-                    }
-                  );
-                } else {
-                  Alert.alert(
-                    'Select Payment Source',
-                    '',
-                    [
-                      {text: 'Cancel', style: 'cancel'},
-                      {text: 'Income', onPress: () => setPaymentSource('income')},
-                    ]
-                  );
-                }
-              }}
-              activeOpacity={0.7}>
-              <Text style={styles.sourceSelectionText}>
-                {paymentSource === 'income' ? 'Income' : 'Select Source'}
-              </Text>
-              <Icon name="chevron-down" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.customAmountInputRow}>
-            <TextInput
-              style={styles.customAmountInput}
-              value={customAmount}
-              onChangeText={setCustomAmount}
-              placeholder="0.00"
-              keyboardType="numeric"
-              autoFocus={true}
-            />
-            <View style={styles.customAmountButtons}>
-              <TouchableOpacity
-                style={styles.customAmountCancelButton}
-                onPress={handleCancelCustomAmount}
-                activeOpacity={0.8}>
-                <Icon name="x" size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.customAmountSubmitButton,
-                  {backgroundColor: goalColor},
-                ]}
-                onPress={handleCustomAmountSubmit}
-                activeOpacity={0.8}>
-                <Icon name="check" size={16} color={colors.textWhite} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Action Buttons */}
-      {!isCompleted && !showProgressUpdate && (
-        <View style={styles.actionButtonsContainer}>
-          {safeGoal.type === 'savings' && (
-            <>
-              <TouchableOpacity
-                style={[styles.primaryButton, {backgroundColor: goalColor}]}
-                onPress={() => {
-                  setTransactionType('add');
-                  setShowProgressUpdate(true);
-                }}
-                activeOpacity={0.8}>
-                <Icon name="plus" size={16} color={colors.textWhite} />
-                <Text style={styles.primaryButtonText}>Add Money</Text>
-              </TouchableOpacity>
-
-              {/* Only show withdraw if there's money in the goal */}
-              {safeGoal.current > 0 && (
-                <TouchableOpacity
-                  style={[styles.secondaryButton, {borderColor: colors.danger}]}
-                  onPress={() => {
-                    setTransactionType('withdraw');
-                    setShowProgressUpdate(true);
-                  }}
-                  activeOpacity={0.8}>
-                  <Icon name="minus" size={16} color={colors.danger} />
-                  <Text style={[styles.secondaryButtonText, {color: colors.danger}]}>Withdraw</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-
-          {safeGoal.type === 'debt' && (
-            <TouchableOpacity
-              style={[styles.primaryButton, {backgroundColor: goalColor}]}
-              onPress={() => setShowProgressUpdate(true)}
+              style={[styles.completeButton, {backgroundColor: colors.success}]}
+              onPress={handleCompletePress}
               activeOpacity={0.8}>
-              <Text style={styles.primaryButtonText}>Make Payment</Text>
+              <Icon name="check-circle" size={16} color={colors.textWhite} />
+              <Text style={styles.completeButtonText}>Mark as Complete</Text>
             </TouchableOpacity>
           )}
-
-          {/* UPDATED: Improved spending budget alert */}
-          {safeGoal.type === 'spending' &&
-            (() => {
-              const remaining = safeGoal.target - safeGoal.current;
-              const isOverBudget = remaining < 0;
-              const overBudgetAmount = Math.abs(remaining);
-
-              return (
-                <View
-                  style={[
-                    styles.spendingAlert,
-                    isOverBudget && styles.spendingAlertOverBudget,
-                  ]}>
-                  <Icon
-                    name={isOverBudget ? 'alert-triangle' : 'alert-circle'}
-                    size={16}
-                    color={isOverBudget ? colors.danger : colors.warning}
-                  />
-                  <Text
-                    style={[
-                      styles.spendingAlertText,
-                      isOverBudget && styles.spendingAlertTextOverBudget,
-                    ]}>
-                    {isOverBudget
-                      ? `${safeCurrency(
-                          overBudgetAmount,
-                        )} over budget this month`
-                      : `${safeCurrency(remaining)} remaining this month`}
-                  </Text>
-                </View>
-              );
-            })()}
         </View>
-      )}
+      </Animated.View>
 
-      {/* Complete Goal Button */}
-      {!isCompleted && progress >= 100 && (
-        <TouchableOpacity
-          style={[styles.completeButton, {backgroundColor: colors.success}]}
-          onPress={handleCompletePress}
-          activeOpacity={0.8}>
-          <Icon name="check-circle" size={16} color={colors.textWhite} />
-          <Text style={styles.completeButtonText}>Mark as Complete</Text>
-        </TouchableOpacity>
+      {/* Payment History Overlay */}
+      {(isDebtGoal || safeGoal.type === 'savings') && (
+        <PaymentHistoryOverlay
+          visible={showPaymentHistory}
+          onClose={() => setShowPaymentHistory(false)}
+          goal={safeGoal}
+          contributions={contributions}
+          loading={loadingContributions}
+          onLoadMore={() => {
+            // TODO: Implement pagination
+          }}
+        />
       )}
     </View>
   );
@@ -610,7 +820,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 20,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
@@ -717,9 +926,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  progressLeftInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   progressText: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary,
+  },
+  monthlyNeededText: {
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: 'System',
     color: colors.textSecondary,
   },
@@ -735,67 +955,7 @@ const styles = StyleSheet.create({
     fontFamily: 'System',
     color: colors.success,
   },
-  insightsContainer: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  insightRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  insightLabel: {
-    fontSize: 12,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-  },
-  insightValue: {
-    fontSize: 12,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.text,
-  },
-  balanceCardToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  toggleInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '400',
-    fontFamily: 'System',
-    color: colors.primary,
-  },
-  toggleFeedback: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.primary,
-    marginBottom: 16,
-  },
-  toggleHelp: {
-    fontSize: 11,
-    fontWeight: '300',
-    fontFamily: 'System',
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  // NEW: Custom Amount Input Styles
+  // Custom Amount Input Styles
   customAmountContainer: {
     backgroundColor: colors.background,
     borderRadius: 8,
@@ -989,6 +1149,51 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'System',
     color: colors.textWhite,
+  },
+  // Swipe gesture styles
+  outerContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  makePaymentBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#52C788',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 30,
+  },
+  makePaymentContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  paymentHistoryBackground: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#64B5F6',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 30,
+  },
+  paymentHistoryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  swipeActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: '#FFFFFF',
   },
 });
 

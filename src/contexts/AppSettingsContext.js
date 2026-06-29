@@ -9,6 +9,8 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UserProfileCache from '../services/UserProfileCache';
 import TrendAPIService from '../services/TrendAPIService';
+import DateService from '../services/DateService';
+import CurrencyService from '../services/CurrencyService';
 
 const AppSettingsContext = createContext();
 
@@ -25,12 +27,24 @@ const defaultModuleSettings = {
   pokerTracker: false,
 };
 
+// Default Pro features (all disabled)
+const defaultProFeatures = {
+  spendingVelocityDetails: false,
+  advancedAnalytics: false,
+  exportData: false,
+  aiAssistant: false,
+};
+
 export const AppSettingsProvider = ({children}) => {
   // Settings state
   const [appSettings, setAppSettings] = useState(null);
   const [moduleSettings, setModuleSettings] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [isPro, setIsPro] = useState(null);
+
+  // Pro/Subscription state (synced from backend via home summary)
+  const [isPro, setIsPro] = useState(false);
+  const [proExpiresAt, setProExpiresAt] = useState(null);
+  const [proFeatures, setProFeatures] = useState(defaultProFeatures);
 
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -45,17 +59,18 @@ export const AppSettingsProvider = ({children}) => {
 
   const loadCachedData = useCallback(async () => {
     try {
+      // Get current user ID first - cache is user-specific
+      const currentUserId = TrendAPIService.getCurrentUserId();
+
       // Batch all AsyncStorage operations to prevent conflicts
       const [
         cachedProfile,
         storedAppSettings,
         storedModuleSettings,
-        proStatus,
       ] = await Promise.all([
-        UserProfileCache.get(),
+        currentUserId ? UserProfileCache.get(currentUserId) : Promise.resolve(null),
         AsyncStorage.getItem('appSettings'),
         AsyncStorage.getItem('moduleSettings'),
-        AsyncStorage.getItem('isPro'),
       ]);
 
       if (!isMountedRef.current) {
@@ -65,6 +80,10 @@ export const AppSettingsProvider = ({children}) => {
       // Process user profile
       if (cachedProfile && cachedProfile.profile) {
         setUserProfile(cachedProfile.profile);
+        // Initialize DateService with user's timezone
+        DateService.initializeFromProfile(cachedProfile.profile);
+        // Initialize CurrencyService with user's currency
+        CurrencyService.initializeFromProfile(cachedProfile.profile);
       }
 
       // Process app settings
@@ -77,25 +96,27 @@ export const AppSettingsProvider = ({children}) => {
         setAppSettings(defaultAppSettings);
       }
 
-      // Process module settings
-      if (storedModuleSettings) {
-        setModuleSettings({
-          ...defaultModuleSettings,
-          ...JSON.parse(storedModuleSettings),
-        });
-      } else {
-        setModuleSettings(defaultModuleSettings);
-      }
+      // Process module settings. Precedence: backend profile (source of truth,
+      // so toggles sync across devices/platforms) > local cache > defaults.
+      const cachedModules = storedModuleSettings
+        ? JSON.parse(storedModuleSettings)
+        : {};
+      const profileModules =
+        (cachedProfile && cachedProfile.profile && cachedProfile.profile.moduleSettings) || {};
+      setModuleSettings({
+        ...defaultModuleSettings,
+        ...cachedModules,
+        ...profileModules,
+      });
 
-      // Process pro status
-      setIsPro(proStatus === 'true');
+      // Note: isPro and proFeatures are synced from backend via updateSubscriptionStatus
+      // They will be updated when HomeContainer loads the home summary
     } catch (error) {
       console.error('Error loading cached app settings:', error);
       // Set defaults on error
       if (isMountedRef.current) {
         setAppSettings(defaultAppSettings);
         setModuleSettings(defaultModuleSettings);
-        setIsPro(false);
       }
     } finally {
       if (isMountedRef.current) {
@@ -115,7 +136,27 @@ export const AppSettingsProvider = ({children}) => {
 
       if (freshProfile && isMountedRef.current) {
         setUserProfile(freshProfile);
-        await UserProfileCache.set(freshProfile);
+        const currentUserId = TrendAPIService.getCurrentUserId();
+        if (currentUserId) {
+          await UserProfileCache.set(freshProfile, currentUserId);
+        }
+        // Update DateService with fresh timezone
+        DateService.initializeFromProfile(freshProfile);
+        // Update CurrencyService with fresh currency
+        CurrencyService.initializeFromProfile(freshProfile);
+        // Hydrate module toggles from the backend (source of truth) so changes
+        // made on another device/platform are reflected here.
+        if (freshProfile.moduleSettings) {
+          const mergedModules = {
+            ...defaultModuleSettings,
+            ...freshProfile.moduleSettings,
+          };
+          setModuleSettings(mergedModules);
+          await AsyncStorage.setItem(
+            'moduleSettings',
+            JSON.stringify(mergedModules),
+          );
+        }
       }
     } catch (error) {
       console.error('Error refreshing user profile:', error);
@@ -151,11 +192,28 @@ export const AppSettingsProvider = ({children}) => {
     async newModuleSettings => {
       try {
         const updatedSettings = {...moduleSettings, ...newModuleSettings};
+        // Optimistically persist locally (works offline and is instant).
         await AsyncStorage.setItem(
           'moduleSettings',
           JSON.stringify(updatedSettings),
         );
         setModuleSettings(updatedSettings);
+
+        // Sync to the backend so module toggles carry across devices and
+        // platforms. Send only the changed keys; the backend merges
+        // last-write-wins so other modules are never clobbered.
+        if (TrendAPIService.isAuthenticated()) {
+          try {
+            await TrendAPIService.updateUserProfile({
+              moduleSettings: newModuleSettings,
+            });
+          } catch (syncError) {
+            console.error(
+              'Error syncing module settings to backend:',
+              syncError,
+            );
+          }
+        }
       } catch (error) {
         console.error('Error updating module settings:', error);
         throw error;
@@ -164,14 +222,35 @@ export const AppSettingsProvider = ({children}) => {
     [moduleSettings],
   );
 
-  const updateProStatus = useCallback(async newProStatus => {
-    try {
-      await AsyncStorage.setItem('isPro', newProStatus.toString());
-      setIsPro(newProStatus);
-    } catch (error) {
-      console.error('Error updating pro status:', error);
-      throw error;
+  /**
+   * Update subscription status from backend home summary
+   * Called by HomeContainer when it loads the home summary
+   *
+   * @param {Object} userData - user object from home summary { isPro, proExpiresAt }
+   * @param {Object} features - features object from home summary
+   */
+  const updateSubscriptionStatus = useCallback((userData, features) => {
+    if (!isMountedRef.current) return;
+
+    // Update Pro status
+    setIsPro(userData?.isPro ?? false);
+    setProExpiresAt(userData?.proExpiresAt ?? null);
+
+    // Update feature flags
+    if (features) {
+      setProFeatures({
+        ...defaultProFeatures,
+        ...features,
+      });
+    } else {
+      setProFeatures(defaultProFeatures);
     }
+
+    console.log('🔐 AppSettings: Subscription status updated', {
+      isPro: userData?.isPro,
+      proExpiresAt: userData?.proExpiresAt,
+      features,
+    });
   }, []);
 
   // ==============================================
@@ -219,12 +298,29 @@ export const AppSettingsProvider = ({children}) => {
   // CONTEXT VALUE
   // ==============================================
 
+  // ⚠️ TEMP (testing): force Pro on so all gated features are accessible.
+  // Remove this override to restore the real backend-driven subscription state.
+  const PRO_OVERRIDE = true;
+  const effectiveIsPro = PRO_OVERRIDE ? true : isPro;
+  const effectiveProFeatures = PRO_OVERRIDE
+    ? {
+        spendingVelocityDetails: true,
+        advancedAnalytics: true,
+        exportData: true,
+        aiAssistant: true,
+      }
+    : proFeatures;
+
   const contextValue = {
     // State
     appSettings,
     moduleSettings,
     userProfile,
-    isPro,
+
+    // Subscription state (synced from backend)
+    isPro: effectiveIsPro,
+    proExpiresAt,
+    proFeatures: effectiveProFeatures,
 
     // Loading states
     isLoading,
@@ -233,7 +329,7 @@ export const AppSettingsProvider = ({children}) => {
     // Update functions
     updateAppSettings,
     updateModuleSettings,
-    updateProStatus,
+    updateSubscriptionStatus,
     refreshUserProfile,
 
     // Helper functions
