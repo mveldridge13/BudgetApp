@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Header, Sidebar, MobileNav } from '@/components/layout';
+import WhatsNewAutoPopup from '@/components/whats-new/WhatsNewAutoPopup';
 
 export default function DashboardLayout({
   children,
@@ -30,6 +31,9 @@ export default function DashboardLayout({
 
         {/* Mobile Navigation */}
         <MobileNav />
+
+        {/* What's New popup — shows once per release */}
+        <WhatsNewAutoPopup />
       </div>
     </ProtectedRoute>
   );
