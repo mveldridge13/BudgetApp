@@ -17,7 +17,16 @@ export default function RecentTransactions({ currency = 'AUD', limit = 5 }: Rece
   const recent = useMemo(
     () =>
       [...transactions]
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .sort((a, b) => {
+          const dateDiff =
+            new Date(b.date).getTime() - new Date(a.date).getTime();
+          if (dateDiff !== 0) return dateDiff;
+          // Same-day transactions tie on date (day-granular); break the tie by
+          // createdAt so the most recently added shows first.
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bCreated - aCreated;
+        })
         .slice(0, limit),
     [transactions, limit],
   );
