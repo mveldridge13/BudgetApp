@@ -1,12 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIncomeSetup } from '@/hooks/useIncomeSetup';
 import IncomeSetupForm from '@/components/income/IncomeSetupForm';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
-export default function IncomeSetupPage() {
+function IncomeSetupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditMode = searchParams.get('edit') === 'true';
@@ -68,5 +69,13 @@ export default function IncomeSetupPage() {
         clearError={clearError}
       />
     </ProtectedRoute>
+  );
+}
+
+export default function IncomeSetupPage() {
+  return (
+    <Suspense fallback={null}>
+      <IncomeSetupContent />
+    </Suspense>
   );
 }
