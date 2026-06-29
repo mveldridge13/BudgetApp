@@ -24,9 +24,8 @@ export const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
     date: '29 June 2026',
     title: 'Welcome to the Trend web app beta',
     items: [
-      'Send Feedback: report bugs or ideas any time from Help → Feedback in the sidebar.',
-      'Signing up now takes you straight to your dashboard once your income is set.',
-      'New accounts no longer see a rollover preview in their first pay period.',
+      'Send Feedback: report bugs or ideas any time using the Feedback option in the sidebar.',
+      'Additional Modules: Optional trackers that extend Trend with specialised features. Enable them anytime from Settings.',
     ],
   },
 ];
