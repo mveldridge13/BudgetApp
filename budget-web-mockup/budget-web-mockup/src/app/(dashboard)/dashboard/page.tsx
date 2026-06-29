@@ -76,6 +76,7 @@ export default function DashboardPage() {
           rolloverAvailable={rolloverAmount}
           baseIncome={baseIncome}
           daysRemaining={daysRemaining}
+          isNewUser={!user?.lastRolloverDate}
           rolloverBanner={rolloverNotification}
           onAllocateRollover={() => setShowAllocationModal(true)}
           onDismissRollover={handleDismissRollover}

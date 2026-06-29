@@ -30,6 +30,10 @@ interface BalanceCardProps {
   baseIncome?: number;
   // Days left in the current pay period; used to show the roll-to-next preview.
   daysRemaining?: number;
+  // True while the user is still in their first pay period (backend
+  // `!lastRolloverDate`). New users don't roll over their first-period surplus,
+  // so the roll-to-next preview must be suppressed for them.
+  isNewUser?: boolean;
 }
 
 export default function BalanceCard({
@@ -48,6 +52,7 @@ export default function BalanceCard({
   rolloverAvailable = 0,
   baseIncome = 0,
   daysRemaining = 0,
+  isNewUser = false,
 }: BalanceCardProps) {
   const [showCommittedModal, setShowCommittedModal] = useState(false);
 
@@ -101,7 +106,10 @@ export default function BalanceCard({
   // Mirror mobile: surface the spendable rollover folded into this period's
   // balance, and preview the surplus that will roll on the last day of the period.
   const hasRollover = rolloverAvailable > 0;
-  const shouldShowRolloverPreview = daysRemaining === 1 && leftToSpend > 0;
+  // Mirror the backend: a new user (no lastRolloverDate) does not roll over
+  // their first-period surplus, so don't preview a rollover that won't happen.
+  const shouldShowRolloverPreview =
+    daysRemaining === 1 && leftToSpend > 0 && !isNewUser;
 
   // Determine progress bar color (aligned with mobile app BalanceCard.js)
   const getProgressBarColor = () => {
