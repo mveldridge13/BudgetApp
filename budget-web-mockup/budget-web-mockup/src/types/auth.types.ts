@@ -34,6 +34,11 @@ export interface User {
   income?: number;
   incomeFrequency?: 'WEEKLY' | 'FORTNIGHTLY' | 'MONTHLY';
   nextPayDate?: string;
+  // Set by the backend on the first pay-period transition. Null/absent means
+  // the user is still in their first period, so no rollover has occurred yet
+  // (backend treats `!lastRolloverDate` as a new user and skips rollover).
+  lastRolloverDate?: string | null;
+  rolloverAmount?: number;
   createdAt?: string;
   updatedAt?: string;
   // Per-user feature module toggles (backend `moduleSettings` JSON column).
