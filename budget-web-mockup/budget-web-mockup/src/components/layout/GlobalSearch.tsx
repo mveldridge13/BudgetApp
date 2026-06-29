@@ -202,7 +202,7 @@ export default function GlobalSearch() {
                   {results.transactions.map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => go(`/transactions?q=${q}`)}
+                      onClick={() => go(`/transactions?txn=${t.id}`)}
                       className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-gray-50 transition-colors"
                     >
                       <ArrowLeftRight className="w-4 h-4 text-gray-400 shrink-0" />

@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useMemo, useEffect} from 'react';
+import {useState, useMemo, useEffect, useRef} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useTransactions} from '@/hooks/useTransactions';
@@ -11,11 +11,13 @@ import {exportTransactionsToCsv} from '@/lib/exportTransactions';
 import {Transaction, UpdateTransactionData} from '@/types';
 
 export default function TransactionsPage() {
-  // Global search query (?q=...). When searching, treat the list as a
-  // historical record: drop the pay-period restriction so transactions from
-  // any period (e.g. an income from a past month) can be found.
+  // Global search query (?q=...) and single-transaction deep link (?txn=<id>).
+  // When either is present, treat the list as a historical record: drop the
+  // pay-period restriction so transactions from any period (e.g. an income from
+  // a past month) can be found.
   const searchParams = useSearchParams();
   const query = (searchParams.get('q') || '').trim();
+  const txnId = (searchParams.get('txn') || '').trim();
 
   const {
     transactions,
@@ -27,7 +29,7 @@ export default function TransactionsPage() {
     updateTransaction,
     deleteTransaction,
     refresh,
-  } = useTransactions({ usePayPeriod: !query });
+  } = useTransactions({ usePayPeriod: !query && !txnId });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
@@ -49,8 +51,10 @@ export default function TransactionsPage() {
     };
   }, [refresh]);
 
-  // Filter the loaded transactions by the global search query (?q=...).
+  // Filter the loaded transactions. A ?txn=<id> deep link narrows to just that
+  // one transaction; otherwise the ?q= search query filters by text.
   const filteredTransactions = useMemo(() => {
+    if (txnId) return transactions.filter((t) => t.id === txnId);
     if (!query) return transactions;
     const q = query.toLowerCase();
     return transactions.filter(
@@ -59,7 +63,25 @@ export default function TransactionsPage() {
         (t.categoryName || '').toLowerCase().includes(q) ||
         (t.subcategoryName || '').toLowerCase().includes(q),
     );
-  }, [transactions, query]);
+  }, [transactions, query, txnId]);
+
+  // When arriving via a search result deep link (?txn=<id>), open that
+  // transaction's card directly once it has loaded. The ref ensures we only
+  // auto-open once per id, so closing the card doesn't immediately reopen it.
+  const autoOpenedTxnRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!txnId) {
+      autoOpenedTxnRef.current = null;
+      return;
+    }
+    if (autoOpenedTxnRef.current === txnId) return;
+    const target = transactions.find((t) => t.id === txnId);
+    if (target) {
+      setEditingTransaction(target);
+      setIsModalOpen(true);
+      autoOpenedTxnRef.current = txnId;
+    }
+  }, [txnId, transactions]);
 
   const handleSaveTransaction = async (data: unknown) => {
     try {
@@ -193,7 +215,14 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {query && (
+      {txnId ? (
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span>Showing a single transaction from search</span>
+          <Link href="/transactions" className="font-medium text-indigo-600 hover:text-indigo-700">
+            View all
+          </Link>
+        </div>
+      ) : query && (
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>
             Showing results for{' '}
