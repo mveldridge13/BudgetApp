@@ -39,7 +39,7 @@ function IncomeSetupContent() {
         router.back();
       } else {
         // After first-time setup, navigate to dashboard
-        router.replace('/');
+        router.replace('/dashboard');
       }
     }
   };
