@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquare, CheckCircle2 } from 'lucide-react';
+import { MessageSquare, CheckCircle2, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import WhatsNewModal from '@/components/whats-new/WhatsNewModal';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -25,6 +26,7 @@ export default function FeedbackPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,6 +207,20 @@ export default function FeedbackPage() {
           </button>
         </div>
       </form>
+
+      {/* Re-open the latest release notes any time */}
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={() => setWhatsNewOpen(true)}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <Sparkles className="w-4 h-4" style={{ color: '#6366f1' }} />
+          What&apos;s New
+        </button>
+      </div>
+
+      <WhatsNewModal isOpen={whatsNewOpen} onClose={() => setWhatsNewOpen(false)} />
     </div>
   );
 }
