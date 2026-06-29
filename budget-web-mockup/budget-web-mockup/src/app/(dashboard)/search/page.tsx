@@ -165,7 +165,7 @@ export default function SearchPage() {
                 {results.transactions.map((t) => (
                   <li key={t.id}>
                     <Link
-                      href={`/transactions?q=${q}`}
+                      href={`/transactions?txn=${t.id}`}
                       className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
                       <ArrowLeftRight className="w-4 h-4 text-gray-400 shrink-0" />
                       <span className="flex-1 min-w-0">
