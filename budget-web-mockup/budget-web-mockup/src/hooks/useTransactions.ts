@@ -1,6 +1,7 @@
 'use client';
 
-import {useState, useCallback, useEffect} from 'react';
+import {useCallback, useMemo} from 'react';
+import useSWR from 'swr';
 import {transactionService} from '@/services/transaction.service';
 import {categoryService} from '@/services/category.service';
 import {userService} from '@/services/user.service';
@@ -35,298 +36,171 @@ interface UseTransactionsReturn {
   refresh: () => Promise<void>;
 }
 
+interface TransactionsPayload {
+  transactions: Transaction[];
+  summary: TransactionSummary | null;
+}
+
+// Attach resolved category name/color/icon to each transaction. Derived at
+// render time so the list re-enriches automatically when categories load.
+function enrich(txns: Transaction[], categories: Category[]): Transaction[] {
+  if (categories.length === 0) return txns;
+  return txns.map((txn) => {
+    const txnAny = txn as unknown as Record<string, unknown>;
+    const categoryId = (txnAny.categoryId || txn.category) as string;
+    const subcategoryId = (txnAny.subcategoryId || txn.subcategory) as
+      | string
+      | undefined;
+    const category = categories.find((c) => c.id === categoryId);
+    const subcategory = categories.find((c) => c.id === subcategoryId);
+    return {
+      ...txn,
+      category: categoryId,
+      subcategory: subcategoryId,
+      categoryName: category?.name || 'Uncategorized',
+      categoryColor: category?.color || '#6B7280',
+      categoryIcon: category?.icon || 'help-circle-outline',
+      subcategoryName: subcategory?.name,
+    };
+  });
+}
+
 export function useTransactions(
   options?: UseTransactionsOptions | TransactionFilters,
 ): UseTransactionsReturn {
   // Support both old signature (filters) and new signature (options)
-  const isOptionsObject = options && ('usePayPeriod' in options || 'initialFilters' in options);
-  const initialFilters = isOptionsObject ? (options as UseTransactionsOptions).initialFilters : options as TransactionFilters | undefined;
-  const usePayPeriod = isOptionsObject ? (options as UseTransactionsOptions).usePayPeriod : false;
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<TransactionSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentFilters, setCurrentFilters] = useState<
-    TransactionFilters | undefined
-  >(initialFilters);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
-  const [payPeriod, setPayPeriod] = useState<{ start: string; end: string } | null>(null);
-  const [payPeriodLoaded, setPayPeriodLoaded] = useState(!usePayPeriod); // Skip if not using pay period
+  const isOptionsObject =
+    options && ('usePayPeriod' in options || 'initialFilters' in options);
+  const initialFilters = isOptionsObject
+    ? (options as UseTransactionsOptions).initialFilters
+    : (options as TransactionFilters | undefined);
+  const usePayPeriod = isOptionsObject
+    ? (options as UseTransactionsOptions).usePayPeriod
+    : false;
 
-  // Fetch categories for enrichment
-  useEffect(() => {
-    const loadCategories = async () => {
-      try {
-        const cats = await categoryService.getCategories();
-        setCategories(cats);
-        setCategoriesLoaded(true);
-      } catch (err) {
-        console.error('Failed to load categories:', err);
-        setCategoriesLoaded(true); // Still mark as loaded even on error
-      }
-    };
-    loadCategories();
-  }, []);
-
-  // Fetch pay period dates if usePayPeriod is enabled
-  useEffect(() => {
-    if (!usePayPeriod) {
-      setPayPeriodLoaded(true);
-      return;
-    }
-
-    const loadPayPeriod = async () => {
-      try {
-        const homeSummary = await userService.getHomeSummary();
-        setPayPeriod({
-          start: homeSummary.period.start,
-          end: homeSummary.period.end,
-        });
-        setPayPeriodLoaded(true);
-      } catch (err) {
-        console.error('Failed to load pay period:', err);
-        setPayPeriodLoaded(true); // Still mark as loaded even on error
-      }
-    };
-    loadPayPeriod();
-  }, [usePayPeriod]);
-
-  // Enrich transactions with category data
-  const enrichTransactions = useCallback(
-    (txns: Transaction[]): Transaction[] => {
-      if (!categoriesLoaded || categories.length === 0) {
-        // Return transactions as-is if categories aren't loaded yet
-        return txns;
-      }
-
-      return txns.map(txn => {
-        // Backend uses categoryId and subcategoryId, but also check category/subcategory for compatibility
-        const txnAny = txn as unknown as Record<string, unknown>;
-        const categoryId = (txnAny.categoryId || txn.category) as string;
-        const subcategoryId = (txnAny.subcategoryId || txn.subcategory) as
-          | string
-          | undefined;
-
-        const category = categories.find(c => c.id === categoryId);
-        const subcategory = categories.find(c => c.id === subcategoryId);
-
-        return {
-          ...txn,
-          category: categoryId,
-          subcategory: subcategoryId,
-          categoryName: category?.name || 'Uncategorized',
-          categoryColor: category?.color || '#6B7280',
-          categoryIcon: category?.icon || 'help-circle-outline',
-          subcategoryName: subcategory?.name,
-        };
-      });
-    },
-    [categories, categoriesLoaded],
+  // Categories (for enrichment) — shared, cached key so other views reuse it.
+  const {data: categories = []} = useSWR<Category[]>(
+    'categories',
+    () => categoryService.getCategories(),
+    {revalidateOnFocus: false},
   );
 
-  const fetchTransactions = useCallback(
-    async (filters?: TransactionFilters) => {
-      setIsLoading(true);
-      setError(null);
-      setCurrentFilters(filters);
-
-      try {
-        // Merge pay period dates into filters if usePayPeriod is enabled
-        let effectiveFilters = filters;
-        if (usePayPeriod && payPeriod) {
-          effectiveFilters = {
-            ...filters,
-            startDate: payPeriod.start,
-            endDate: payPeriod.end,
-          };
-        }
-
-        const [transactionsData, summaryData] = await Promise.all([
-          transactionService.getTransactions(effectiveFilters),
-          transactionService.getSummary(effectiveFilters),
-        ]);
-
-        const enrichedTransactions = enrichTransactions(transactionsData);
-        setTransactions(enrichedTransactions);
-        setSummary(summaryData);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to fetch transactions';
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [enrichTransactions, usePayPeriod, payPeriod],
+  // Pay period dates come from the home summary; only needed when scoping to it.
+  const {data: homeSummary} = useSWR(
+    usePayPeriod ? 'home-summary' : null,
+    () => userService.getHomeSummary(),
   );
+  const payPeriod =
+    usePayPeriod && homeSummary
+      ? {start: homeSummary.period.start, end: homeSummary.period.end}
+      : null;
+
+  // SWR caches per scope, so revisiting a scope (or clearing a search back to
+  // the pay-period view) renders instantly from cache instead of refetching.
+  const filtersKey = initialFilters ? JSON.stringify(initialFilters) : '';
+  const scopeKey = usePayPeriod
+    ? payPeriod
+      ? `pp:${payPeriod.start}:${payPeriod.end}`
+      : null // wait for the pay period before fetching
+    : 'all';
+  const swrKey = scopeKey ? `transactions:${scopeKey}:${filtersKey}` : null;
+
+  const {data, isLoading: swrLoading, error, mutate} =
+    useSWR<TransactionsPayload>(swrKey, async () => {
+      const filters: TransactionFilters = {...initialFilters};
+      if (usePayPeriod && payPeriod) {
+        filters.startDate = payPeriod.start;
+        filters.endDate = payPeriod.end;
+      }
+      const [transactionsData, summaryData] = await Promise.all([
+        transactionService.getTransactions(filters),
+        transactionService.getSummary(filters),
+      ]);
+      return {transactions: transactionsData, summary: summaryData};
+    });
+
+  const rawTransactions = useMemo(() => data?.transactions ?? [], [data]);
+  const summary = data?.summary ?? null;
+
+  const transactions = useMemo(
+    () => enrich(rawTransactions, categories),
+    [rawTransactions, categories],
+  );
+
+  // Loading while waiting for the pay period, or while the list itself loads
+  // with nothing cached yet.
+  const isLoading = (usePayPeriod && !payPeriod) || swrLoading;
+
+  const refresh = useCallback(async (): Promise<void> => {
+    await mutate();
+  }, [mutate]);
 
   const createTransaction = useCallback(
-    async (data: CreateTransactionData): Promise<Transaction> => {
-      setError(null);
-
-      try {
-        const newTransaction = await transactionService.createTransaction(data);
-        const enrichedTransaction = enrichTransactions([newTransaction])[0];
-
-        // Optimistic update
-        setTransactions(prev => [enrichedTransaction, ...prev]);
-
-        // Update summary
-        if (summary) {
-          const isIncome = data.type === 'INCOME';
-          setSummary({
-            ...summary,
-            totalIncome: summary.totalIncome + (isIncome ? data.amount : 0),
-            totalExpenses:
-              summary.totalExpenses + (isIncome ? 0 : Math.abs(data.amount)),
-            transactionCount: summary.transactionCount + 1,
-            netAmount:
-              summary.netAmount +
-              (isIncome ? data.amount : -Math.abs(data.amount)),
-          });
-        }
-
-        return enrichedTransaction;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to create transaction';
-        setError(message);
-        throw err;
-      }
+    async (input: CreateTransactionData): Promise<Transaction> => {
+      const created = await transactionService.createTransaction(input);
+      await mutate();
+      return enrich([created], categories)[0];
     },
-    [summary, enrichTransactions],
+    [mutate, categories],
   );
 
   const updateTransaction = useCallback(
-    async (id: string, data: UpdateTransactionData): Promise<Transaction> => {
-      setError(null);
-
-      try {
-        const updatedTransaction = await transactionService.updateTransaction(
-          id,
-          data,
-        );
-        const enrichedTransaction = enrichTransactions([updatedTransaction])[0];
-
-        // Optimistic update
-        setTransactions(prev =>
-          prev.map(t => (t.id === id ? enrichedTransaction : t)),
-        );
-
-        return enrichedTransaction;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to update transaction';
-        setError(message);
-        throw err;
-      }
+    async (id: string, input: UpdateTransactionData): Promise<Transaction> => {
+      const updated = await transactionService.updateTransaction(id, input);
+      await mutate();
+      return enrich([updated], categories)[0];
     },
-    [enrichTransactions],
+    [mutate, categories],
   );
 
   const deleteTransaction = useCallback(
     async (id: string): Promise<void> => {
-      setError(null);
-
-      // Store for rollback
-      const previousTransactions = transactions;
-
-      // Optimistic update
-      setTransactions(prev => prev.filter(t => t.id !== id));
-
-      try {
-        await transactionService.deleteTransaction(id);
-      } catch (err) {
-        // Rollback on error
-        setTransactions(previousTransactions);
-        const message =
-          err instanceof Error ? err.message : 'Failed to delete transaction';
-        setError(message);
-        throw err;
-      }
-    },
-    [transactions],
-  );
-
-  const searchTransactions = useCallback(
-    async (query: string): Promise<void> => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const results = await transactionService.searchTransactions(
-          query,
-          currentFilters,
-        );
-        const enrichedResults = enrichTransactions(results);
-        setTransactions(enrichedResults);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Search failed';
-        setError(message);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [currentFilters, enrichTransactions],
-  );
-
-  const refresh = useCallback(async (): Promise<void> => {
-    await fetchTransactions(currentFilters);
-  }, [fetchTransactions, currentFilters]);
-
-  // Re-enrich transactions when categories become available
-  useEffect(() => {
-    if (categoriesLoaded && categories.length > 0 && transactions.length > 0) {
-      // Only re-enrich if transactions don't already have category names
-      const needsEnrichment = transactions.some(
-        t => !t.categoryName || t.categoryName === 'Uncategorized',
+      // Optimistically drop the row, roll back if the request fails.
+      await mutate(
+        async (current) => {
+          await transactionService.deleteTransaction(id);
+          if (!current) return current;
+          return {
+            ...current,
+            transactions: current.transactions.filter((t) => t.id !== id),
+          };
+        },
+        {
+          optimisticData: (current) =>
+            current
+              ? {
+                  ...current,
+                  transactions: current.transactions.filter((t) => t.id !== id),
+                }
+              : ({transactions: [], summary: null} as TransactionsPayload),
+          rollbackOnError: true,
+          revalidate: true,
+        },
       );
-      if (needsEnrichment) {
-        setTransactions(prev =>
-          prev.map(txn => {
-            const category = categories.find(c => c.id === txn.category);
-            const subcategory = categories.find(c => c.id === txn.subcategory);
-            return {
-              ...txn,
-              categoryName: category?.name || 'Uncategorized',
-              categoryColor: category?.color || '#6B7280',
-              categoryIcon: category?.icon || 'help-circle-outline',
-              subcategoryName: subcategory?.name,
-            };
-          }),
-        );
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriesLoaded, categories.length]);
+    },
+    [mutate],
+  );
 
-  // When the scope flips between the all-history search view and the
-  // pay-period view, drop the previously loaded rows so the list shows a
-  // loading state instead of briefly rendering the other scope's transactions.
-  useEffect(() => {
-    setTransactions([]);
-    setIsLoading(true);
-  }, [usePayPeriod]);
-
-  // Initial fetch - wait for categories and pay period to load first
-  // Include payPeriod in deps to ensure we refetch when period is available
-  useEffect(() => {
-    if (categoriesLoaded && payPeriodLoaded) {
-      // Only fetch if payPeriod is set when usePayPeriod is enabled
-      if (usePayPeriod && !payPeriod) {
-        return; // Wait for payPeriod to be set
-      }
-      fetchTransactions(initialFilters);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriesLoaded, payPeriodLoaded, payPeriod, usePayPeriod]);
+  // Kept for API compatibility; the transactions page filters client-side and
+  // drives reloads via refresh(), so these simply revalidate the cache.
+  const fetchTransactions = useCallback(
+    async (): Promise<void> => {
+      await mutate();
+    },
+    [mutate],
+  );
+  const searchTransactions = useCallback(
+    async (): Promise<void> => {
+      await mutate();
+    },
+    [mutate],
+  );
 
   return {
     transactions,
     summary,
     isLoading,
-    error,
+    error: error instanceof Error ? error.message : error ? String(error) : null,
     payPeriod,
     fetchTransactions,
     createTransaction,
