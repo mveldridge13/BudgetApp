@@ -120,6 +120,11 @@ interface IncomeAnalytics {
   totalIncomeThisPayPeriod: number;
   totalIncomeThisWeek: number;
   monthChangePercentage?: number;
+  // Year-to-date income (anniversary-based), matching the mobile app.
+  totalIncomeYTD?: number;
+  ytdChangePercentage?: number;
+  hasYearOverYearData?: boolean;
+  anniversaryStartDate?: string | null;
   payPeriodInfo?: {frequency: string};
   incomeBySource: IncomeBySource[];
   incomeBreakdown?: IncomeBreakdown;
@@ -991,21 +996,33 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
-                Total This Month
+                Year to Date
               </p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(incomeAnalytics?.totalIncomeThisMonth || 0)}
+                {formatCurrency(incomeAnalytics?.totalIncomeYTD || 0)}
               </p>
-              {incomeAnalytics?.monthChangePercentage !== undefined && (
+              {incomeAnalytics?.hasYearOverYearData &&
+              incomeAnalytics?.ytdChangePercentage !== undefined ? (
                 <p
                   className={`text-sm mt-1 ${
-                    incomeAnalytics.monthChangePercentage >= 0
+                    incomeAnalytics.ytdChangePercentage >= 0
                       ? 'text-green-600'
                       : 'text-red-600'
                   }`}>
-                  {incomeAnalytics.monthChangePercentage >= 0 ? '+' : ''}
-                  {incomeAnalytics.monthChangePercentage.toFixed(1)}% from last
-                  month
+                  {incomeAnalytics.ytdChangePercentage >= 0 ? '+' : ''}
+                  {incomeAnalytics.ytdChangePercentage.toFixed(1)}% vs last year
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-1">
+                  Since{' '}
+                  {incomeAnalytics?.anniversaryStartDate
+                    ? new Date(
+                        incomeAnalytics.anniversaryStartDate,
+                      ).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'signup'}
                 </p>
               )}
             </div>
