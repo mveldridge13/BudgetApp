@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useEffect, useCallback} from 'react';
+import {useState, useCallback} from 'react';
 import {
   AreaChart,
   Area,
@@ -13,8 +13,7 @@ import {
 import {ChevronLeft, ChevronRight} from 'lucide-react';
 import {transactionService} from '@/services/transaction.service';
 import type {DiscretionaryBreakdown} from '@/types/transaction.types';
-import {userService} from '@/services/user.service';
-import {getPayPeriodStatusText} from '@/utils/payPeriodService';
+import {useAnalyticsData} from '@/hooks/useAnalyticsData';
 import Modal from '@/components/ui/Modal';
 import DatePicker from '@/components/ui/DatePicker';
 import CategoryDonut from '@/components/analytics/CategoryDonut';
@@ -185,16 +184,18 @@ export default function AnalyticsPage() {
   const [selectedTab, setSelectedTab] = useState<TabType>('spending');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('30d');
   const [comparisonMode, setComparisonMode] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Data state
-  const [analytics, setAnalytics] = useState<TransactionAnalytics | null>(null);
-  const [incomeAnalytics, setIncomeAnalytics] =
-    useState<IncomeAnalytics | null>(null);
-  const [billsAnalytics, setBillsAnalytics] =
-    useState<BillsAnalyticsResponse | null>(null);
-  const [payPeriodStatus, setPayPeriodStatus] = useState<string | null>(null);
+  // Cached, per-period analytics (SWR keeps the cache across mounts so
+  // revisiting the page is instant; it revalidates in the background).
+  const {data: analyticsData, isLoading, refresh} =
+    useAnalyticsData(selectedPeriod);
+  const analytics = (analyticsData?.analytics ?? null) as TransactionAnalytics | null;
+  const incomeAnalytics =
+    (analyticsData?.incomeAnalytics ?? null) as IncomeAnalytics | null;
+  const billsAnalytics =
+    (analyticsData?.billsAnalytics ?? null) as BillsAnalyticsResponse | null;
+  const payPeriodStatus = analyticsData?.payPeriodStatus ?? null;
 
   // Modal state
   const [showDiscretionaryBreakdown, setShowDiscretionaryBreakdown] =
@@ -211,82 +212,13 @@ export default function AnalyticsPage() {
   >(null);
   const [showVelocityBreakdown, setShowVelocityBreakdown] = useState(false);
 
-  // Fetch data
-  const fetchData = useCallback(async () => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
     try {
-      setIsLoading(true);
-
-      // Get date range based on selected period
-      const now = new Date();
-      let startDate: string;
-
-      // Date ranges intentionally match the mobile app (AnalyticsContainer) so
-      // the backend returns identically-grouped monthlyTrends across platforms.
-      switch (selectedPeriod) {
-        case '7d': {
-          // Rolling 7 days (today included) — 7 daily points.
-          const start = new Date(now);
-          start.setDate(start.getDate() - 6);
-          startDate = start.toISOString();
-          break;
-        }
-        case '30d': {
-          // Rolling 30 days — 30 daily points (the behavioural-trend default).
-          const start = new Date(now);
-          start.setDate(start.getDate() - 29);
-          startDate = start.toISOString();
-          break;
-        }
-        case '12m':
-        default:
-          // Last 12 calendar months — 12 monthly aggregates.
-          startDate = new Date(
-            now.getFullYear(),
-            now.getMonth() - 11,
-            1,
-          ).toISOString();
-          break;
-      }
-
-      const filters = {
-        startDate,
-        endDate: now.toISOString(),
-      };
-
-      // Fetch all data in parallel
-      // Bills analytics now uses pay period filtering on the backend
-      const [analyticsData, incomeData, billsData, incomeInfo] =
-        await Promise.all([
-          transactionService.getAnalytics(filters),
-          transactionService.getIncomeAnalytics(filters).catch(() => null),
-          transactionService.getBillsAnalytics().catch(() => null),
-          userService.getIncome().catch(() => null),
-        ]);
-
-      setAnalytics(analyticsData as TransactionAnalytics);
-      setIncomeAnalytics(incomeData as IncomeAnalytics | null);
-      setBillsAnalytics(billsData as BillsAnalyticsResponse | null);
-
-      // Calculate pay period status for display
-      if (incomeInfo?.nextPayDate) {
-        const status = getPayPeriodStatusText(incomeInfo.nextPayDate);
-        setPayPeriodStatus(status);
-      }
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
+      await refresh();
     } finally {
-      setIsLoading(false);
       setRefreshing(false);
     }
-  }, [selectedPeriod]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchData();
   };
 
   // Fetch the discretionary breakdown for the period (day/week/month per the
