@@ -1,6 +1,7 @@
 'use client';
 
 import {useState, useEffect, useMemo} from 'react';
+import useSWR from 'swr';
 import {useSearchParams} from 'next/navigation';
 import {goalService} from '@/services/goal.service';
 import {transactionService} from '@/services/transaction.service';
@@ -21,8 +22,13 @@ import DebtSimulator from '@/components/goals/DebtSimulator';
 import {CustomSelect} from '@/components/ui';
 
 export default function GoalsPage() {
-  const [goals, setGoals] = useState<GoalDisplay[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // SWR-cached goals: revisits render instantly from cache while revalidating
+  // in the background, instead of refetching from scratch on every navigation.
+  const {
+    data: goals = [],
+    isLoading,
+    mutate: mutateGoals,
+  } = useSWR<GoalDisplay[]>('goals', () => goalService.getGoals());
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalDisplay | null>(null);
   const [simulatingGoal, setSimulatingGoal] = useState<GoalDisplay | null>(
@@ -42,20 +48,10 @@ export default function GoalsPage() {
     if (q) setSearchTerm(q);
   }, [searchParams]);
 
-  useEffect(() => {
-    loadGoals();
-  }, []);
-
+  // CRUD handlers call loadGoals() after mutating; revalidate the SWR cache so
+  // the list refreshes from the server while keeping the cached view on screen.
   const loadGoals = async () => {
-    setIsLoading(true);
-    try {
-      const data = await goalService.getGoals();
-      setGoals(data);
-    } catch (error) {
-      console.error('Error loading goals:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    await mutateGoals();
   };
 
   // Apply search and filters to goals
