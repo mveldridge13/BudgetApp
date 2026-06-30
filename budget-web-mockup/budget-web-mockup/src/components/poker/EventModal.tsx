@@ -163,6 +163,11 @@ export default function EventModal({
       fieldSize: pos.fieldSize,
       winnings: toNum(form.prize) ?? 0,
       isClosed: isCloseOut ? true : editingEvent?.isClosed,
+      // Re-buys aren't editable in this modal, but the backend update is a full
+      // replace (@Put) — carry the existing values through so editing/closing
+      // out an event doesn't reset its re-buy count/amount to 0.
+      reBuys: editingEvent?.reBuys,
+      reBuyAmount: editingEvent?.reBuyAmount,
     };
     try {
       setSaving(true);
