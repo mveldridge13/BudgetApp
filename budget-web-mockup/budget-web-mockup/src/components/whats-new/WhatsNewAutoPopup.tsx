@@ -10,8 +10,12 @@ import {
 /**
  * Shows the What's New popup once per release. On mount it compares the current
  * release version against the one saved in localStorage; if they differ, it
- * opens the modal. Closing the modal marks the current version as seen, so it
- * won't reappear until the version is bumped again.
+ * opens the modal AND immediately records the version as seen.
+ *
+ * The "seen" flag is written as soon as the popup is shown — not on close — so
+ * it sticks even if the user closes the browser without dismissing the modal.
+ * (Writing only on close meant closing the tab/browser left it unrecorded, so
+ * the popup reappeared on every login.)
  *
  * Mounted in the dashboard layout so it triggers after login on any page.
  */
@@ -24,6 +28,8 @@ export default function WhatsNewAutoPopup() {
       const seen = localStorage.getItem(WHATS_NEW_STORAGE_KEY);
       if (seen !== CURRENT_WHATS_NEW_VERSION) {
         setOpen(true);
+        // Record it as seen now, while we know it's being shown.
+        localStorage.setItem(WHATS_NEW_STORAGE_KEY, CURRENT_WHATS_NEW_VERSION);
       }
     } catch {
       // localStorage unavailable (private mode etc.) — skip the popup silently.
@@ -32,11 +38,6 @@ export default function WhatsNewAutoPopup() {
 
   const handleClose = () => {
     setOpen(false);
-    try {
-      localStorage.setItem(WHATS_NEW_STORAGE_KEY, CURRENT_WHATS_NEW_VERSION);
-    } catch {
-      // Ignore write failures; worst case the popup shows again next load.
-    }
   };
 
   return <WhatsNewModal isOpen={open} onClose={handleClose} />;
