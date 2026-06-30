@@ -73,13 +73,16 @@ export default function TournamentDetailPage() {
     const buyIns =
       analytics?.totalBuyIns ??
       events.reduce((s, e) => s + (e.buyIn || 0), 0);
+    // Analytics doesn't return re-buys separately, so roll them up from events.
+    const reBuys = events.reduce((s, e) => s + (e.reBuyAmount || 0), 0);
     const winnings =
       analytics?.totalWinnings ??
       events.reduce((s, e) => s + (e.winnings || 0), 0);
-    const net = analytics?.netProfit ?? winnings - buyIns;
+    const net = analytics?.netProfit ?? winnings - buyIns - reBuys;
     return {
       events: events.length,
       buyIns,
+      reBuys,
       winnings,
       net,
       roi: analytics?.roi,
@@ -218,9 +221,10 @@ export default function TournamentDetailPage() {
           <h2 className="text-base font-semibold text-gray-900 mb-4">
             Performance Summary
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <SummaryTile label="Events" value={String(summary.events)} />
             <SummaryTile label="Total Buy-ins" value={formatMoney(summary.buyIns)} />
+            <SummaryTile label="Total Re-buys" value={formatMoney(summary.reBuys)} />
             <SummaryTile
               label="Total Winnings"
               value={formatMoney(summary.winnings)}
