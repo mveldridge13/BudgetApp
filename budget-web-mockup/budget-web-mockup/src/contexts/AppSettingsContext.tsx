@@ -59,12 +59,16 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   // Sync currency and module toggles from the user profile (backend is the
   // source of truth, so settings carry across devices and platforms).
   useEffect(() => {
-    if (user && !initializedFromUser.current) {
-      setSettings((prev) => ({
-        ...prev,
-        ...(user.currency ? { currency: user.currency } : {}),
-        modules: { ...prev.modules, ...(user.moduleSettings || {}) },
-      }));
+    if (!user || initializedFromUser.current) return;
+    setSettings((prev) => ({
+      ...prev,
+      ...(user.currency ? { currency: user.currency } : {}),
+      modules: { ...prev.modules, ...(user.moduleSettings || {}) },
+    }));
+    // Only mark settings "initialized" once the authoritative profile (which
+    // carries moduleSettings) has loaded. Some auth responses omit it, and
+    // latching on that empty value would pin module toggles to their defaults.
+    if (user.moduleSettings) {
       initializedFromUser.current = true;
     }
   }, [user]);

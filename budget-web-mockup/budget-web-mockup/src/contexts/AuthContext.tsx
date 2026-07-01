@@ -84,8 +84,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const response = await authService.login(credentials);
+      // The login response's `user` omits profile-only fields like
+      // `moduleSettings` (the poker toggle), so settings would reset to their
+      // defaults after a fresh credential login. Fetch the full profile — same
+      // as the saved-token reload path in initAuth — so `user` is complete.
+      let user = response.user;
+      try {
+        user = (await authService.getProfile()) as User;
+      } catch {
+        // Fall back to the login user if the profile fetch fails.
+      }
       setState({
-        user: response.user,
+        user,
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -106,8 +116,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const response = await authService.register(data);
+      // Match login: enrich with the full profile so profile-only fields
+      // (e.g. moduleSettings) are present from the start.
+      let user = response.user;
+      try {
+        user = (await authService.getProfile()) as User;
+      } catch {
+        // Fall back to the register user if the profile fetch fails.
+      }
       setState({
-        user: response.user,
+        user,
         isAuthenticated: true,
         isLoading: false,
         error: null,
