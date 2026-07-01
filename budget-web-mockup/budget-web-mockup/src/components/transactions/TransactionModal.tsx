@@ -153,8 +153,12 @@ export default function TransactionModal({
       ...(recurrence !== 'none' && {status: 'UPCOMING'}), // Only recurring transactions have status; one-off = no status
     };
 
+    // Don't reset here: onSave is async and the parent closes the modal only
+    // after it resolves. Resetting now would flip the still-open modal back to
+    // the type-selection screen for the whole save (the "linger" flash). The
+    // reset runs when the modal closes (the `!visible` effect above); leaving
+    // the form intact also preserves the user's input if the save fails.
     onSave(transactionData);
-    resetForm();
   };
 
   const resetForm = () => {
