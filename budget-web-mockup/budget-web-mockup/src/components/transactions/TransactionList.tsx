@@ -59,21 +59,24 @@ export default function TransactionList({
     .sort((a, b) => {
       switch (sortOrder) {
         case 'Newest First': {
-          // Sort by date first, then by createdAt as tiebreaker
-          const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
-          if (dateCompare !== 0) return dateCompare;
-          // If dates are the same, use createdAt
-          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          // Order by calendar day, then by createdAt (actual entry order)
+          // WITHIN a day. We can't order by the raw `date` timestamp: manually
+          // added transactions are stored at midnight while income/auto entries
+          // carry a real time-of-day, which would sink a just-added expense
+          // below a same-day income even though it's newer.
+          const dayA = new Date(a.date).setHours(0, 0, 0, 0);
+          const dayB = new Date(b.date).setHours(0, 0, 0, 0);
+          if (dayA !== dayB) return dayB - dayA;
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime();
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime();
           return bCreated - aCreated;
         }
         case 'Oldest First': {
-          // Sort by date first, then by createdAt as tiebreaker
-          const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
-          if (dateCompare !== 0) return dateCompare;
-          // If dates are the same, use createdAt
-          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const dayA = new Date(a.date).setHours(0, 0, 0, 0);
+          const dayB = new Date(b.date).setHours(0, 0, 0, 0);
+          if (dayA !== dayB) return dayA - dayB;
+          const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime();
+          const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime();
           return aCreated - bCreated;
         }
         case 'Highest Amount':
