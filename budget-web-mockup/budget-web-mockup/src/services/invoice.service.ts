@@ -81,6 +81,15 @@ class InvoiceService {
     return unwrapOne<Invoice>(res);
   }
 
+  // Void a sent invoice → status CANCELED, keeps the row + number, emails the
+  // client a cancellation notice. Backend blocks void for PAID/already-voided.
+  // (Sent invoices can't be deleted — DELETE is DRAFT-only — so this is the
+  // "cancel" path for anything already sent.)
+  async voidInvoice(id: string): Promise<Invoice> {
+    const res = await api.post<unknown>(`/invoices/${id}/void`);
+    return unwrapOne<Invoice>(res);
+  }
+
   // ── Clients ─────────────────────────────────────────────────────────────────
   async getClients(): Promise<Client[]> {
     const res = await api.get<unknown>('/invoices/clients', undefined, {

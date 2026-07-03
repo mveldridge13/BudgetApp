@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   MoreVertical,
   Check,
+  Ban,
+  Trash2,
 } from 'lucide-react';
 import {useInvoices, deriveInvoiceStatus} from '@/hooks/useInvoices';
 import {useAuth} from '@/contexts/AuthContext';
@@ -120,6 +122,7 @@ export default function InvoicesPage() {
     updateInvoice,
     sendInvoice,
     markPaid,
+    voidInvoice,
     deleteInvoice,
     refresh,
   } = useInvoices();
@@ -232,6 +235,19 @@ export default function InvoicesPage() {
       return;
     }
     runAction(() => deleteInvoice(inv.id), inv.id);
+  };
+
+  // Sent invoices can't be deleted (DELETE is draft-only) — they're voided:
+  // status → CANCELED, number kept, client emailed a cancellation notice.
+  const handleVoid = (inv: Invoice) => {
+    if (
+      !confirm(
+        `Void ${inv.invoiceNumber}? This cancels the invoice and emails ${inv.client?.name ?? 'the client'} a cancellation notice. The invoice number is kept.`,
+      )
+    ) {
+      return;
+    }
+    runAction(() => voidInvoice(inv.id), inv.id);
   };
 
   const openCreate = () => {
@@ -411,6 +427,11 @@ export default function InvoicesPage() {
                   const isBusy = busyId === inv.id;
                   const canSend = status === 'DRAFT';
                   const canPay = status === 'SENT' || status === 'OVERDUE';
+                  // DELETE is draft-only on the backend; sent/overdue invoices
+                  // are voided instead. Paid/canceled have neither.
+                  const canDelete = status === 'DRAFT';
+                  const canVoid = status === 'SENT' || status === 'OVERDUE';
+                  const hasActions = canSend || canPay || canDelete || canVoid;
                   return (
                     <tr
                       key={inv.id}
@@ -441,7 +462,7 @@ export default function InvoicesPage() {
                         onClick={(e) => e.stopPropagation()}>
                         {isBusy ? (
                           <Spinner size="sm" />
-                        ) : (
+                        ) : hasActions ? (
                           <button
                             data-invoice-menu-trigger
                             onClick={(e) => openMenuFor(inv.id, e.currentTarget)}
@@ -449,7 +470,7 @@ export default function InvoicesPage() {
                             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                             <MoreVertical className="w-4 h-4" />
                           </button>
-                        )}
+                        ) : null}
                         {menu?.id === inv.id &&
                           createPortal(
                             <div
@@ -481,12 +502,22 @@ export default function InvoicesPage() {
                                   Mark as paid
                                 </button>
                               )}
-                              <button
-                                onClick={() => handleDelete(inv)}
-                                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
-                                <AlertCircle className="w-4 h-4" />
-                                Delete
-                              </button>
+                              {canVoid && (
+                                <button
+                                  onClick={() => handleVoid(inv)}
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-amber-700 hover:bg-amber-50">
+                                  <Ban className="w-4 h-4" />
+                                  Void invoice
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  onClick={() => handleDelete(inv)}
+                                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              )}
                             </div>,
                             document.body,
                           )}
