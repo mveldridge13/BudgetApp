@@ -66,18 +66,27 @@ export function useInvoices(): UseInvoicesReturn {
 
   const createInvoice = useCallback(
     async (form: InvoiceFormData, send: boolean) => {
-      const invoice = await invoiceService.createFromForm(form, send);
-      await refresh();
-      return invoice;
+      // Refresh even if the send step throws (e.g. email misconfigured): the
+      // draft was already created, so keep it visible to resend from the row
+      // menu instead of leaving a hidden draft the user might recreate.
+      try {
+        return await invoiceService.createFromForm(form, send);
+      } finally {
+        await refresh();
+      }
     },
     [refresh],
   );
 
   const updateInvoice = useCallback(
     async (id: string, form: InvoiceFormData, send: boolean) => {
-      const invoice = await invoiceService.updateFromForm(id, form, send);
-      await refresh();
-      return invoice;
+      // Same as create: a failed send still leaves the (updated) draft, so
+      // always resync the list.
+      try {
+        return await invoiceService.updateFromForm(id, form, send);
+      } finally {
+        await refresh();
+      }
     },
     [refresh],
   );
