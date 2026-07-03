@@ -22,6 +22,14 @@ export interface WhatsNewEntry {
 // Newest first. The first entry's `version` drives the auto-popup.
 export const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
   {
+    version: '2026-07-03',
+    date: '3 July 2026',
+    title: 'Invoices',
+    items: [
+      'Invoices: Generate, send, and track invoices for your freelance or contracting work.',
+    ],
+  },
+  {
     version: '2026-06-29',
     date: '29 June 2026',
     title: 'Welcome to the Trend web app beta',
