@@ -11,3 +11,4 @@ export * from './goal.types';
 export * from './budget.types';
 export * from './user.types';
 export * from './poker.types';
+export * from './invoice.types';
