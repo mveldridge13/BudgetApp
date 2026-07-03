@@ -31,6 +31,7 @@ interface UseInvoicesReturn {
   ) => Promise<Invoice>;
   sendInvoice: (id: string) => Promise<Invoice>;
   markPaid: (id: string) => Promise<Invoice>;
+  voidInvoice: (id: string) => Promise<Invoice>;
   deleteInvoice: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -109,6 +110,15 @@ export function useInvoices(): UseInvoicesReturn {
     [refresh],
   );
 
+  const voidInvoice = useCallback(
+    async (id: string) => {
+      const invoice = await invoiceService.voidInvoice(id);
+      await refresh();
+      return invoice;
+    },
+    [refresh],
+  );
+
   const deleteInvoice = useCallback(
     async (id: string) => {
       await invoiceService.deleteInvoice(id);
@@ -157,6 +167,7 @@ export function useInvoices(): UseInvoicesReturn {
     updateInvoice,
     sendInvoice,
     markPaid,
+    voidInvoice,
     deleteInvoice,
     refresh,
   };
