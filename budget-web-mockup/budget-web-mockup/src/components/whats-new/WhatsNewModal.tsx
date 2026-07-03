@@ -2,7 +2,7 @@
 
 import { Sparkles, Check } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
-import { WHATS_NEW_ENTRIES } from '@/config/whatsNew';
+import { WHATS_NEW_ENTRIES, WHATS_NEW_BETA_HEADER } from '@/config/whatsNew';
 
 interface WhatsNewModalProps {
   isOpen: boolean;
@@ -13,6 +13,21 @@ export default function WhatsNewModal({ isOpen, onClose }: WhatsNewModalProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="What's New" size="lg">
       <div className="p-6 space-y-6">
+        {/* Standing beta banner — separate from the dated release entries. */}
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+              Beta
+            </span>
+            <h3 className="text-base font-semibold text-gray-900">
+              {WHATS_NEW_BETA_HEADER.title}
+            </h3>
+          </div>
+          <p className="mt-1.5 text-sm text-gray-600">
+            {WHATS_NEW_BETA_HEADER.subtitle}
+          </p>
+        </div>
+
         {WHATS_NEW_ENTRIES.map((entry) => (
           <div key={entry.version}>
             <div className="flex items-center gap-2 mb-3">
