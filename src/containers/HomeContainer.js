@@ -121,11 +121,21 @@ const HomeContainer = ({navigation}) => {
         return 1;
       }
 
-      // Neither has due date - sort by transaction date descending (newest first)
-      const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
-      if (dateDiff !== 0) return dateDiff;
-      // Same date - sort by createdAt descending (newest first)
-      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      // Neither has due date - order by calendar day (newest first), then by
+      // createdAt within the day. Manually added transactions are stored at
+      // midnight while income/auto entries carry a real time-of-day, so a raw
+      // date-timestamp compare sinks a just-added same-day expense below an
+      // income; createdAt reflects actual entry order.
+      const dayA = new Date(a.date || 0).setHours(0, 0, 0, 0);
+      const dayB = new Date(b.date || 0).setHours(0, 0, 0, 0);
+      if (dayA !== dayB) return dayB - dayA;
+      const aCreated = a.createdAt
+        ? new Date(a.createdAt).getTime()
+        : new Date(a.date || 0).getTime();
+      const bCreated = b.createdAt
+        ? new Date(b.createdAt).getTime()
+        : new Date(b.date || 0).getTime();
+      return bCreated - aCreated;
     });
   };
 
