@@ -74,26 +74,14 @@ const PaymentHistoryOverlay = ({
     }).format(amount);
   };
 
-  // Format date relative
+  // Always show the actual payment date (web parity) — the old relative
+  // labels miscounted calendar days ("Yesterday" for a 2-day-old payment)
   const formatDate = dateString => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return 'Today';
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString('en-AU', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-    }
+    return new Date(dateString).toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
   };
 
   // Get contribution type display
