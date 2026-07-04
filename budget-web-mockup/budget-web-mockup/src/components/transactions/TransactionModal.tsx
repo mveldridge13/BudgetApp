@@ -201,7 +201,8 @@ export default function TransactionModal({
       isOpen={visible}
       onClose={handleClose}
       title={isEditMode ? 'Edit Transaction' : 'Add Transaction'}
-      size="lg">
+      size="lg"
+      headerVariant="indigo">
       {showTypeSelection && !isEditMode ? (
         /* Type Selection Screen */
         <div className="p-8 space-y-4">

@@ -50,6 +50,14 @@ const GOAL_TYPES = [
   },
 ];
 
+// Icon colours for the type-selection screen, matching the Add Transaction
+// selection cards' style (tinted circle + saturated icon).
+const TYPE_SELECT_COLORS: Record<string, { bg: string; fg: string }> = {
+  savings: { bg: 'rgba(0, 122, 255, 0.15)', fg: '#007AFF' },
+  spending: { bg: 'rgba(245, 158, 11, 0.15)', fg: '#F59E0B' },
+  debt: { bg: 'rgba(255, 107, 133, 0.15)', fg: '#FF6B85' },
+};
+
 const CATEGORIES = [
   { id: 'Security', label: 'Emergency Fund', icon: Shield },
   { id: 'Debt', label: 'Debt Repayment', icon: CreditCard },
@@ -107,6 +115,9 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  // New goals start on a type-selection screen (same flow as Add Transaction);
+  // editing an existing goal goes straight to the form.
+  const [showTypeSelection, setShowTypeSelection] = useState(true);
 
   useEffect(() => {
     if (visible) {
@@ -133,6 +144,7 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
           autoContribute: undefined,
         });
       }
+      setShowTypeSelection(!editingGoal);
       setErrors({});
       setSaving(false);
     } else {
@@ -220,6 +232,12 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
   };
 
   if (!visible) return null;
+
+  const handleTypeSelect = (type: GoalTypeDisplay) => {
+    // updateFormData also auto-sets category to Debt for debt goals
+    updateFormData('type', type);
+    setShowTypeSelection(false);
+  };
 
   const selectedType = GOAL_TYPES.find((t) => t.id === formData.type);
 
@@ -518,6 +536,37 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
           </button>
         </div>
 
+        {showTypeSelection ? (
+          /* Type Selection Screen - same flow as Add Transaction */
+          <div className="flex-1 overflow-y-auto p-8 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-6 text-center">
+              What type of goal would you like to add?
+            </h3>
+            <div className="space-y-4">
+              {GOAL_TYPES.map((type) => {
+                const Icon = type.icon;
+                const colors = TYPE_SELECT_COLORS[type.id];
+                return (
+                  <button
+                    key={type.id}
+                    onClick={() => handleTypeSelect(type.id)}
+                    className="w-full p-5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <div className="flex flex-col items-center text-center">
+                      <div
+                        className="w-16 h-16 rounded-full flex items-center justify-center mb-3"
+                        style={{ backgroundColor: colors.bg }}>
+                        <Icon className="w-8 h-8" style={{ color: colors.fg }} />
+                      </div>
+                      <h4 className="font-semibold text-gray-900 mb-1">{type.label}</h4>
+                      <p className="text-sm text-gray-600">{type.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Content - Same as editing panel above */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-5">
@@ -797,6 +846,8 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
             {saving ? 'Saving...' : 'Create'}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
