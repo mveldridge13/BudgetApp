@@ -9,14 +9,14 @@ export default function BudgetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Budgets</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Budgets</h1>
           <p className="text-gray-600 mt-1">
             Manage your spending budgets.
           </p>
         </div>
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors">
+        <button className="self-start sm:self-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm sm:text-base rounded-lg font-medium flex items-center space-x-2 transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"

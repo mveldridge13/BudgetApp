@@ -23,7 +23,7 @@ export default function DashboardLayout({
           <Header />
 
           <main className="flex-1 pb-20 lg:pb-0">
-            <div className="max-w-7xl mx-auto w-full p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
               <Suspense fallback={null}>{children}</Suspense>
             </div>
           </main>
