@@ -10,6 +10,8 @@ interface ModalProps {
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   showCloseButton?: boolean;
+  /** 'indigo' renders the filled brand header used by the Add Goal modal. */
+  headerVariant?: 'default' | 'indigo';
 }
 
 const sizeClasses = {
@@ -26,7 +28,9 @@ export default function Modal({
   children,
   size = 'md',
   showCloseButton = true,
+  headerVariant = 'default',
 }: ModalProps) {
+  const isIndigo = headerVariant === 'indigo';
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -83,16 +87,34 @@ export default function Modal({
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <div
+            className={
+              isIndigo
+                ? 'flex items-center justify-between px-6 py-5'
+                : 'flex items-center justify-between p-4 border-b border-gray-100'
+            }
+            style={isIndigo ? { backgroundColor: '#6366f1' } : undefined}
+          >
             {title && (
-              <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
+              <h2
+                id="modal-title"
+                className={
+                  isIndigo
+                    ? 'text-xl font-semibold text-white'
+                    : 'text-lg font-semibold text-gray-900'
+                }
+              >
                 {title}
               </h2>
             )}
             {showCloseButton && (
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100"
+                className={
+                  isIndigo
+                    ? 'text-white transition-colors p-1 rounded-lg hover:bg-white/10'
+                    : 'text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100'
+                }
                 aria-label="Close modal"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

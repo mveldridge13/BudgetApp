@@ -1,5 +1,5 @@
 // screens/HomeScreen.js
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {
   View,
   StyleSheet,
@@ -106,6 +106,20 @@ const HomeScreen = ({
     setShowAddTransaction(false);
     onClearEditingTransaction();
   }, [onClearEditingTransaction]);
+
+  // The add-transaction selection overlays are plain views inside this screen
+  // (not RN Modals), so the tab bar stays tappable while they're open. Dismiss
+  // the flow when the user navigates to another tab.
+  useEffect(() => {
+    if (!navigation) {
+      return undefined;
+    }
+    const unsubscribe = navigation.addListener('blur', () => {
+      setShowAddTransaction(false);
+      onClearEditingTransaction();
+    });
+    return unsubscribe;
+  }, [navigation, onClearEditingTransaction]);
 
   const handleSaveTransaction = useCallback(
     async transaction => {

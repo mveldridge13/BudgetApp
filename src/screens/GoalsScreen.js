@@ -18,6 +18,7 @@ import {colors} from '../styles';
 import useGoals from '../hooks/useGoals';
 import useRolloverAllocation from '../hooks/useRolloverAllocation';
 import AddGoalModal from '../components/AddGoalModal';
+import GoalTypeOverlay from '../components/GoalTypeOverlay';
 import GoalCard from '../components/GoalCard';
 import {formatCurrencySync} from '../utils/currencyHelper';
 import {useAppSettings} from '../contexts/AppSettingsContext';
@@ -37,6 +38,10 @@ const GoalsScreen = ({route, navigation}) => {
 
   const [activeTab, setActiveTab] = useState('active');
   const [showAddGoal, setShowAddGoal] = useState(false);
+  // Type-selection bottom sheet shown before the Add Goal form (parity with
+  // the Add Transaction flow). Editing and the rollover auto-open skip it.
+  const [showGoalTypeOverlay, setShowGoalTypeOverlay] = useState(false);
+  const [initialGoalType, setInitialGoalType] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showDebtGestureBanner, setShowDebtGestureBanner] = useState(true);
 
@@ -178,8 +183,32 @@ const GoalsScreen = ({route, navigation}) => {
 
   const handleAddGoal = useCallback(() => {
     clearEditingGoal();
-    setShowAddGoal(true);
+    setInitialGoalType(null);
+    setShowGoalTypeOverlay(true);
   }, [clearEditingGoal]);
+
+  const handleGoalTypeSelect = useCallback(type => {
+    setInitialGoalType(type);
+    setShowGoalTypeOverlay(false);
+    setShowAddGoal(true);
+  }, []);
+
+  const handleGoalTypeClose = useCallback(() => {
+    setShowGoalTypeOverlay(false);
+  }, []);
+
+  // The type-selection sheet is a plain view inside this screen (not an RN
+  // Modal), so the tab bar stays tappable while it's open. Dismiss it when
+  // the user navigates to another tab.
+  useEffect(() => {
+    if (!navigation) {
+      return undefined;
+    }
+    const unsubscribe = navigation.addListener('blur', () => {
+      setShowGoalTypeOverlay(false);
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const handleEditGoal = useCallback(
     async goal => {
@@ -381,6 +410,7 @@ const GoalsScreen = ({route, navigation}) => {
 
     setShowAddGoal(false);
     clearEditingGoal();
+    setInitialGoalType(null);
   }, [clearEditingGoal, shouldShowRolloverModal, cancelRollover]);
 
   const formatCurrency = useCallback(
@@ -724,12 +754,22 @@ const GoalsScreen = ({route, navigation}) => {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Goal type selection - shown before the Add Goal form */}
+      {showGoalTypeOverlay && (
+        <GoalTypeOverlay
+          visible={true}
+          onClose={handleGoalTypeClose}
+          onTypeSelect={handleGoalTypeSelect}
+        />
+      )}
+
       {/* Add/Edit Goal Modal */}
       <AddGoalModal
         visible={showAddGoal}
         onClose={handleCloseAddGoal}
         onSave={handleSaveGoal}
         editingGoal={editingGoal}
+        initialType={initialGoalType}
         formatCurrency={formatCurrency}
       />
     </View>

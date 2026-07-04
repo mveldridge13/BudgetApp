@@ -65,6 +65,7 @@ const AddGoalModal = ({
   onClose,
   onSave,
   editingGoal,
+  initialType,
   formatCurrency,
 }) => {
   const insets = useSafeAreaInsets();
@@ -138,15 +139,16 @@ const AddGoalModal = ({
           autoContribute: editingGoal.autoContribute?.toString() || '',
         });
       } else {
-        // Creating new goal - reset form
+        // Creating new goal - reset form. initialType comes from the
+        // type-selection overlay; debt goals always use the Debt category.
         setFormData({
           title: '',
-          type: 'savings',
+          type: initialType || 'savings',
           target: '',
           current: '',
           originalAmount: '',
           deadline: '',
-          category: 'Other',
+          category: initialType === 'debt' ? 'Debt' : 'Other',
           priority: 'medium',
           autoContribute: '',
         });
@@ -154,7 +156,7 @@ const AddGoalModal = ({
       setErrors({});
       setSaving(false);
     }
-  }, [editingGoal, visible]);
+  }, [editingGoal, visible, initialType]);
 
   const handleCloseModal = () => {
     // Animate out
