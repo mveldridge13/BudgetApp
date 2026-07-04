@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { GoalDisplay, GoalTypeDisplay, GoalPriorityDisplay } from '@/types';
 import { DatePicker } from '@/components/ui';
+import { lockBodyScroll, unlockBodyScroll } from '@/lib/bodyScrollLock';
 import {
   DollarSign,
   CreditCard,
@@ -121,8 +122,9 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
 
   useEffect(() => {
     if (visible) {
-      // Lock body scroll for both add and edit
-      document.body.style.overflow = 'hidden';
+      // Lock body scroll for both add and edit (scrollbar-width compensated
+      // so the page doesn't shift sideways)
+      lockBodyScroll();
 
       // Trigger animation for slide-in panel (editing)
       if (editingGoal) {
@@ -150,12 +152,12 @@ export default function AddGoalModal({ visible, onClose, onSave, editingGoal }: 
     } else {
       setIsAnimating(false);
       // Unlock body scroll
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     }
 
     // Cleanup on unmount
     return () => {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     };
   }, [visible, editingGoal]);
 

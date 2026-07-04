@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Transaction, RecurrenceType, PaymentStatus } from '@/types';
 import { formatCurrency, formatDate } from '@/lib/formatters';
+import { lockBodyScroll, unlockBodyScroll } from '@/lib/bodyScrollLock';
 import { CategoryIcon, CustomSelect, DatePicker } from '@/components/ui';
 import { useCategories } from '@/hooks/useCategories';
 
@@ -44,7 +45,7 @@ export default function TransactionDetailPanel({
   useEffect(() => {
     if (isOpen) {
       // Lock body scroll
-      document.body.style.overflow = 'hidden';
+      lockBodyScroll();
 
       setShouldRender(true);
       setIsEditMode(false);
@@ -54,7 +55,7 @@ export default function TransactionDetailPanel({
     } else {
       setIsAnimating(false);
       // Unlock body scroll
-      document.body.style.overflow = '';
+      unlockBodyScroll();
       // Remove from DOM after animation completes
       const timer = setTimeout(() => setShouldRender(false), 300);
       return () => clearTimeout(timer);
@@ -62,7 +63,7 @@ export default function TransactionDetailPanel({
 
     // Cleanup on unmount
     return () => {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     };
   }, [isOpen]);
 

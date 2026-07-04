@@ -4,6 +4,7 @@ import {useEffect, useState} from 'react';
 import {X} from 'lucide-react';
 import {DatePicker, CustomSelect} from '@/components/ui';
 import {GAME_TYPE_LABELS} from '@/types';
+import {lockBodyScroll, unlockBodyScroll} from '@/lib/bodyScrollLock';
 import type {GameType, EventInput, PokerTournamentEvent} from '@/types';
 
 interface EventModalProps {
@@ -94,10 +95,10 @@ export default function EventModal({
 
   useEffect(() => {
     if (!visible) {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
       return;
     }
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
     if (editingEvent) {
       const pos = editingEvent.finishPosition;
       const field = editingEvent.fieldSize;
@@ -119,7 +120,7 @@ export default function EventModal({
     setErrors({});
     setSaving(false);
     return () => {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     };
   }, [visible, editingEvent]);
 

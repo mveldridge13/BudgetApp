@@ -3,6 +3,7 @@
 import {useEffect, useState} from 'react';
 import {X} from 'lucide-react';
 import {DatePicker} from '@/components/ui';
+import {lockBodyScroll, unlockBodyScroll} from '@/lib/bodyScrollLock';
 import type {PokerTournament, TournamentInput} from '@/types';
 
 interface TournamentModalProps {
@@ -59,10 +60,10 @@ export default function TournamentModal({
 
   useEffect(() => {
     if (!visible) {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
       return;
     }
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
     if (editingTournament) {
       setForm({
         name: editingTournament.name || '',
@@ -86,7 +87,7 @@ export default function TournamentModal({
     setErrors({});
     setSaving(false);
     return () => {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     };
   }, [visible, editingTournament]);
 
