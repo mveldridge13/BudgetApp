@@ -1,6 +1,7 @@
 'use client';
 
-import {useState, useCallback} from 'react';
+import {useState, useCallback, useMemo} from 'react';
+import useSWR from 'swr';
 import {
   AreaChart,
   Area,
@@ -200,10 +201,6 @@ export default function AnalyticsPage() {
   // Modal state
   const [showDiscretionaryBreakdown, setShowDiscretionaryBreakdown] =
     useState(false);
-  const [discretionaryDetail, setDiscretionaryDetail] =
-    useState<DiscretionaryBreakdown | null>(null);
-  const [discretionaryDetailLoading, setDiscretionaryDetailLoading] =
-    useState(false);
   // The reference day (YYYY-MM-DD) the breakdown modal is showing; user-changeable via the calendar.
   const [discretionaryDate, setDiscretionaryDate] = useState('');
   // The donut slice the user clicked, to show its subcategory breakdown on the right.
@@ -221,73 +218,75 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Fetch the discretionary breakdown for the period (day/week/month per the
-  // active tab) containing the given day. Mirrors the mobile app's
-  // createLocalDateRange so the backend scopes to that exact period and returns
-  // discretionary-only categories — instead of the whole-range categoryBreakdown.
-  const loadDiscretionaryBreakdown = useCallback(
-    async (isoDate: string) => {
-      setSelectedDonutCategoryId(null);
-      if (!isoDate) {
-        setDiscretionaryDetail(null);
-        return;
-      }
+  // Date range for the discretionary breakdown: the period (day for 7d/30d,
+  // whole month for 12m) containing the reference day. Mirrors the mobile
+  // app's createLocalDateRange so the backend scopes to that exact period and
+  // returns discretionary-only categories — instead of the whole-range
+  // categoryBreakdown.
+  const discretionaryRange = useMemo(() => {
+    if (!discretionaryDate) return null;
 
-      const [y, m, d] = isoDate.split('-').map(Number);
-      const base = new Date(y, m - 1, d);
-      let start: Date;
-      let end: Date;
+    const [y, m, d] = discretionaryDate.split('-').map(Number);
+    const base = new Date(y, m - 1, d);
+    let start: Date;
+    let end: Date;
 
-      if (selectedPeriod === '12m') {
-        // First to last day of the month (the highest-spend month).
-        start = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
-        end = new Date(
-          base.getFullYear(),
-          base.getMonth() + 1,
-          0,
-          23,
-          59,
-          59,
-          999,
-        );
-      } else {
-        // 7d / 30d — a single day (the highest-spend day).
-        start = new Date(
-          base.getFullYear(),
-          base.getMonth(),
-          base.getDate(),
-          0,
-          0,
-          0,
-          0,
-        );
-        end = new Date(
-          base.getFullYear(),
-          base.getMonth(),
-          base.getDate(),
-          23,
-          59,
-          59,
-          999,
-        );
-      }
+    if (selectedPeriod === '12m') {
+      // First to last day of the month (the highest-spend month).
+      start = new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+    } else {
+      // 7d / 30d — a single day (the highest-spend day).
+      start = new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        base.getDate(),
+        0,
+        0,
+        0,
+        0,
+      );
+      end = new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        base.getDate(),
+        23,
+        59,
+        59,
+        999,
+      );
+    }
 
-      try {
-        setDiscretionaryDetailLoading(true);
-        const detail = await transactionService.getDiscretionaryBreakdown({
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-        });
-        setDiscretionaryDetail(detail);
-      } catch (error) {
-        console.error('Error fetching discretionary breakdown:', error);
-        setDiscretionaryDetail(null);
-      } finally {
-        setDiscretionaryDetailLoading(false);
-      }
-    },
-    [selectedPeriod],
-  );
+    return {startDate: start.toISOString(), endDate: end.toISOString()};
+  }, [discretionaryDate, selectedPeriod]);
+
+  // SWR-cached per date range: reopening the modal on an already-viewed day
+  // renders instantly from cache and revalidates in the background.
+  const {data: discretionaryDetail, isLoading: discretionaryDetailLoading} =
+    useSWR<DiscretionaryBreakdown>(
+      showDiscretionaryBreakdown && discretionaryRange
+        ? [
+            'discretionary-breakdown',
+            discretionaryRange.startDate,
+            discretionaryRange.endDate,
+          ]
+        : null,
+      ([, startDate, endDate]: [string, string, string]) =>
+        transactionService.getDiscretionaryBreakdown({startDate, endDate}),
+      {
+        keepPreviousData: true,
+        onError: error =>
+          console.error('Error fetching discretionary breakdown:', error),
+      },
+    );
 
   // Open the breakdown modal anchored to a given day (defaults to today).
   const openDiscretionaryBreakdown = useCallback(
@@ -307,21 +306,21 @@ export default function AnalyticsPage() {
           )}-${String(dt.getDate()).padStart(2, '0')}`;
         }
       }
+      setSelectedDonutCategoryId(null);
       setDiscretionaryDate(iso);
       setShowDiscretionaryBreakdown(true);
-      loadDiscretionaryBreakdown(iso);
     },
-    [loadDiscretionaryBreakdown],
+    [],
   );
 
   // Calendar change inside the modal: switch the day and refetch.
   const handleDiscretionaryDateChange = useCallback(
     (isoDate: string) => {
       if (!isoDate) return;
+      setSelectedDonutCategoryId(null);
       setDiscretionaryDate(isoDate);
-      loadDiscretionaryBreakdown(isoDate);
     },
-    [loadDiscretionaryBreakdown],
+    [],
   );
 
   const todayISO = (() => {
@@ -1456,7 +1455,6 @@ export default function AnalyticsPage() {
         isOpen={showDiscretionaryBreakdown}
         onClose={() => {
           setShowDiscretionaryBreakdown(false);
-          setDiscretionaryDetail(null);
           setDiscretionaryDate('');
           setSelectedDonutCategoryId(null);
         }}
