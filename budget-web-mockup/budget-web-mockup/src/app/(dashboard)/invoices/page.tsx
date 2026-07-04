@@ -278,14 +278,14 @@ export default function InvoicesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Invoices</h1>
           <p className="text-gray-600 mt-1">
             Create and manage invoices for your freelance work.
           </p>
         </div>
         <button
           onClick={openCreate}
-          className="text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all hover:shadow-lg shrink-0"
+          className="self-start text-white px-4 py-2 text-sm sm:px-5 sm:py-2.5 sm:text-base rounded-xl font-medium flex items-center gap-2 transition-all hover:shadow-lg shrink-0"
           style={{
             backgroundColor: '#6366f1',
             boxShadow: '0 2px 8px rgba(99, 102, 241, 0.2)',

@@ -102,7 +102,7 @@ export default function FeedbackPage() {
       <div>
         <div className="flex items-center gap-2.5">
           <MessageSquare className="w-7 h-7" style={{ color: '#6366f1' }} />
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Feedback</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Feedback</h1>
         </div>
         <p className="text-gray-500 mt-2">
           Found a bug or have an idea? Let us know — every bit helps while we&apos;re testing.

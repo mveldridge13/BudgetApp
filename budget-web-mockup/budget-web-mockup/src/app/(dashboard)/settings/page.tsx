@@ -221,7 +221,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-600 mt-1">
           Manage your account and preferences.
         </p>
@@ -229,14 +229,14 @@ export default function SettingsPage() {
 
       {/* Tab bar */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6 -mb-px">
+        <nav className="flex gap-5 sm:gap-6 -mb-px overflow-x-auto no-scrollbar">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
                   isActive
                     ? 'text-indigo-600 border-indigo-600'
                     : 'text-gray-500 border-transparent hover:text-gray-700'

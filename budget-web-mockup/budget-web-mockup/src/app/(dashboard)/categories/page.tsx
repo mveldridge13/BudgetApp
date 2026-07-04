@@ -171,16 +171,16 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Categories</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Categories</h1>
           <p className="text-gray-600 mt-1">
             Organize your transactions with categories.
           </p>
         </div>
         <button
           onClick={handleAddCategory}
-          className="text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2 transition-colors"
+          className="self-start sm:self-auto text-white px-4 py-2 text-sm sm:text-base rounded-lg font-medium flex items-center space-x-2 transition-colors"
           style={{backgroundColor: '#6366f1'}}
           onMouseEnter={e =>
             (e.currentTarget.style.backgroundColor = '#4f46e5')
