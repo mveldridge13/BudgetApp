@@ -4,6 +4,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {X, Plus, Trash2, Send} from 'lucide-react';
 import {DatePicker} from '@/components/ui';
 import {formatCurrency} from '@/lib/formatters';
+import {lockBodyScroll, unlockBodyScroll} from '@/lib/bodyScrollLock';
 import type {Invoice, InvoiceFormData, InvoiceLineItemInput} from '@/types';
 
 interface InvoiceModalProps {
@@ -85,10 +86,10 @@ export default function InvoiceModal({
 
   useEffect(() => {
     if (!visible) {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
       return;
     }
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
 
     if (invoice) {
       setClientName(invoice.client?.name ?? '');
@@ -122,7 +123,7 @@ export default function InvoiceModal({
     setErrors({});
     setSaving(null);
     return () => {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     };
   }, [visible, invoice]);
 

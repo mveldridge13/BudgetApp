@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { GoalDisplay } from '@/types';
 import { useDebtSimulator } from '@/hooks/useDebtSimulator';
+import { lockBodyScroll, unlockBodyScroll } from '@/lib/bodyScrollLock';
 
 interface DebtSimulatorProps {
   goal: GoalDisplay;
@@ -37,13 +38,13 @@ export default function DebtSimulator({
   // Lock body scroll when modal is visible
   useEffect(() => {
     if (visible) {
-      document.body.style.overflow = 'hidden';
+      lockBodyScroll();
     } else {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     }
 
     return () => {
-      document.body.style.overflow = '';
+      unlockBodyScroll();
     };
   }, [visible]);
 
