@@ -108,6 +108,7 @@ export default function TransactionDetailPanel({
       'weekly': 'Weekly',
       'fortnightly': 'Fortnightly',
       'monthly': 'Monthly',
+      'quarterly': 'Quarterly',
       'sixmonths': 'Every 6 months',
       'yearly': 'Yearly',
     };
@@ -285,6 +286,7 @@ export default function TransactionDetailPanel({
                         { value: 'weekly', label: 'Weekly' },
                         { value: 'fortnightly', label: 'Fortnightly' },
                         { value: 'monthly', label: 'Monthly' },
+                        { value: 'quarterly', label: 'Quarterly' },
                         { value: 'sixmonths', label: 'Every 6 months' },
                         { value: 'yearly', label: 'Yearly' },
                       ]}

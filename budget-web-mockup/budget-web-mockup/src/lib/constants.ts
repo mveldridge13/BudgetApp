@@ -10,6 +10,7 @@ export const RECURRENCE_OPTIONS = [
   { id: 'weekly', name: 'Weekly' },
   { id: 'fortnightly', name: 'Fortnightly' },
   { id: 'monthly', name: 'Monthly' },
+  { id: 'quarterly', name: 'Quarterly' },
   { id: 'sixmonths', name: 'Every 6 months' },
   { id: 'yearly', name: 'Yearly' },
 ] as const;
