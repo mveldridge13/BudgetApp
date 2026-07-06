@@ -212,6 +212,8 @@ const TransactionCard = ({
     switch (recurrence) {
       case 'monthly':
         return 'Monthly';
+      case 'quarterly':
+        return 'Quarterly';
       case 'sixmonths':
         return 'Every 6 months';
       case 'weekly':

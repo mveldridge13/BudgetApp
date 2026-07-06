@@ -2,7 +2,7 @@ import { DateRangeFilter, PaginationParams } from './api.types';
 
 export type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'ROLLOVER';
 export type PaymentStatus = 'UPCOMING' | 'PAID' | 'OVERDUE';
-export type RecurrenceType = 'none' | 'weekly' | 'fortnightly' | 'monthly' | 'sixmonths' | 'yearly';
+export type RecurrenceType = 'none' | 'weekly' | 'fortnightly' | 'monthly' | 'quarterly' | 'sixmonths' | 'yearly';
 
 export interface RecurringPattern {
   type: RecurrenceType;

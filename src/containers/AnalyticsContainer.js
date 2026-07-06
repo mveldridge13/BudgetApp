@@ -834,7 +834,7 @@ const AnalyticsContainer = () => {
     return (
       transaction.recurrence &&
       transaction.recurrence !== 'none' &&
-      ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
+      ['weekly', 'fortnightly', 'monthly', 'quarterly', 'sixmonths', 'yearly'].includes(
         transaction.recurrence,
       )
     );

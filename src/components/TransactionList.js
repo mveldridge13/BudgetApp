@@ -123,7 +123,7 @@ const TransactionList = ({
       if (!transaction.recurrence || transaction.recurrence === 'none') {
         return false;
       }
-      if (!['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
+      if (!['weekly', 'fortnightly', 'monthly', 'quarterly', 'sixmonths', 'yearly'].includes(
         transaction.recurrence,
       )) {
         return false;
@@ -138,6 +138,7 @@ const TransactionList = ({
       weekly: [],
       fortnightly: [],
       monthly: [],
+      quarterly: [],
       sixmonths: [],
       yearly: [],
     };
@@ -168,7 +169,7 @@ const TransactionList = ({
       return (
         transaction.recurrence &&
         transaction.recurrence !== 'none' &&
-        ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].includes(
+        ['weekly', 'fortnightly', 'monthly', 'quarterly', 'sixmonths', 'yearly'].includes(
           transaction.recurrence,
         )
       );
@@ -200,6 +201,7 @@ const TransactionList = ({
       weekly: 'Weekly',
       fortnightly: 'Fortnightly',
       monthly: 'Monthly',
+      quarterly: 'Quarterly',
       sixmonths: 'Every Six Months',
       yearly: 'Yearly',
     };
@@ -315,7 +317,7 @@ const TransactionList = ({
         )
       ) : (
         // Show all recurring transactions grouped by frequency
-        ['weekly', 'fortnightly', 'monthly', 'sixmonths', 'yearly'].map(
+        ['weekly', 'fortnightly', 'monthly', 'quarterly', 'sixmonths', 'yearly'].map(
           frequency => {
             const transactionsForFrequency = recurringGroups[frequency];
 

@@ -153,6 +153,7 @@ export default function TransactionList({
       'weekly': 'Weekly',
       'fortnightly': 'Fortnightly',
       'monthly': 'Monthly',
+      'quarterly': 'Quarterly',
       'sixmonths': 'Every 6 months',
       'yearly': 'Yearly',
     };
