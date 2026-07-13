@@ -25,6 +25,7 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
     email: '',
     password: '',
   });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Registration form state
   const [registerForm, setRegisterForm] = useState({
@@ -146,9 +147,20 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
             placeholderTextColor={colors.textSecondary}
             value={loginForm.password}
             onChangeText={text => handleInputChange('login', 'password', text)}
-            secureTextEntry
+            secureTextEntry={!showLoginPassword}
             editable={!loading}
           />
+          <TouchableOpacity
+            style={styles.passwordToggle}
+            onPress={() => setShowLoginPassword(prev => !prev)}
+            disabled={loading}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <Icon
+              name={showLoginPassword ? 'eye-off' : 'eye'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
         {errors?.password && (
           <Text style={styles.fieldError}>{errors.password}</Text>
@@ -484,6 +496,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
     marginLeft: 12,
+  },
+  passwordToggle: {
+    marginLeft: 8,
   },
   fieldError: {
     fontSize: 12,
