@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRightCircle, X, ChevronRight, ListChecks, Pencil } from 'lucide-react';
 import {formatCurrency} from '@/lib/formatters';
-import type { CommittedItem } from '@/services/user.service';
+import type { CommittedItem, PotInfo } from '@/services/user.service';
 
 interface RolloverBannerData {
   amount: number;
@@ -31,6 +31,9 @@ interface BalanceCardProps {
   baseIncome?: number;
   // Named income-source amounts received this period (income.sources)
   incomeSources?: {id: string; name: string; amount: number}[];
+  // Per-source ledger pots; when there are 2+ the card becomes a carousel
+  // ("Everything" card first, then one card per pot)
+  pots?: PotInfo[];
   // Days left in the current pay period; used to show the roll-to-next preview.
   daysRemaining?: number;
   // True while the user is still in their first pay period (backend
@@ -55,10 +58,42 @@ export default function BalanceCard({
   rolloverAvailable = 0,
   baseIncome = 0,
   incomeSources = [],
+  pots = [],
   daysRemaining = 0,
   isNewUser = false,
 }: BalanceCardProps) {
   const [showCommittedModal, setShowCommittedModal] = useState(false);
+
+  // Carousel state (only used when there are 2+ pots)
+  const [activeSlide, setActiveSlide] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const handleTrackScroll = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const mid = track.scrollLeft + track.clientWidth / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    Array.from(track.children).forEach((child, i) => {
+      const el = child as HTMLElement;
+      const center = el.offsetLeft + el.offsetWidth / 2;
+      const dist = Math.abs(center - mid);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    setActiveSlide(best);
+  };
+
+  const scrollToSlide = (index: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const child = track.children[index] as HTMLElement | undefined;
+    if (child) {
+      track.scrollTo({left: child.offsetLeft, behavior: 'smooth'});
+    }
+  };
 
   // Get locale based on currency
   const getLocale = (curr: string) => {
@@ -145,9 +180,9 @@ export default function BalanceCard({
     );
   }
 
-  return (
+  const mainCard = (
     <div
-      className="bg-white rounded-xl border border-gray-100 p-6 transition-all duration-200 hover:shadow-lg"
+      className="h-full bg-white rounded-xl border border-gray-100 p-6 transition-all duration-200 hover:shadow-lg"
       style={{boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)'}}>
       {/* Main Balance */}
       <div className="mb-6">
@@ -396,6 +431,149 @@ export default function BalanceCard({
           </div>
         </div>
       )}
+    </div>
+  );
+
+  // No income sources → the card renders exactly as it always has
+  if (pots.length < 2) {
+    return mainCard;
+  }
+
+  // Carousel: "Everything" card first, then one card per pot
+  return (
+    <div className="flex flex-col">
+      <div
+        ref={trackRef}
+        onScroll={handleTrackScroll}
+        className="no-scrollbar relative flex items-stretch gap-4 overflow-x-auto snap-x snap-mandatory"
+        aria-label="Balance cards, swipe horizontally">
+        <div className="w-full shrink-0 snap-center">{mainCard}</div>
+        {pots.map(pot => (
+          <div key={pot.id} className="w-full shrink-0 snap-center">
+            <PotCard pot={pot} format={format} locale={locale} />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-center gap-1.5 mt-3" role="tablist" aria-label="Balance card selector">
+        {['Everything', ...pots.map(p => p.name)].map((name, i) => (
+          <button
+            key={name + i}
+            onClick={() => scrollToSlide(i)}
+            aria-label={name}
+            aria-selected={activeSlide === i}
+            role="tab"
+            className={`h-2 rounded-full transition-all duration-200 ${
+              activeSlide === i
+                ? 'w-5'
+                : 'w-2 bg-gray-300 hover:bg-gray-400'
+            }`}
+            style={activeSlide === i ? {backgroundColor: '#6366f1'} : undefined}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One pot in the carousel: what's left of this income stream this period.
+ * Attribution-only — a negative pot is over-spent, not blocked.
+ */
+function PotCard({
+  pot,
+  format,
+  locale,
+}: {
+  pot: PotInfo;
+  format: (amount: number) => string;
+  locale: string;
+}) {
+  const pctLeft =
+    pot.received > 0 ? Math.round((pot.left / pot.received) * 100) : 0;
+  const isOverspent = pot.left < 0;
+  const barColor =
+    isOverspent || pctLeft < 20
+      ? '#FF6B6B'
+      : pctLeft < 50
+        ? '#FFB366'
+        : '#14B8A6';
+  const frequencyLabel = pot.frequency
+    ? pot.frequency.charAt(0) + pot.frequency.slice(1).toLowerCase()
+    : null;
+  const nextPaymentLabel = pot.nextPaymentDate
+    ? new Date(pot.nextPaymentDate).toLocaleDateString(locale, {
+        day: 'numeric',
+        month: 'short',
+      })
+    : '—';
+
+  return (
+    <div
+      className="h-full bg-white rounded-xl border border-gray-100 p-6 transition-all duration-200 hover:shadow-lg"
+      style={{boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)'}}>
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-sm font-medium text-gray-500">{pot.name}</p>
+          {frequencyLabel && (
+            <span
+              className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+              style={{backgroundColor: '#EEF2FF', color: '#6366f1'}}>
+              {frequencyLabel}
+            </span>
+          )}
+        </div>
+        <p
+          className={`text-4xl font-bold tracking-tight ${
+            isOverspent ? 'text-red-500' : 'text-gray-900'
+          }`}>
+          {format(pot.left)}
+        </p>
+        <p className="text-sm text-gray-500 mt-1">
+          {format(pot.received)} received · {format(pot.spent)} spent
+        </p>
+      </div>
+
+      <div className="rounded-xl p-5" style={{backgroundColor: '#EEF2FF'}}>
+        <p className="text-xs font-medium text-gray-500 mb-2">
+          Left in this pot
+        </p>
+        <p
+          className="text-2xl font-bold mb-4 tracking-tight"
+          style={{color: isOverspent ? '#F87171' : '#6366f1'}}>
+          {format(pot.left)}
+        </p>
+        <div className="bg-white/50 rounded-full h-2 overflow-hidden mb-2">
+          <div
+            className="h-full rounded-full transition-all duration-500 ease-out"
+            style={{
+              width: `${Math.max(0, Math.min(100, pctLeft))}%`,
+              backgroundColor: barColor,
+            }}
+          />
+        </div>
+        <p className="text-xs text-gray-500 font-medium">
+          {isOverspent
+            ? `Over-spent by ${format(Math.abs(pot.left))}`
+            : `${pctLeft}% of this pot remaining`}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs font-medium text-gray-500 mb-1">Received</p>
+          <p className="text-lg font-semibold text-gray-900">
+            {format(pot.received)}
+          </p>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs font-medium text-gray-500 mb-1">
+            {pot.isSalary ? 'Next pay' : 'Next payment'}
+          </p>
+          <p className="text-lg font-semibold text-gray-900">
+            {nextPaymentLabel}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
