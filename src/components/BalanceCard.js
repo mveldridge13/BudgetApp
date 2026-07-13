@@ -1,7 +1,13 @@
 /* eslint-disable react-native/no-inline-styles */
 // components/BalanceCard.js (Improved goal readability with larger fonts and better spacing)
-import React, {useMemo} from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import React, {useMemo, useState, useRef} from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
 import {formatCurrencySync} from '../utils/currencyHelper';
@@ -37,6 +43,32 @@ const BalanceCard = ({
   const formatCurrency = amount => {
     return formatCurrencySync(amount, currency);
   };
+
+  // Carousel state (only used when there's an additional account; the
+  // "Everything" card already represents the main income, so the carousel
+  // only adds one slide per additional income account, web parity).
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [carouselWidth, setCarouselWidth] = useState(0);
+  const carouselScrollRef = useRef(null);
+
+  const handleCarouselScrollEnd = e => {
+    if (!carouselWidth) {
+      return;
+    }
+    const index = Math.round(e.nativeEvent.contentOffset.x / carouselWidth);
+    setActiveSlide(index);
+  };
+
+  const scrollToSlide = index => {
+    carouselScrollRef.current?.scrollTo({
+      x: index * carouselWidth,
+      animated: true,
+    });
+  };
+
+  const additionalAccounts = (homeSummary?.accounts || []).filter(
+    account => !account.isSalary,
+  );
 
   const getCurrentDate = () => {
     const day = selectedDate.getDate();
@@ -310,30 +342,27 @@ const BalanceCard = ({
     return colors.progressGreen;
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Period Info - Touchable */}
-      {incomeData && !loading && (
-        <TouchableOpacity
-          style={styles.periodInfo}
-          onPress={onCalendarPress}
-          activeOpacity={0.7}>
-          <Text style={styles.currentMonth}>{getCurrentDate()}</Text>
-          <Text style={styles.frequencyDisplay}>
-            Paid {incomeData.frequency}
-          </Text>
-          {getPayPeriodStatus() && (
-            <Text
-              style={[
-                styles.payPeriodStatus,
-                isNewPayPeriod && styles.newPeriodStatus,
-              ]}>
-              {getPayPeriodStatus()}
-            </Text>
-          )}
-        </TouchableOpacity>
+  const periodInfo = incomeData && !loading && (
+    <TouchableOpacity
+      style={styles.periodInfo}
+      onPress={onCalendarPress}
+      activeOpacity={0.7}>
+      <Text style={styles.currentMonth}>{getCurrentDate()}</Text>
+      <Text style={styles.frequencyDisplay}>Paid {incomeData.frequency}</Text>
+      {getPayPeriodStatus() && (
+        <Text
+          style={[
+            styles.payPeriodStatus,
+            isNewPayPeriod && styles.newPeriodStatus,
+          ]}>
+          {getPayPeriodStatus()}
+        </Text>
       )}
+    </TouchableOpacity>
+  );
 
+  const mainCard = (
+    <>
       {/* Balance Card */}
       <View
         ref={balanceCardRef}
@@ -657,9 +686,168 @@ const BalanceCard = ({
           </Text>
         </TouchableOpacity>
       )}
+    </>
+  );
+
+  // No income sources → the card renders exactly as it always has
+  if (additionalAccounts.length === 0) {
+    return (
+      <View style={styles.container}>
+        {periodInfo}
+        {mainCard}
+      </View>
+    );
+  }
+
+  // Carousel: the "Everything" card first, then one card per additional
+  // income account (web parity, see BalanceCard.tsx on the website).
+  return (
+    <View style={styles.container}>
+      {periodInfo}
+
+      <View
+        style={styles.carouselWrapper}
+        onLayout={e => setCarouselWidth(e.nativeEvent.layout.width)}>
+        <ScrollView
+          ref={carouselScrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={handleCarouselScrollEnd}>
+          <View style={{width: carouselWidth}}>{mainCard}</View>
+          {additionalAccounts.map(account => (
+            <View key={account.id} style={{width: carouselWidth}}>
+              <AccountCard account={account} currency={currency} />
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.carouselDots}>
+        {['Everything', ...additionalAccounts.map(a => a.name)].map(
+          (name, i) => (
+            <TouchableOpacity
+              key={name + i}
+              onPress={() => scrollToSlide(i)}
+              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+              style={[styles.dot, activeSlide === i && styles.dotActive]}
+            />
+          ),
+        )}
+      </View>
     </View>
   );
 };
+
+/**
+ * One additional income account in the carousel, laid out like the main
+ * balance card: the account's received total as the headline, then Left to
+ * Spend + Total Expenses (with the same Committed/Discretionary/Goals
+ * breakdown as the main card), then Received + Next payment. Attribution
+ * only — a negative account is over-spent, not blocked. Web parity
+ * (budget-web-mockup BalanceCard.tsx AccountCard).
+ */
+function AccountCard({account, currency}) {
+  const format = amount => formatCurrencySync(amount, currency);
+
+  const pctLeft =
+    account.received > 0 ? Math.round((account.left / account.received) * 100) : 0;
+  const isOverspent = account.left < 0;
+  const isCloseToLimit = pctLeft < 20 && pctLeft >= 0;
+  const isLowBalance = pctLeft < 50 && pctLeft >= 20;
+  const frequencyLabel = account.frequency
+    ? account.frequency.charAt(0) + account.frequency.slice(1).toLowerCase()
+    : null;
+  const nextPaymentLabel = account.nextPaymentDate
+    ? (() => {
+        const d = new Date(account.nextPaymentDate);
+        return `${d.toLocaleDateString('en-AU', {month: 'short'})} ${d.getDate()}`;
+      })()
+    : '—';
+
+  return (
+    <View style={styles.balanceCard}>
+      <View style={styles.accountHeaderRow}>
+        <Text style={styles.balanceLabel}>{account.name.toUpperCase()}</Text>
+        {frequencyLabel && (
+          <View style={styles.frequencyBadge}>
+            <Text style={styles.frequencyBadgeText}>{frequencyLabel}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.totalIncome}>{format(account.received)}</Text>
+
+      <View style={[styles.balanceRow, styles.accountSecondRow]}>
+        <View style={styles.balanceItem}>
+          <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
+          <Text
+            style={[
+              styles.balanceAmount,
+              isOverspent && styles.overBudgetText,
+            ]}>
+            {format(account.left)}
+          </Text>
+        </View>
+        <View style={[styles.balanceItem, styles.balanceItemRight]}>
+          <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
+          <Text style={styles.balanceAmount}>{format(account.spent)}</Text>
+
+          <View style={styles.expenseBreakdown}>
+            <View style={styles.expenseBreakdownRow}>
+              <Text style={styles.expenseBreakdownLabel}>└─ Committed:</Text>
+              <Text style={styles.expenseBreakdownAmount}>
+                {format(account.committed)}
+              </Text>
+            </View>
+            <View style={styles.expenseBreakdownRow}>
+              <Text style={styles.expenseBreakdownLabel}>
+                └─ Discretionary:
+              </Text>
+              <Text style={styles.expenseBreakdownAmount}>
+                {format(account.discretionary)}
+              </Text>
+            </View>
+            {account.goals > 0 && (
+              <View style={styles.expenseBreakdownRow}>
+                <Text style={styles.expenseBreakdownLabel}>└─ Goals:</Text>
+                <Text style={styles.expenseBreakdownAmount}>
+                  {format(account.goals)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.progressContainer}>
+        <View
+          style={[
+            styles.progressBar,
+            {width: `${Math.max(0, Math.min(100, pctLeft))}%`},
+            (isOverspent || isCloseToLimit) && styles.overBudgetBar,
+            isLowBalance && styles.warningBar,
+          ]}
+        />
+      </View>
+      <Text style={styles.progressText}>
+        {isOverspent
+          ? `Over-spent by ${format(Math.abs(account.left))}`
+          : `${pctLeft}% remaining`}
+      </Text>
+
+      <View style={[styles.balanceRow, styles.accountReceivedRow]}>
+        <View style={styles.balanceItem}>
+          <Text style={styles.balanceLabel}>RECEIVED</Text>
+          <Text style={styles.balanceAmount}>{format(account.received)}</Text>
+        </View>
+        <View style={[styles.balanceItem, styles.balanceItemRight]}>
+          <Text style={styles.balanceLabel}>NEXT PAYMENT</Text>
+          <Text style={styles.balanceAmount}>{nextPaymentLabel}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   container: {},
@@ -1096,6 +1284,56 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 12,
     backgroundColor: colors.overlayLight,
+  },
+  // Carousel (additional-accounts) styles — web parity
+  carouselWrapper: {
+    width: '100%',
+  },
+  carouselDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.overlayDark,
+  },
+  dotActive: {
+    width: 16,
+    backgroundColor: colors.textWhite,
+  },
+  accountHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  frequencyBadge: {
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  frequencyBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  accountSecondRow: {
+    marginTop: 15,
+  },
+  accountReceivedRow: {
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: colors.overlayLight,
   },
 });
 
