@@ -5,10 +5,12 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   RefreshControl,
   Alert,
   Animated,
   PanResponder,
+  Modal,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {LineChart} from 'react-native-chart-kit';
@@ -289,6 +291,12 @@ const AnalyticsScreen = ({
   // ✅ NEW: State for Spending Velocity Modal
   const [showSpendingVelocityModal, setShowSpendingVelocityModal] =
     useState(false);
+
+  // Ad-hoc income breakdown modal (web parity) - the "Ad-hoc" row in Income
+  // by Source is an aggregate, so it's tappable to reveal what's inside it.
+  const [showAdhocBreakdown, setShowAdhocBreakdown] = useState(false);
+  const adhocIncomeSource =
+    incomeAnalytics?.incomeBySource?.find(source => source.isAdhoc) || null;
 
   // ✅ NEW: Handle Spending Velocity tap
   const handleSpendingVelocityPress = () => {
@@ -762,37 +770,71 @@ const AnalyticsScreen = ({
               <Text style={styles.chartTitle}>Income by Source</Text>
               <View style={styles.incomeSourceContainer}>
                 {incomeAnalytics?.incomeBySource?.length > 0 ? (
-                  incomeAnalytics.incomeBySource.map((source, index) => (
-                    <View
-                      key={source.categoryId || index}
-                      style={styles.incomeSourceItem}>
-                      <View style={styles.incomeSourceHeader}>
-                        <View
-                          style={[
-                            styles.incomeSourceDot,
-                            {backgroundColor: source.color || colors.primary},
-                          ]}
-                        />
-                        <Text style={styles.incomeSourceLabel}>
-                          {source.categoryName}
-                        </Text>
-                        <Text style={styles.incomeSourceAmount}>
-                          ${source.totalAmount.toFixed(2)}
-                        </Text>
+                  incomeAnalytics.incomeBySource.map((source, index) => {
+                    const isClickableAdhoc =
+                      source.isAdhoc && (source.breakdown?.length ?? 0) > 0;
+                    const clampedWidth = Math.max(
+                      0,
+                      Math.min(100, source.percentage),
+                    );
+                    return (
+                      <View
+                        key={source.categoryId || index}
+                        style={styles.incomeSourceItem}>
+                        {isClickableAdhoc ? (
+                          <TouchableOpacity
+                            style={styles.incomeSourceHeader}
+                            onPress={() => setShowAdhocBreakdown(true)}
+                            activeOpacity={0.7}>
+                            <View
+                              style={[
+                                styles.incomeSourceDot,
+                                {backgroundColor: source.color || colors.primary},
+                              ]}
+                            />
+                            <Text style={styles.incomeSourceLabel}>
+                              {source.categoryName}
+                            </Text>
+                            <Icon
+                              name="chevron-forward"
+                              size={16}
+                              color={colors.textSecondary || '#9CA3AF'}
+                              style={styles.incomeSourceChevron}
+                            />
+                            <Text style={styles.incomeSourceAmount}>
+                              ${source.totalAmount.toFixed(2)}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={styles.incomeSourceHeader}>
+                            <View
+                              style={[
+                                styles.incomeSourceDot,
+                                {backgroundColor: source.color || colors.primary},
+                              ]}
+                            />
+                            <Text style={styles.incomeSourceLabel}>
+                              {source.categoryName}
+                            </Text>
+                            <Text style={styles.incomeSourceAmount}>
+                              ${source.totalAmount.toFixed(2)}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.incomeSourceBar}>
+                          <View
+                            style={[
+                              styles.incomeSourceBarFill,
+                              {
+                                width: `${clampedWidth}%`,
+                                backgroundColor: source.color || colors.primary,
+                              },
+                            ]}
+                          />
+                        </View>
                       </View>
-                      <View style={styles.incomeSourceBar}>
-                        <View
-                          style={[
-                            styles.incomeSourceBarFill,
-                            {
-                              width: `${source.percentage}%`,
-                              backgroundColor: source.color || colors.primary,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </View>
-                  ))
+                    );
+                  })
                 ) : (
                   <View style={styles.incomeSourceItem}>
                     <Text style={styles.incomeSourceLabel}>
@@ -1305,6 +1347,62 @@ const AnalyticsScreen = ({
         onClose={() => setShowSpendingVelocityModal(false)}
         selectedPeriod={selectedPeriod}
       />
+
+      {/* Ad-hoc Income Breakdown Modal (web parity) */}
+      <Modal
+        visible={showAdhocBreakdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowAdhocBreakdown(false)}>
+        <TouchableWithoutFeedback onPress={() => setShowAdhocBreakdown(false)}>
+          <View style={styles.adhocModalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.adhocModalContent}>
+                <View style={styles.adhocModalHeader}>
+                  <Text style={styles.adhocModalTitle}>
+                    Ad-hoc Income Breakdown
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowAdhocBreakdown(false)}
+                    hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                    <Icon
+                      name="close"
+                      size={22}
+                      color={colors.textSecondary || '#9CA3AF'}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {adhocIncomeSource?.breakdown?.length > 0 ? (
+                  adhocIncomeSource.breakdown.map(item => (
+                    <View key={item.categoryId} style={styles.adhocModalRow}>
+                      <View style={styles.adhocModalRowLeft}>
+                        <View
+                          style={[
+                            styles.incomeSourceDot,
+                            {backgroundColor: item.color || colors.primary},
+                          ]}
+                        />
+                        <Text
+                          style={styles.adhocModalRowLabel}
+                          numberOfLines={1}>
+                          {item.categoryName}
+                        </Text>
+                      </View>
+                      <Text style={styles.adhocModalRowAmount}>
+                        ${item.totalAmount.toFixed(2)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.adhocModalEmptyText}>
+                    No ad-hoc income this period.
+                  </Text>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 };
@@ -1643,6 +1741,68 @@ const styles = StyleSheet.create({
   incomeSourceBarFill: {
     height: '100%',
     borderRadius: 4,
+  },
+  incomeSourceChevron: {
+    marginRight: 8,
+  },
+  adhocModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  adhocModalContent: {
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: '70%',
+  },
+  adhocModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  adhocModalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+  },
+  adhocModalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.background || '#F3F4F6',
+  },
+  adhocModalRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 12,
+  },
+  adhocModalRowLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+    flexShrink: 1,
+  },
+  adhocModalRowAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'System',
+    color: colors.textPrimary || '#1F2937',
+  },
+  adhocModalEmptyText: {
+    fontSize: 14,
+    fontFamily: 'System',
+    color: colors.textSecondary || '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 
   // Recurring vs Ad-hoc styles
