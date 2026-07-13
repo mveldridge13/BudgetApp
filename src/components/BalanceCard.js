@@ -775,38 +775,41 @@ function AccountCard({account, currency}) {
           </View>
         )}
       </View>
-      {/* Headline — unlabeled, matching the web AccountCard (the name/badge
-          row above already identifies it; a "RECEIVED" label here would
-          duplicate the Received tile lower down). */}
-      <Text style={styles.totalIncome}>{format(account.received)}</Text>
+      <View style={styles.balanceRow}>
+        {/* Headline — unlabeled, matching the web AccountCard (the name/badge
+            row above already identifies it; a "RECEIVED" label here would
+            duplicate the Received tile lower down). */}
+        <View style={styles.balanceItem}>
+          <Text style={styles.totalIncome}>{format(account.received)}</Text>
+        </View>
+        <View style={[styles.balanceItem, styles.balanceItemRight]}>
+          <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
+          <Text style={styles.balanceAmount}>{format(account.spent)}</Text>
 
-      <View style={styles.accountTotalExpenses}>
-        <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
-        <Text style={styles.balanceAmount}>{format(account.spent)}</Text>
-
-        <View style={styles.expenseBreakdown}>
-          <View style={styles.expenseBreakdownRow}>
-            <Text style={styles.expenseBreakdownLabel}>└─ Committed:</Text>
-            <Text style={styles.expenseBreakdownAmount}>
-              {format(account.committed)}
-            </Text>
-          </View>
-          <View style={styles.expenseBreakdownRow}>
-            <Text style={styles.expenseBreakdownLabel}>
-              └─ Discretionary:
-            </Text>
-            <Text style={styles.expenseBreakdownAmount}>
-              {format(account.discretionary)}
-            </Text>
-          </View>
-          {account.goals > 0 && (
+          <View style={styles.expenseBreakdown}>
             <View style={styles.expenseBreakdownRow}>
-              <Text style={styles.expenseBreakdownLabel}>└─ Goals:</Text>
+              <Text style={styles.expenseBreakdownLabel}>└─ Committed:</Text>
               <Text style={styles.expenseBreakdownAmount}>
-                {format(account.goals)}
+                {format(account.committed)}
               </Text>
             </View>
-          )}
+            <View style={styles.expenseBreakdownRow}>
+              <Text style={styles.expenseBreakdownLabel}>
+                └─ Discretionary:
+              </Text>
+              <Text style={styles.expenseBreakdownAmount}>
+                {format(account.discretionary)}
+              </Text>
+            </View>
+            {account.goals > 0 && (
+              <View style={styles.expenseBreakdownRow}>
+                <Text style={styles.expenseBreakdownLabel}>└─ Goals:</Text>
+                <Text style={styles.expenseBreakdownAmount}>
+                  {format(account.goals)}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
@@ -1329,10 +1332,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-  },
-  accountTotalExpenses: {
-    marginTop: 15,
-    marginBottom: 15,
   },
   accountReceivedRow: {
     marginTop: 15,
