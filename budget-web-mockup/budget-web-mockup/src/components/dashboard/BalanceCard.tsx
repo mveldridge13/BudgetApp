@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRightCircle, X, ChevronRight, ListChecks, Pencil } from 'lucide-react';
 import {formatCurrency} from '@/lib/formatters';
-import type { CommittedItem, AccountInfo } from '@/services/user.service';
+import type { CommittedItem, IncomeLedgerInfo } from '@/services/user.service';
 
 interface RolloverBannerData {
   amount: number;
@@ -31,9 +31,10 @@ interface BalanceCardProps {
   baseIncome?: number;
   // Named income-source amounts received this period (income.sources)
   incomeSources?: {id: string; name: string; amount: number}[];
-  // Per-source ledger accounts; when there's an additional account the card
-  // becomes a carousel ("Everything" card first, then one card per account)
-  accounts?: AccountInfo[];
+  // Per-source income ledger; when there's an additional income source the
+  // card becomes a carousel ("Everything" card first, then one card per
+  // income source)
+  incomeLedger?: IncomeLedgerInfo[];
   // Days left in the current pay period; used to show the roll-to-next preview.
   daysRemaining?: number;
   // True while the user is still in their first pay period (backend
@@ -58,13 +59,13 @@ export default function BalanceCard({
   rolloverAvailable = 0,
   baseIncome = 0,
   incomeSources = [],
-  accounts = [],
+  incomeLedger = [],
   daysRemaining = 0,
   isNewUser = false,
 }: BalanceCardProps) {
   const [showCommittedModal, setShowCommittedModal] = useState(false);
 
-  // Carousel state (only used when there's an additional account)
+  // Carousel state (only used when there's an additional income source)
   const [activeSlide, setActiveSlide] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -435,15 +436,16 @@ export default function BalanceCard({
   );
 
   // The first "Balance" card already represents the main income (salary +
-  // rollover), so the extra slides cover only the additional income accounts.
-  const additionalAccounts = accounts.filter(account => !account.isSalary);
+  // rollover), so the extra slides cover only the additional income sources.
+  const additionalIncomes = incomeLedger.filter(entry => !entry.isSalary);
 
   // No income sources → the card renders exactly as it always has
-  if (additionalAccounts.length === 0) {
+  if (additionalIncomes.length === 0) {
     return mainCard;
   }
 
-  // Carousel: the main balance card first, then one card per additional account
+  // Carousel: the main balance card first, then one card per additional
+  // income source
   return (
     <div className="flex flex-col">
       <div
@@ -452,14 +454,14 @@ export default function BalanceCard({
         className="no-scrollbar relative flex items-stretch gap-4 overflow-x-auto snap-x snap-mandatory"
         aria-label="Balance cards, swipe horizontally">
         <div className="w-full shrink-0 snap-center">{mainCard}</div>
-        {additionalAccounts.map(account => (
-          <div key={account.id} className="w-full shrink-0 snap-center">
-            <AccountCard account={account} format={format} locale={locale} />
+        {additionalIncomes.map(income => (
+          <div key={income.id} className="w-full shrink-0 snap-center">
+            <IncomeCard income={income} format={format} locale={locale} />
           </div>
         ))}
       </div>
       <div className="flex justify-center gap-1.5 mt-3" role="tablist" aria-label="Balance card selector">
-        {['Everything', ...additionalAccounts.map(a => a.name)].map((name, i) => (
+        {['Everything', ...additionalIncomes.map(i => i.name)].map((name, i) => (
           <button
             key={name + i}
             onClick={() => scrollToSlide(i)}
@@ -480,34 +482,34 @@ export default function BalanceCard({
 }
 
 /**
- * One additional income account in the carousel, laid out like the main
- * balance card: the account's received total as the headline, then Left to
+ * One additional income source in the carousel, laid out like the main
+ * balance card: the income's received total as the headline, then Left to
  * Spend + Total Expenses, then Received + Next payment. Attribution-only — a
- * negative account is over-spent, not blocked.
+ * negative entry is over-spent, not blocked.
  */
-function AccountCard({
-  account,
+function IncomeCard({
+  income,
   format,
   locale,
 }: {
-  account: AccountInfo;
+  income: IncomeLedgerInfo;
   format: (amount: number) => string;
   locale: string;
 }) {
   const pctLeft =
-    account.received > 0 ? Math.round((account.left / account.received) * 100) : 0;
-  const isOverspent = account.left < 0;
+    income.received > 0 ? Math.round((income.left / income.received) * 100) : 0;
+  const isOverspent = income.left < 0;
   const barColor =
     isOverspent || pctLeft < 20
       ? '#FF6B6B'
       : pctLeft < 50
         ? '#FFB366'
         : '#14B8A6';
-  const frequencyLabel = account.frequency
-    ? account.frequency.charAt(0) + account.frequency.slice(1).toLowerCase()
+  const frequencyLabel = income.frequency
+    ? income.frequency.charAt(0) + income.frequency.slice(1).toLowerCase()
     : null;
-  const nextPaymentLabel = account.nextPaymentDate
-    ? new Date(account.nextPaymentDate).toLocaleDateString(locale, {
+  const nextPaymentLabel = income.nextPaymentDate
+    ? new Date(income.nextPaymentDate).toLocaleDateString(locale, {
         day: 'numeric',
         month: 'short',
       })
@@ -519,7 +521,7 @@ function AccountCard({
       style={{boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)'}}>
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <p className="text-sm font-medium text-gray-500">{account.name}</p>
+          <p className="text-sm font-medium text-gray-500">{income.name}</p>
           {frequencyLabel && (
             <span
               className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
@@ -529,7 +531,7 @@ function AccountCard({
           )}
         </div>
         <p className="text-4xl font-bold text-gray-900 tracking-tight">
-          {format(account.received)}
+          {format(income.received)}
         </p>
       </div>
 
@@ -540,7 +542,7 @@ function AccountCard({
           <p
             className="text-2xl font-bold mb-4 tracking-tight"
             style={{color: isOverspent ? '#F87171' : '#6366f1'}}>
-            {format(account.left)}
+            {format(income.left)}
           </p>
           <div className="bg-white/50 rounded-full h-2 overflow-hidden mb-2">
             <div
@@ -553,7 +555,7 @@ function AccountCard({
           </div>
           <p className="text-xs text-gray-500 font-medium">
             {isOverspent
-              ? `Over-spent by ${format(Math.abs(account.left))}`
+              ? `Over-spent by ${format(Math.abs(income.left))}`
               : `${pctLeft}% remaining`}
           </p>
         </div>
@@ -562,11 +564,11 @@ function AccountCard({
           <p
             className="text-2xl font-bold tracking-tight"
             style={{color: '#F87171'}}>
-            {format(account.spent)}
+            {format(income.spent)}
           </p>
 
           {/* Committed vs Discretionary Breakdown — same rows as the main
-              balance card, but static (per-account committed items aren't in
+              balance card, but static (per-income committed items aren't in
               the payload, so no modal). */}
           <div
             className="mt-4 pt-4 space-y-2.5"
@@ -581,7 +583,7 @@ function AccountCard({
                 </span>
               </div>
               <span className="text-xs font-semibold text-gray-900">
-                {format(account.committed)}
+                {format(income.committed)}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -594,10 +596,10 @@ function AccountCard({
                 </span>
               </div>
               <span className="text-xs font-semibold text-gray-900">
-                {format(account.discretionary)}
+                {format(income.discretionary)}
               </span>
             </div>
-            {account.goals > 0 && (
+            {income.goals > 0 && (
               <div className="flex justify-between items-center">
                 <div className="flex items-center">
                   <div
@@ -608,7 +610,7 @@ function AccountCard({
                   </span>
                 </div>
                 <span className="text-xs font-semibold text-gray-900">
-                  {format(account.goals)}
+                  {format(income.goals)}
                 </span>
               </div>
             )}
@@ -621,7 +623,7 @@ function AccountCard({
         <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs font-medium text-gray-500 mb-1">Received</p>
           <p className="text-lg font-semibold text-gray-900">
-            {format(account.received)}
+            {format(income.received)}
           </p>
         </div>
         <div className="bg-gray-50 rounded-xl p-4">

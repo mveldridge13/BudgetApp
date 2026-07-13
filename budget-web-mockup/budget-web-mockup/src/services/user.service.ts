@@ -84,17 +84,16 @@ export interface CommittedItem {
   categoryName: string | null;
 }
 
-// A spendable account in the per-source ledger view. Attribution-only: the
-// accounts always sum to the single spendable total. The salary account holds
-// base income + rollover + unattributed income and pays for all unattributed
-// spending.
-export interface AccountInfo {
+// A per-income-stream ledger entry. Attribution-only: the entries always sum
+// to the single spendable total. The salary entry holds base income +
+// rollover + unattributed income and pays for all unattributed spending.
+export interface IncomeLedgerInfo {
   id: string; // 'salary' or the IncomeSource id
   name: string;
   isSalary: boolean;
   received: number;
   // Same three expense buckets the main balance card shows, restricted to this
-  // account's attributed spending.
+  // income stream's attributed spending.
   committed: number;
   discretionary: number;
   goals: number;
@@ -141,9 +140,9 @@ export interface HomeSummaryResponse {
     totalExpensesAllocated: number;
     leftToSpendSafe: number;
   };
-  // Per-source ledger; length >= 2 only when the user has income sources
-  // (absent on older backend deploys — treat as [])
-  accounts?: AccountInfo[];
+  // Per-source income ledger; length >= 2 only when the user has income
+  // sources (absent on older backend deploys — treat as [])
+  incomeLedger?: IncomeLedgerInfo[];
   // One-time, dismissible notification emitted by the backend after an
   // auto-rollover occurs. Distinct from income.rolloverAvailable (the spendable
   // amount): the notification drives the banner and clears on dismiss.
