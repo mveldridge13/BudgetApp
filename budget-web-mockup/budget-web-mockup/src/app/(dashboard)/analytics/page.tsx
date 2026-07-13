@@ -88,12 +88,24 @@ interface TransactionAnalytics {
   dailyBurnRate?: DailyBurnRate;
 }
 
+interface IncomeBySourceBreakdownItem {
+  categoryId: string;
+  categoryName: string;
+  totalAmount: number;
+  color?: string;
+  transactionCount?: number;
+}
+
 interface IncomeBySource {
   categoryId: string;
   categoryName: string;
   totalAmount: number;
   percentage: number;
   color?: string;
+  // True only for the aggregated "Ad-hoc" row (income not attributed to a
+  // source), which is clickable to reveal its own category breakdown.
+  isAdhoc?: boolean;
+  breakdown?: IncomeBySourceBreakdownItem[];
 }
 
 interface IncomeBreakdown {
@@ -194,6 +206,8 @@ export default function AnalyticsPage() {
   const analytics = (analyticsData?.analytics ?? null) as TransactionAnalytics | null;
   const incomeAnalytics =
     (analyticsData?.incomeAnalytics ?? null) as IncomeAnalytics | null;
+  const adhocIncomeSource =
+    incomeAnalytics?.incomeBySource.find(s => s.isAdhoc) ?? null;
   const billsAnalytics =
     (analyticsData?.billsAnalytics ?? null) as BillsAnalyticsResponse | null;
   const payPeriodStatus = analyticsData?.payPeriodStatus ?? null;
@@ -208,6 +222,7 @@ export default function AnalyticsPage() {
     string | null
   >(null);
   const [showVelocityBreakdown, setShowVelocityBreakdown] = useState(false);
+  const [showAdhocBreakdown, setShowAdhocBreakdown] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -985,22 +1000,47 @@ export default function AnalyticsPage() {
             {incomeAnalytics?.incomeBySource &&
             incomeAnalytics.incomeBySource.length > 0 ? (
               <div className="space-y-4">
-                {incomeAnalytics.incomeBySource.map((source, index) => (
+                {incomeAnalytics.incomeBySource.map((source, index) => {
+                  const isClickableAdhoc =
+                    source.isAdhoc && (source.breakdown?.length ?? 0) > 0;
+                  return (
                   <div key={source.categoryId || index} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{backgroundColor: source.color || '#6366F1'}}
-                        />
-                        <span className="text-sm font-medium text-gray-900">
-                          {source.categoryName}
+                    {isClickableAdhoc ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAdhocBreakdown(true)}
+                        className="group w-full flex items-center justify-between"
+                        title="View Ad-hoc breakdown">
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{backgroundColor: source.color || '#6366F1'}}
+                          />
+                          <span className="text-sm font-medium text-gray-900 group-hover:text-gray-700">
+                            {source.categoryName}
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {formatCurrency(source.totalAmount)}
+                        </span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{backgroundColor: source.color || '#6366F1'}}
+                          />
+                          <span className="text-sm font-medium text-gray-900">
+                            {source.categoryName}
+                          </span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {formatCurrency(source.totalAmount)}
                         </span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900">
-                        {formatCurrency(source.totalAmount)}
-                      </span>
-                    </div>
+                    )}
                     <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                       <div
                         className="h-2 rounded-full transition-all"
@@ -1011,7 +1051,8 @@ export default function AnalyticsPage() {
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-gray-500 text-sm">
@@ -1860,6 +1901,41 @@ export default function AnalyticsPage() {
                 </p>
               </div>
             </>
+          )}
+        </div>
+      </Modal>
+
+      {/* Ad-hoc Income Breakdown Modal */}
+      <Modal
+        isOpen={showAdhocBreakdown}
+        onClose={() => setShowAdhocBreakdown(false)}
+        title="Ad-hoc Income Breakdown"
+        size="md">
+        <div className="p-6 space-y-3">
+          {adhocIncomeSource?.breakdown &&
+          adhocIncomeSource.breakdown.length > 0 ? (
+            adhocIncomeSource.breakdown.map(item => (
+              <div
+                key={item.categoryId}
+                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{backgroundColor: item.color || '#6366F1'}}
+                  />
+                  <span className="text-sm font-medium text-gray-900 truncate">
+                    {item.categoryName}
+                  </span>
+                </div>
+                <span className="text-sm font-semibold text-gray-900 shrink-0">
+                  {formatCurrency(item.totalAmount)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-6">
+              No ad-hoc income this period.
+            </p>
           )}
         </div>
       </Modal>
