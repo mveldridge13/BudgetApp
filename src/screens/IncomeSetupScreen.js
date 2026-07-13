@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  ScrollView,
   Keyboard,
   TouchableWithoutFeedback,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import CalendarModal from '../components/CalendarModal';
+import IncomeSourcesSection from '../components/IncomeSourcesSection';
 
 const FrequencyButton = ({frequency, selectedFrequency, onSelect}) => (
   <TouchableOpacity
@@ -98,7 +100,9 @@ const IncomeSetupScreen = ({
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.title}>
               {isEditMode ? 'Edit Income Setup' : "Let's get started"}
@@ -207,7 +211,10 @@ const IncomeSetupScreen = ({
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+
+          {/* Additional income sources - edit mode only (web parity) */}
+          {isEditMode && <IncomeSourcesSection />}
+        </ScrollView>
 
         {/* Calendar Modal */}
         <CalendarModal
@@ -227,9 +234,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 60,
+    paddingBottom: 40,
     justifyContent: 'center',
   },
   header: {

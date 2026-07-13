@@ -644,6 +644,35 @@ class TrendAPIService {
     return this.makeRequest('/users/income');
   }
 
+  // ============================================================================
+  // ADDITIONAL INCOME SOURCES (web parity: budget-web-mockup income-source.service.ts)
+  // ============================================================================
+
+  async getIncomeSources() {
+    const response = await this.makeRequest('/income-sources');
+    return Array.isArray(response) ? response : [];
+  }
+
+  async createIncomeSource(data) {
+    return this.makeRequest('/income-sources', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateIncomeSource(id, data) {
+    return this.makeRequest(`/income-sources/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteIncomeSource(id) {
+    return this.makeRequest(`/income-sources/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   /**
    * Get home summary for Balance Card
    * Single source of truth for all balance calculations
