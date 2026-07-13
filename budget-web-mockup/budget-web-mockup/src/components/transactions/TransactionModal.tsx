@@ -163,9 +163,12 @@ export default function TransactionModal({
       recurrence: recurrence, // Send recurrence field directly
       ...(recurrence !== 'none' && {dueDate: dueDateISO}), // Include dueDate for recurring transactions
       ...(recurrence !== 'none' && {status: 'UPCOMING'}), // Only recurring transactions have status; one-off = no status
-      // Income source attribution; null clears it (e.g. flipping income → expense on edit)
-      incomeSourceId:
-        transactionType === 'INCOME' && incomeSourceId ? incomeSourceId : null,
+      // Which income source this expense is taken from; null clears it.
+      // Omitted entirely for INCOME so editing an auto-created income
+      // occurrence never strips its source link.
+      ...(transactionType === 'EXPENSE' && {
+        incomeSourceId: incomeSourceId || null,
+      }),
     };
 
     // Don't reset here: onSave is async and the parent closes the modal only
@@ -353,19 +356,21 @@ export default function TransactionModal({
           </button>
         </div>
 
-        {/* Income Source - attribute income to a named source (child support etc.) */}
-        {transactionType === 'INCOME' && selectableIncomeSources.length > 0 && (
+        {/* Payment Source - which income stream this expense is taken from
+            (mirrors the goal card's Payment Source; attribution only, the
+            money all comes from the same spendable pot) */}
+        {transactionType === 'EXPENSE' && selectableIncomeSources.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Source
+              Payment Source
             </label>
             <div className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 transition-colors hover:border-gray-400">
               <CustomSelect
                 value={incomeSourceId}
                 onChange={setIncomeSourceId}
-                placeholder="Regular income"
+                placeholder="Income"
                 options={[
-                  {value: '', label: 'Regular income'},
+                  {value: '', label: 'Income'},
                   ...selectableIncomeSources.map(source => ({
                     value: source.id,
                     label: source.name,
