@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../styles';
@@ -47,8 +48,16 @@ const BalanceCard = ({
   // Carousel state (only used when there's an additional account; the
   // "Everything" card already represents the main income, so the carousel
   // only adds one slide per additional income account, web parity).
+  const {width: windowWidth} = useWindowDimensions();
   const [activeSlide, setActiveSlide] = useState(0);
-  const [carouselWidth, setCarouselWidth] = useState(0);
+  // Seeded from the window width (minus HomeScreen's 20px header padding on
+  // each side) so slides render at the right width on the very first paint —
+  // starting this at 0 caused a visible collapse-then-expand flicker the
+  // first time homeSummary loads with accounts and the carousel appears.
+  // onLayout below still corrects it if that padding assumption is ever off.
+  const [carouselWidth, setCarouselWidth] = useState(
+    Math.max(0, windowWidth - 40),
+  );
   const carouselScrollRef = useRef(null);
 
   const handleCarouselScrollEnd = e => {
@@ -707,7 +716,12 @@ const BalanceCard = ({
 
       <View
         style={styles.carouselWrapper}
-        onLayout={e => setCarouselWidth(e.nativeEvent.layout.width)}>
+        onLayout={e => {
+          const measured = e.nativeEvent.layout.width;
+          if (measured !== carouselWidth) {
+            setCarouselWidth(measured);
+          }
+        }}>
         <ScrollView
           ref={carouselScrollRef}
           horizontal
