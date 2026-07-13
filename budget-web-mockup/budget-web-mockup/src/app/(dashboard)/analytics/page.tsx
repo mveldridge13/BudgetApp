@@ -1001,11 +1001,11 @@ export default function AnalyticsPage() {
                         {formatCurrency(source.totalAmount)}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                       <div
                         className="h-2 rounded-full transition-all"
                         style={{
-                          width: `${source.percentage}%`,
+                          width: `${Math.max(0, Math.min(100, source.percentage))}%`,
                           backgroundColor: source.color || '#6366F1',
                         }}
                       />
@@ -1239,10 +1239,10 @@ export default function AnalyticsPage() {
                 {formatCurrency(billsAnalytics?.paidAmount || 0)} of{' '}
                 {formatCurrency(billsAnalytics?.totalAmount || 0)} settled
               </p>
-              <div className="w-full bg-gray-100 rounded-full h-3">
+              <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
                 <div
                   className="h-3 rounded-full bg-green-500 transition-all"
-                  style={{width: `${billsAnalytics?.progress || 0}%`}}
+                  style={{width: `${Math.max(0, Math.min(100, billsAnalytics?.progress || 0))}%`}}
                 />
               </div>
               <p className="text-sm font-medium text-gray-900">
@@ -1771,15 +1771,19 @@ export default function AnalyticsPage() {
                   <span>Day {analytics.spendingVelocity.daysElapsed}</span>
                   <span>Day {analytics.spendingVelocity.daysInMonth}</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                   <div
                     className="h-3 rounded-full bg-indigo-500 transition-all"
                     style={{
-                      width: `${
-                        (analytics.spendingVelocity.daysElapsed /
-                          analytics.spendingVelocity.daysInMonth) *
-                        100
-                      }%`,
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          (analytics.spendingVelocity.daysElapsed /
+                            analytics.spendingVelocity.daysInMonth) *
+                            100,
+                        ),
+                      )}%`,
                     }}
                   />
                 </div>
