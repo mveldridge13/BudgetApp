@@ -45,16 +45,17 @@ const BalanceCard = ({
     return formatCurrencySync(amount, currency);
   };
 
-  // Carousel state (only used when there's an additional account; the
+  // Carousel state (only used when there's an additional income source; the
   // "Everything" card already represents the main income, so the carousel
-  // only adds one slide per additional income account, web parity).
+  // only adds one slide per additional income source, web parity).
   const {width: windowWidth} = useWindowDimensions();
   const [activeSlide, setActiveSlide] = useState(0);
   // Seeded from the window width (minus HomeScreen's 20px header padding on
   // each side) so slides render at the right width on the very first paint —
   // starting this at 0 caused a visible collapse-then-expand flicker the
-  // first time homeSummary loads with accounts and the carousel appears.
-  // onLayout below still corrects it if that padding assumption is ever off.
+  // first time homeSummary loads with an income ledger and the carousel
+  // appears. onLayout below still corrects it if that padding assumption is
+  // ever off.
   const [carouselWidth, setCarouselWidth] = useState(
     Math.max(0, windowWidth - 40),
   );
@@ -75,8 +76,8 @@ const BalanceCard = ({
     });
   };
 
-  const additionalAccounts = (homeSummary?.accounts || []).filter(
-    account => !account.isSalary,
+  const additionalIncomes = (homeSummary?.incomeLedger || []).filter(
+    entry => !entry.isSalary,
   );
 
   const getCurrentDate = () => {
@@ -699,7 +700,7 @@ const BalanceCard = ({
   );
 
   // No income sources → the card renders exactly as it always has
-  if (additionalAccounts.length === 0) {
+  if (additionalIncomes.length === 0) {
     return (
       <View style={styles.container}>
         {periodInfo}
@@ -709,7 +710,7 @@ const BalanceCard = ({
   }
 
   // Carousel: the "Everything" card first, then one card per additional
-  // income account (web parity, see BalanceCard.tsx on the website).
+  // income source (web parity, see BalanceCard.tsx on the website).
   return (
     <View style={styles.container}>
       {periodInfo}
@@ -729,16 +730,16 @@ const BalanceCard = ({
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={handleCarouselScrollEnd}>
           <View style={{width: carouselWidth}}>{mainCard}</View>
-          {additionalAccounts.map(account => (
-            <View key={account.id} style={{width: carouselWidth}}>
-              <AccountCard account={account} currency={currency} />
+          {additionalIncomes.map(income => (
+            <View key={income.id} style={{width: carouselWidth}}>
+              <IncomeCard income={income} currency={currency} />
             </View>
           ))}
         </ScrollView>
       </View>
 
       <View style={styles.carouselDots}>
-        {['Everything', ...additionalAccounts.map(a => a.name)].map(
+        {['Everything', ...additionalIncomes.map(i => i.name)].map(
           (name, i) => (
             <TouchableOpacity
               key={name + i}
@@ -754,35 +755,35 @@ const BalanceCard = ({
 };
 
 /**
- * One additional income account in the carousel, laid out like the main
- * balance card: the account's received total as the headline, then Left to
+ * One additional income source in the carousel, laid out like the main
+ * balance card: the income's received total as the headline, then Left to
  * Spend + Total Expenses (with the same Committed/Discretionary/Goals
  * breakdown as the main card), then Received + Next payment. Attribution
- * only — a negative account is over-spent, not blocked. Web parity
- * (budget-web-mockup BalanceCard.tsx AccountCard).
+ * only — a negative entry is over-spent, not blocked. Web parity
+ * (budget-web-mockup BalanceCard.tsx IncomeCard).
  */
-function AccountCard({account, currency}) {
+function IncomeCard({income, currency}) {
   const format = amount => formatCurrencySync(amount, currency);
 
   const pctLeft =
-    account.received > 0 ? Math.round((account.left / account.received) * 100) : 0;
-  const isOverspent = account.left < 0;
+    income.received > 0 ? Math.round((income.left / income.received) * 100) : 0;
+  const isOverspent = income.left < 0;
   const isCloseToLimit = pctLeft < 20 && pctLeft >= 0;
   const isLowBalance = pctLeft < 50 && pctLeft >= 20;
-  const frequencyLabel = account.frequency
-    ? account.frequency.charAt(0) + account.frequency.slice(1).toLowerCase()
+  const frequencyLabel = income.frequency
+    ? income.frequency.charAt(0) + income.frequency.slice(1).toLowerCase()
     : null;
-  const nextPaymentLabel = account.nextPaymentDate
+  const nextPaymentLabel = income.nextPaymentDate
     ? (() => {
-        const d = new Date(account.nextPaymentDate);
+        const d = new Date(income.nextPaymentDate);
         return `${d.toLocaleDateString('en-AU', {month: 'short'})} ${d.getDate()}`;
       })()
     : '—';
 
   return (
     <View style={styles.balanceCard}>
-      <View style={styles.accountHeaderRow}>
-        <Text style={styles.balanceLabel}>{account.name.toUpperCase()}</Text>
+      <View style={styles.incomeHeaderRow}>
+        <Text style={styles.balanceLabel}>{income.name.toUpperCase()}</Text>
         {frequencyLabel && (
           <View style={styles.frequencyBadge}>
             <Text style={styles.frequencyBadgeText}>{frequencyLabel}</Text>
@@ -790,21 +791,21 @@ function AccountCard({account, currency}) {
         )}
       </View>
       <View style={styles.balanceRow}>
-        {/* Headline — unlabeled, matching the web AccountCard (the name/badge
+        {/* Headline — unlabeled, matching the web IncomeCard (the name/badge
             row above already identifies it; a "RECEIVED" label here would
             duplicate the Received tile lower down). */}
         <View style={styles.balanceItem}>
-          <Text style={styles.totalIncome}>{format(account.received)}</Text>
+          <Text style={styles.totalIncome}>{format(income.received)}</Text>
         </View>
         <View style={[styles.balanceItem, styles.balanceItemRight]}>
           <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
-          <Text style={styles.balanceAmount}>{format(account.spent)}</Text>
+          <Text style={styles.balanceAmount}>{format(income.spent)}</Text>
 
           <View style={styles.expenseBreakdown}>
             <View style={styles.expenseBreakdownRow}>
               <Text style={styles.expenseBreakdownLabel}>└─ Committed:</Text>
               <Text style={styles.expenseBreakdownAmount}>
-                {format(account.committed)}
+                {format(income.committed)}
               </Text>
             </View>
             <View style={styles.expenseBreakdownRow}>
@@ -812,14 +813,14 @@ function AccountCard({account, currency}) {
                 └─ Discretionary:
               </Text>
               <Text style={styles.expenseBreakdownAmount}>
-                {format(account.discretionary)}
+                {format(income.discretionary)}
               </Text>
             </View>
-            {account.goals > 0 && (
+            {income.goals > 0 && (
               <View style={styles.expenseBreakdownRow}>
                 <Text style={styles.expenseBreakdownLabel}>└─ Goals:</Text>
                 <Text style={styles.expenseBreakdownAmount}>
-                  {format(account.goals)}
+                  {format(income.goals)}
                 </Text>
               </View>
             )}
@@ -836,7 +837,7 @@ function AccountCard({account, currency}) {
         </View>
         <Text
           style={[styles.leftAmount, isOverspent && styles.overBudgetText]}>
-          {format(account.left)}
+          {format(income.left)}
         </Text>
 
         <View style={styles.progressContainer}>
@@ -851,15 +852,15 @@ function AccountCard({account, currency}) {
         </View>
         <Text style={styles.progressText}>
           {isOverspent
-            ? `Over-spent by ${format(Math.abs(account.left))}`
+            ? `Over-spent by ${format(Math.abs(income.left))}`
             : `${pctLeft}% remaining`}
         </Text>
       </View>
 
-      <View style={[styles.balanceRow, styles.accountReceivedRow]}>
+      <View style={[styles.balanceRow, styles.incomeReceivedRow]}>
         <View style={styles.balanceItem}>
           <Text style={styles.balanceLabel}>RECEIVED</Text>
-          <Text style={styles.balanceAmount}>{format(account.received)}</Text>
+          <Text style={styles.balanceAmount}>{format(income.received)}</Text>
         </View>
         <View style={[styles.balanceItem, styles.balanceItemRight]}>
           <Text style={styles.balanceLabel}>NEXT PAYMENT</Text>
@@ -1306,7 +1307,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.overlayLight,
   },
-  // Carousel (additional-accounts) styles — web parity
+  // Carousel (additional-incomes) styles — web parity
   carouselWrapper: {
     width: '100%',
   },
@@ -1327,7 +1328,7 @@ const styles = StyleSheet.create({
     width: 16,
     backgroundColor: colors.textWhite,
   },
-  accountHeaderRow: {
+  incomeHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -1347,7 +1348,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  accountReceivedRow: {
+  incomeReceivedRow: {
     marginTop: 15,
     paddingTop: 15,
     borderTopWidth: 1,
