@@ -358,7 +358,7 @@ export default function TransactionModal({
 
         {/* Payment Source - which income stream this expense is taken from
             (mirrors the goal card's Payment Source; attribution only, the
-            money all comes from the same spendable pot) */}
+            money all comes from the same spendable balance) */}
         {transactionType === 'EXPENSE' && selectableIncomeSources.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -1,6 +1,6 @@
 import useSWR from 'swr';
 import {goalService} from '@/services/goal.service';
-import {userService, HomeSummaryResponse, CommittedItem, PotInfo} from '@/services/user.service';
+import {userService, HomeSummaryResponse, CommittedItem, AccountInfo} from '@/services/user.service';
 import {GoalDisplay} from '@/types';
 
 interface DashboardData {
@@ -21,7 +21,7 @@ interface DashboardData {
   rolloverNotification: HomeSummaryResponse['rolloverNotification'];
   baseIncome: number;
   incomeSources: {id: string; name: string; amount: number}[];
-  pots: PotInfo[];
+  accounts: AccountInfo[];
   daysRemaining: number;
   isLoading: boolean;
   error: Error | null;
@@ -95,7 +95,7 @@ export function useDashboardData(): DashboardData {
     rolloverNotification: summary?.rolloverNotification ?? null,
     baseIncome: summary?.income.baseIncome ?? 0,
     incomeSources: summary?.income.sources ?? [],
-    pots: summary?.pots ?? [],
+    accounts: summary?.accounts ?? [],
     daysRemaining: summary?.period.daysRemaining ?? 0,
     isLoading,
     error: error instanceof Error ? error : error ? new Error('Failed to fetch dashboard data') : null,

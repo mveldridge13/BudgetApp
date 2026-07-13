@@ -23,7 +23,7 @@ export default function DashboardPage() {
     rolloverNotification,
     baseIncome,
     incomeSources,
-    pots,
+    accounts,
     daysRemaining,
     isLoading,
     refresh,
@@ -78,7 +78,7 @@ export default function DashboardPage() {
           rolloverAvailable={rolloverAmount}
           baseIncome={baseIncome}
           incomeSources={incomeSources}
-          pots={pots}
+          accounts={accounts}
           daysRemaining={daysRemaining}
           isNewUser={!user?.lastRolloverDate}
           rolloverBanner={rolloverNotification}

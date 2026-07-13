@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRightCircle, X, ChevronRight, ListChecks, Pencil } from 'lucide-react';
 import {formatCurrency} from '@/lib/formatters';
-import type { CommittedItem, PotInfo } from '@/services/user.service';
+import type { CommittedItem, AccountInfo } from '@/services/user.service';
 
 interface RolloverBannerData {
   amount: number;
@@ -31,9 +31,9 @@ interface BalanceCardProps {
   baseIncome?: number;
   // Named income-source amounts received this period (income.sources)
   incomeSources?: {id: string; name: string; amount: number}[];
-  // Per-source ledger pots; when there are 2+ the card becomes a carousel
-  // ("Everything" card first, then one card per pot)
-  pots?: PotInfo[];
+  // Per-source ledger accounts; when there's an additional account the card
+  // becomes a carousel ("Everything" card first, then one card per account)
+  accounts?: AccountInfo[];
   // Days left in the current pay period; used to show the roll-to-next preview.
   daysRemaining?: number;
   // True while the user is still in their first pay period (backend
@@ -58,13 +58,13 @@ export default function BalanceCard({
   rolloverAvailable = 0,
   baseIncome = 0,
   incomeSources = [],
-  pots = [],
+  accounts = [],
   daysRemaining = 0,
   isNewUser = false,
 }: BalanceCardProps) {
   const [showCommittedModal, setShowCommittedModal] = useState(false);
 
-  // Carousel state (only used when there are 2+ pots)
+  // Carousel state (only used when there's an additional account)
   const [activeSlide, setActiveSlide] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -435,15 +435,15 @@ export default function BalanceCard({
   );
 
   // The first "Balance" card already represents the main income (salary +
-  // rollover), so the per-source slides cover only the income sources.
-  const sourcePots = pots.filter(pot => !pot.isSalary);
+  // rollover), so the extra slides cover only the additional income accounts.
+  const additionalAccounts = accounts.filter(account => !account.isSalary);
 
   // No income sources → the card renders exactly as it always has
-  if (sourcePots.length === 0) {
+  if (additionalAccounts.length === 0) {
     return mainCard;
   }
 
-  // Carousel: the main balance card first, then one card per income source
+  // Carousel: the main balance card first, then one card per additional account
   return (
     <div className="flex flex-col">
       <div
@@ -452,14 +452,14 @@ export default function BalanceCard({
         className="no-scrollbar relative flex items-stretch gap-4 overflow-x-auto snap-x snap-mandatory"
         aria-label="Balance cards, swipe horizontally">
         <div className="w-full shrink-0 snap-center">{mainCard}</div>
-        {sourcePots.map(pot => (
-          <div key={pot.id} className="w-full shrink-0 snap-center">
-            <PotCard pot={pot} format={format} locale={locale} />
+        {additionalAccounts.map(account => (
+          <div key={account.id} className="w-full shrink-0 snap-center">
+            <AccountCard account={account} format={format} locale={locale} />
           </div>
         ))}
       </div>
       <div className="flex justify-center gap-1.5 mt-3" role="tablist" aria-label="Balance card selector">
-        {['Everything', ...sourcePots.map(p => p.name)].map((name, i) => (
+        {['Everything', ...additionalAccounts.map(a => a.name)].map((name, i) => (
           <button
             key={name + i}
             onClick={() => scrollToSlide(i)}
@@ -480,36 +480,34 @@ export default function BalanceCard({
 }
 
 /**
- * One income source in the carousel, laid out like the main balance card:
- * the source's received total as the headline, then Left to Spend + Total
- * Expenses, then Received + Next payment. Attribution-only — a negative pot
- * is over-spent, not blocked.
+ * One additional income account in the carousel, laid out like the main
+ * balance card: the account's received total as the headline, then Left to
+ * Spend + Total Expenses, then Received + Next payment. Attribution-only — a
+ * negative account is over-spent, not blocked.
  */
-function PotCard({
-  pot,
+function AccountCard({
+  account,
   format,
   locale,
 }: {
-  pot: PotInfo;
+  account: AccountInfo;
   format: (amount: number) => string;
   locale: string;
 }) {
   const pctLeft =
-    pot.received > 0 ? Math.round((pot.left / pot.received) * 100) : 0;
-  const pctSpent =
-    pot.received > 0 ? Math.round((pot.spent / pot.received) * 100) : 0;
-  const isOverspent = pot.left < 0;
+    account.received > 0 ? Math.round((account.left / account.received) * 100) : 0;
+  const isOverspent = account.left < 0;
   const barColor =
     isOverspent || pctLeft < 20
       ? '#FF6B6B'
       : pctLeft < 50
         ? '#FFB366'
         : '#14B8A6';
-  const frequencyLabel = pot.frequency
-    ? pot.frequency.charAt(0) + pot.frequency.slice(1).toLowerCase()
+  const frequencyLabel = account.frequency
+    ? account.frequency.charAt(0) + account.frequency.slice(1).toLowerCase()
     : null;
-  const nextPaymentLabel = pot.nextPaymentDate
-    ? new Date(pot.nextPaymentDate).toLocaleDateString(locale, {
+  const nextPaymentLabel = account.nextPaymentDate
+    ? new Date(account.nextPaymentDate).toLocaleDateString(locale, {
         day: 'numeric',
         month: 'short',
       })
@@ -521,7 +519,7 @@ function PotCard({
       style={{boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)'}}>
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <p className="text-sm font-medium text-gray-500">{pot.name}</p>
+          <p className="text-sm font-medium text-gray-500">{account.name}</p>
           {frequencyLabel && (
             <span
               className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
@@ -531,7 +529,7 @@ function PotCard({
           )}
         </div>
         <p className="text-4xl font-bold text-gray-900 tracking-tight">
-          {format(pot.received)}
+          {format(account.received)}
         </p>
       </div>
 
@@ -542,7 +540,7 @@ function PotCard({
           <p
             className="text-2xl font-bold mb-4 tracking-tight"
             style={{color: isOverspent ? '#F87171' : '#6366f1'}}>
-            {format(pot.left)}
+            {format(account.left)}
           </p>
           <div className="bg-white/50 rounded-full h-2 overflow-hidden mb-2">
             <div
@@ -555,19 +553,16 @@ function PotCard({
           </div>
           <p className="text-xs text-gray-500 font-medium">
             {isOverspent
-              ? `Over-spent by ${format(Math.abs(pot.left))}`
+              ? `Over-spent by ${format(Math.abs(account.left))}`
               : `${pctLeft}% remaining`}
           </p>
         </div>
         <div className="rounded-xl p-5" style={{backgroundColor: '#FEF2F2'}}>
           <p className="text-xs font-medium text-gray-500 mb-2">Total Expenses</p>
           <p
-            className="text-2xl font-bold mb-4 tracking-tight"
+            className="text-2xl font-bold tracking-tight"
             style={{color: '#F87171'}}>
-            {format(pot.spent)}
-          </p>
-          <p className="text-xs text-gray-500 font-medium">
-            {pctSpent}% of this pot spent
+            {format(account.spent)}
           </p>
         </div>
       </div>
@@ -577,7 +572,7 @@ function PotCard({
         <div className="bg-gray-50 rounded-xl p-4">
           <p className="text-xs font-medium text-gray-500 mb-1">Received</p>
           <p className="text-lg font-semibold text-gray-900">
-            {format(pot.received)}
+            {format(account.received)}
           </p>
         </div>
         <div className="bg-gray-50 rounded-xl p-4">

@@ -84,16 +84,22 @@ export interface CommittedItem {
   categoryName: string | null;
 }
 
-// A spendable "pot" in the per-source ledger view. Attribution-only: pots
-// always sum to the single spendable total. The salary pot holds base income
-// + rollover + unattributed income and pays for all unattributed spending.
-export interface PotInfo {
+// A spendable account in the per-source ledger view. Attribution-only: the
+// accounts always sum to the single spendable total. The salary account holds
+// base income + rollover + unattributed income and pays for all unattributed
+// spending.
+export interface AccountInfo {
   id: string; // 'salary' or the IncomeSource id
   name: string;
   isSalary: boolean;
   received: number;
-  spent: number;
-  left: number; // may be negative (over-spent pot)
+  // Same three expense buckets the main balance card shows, restricted to this
+  // account's attributed spending.
+  committed: number;
+  discretionary: number;
+  goals: number;
+  spent: number; // committed + discretionary + goals
+  left: number; // may be negative (over-spent)
   frequency: string | null;
   nextPaymentDate: string | null;
 }
@@ -137,7 +143,7 @@ export interface HomeSummaryResponse {
   };
   // Per-source ledger; length >= 2 only when the user has income sources
   // (absent on older backend deploys — treat as [])
-  pots?: PotInfo[];
+  accounts?: AccountInfo[];
   // One-time, dismissible notification emitted by the backend after an
   // auto-rollover occurs. Distinct from income.rolloverAvailable (the spendable
   // amount): the notification drives the banner and clears on dismiss.
