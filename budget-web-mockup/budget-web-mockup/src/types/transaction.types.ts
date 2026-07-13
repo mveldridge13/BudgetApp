@@ -32,6 +32,7 @@ export interface Transaction {
   paymentStatus?: PaymentStatus; // Legacy field
   budgetId?: string;
   location?: string;
+  incomeSourceId?: string; // Which IncomeSource this income/goal payment came from
   userId?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -50,6 +51,7 @@ export interface CreateTransactionData {
   status?: PaymentStatus; // Backend expects status, not paymentStatus
   budgetId?: string;
   location?: string;
+  incomeSourceId?: string; // Attribute to an IncomeSource (goal payments)
 }
 
 export interface UpdateTransactionData {

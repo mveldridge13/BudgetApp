@@ -27,6 +27,10 @@ interface IncomeSetupFormProps {
   onSave: () => void;
   onCancel?: () => void;
   clearError: () => void;
+
+  // Extra content rendered below the form, inside the centered column
+  // (used for the income sources manager in edit mode)
+  children?: React.ReactNode;
 }
 
 const FrequencyButton = ({
@@ -78,6 +82,7 @@ export default function IncomeSetupForm({
   onDateChange,
   onSave,
   onCancel,
+  children,
 }: IncomeSetupFormProps) {
   const handleDateChange = (dateValue: string) => {
     if (dateValue) {
@@ -227,6 +232,8 @@ export default function IncomeSetupForm({
             </button>
           </div>
         </form>
+
+        {children}
       </div>
     </div>
   );

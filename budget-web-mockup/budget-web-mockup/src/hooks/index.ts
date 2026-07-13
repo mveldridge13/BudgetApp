@@ -8,3 +8,4 @@ export { useDashboardMetrics } from './useDashboardMetrics';
 export { useDashboardData } from './useDashboardData';
 export { useIncomeSetup } from './useIncomeSetup';
 export { useInvoices } from './useInvoices';
+export { useIncomeSources } from './useIncomeSources';

@@ -8,3 +8,4 @@ export { userService } from './user.service';
 export { analyticsService } from './analytics.service';
 export { pokerService } from './poker.service';
 export { invoiceService } from './invoice.service';
+export { incomeSourceService } from './income-source.service';

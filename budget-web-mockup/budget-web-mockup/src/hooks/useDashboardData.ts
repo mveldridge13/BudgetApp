@@ -20,6 +20,7 @@ interface DashboardData {
   rolloverAmount: number;
   rolloverNotification: HomeSummaryResponse['rolloverNotification'];
   baseIncome: number;
+  incomeSources: {id: string; name: string; amount: number}[];
   daysRemaining: number;
   isLoading: boolean;
   error: Error | null;
@@ -92,6 +93,7 @@ export function useDashboardData(): DashboardData {
     rolloverAmount: summary?.income.rolloverAvailable ?? 0,
     rolloverNotification: summary?.rolloverNotification ?? null,
     baseIncome: summary?.income.baseIncome ?? 0,
+    incomeSources: summary?.income.sources ?? [],
     daysRemaining: summary?.period.daysRemaining ?? 0,
     isLoading,
     error: error instanceof Error ? error : error ? new Error('Failed to fetch dashboard data') : null,

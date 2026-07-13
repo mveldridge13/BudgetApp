@@ -97,6 +97,9 @@ export interface HomeSummaryResponse {
     additionalIncome: number;
     rolloverAvailable: number;
     totalInflow: number;
+    // Named breakdown of additional income received from income sources this
+    // period (absent on older backend deploys — treat as []).
+    sources?: {id: string; name: string; amount: number}[];
   };
   outflows: {
     committed: {
