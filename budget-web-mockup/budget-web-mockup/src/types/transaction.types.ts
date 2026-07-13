@@ -51,7 +51,7 @@ export interface CreateTransactionData {
   status?: PaymentStatus; // Backend expects status, not paymentStatus
   budgetId?: string;
   location?: string;
-  incomeSourceId?: string; // Attribute to an IncomeSource (goal payments)
+  incomeSourceId?: string | null; // Attribute to an IncomeSource (income & goal payments); null = unattributed
 }
 
 export interface UpdateTransactionData {
@@ -68,6 +68,7 @@ export interface UpdateTransactionData {
   paymentStatus?: PaymentStatus;
   budgetId?: string;
   location?: string;
+  incomeSourceId?: string | null; // Change/clear IncomeSource attribution
 }
 
 export interface TransactionFilters extends DateRangeFilter, PaginationParams {
