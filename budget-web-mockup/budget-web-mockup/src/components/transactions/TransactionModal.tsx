@@ -2,6 +2,7 @@
 
 import {useState, useEffect} from 'react';
 import {useCategories} from '@/hooks/useCategories';
+import {useIncomeSources} from '@/hooks/useIncomeSources';
 import {Modal, Button, Input, DatePicker, CustomSelect} from '@/components/ui';
 import CategoryIcon from '@/components/ui/CategoryIcon';
 import {RECURRENCE_OPTIONS} from '@/lib/constants';
@@ -24,6 +25,7 @@ export default function TransactionModal({
 }: TransactionModalProps) {
   const {categoriesWithSubcategories, isLoading: categoriesLoading} =
     useCategories();
+  const {incomeSources} = useIncomeSources();
 
   const [showTypeSelection, setShowTypeSelection] = useState(true);
   const [selectedFlowType, setSelectedFlowType] = useState<'oneoff' | 'recurring' | 'debt' | null>(null);
@@ -38,6 +40,8 @@ export default function TransactionModal({
   const [selectedDate, setSelectedDate] = useState(formatISODate(new Date()));
   const [recurrence, setRecurrence] = useState('none');
   const [dueDate, setDueDate] = useState(formatISODate(new Date()));
+  // '' = regular income (no source attribution)
+  const [incomeSourceId, setIncomeSourceId] = useState('');
 
   // Populate form when editing
   useEffect(() => {
@@ -58,6 +62,7 @@ export default function TransactionModal({
         recurrence?: string;
         isRecurring?: boolean;
         recurringPattern?: {type?: string};
+        incomeSourceId?: string;
       };
       setTransactionType(transaction.type === 'INCOME' ? 'INCOME' : 'EXPENSE');
       setAmount(
@@ -85,6 +90,7 @@ export default function TransactionModal({
       // Backend uses 'recurrence' field directly
       const recurrenceValue = transaction.recurrence || 'none';
       setRecurrence(recurrenceValue);
+      setIncomeSourceId(transaction.incomeSourceId || '');
       // Set flow type based on whether it's recurring
       setSelectedFlowType(recurrenceValue !== 'none' ? 'recurring' : 'oneoff');
     } else if (!visible) {
@@ -98,6 +104,12 @@ export default function TransactionModal({
   // Only show categories that match the selected transaction type
   const categoriesForType = categoriesWithSubcategories.filter(
     c => c.type === transactionType,
+  );
+
+  // Active income sources, plus the currently attributed one when editing a
+  // transaction whose source has since been paused
+  const selectableIncomeSources = incomeSources.filter(
+    s => s.isActive || s.id === incomeSourceId,
   );
 
   const selectedCategoryData = categoriesWithSubcategories.find(
@@ -151,6 +163,12 @@ export default function TransactionModal({
       recurrence: recurrence, // Send recurrence field directly
       ...(recurrence !== 'none' && {dueDate: dueDateISO}), // Include dueDate for recurring transactions
       ...(recurrence !== 'none' && {status: 'UPCOMING'}), // Only recurring transactions have status; one-off = no status
+      // Which income source this expense is taken from; null clears it.
+      // Omitted entirely for INCOME so editing an auto-created income
+      // occurrence never strips its source link.
+      ...(transactionType === 'EXPENSE' && {
+        incomeSourceId: incomeSourceId || null,
+      }),
     };
 
     // Don't reset here: onSave is async and the parent closes the modal only
@@ -172,6 +190,7 @@ export default function TransactionModal({
     setSelectedDate(formatISODate(new Date()));
     setDueDate(formatISODate(new Date()));
     setRecurrence('none');
+    setIncomeSourceId('');
   };
 
   const handleClose = () => {
@@ -336,6 +355,31 @@ export default function TransactionModal({
             <span className="font-medium">Income</span>
           </button>
         </div>
+
+        {/* Payment Source - which income stream this expense is taken from
+            (mirrors the goal card's Payment Source; attribution only, the
+            money all comes from the same spendable pot) */}
+        {transactionType === 'EXPENSE' && selectableIncomeSources.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Payment Source
+            </label>
+            <div className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 transition-colors hover:border-gray-400">
+              <CustomSelect
+                value={incomeSourceId}
+                onChange={setIncomeSourceId}
+                placeholder="Income"
+                options={[
+                  {value: '', label: 'Income'},
+                  ...selectableIncomeSources.map(source => ({
+                    value: source.id,
+                    label: source.name,
+                  })),
+                ]}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Date Field */}
         <div className="w-full">
