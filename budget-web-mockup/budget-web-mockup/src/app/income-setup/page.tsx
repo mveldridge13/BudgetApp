@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useIncomeSetup } from '@/hooks/useIncomeSetup';
 import IncomeSetupForm from '@/components/income/IncomeSetupForm';
+import IncomeSourcesSection from '@/components/income/IncomeSourcesSection';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 function IncomeSetupContent() {
@@ -67,7 +68,10 @@ function IncomeSetupContent() {
         onSave={handleSave}
         onCancel={isEditMode ? handleCancel : undefined}
         clearError={clearError}
-      />
+      >
+        {/* Sources are managed here in edit mode only — first-run onboarding stays simple */}
+        {isEditMode && <IncomeSourcesSection />}
+      </IncomeSetupForm>
     </ProtectedRoute>
   );
 }

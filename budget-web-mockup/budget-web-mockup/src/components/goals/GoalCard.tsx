@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { GoalDisplay, GoalContribution } from '@/types';
 import { goalService } from '@/services/goal.service';
+import { useIncomeSources } from '@/hooks/useIncomeSources';
 import {
   Eye,
   EyeOff,
@@ -45,8 +46,12 @@ export default function GoalCard({
   const [loadingContributions, setLoadingContributions] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [transactionType, setTransactionType] = useState<'add' | 'withdraw'>('add');
+  // 'income' (base pay) or an IncomeSource id
   const [paymentSource, setPaymentSource] = useState('income');
   const [localShowOnBalanceCard, setLocalShowOnBalanceCard] = useState(goal.showOnBalanceCard);
+
+  // SWR dedupes by key, so every card shares one fetch
+  const { activeIncomeSources } = useIncomeSources();
 
   const progress = goalService.calculateProgress(goal);
   const isDebtGoal = goal.type === 'debt';
@@ -99,6 +104,7 @@ export default function GoalCard({
         await onUpdateProgress(goal.id, finalAmount, paymentSource);
         setCustomAmount('');
         setTransactionType('add');
+        setPaymentSource('income');
         setShowProgressUpdate(false);
       } catch (error) {
         console.error('Error updating progress:', error);
@@ -304,6 +310,11 @@ export default function GoalCard({
                   className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
                 >
                   <option value="income" className="text-gray-900">Income</option>
+                  {activeIncomeSources.map(source => (
+                    <option key={source.id} value={source.id} className="text-gray-900">
+                      {source.name}
+                    </option>
+                  ))}
                 </select>
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                   <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

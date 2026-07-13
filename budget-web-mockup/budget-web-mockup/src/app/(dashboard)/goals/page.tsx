@@ -6,6 +6,7 @@ import {useSearchParams} from 'next/navigation';
 import {goalService} from '@/services/goal.service';
 import {transactionService} from '@/services/transaction.service';
 import {categoryService} from '@/services/category.service';
+import {useIncomeSources} from '@/hooks/useIncomeSources';
 import {GoalDisplay} from '@/types';
 import {
   Plus,
@@ -29,6 +30,8 @@ export default function GoalsPage() {
     isLoading,
     mutate: mutateGoals,
   } = useSWR<GoalDisplay[]>('goals', () => goalService.getGoals());
+  // For resolving a selected payment source id to its name
+  const {incomeSources} = useIncomeSources();
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalDisplay | null>(null);
   const [simulatingGoal, setSimulatingGoal] = useState<GoalDisplay | null>(
@@ -263,15 +266,25 @@ export default function GoalsPage() {
     const timestamp = new Date().toISOString();
     const isWithdrawal = amount < 0;
 
+    // paymentSource is 'income' (base pay) or an IncomeSource id
+    const selectedSource =
+      paymentSource !== 'income'
+        ? incomeSources.find(s => s.id === paymentSource)
+        : undefined;
+
     try {
-      // Create contribution
+      // Create contribution — the money flow is identical for every source
+      // (deducted from Left to Spend); a source pick just attributes it.
       await goalService.addContribution(goalId, {
         amount: Math.abs(amount),
         type: isWithdrawal ? 'WITHDRAWAL' : 'MANUAL',
         date: timestamp,
         description: isWithdrawal
           ? `Withdrawal from goal`
-          : `${paymentSource === 'income' ? 'Income' : 'Manual'} payment`,
+          : selectedSource
+            ? `Payment from ${selectedSource.name}`
+            : 'Income payment',
+        incomeSourceId: selectedSource?.id,
       });
 
       // Mirror mobile: create a TRANSFER transaction for MANUAL contributions so
@@ -279,7 +292,12 @@ export default function GoalsPage() {
       // used so it's not double-counted in spending totals — the contribution is
       // already tracked via the goal's income payments.
       if (!isWithdrawal) {
-        await createGoalPaymentTransaction(goalId, Math.abs(amount), timestamp);
+        await createGoalPaymentTransaction(
+          goalId,
+          Math.abs(amount),
+          timestamp,
+          selectedSource?.id,
+        );
       }
 
       await loadGoals();
@@ -299,6 +317,7 @@ export default function GoalsPage() {
     goalId: string,
     amount: number,
     timestamp: string,
+    incomeSourceId?: string,
   ) => {
     try {
       const targetGoal = goals.find(g => g.id === goalId);
@@ -358,6 +377,8 @@ export default function GoalsPage() {
         amount,
         categoryId,
         subcategoryId,
+        // Keep the "Payment to" prefix — the dashboard's double-count filter
+        // relies on it to exclude goal payments from expense totals.
         description: `Payment to ${targetGoal.title}`,
         type: 'TRANSFER',
         // Paying from the goal card IS the payment, so mark it PAID. This also
@@ -366,6 +387,7 @@ export default function GoalsPage() {
         status: 'PAID',
         date: timestamp,
         recurrence: 'none',
+        incomeSourceId,
       });
     } catch (transactionError) {
       // Non-fatal: the contribution succeeded; the transaction is supplementary.

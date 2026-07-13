@@ -117,6 +117,7 @@ export interface GoalContribution {
   description?: string;
   type: ContributionType;
   date: string;
+  incomeSourceId?: string; // Which IncomeSource funded this contribution
   createdAt?: string;
   updatedAt?: string;
 }
@@ -127,6 +128,7 @@ export interface CreateContributionData {
   description?: string;
   type?: ContributionType;
   date?: string;
+  incomeSourceId?: string; // Which IncomeSource funds this contribution
 }
 
 export interface GoalFilters extends DateRangeFilter, PaginationParams {

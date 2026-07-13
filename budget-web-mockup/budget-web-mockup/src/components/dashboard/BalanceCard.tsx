@@ -28,6 +28,8 @@ interface BalanceCardProps {
   // Distinct from rolloverBanner (the one-time notification).
   rolloverAvailable?: number;
   baseIncome?: number;
+  // Named income-source amounts received this period (income.sources)
+  incomeSources?: {id: string; name: string; amount: number}[];
   // Days left in the current pay period; used to show the roll-to-next preview.
   daysRemaining?: number;
   // True while the user is still in their first pay period (backend
@@ -51,6 +53,7 @@ export default function BalanceCard({
   onDismissRollover,
   rolloverAvailable = 0,
   baseIncome = 0,
+  incomeSources = [],
   daysRemaining = 0,
   isNewUser = false,
 }: BalanceCardProps) {
@@ -106,6 +109,8 @@ export default function BalanceCard({
   // Mirror mobile: surface the spendable rollover folded into this period's
   // balance, and preview the surplus that will roll on the last day of the period.
   const hasRollover = rolloverAvailable > 0;
+  const receivedSources = incomeSources.filter(s => s.amount > 0);
+  const hasBalanceBreakdown = hasRollover || receivedSources.length > 0;
   // Mirror the backend: a new user (no lastRolloverDate) does not roll over
   // their first-period surplus, so don't preview a rollover that won't happen.
   const shouldShowRolloverPreview =
@@ -149,9 +154,15 @@ export default function BalanceCard({
         <p className="text-4xl font-bold text-gray-900 tracking-tight">
           {format(balance)}
         </p>
-        {hasRollover && (
+        {hasBalanceBreakdown && (
           <p className="text-sm text-gray-500 mt-1">
-            {format(baseIncome)} + {format(rolloverAvailable)} rollover
+            {format(baseIncome)}
+            {receivedSources.map(source => (
+              <span key={source.id}>
+                {' '}+ {format(source.amount)} {source.name}
+              </span>
+            ))}
+            {hasRollover && <> + {format(rolloverAvailable)} rollover</>}
           </p>
         )}
       </div>
