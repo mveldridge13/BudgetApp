@@ -26,6 +26,9 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
     password: '',
   });
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  // One toggle for both register fields - they're compared against each
+  // other, so there's no real case for revealing one but not the other.
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
 
   // Registration form state
   const [registerForm, setRegisterForm] = useState({
@@ -289,9 +292,20 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
             onChangeText={text =>
               handleInputChange('register', 'password', text)
             }
-            secureTextEntry
+            secureTextEntry={!showRegisterPassword}
             editable={!loading}
           />
+          <TouchableOpacity
+            style={styles.passwordToggle}
+            onPress={() => setShowRegisterPassword(prev => !prev)}
+            disabled={loading}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <Icon
+              name={showRegisterPassword ? 'eye-off' : 'eye'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
         {errors?.password && (
           <Text style={styles.fieldError}>{errors.password}</Text>
@@ -314,9 +328,20 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
             onChangeText={text =>
               handleInputChange('register', 'confirmPassword', text)
             }
-            secureTextEntry
+            secureTextEntry={!showRegisterPassword}
             editable={!loading}
           />
+          <TouchableOpacity
+            style={styles.passwordToggle}
+            onPress={() => setShowRegisterPassword(prev => !prev)}
+            disabled={loading}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <Icon
+              name={showRegisterPassword ? 'eye-off' : 'eye'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
         </View>
         {errors?.confirmPassword && (
           <Text style={styles.fieldError}>{errors.confirmPassword}</Text>
