@@ -8,7 +8,9 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  KeyboardAvoidingView,
   Keyboard,
+  Platform,
   TouchableWithoutFeedback,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -100,121 +102,129 @@ const IncomeSetupScreen = ({
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <SafeAreaView style={styles.container}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              {isEditMode ? 'Edit Income Setup' : "Let's get started"}
-            </Text>
-            <Text style={styles.subtitle}>
-              {isEditMode
-                ? 'Update your income information'
-                : 'Tell us about your income to set up your budget'}
-            </Text>
-          </View>
-
-          <View style={styles.form}>
-            {/* Income Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Income Amount</Text>
-              <View style={styles.incomeInputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.incomeInput}
-                  value={income}
-                  onChangeText={onIncomeChange}
-                  keyboardType="number-pad"
-                  placeholder="0"
-                  placeholderTextColor="#A0A0A0"
-                  autoCorrect={false}
-                  spellCheck={false}
-                  textContentType="none"
-                  editable={!loading}
-                />
-              </View>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoiding}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled">
+            <View style={styles.header}>
+              <Text style={styles.title}>
+                {isEditMode ? 'Edit Income Setup' : "Let's get started"}
+              </Text>
+              <Text style={styles.subtitle}>
+                {isEditMode
+                  ? 'Update your income information'
+                  : 'Tell us about your income to set up your budget'}
+              </Text>
             </View>
 
-            {/* Frequency Selection */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>How often are you paid?</Text>
-              <View style={styles.frequencyContainer}>
-                {frequencies.map(frequency => (
-                  <FrequencyButton
-                    key={frequency.id}
-                    frequency={frequency}
-                    selectedFrequency={selectedFrequency}
-                    onSelect={onFrequencySelect}
+            <View style={styles.form}>
+              {/* Income Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Income Amount</Text>
+                <View style={styles.incomeInputContainer}>
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.incomeInput}
+                    value={income}
+                    onChangeText={onIncomeChange}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor="#A0A0A0"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    textContentType="none"
+                    editable={!loading}
                   />
-                ))}
+                </View>
+              </View>
+
+              {/* Frequency Selection */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>How often are you paid?</Text>
+                <View style={styles.frequencyContainer}>
+                  {frequencies.map(frequency => (
+                    <FrequencyButton
+                      key={frequency.id}
+                      frequency={frequency}
+                      selectedFrequency={selectedFrequency}
+                      onSelect={onFrequencySelect}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {/* Next Pay Date */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Next Pay Date</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.datePickerButton,
+                    loading && styles.disabledButton,
+                  ]}
+                  onPress={openDatePicker}
+                  disabled={loading}>
+                  <Text
+                    style={[
+                      styles.datePickerText,
+                      !hasSelectedDate && styles.placeholderText,
+                    ]}>
+                    {hasSelectedDate
+                      ? formatDateForDisplay(nextPayDate)
+                      : 'Select date'}
+                  </Text>
+                  <Icon
+                    name="calendar-today"
+                    size={18}
+                    color="#8E8E93"
+                    style={styles.datePickerIcon}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.helperText}>
+                  This helps us calculate your current budget period
+                </Text>
               </View>
             </View>
 
-            {/* Next Pay Date */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Next Pay Date</Text>
+            <View style={styles.buttonContainer}>
+              {/* Cancel Button - only in edit mode */}
+              {isEditMode && (
+                <TouchableOpacity
+                  style={[
+                    styles.cancelButton,
+                    loading && styles.disabledButton,
+                  ]}
+                  onPress={onCancel}
+                  disabled={loading}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Save Button */}
               <TouchableOpacity
                 style={[
-                  styles.datePickerButton,
-                  loading && styles.disabledButton,
+                  styles.saveButton,
+                  isEditMode && styles.editSaveButton,
+                  loading && styles.disabledSaveButton,
                 ]}
-                onPress={openDatePicker}
+                onPress={onSave}
                 disabled={loading}>
-                <Text
-                  style={[
-                    styles.datePickerText,
-                    !hasSelectedDate && styles.placeholderText,
-                  ]}>
-                  {hasSelectedDate
-                    ? formatDateForDisplay(nextPayDate)
-                    : 'Select date'}
+                <Text style={styles.saveButtonText}>
+                  {loading
+                    ? 'Saving...'
+                    : isEditMode
+                    ? 'Save Changes'
+                    : 'Get Started'}
                 </Text>
-                <Icon
-                  name="calendar-today"
-                  size={18}
-                  color="#8E8E93"
-                  style={styles.datePickerIcon}
-                />
               </TouchableOpacity>
-              <Text style={styles.helperText}>
-                This helps us calculate your current budget period
-              </Text>
             </View>
-          </View>
 
-          <View style={styles.buttonContainer}>
-            {/* Cancel Button - only in edit mode */}
-            {isEditMode && (
-              <TouchableOpacity
-                style={[styles.cancelButton, loading && styles.disabledButton]}
-                onPress={onCancel}
-                disabled={loading}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Save Button */}
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                isEditMode && styles.editSaveButton,
-                loading && styles.disabledSaveButton,
-              ]}
-              onPress={onSave}
-              disabled={loading}>
-              <Text style={styles.saveButtonText}>
-                {loading
-                  ? 'Saving...'
-                  : isEditMode
-                  ? 'Save Changes'
-                  : 'Get Started'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Additional income sources - edit mode only (web parity) */}
-          {isEditMode && <IncomeSourcesSection />}
-        </ScrollView>
+            {/* Additional income sources - edit mode only (web parity) */}
+            {isEditMode && <IncomeSourcesSection />}
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Calendar Modal */}
         <CalendarModal
@@ -232,6 +242,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  keyboardAvoiding: {
+    flex: 1,
   },
   content: {
     flexGrow: 1,
