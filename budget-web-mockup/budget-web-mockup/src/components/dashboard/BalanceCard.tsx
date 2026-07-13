@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRightCircle, X, ChevronRight, ListChecks } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRightCircle, X, ChevronRight, ListChecks, Pencil } from 'lucide-react';
 import {formatCurrency} from '@/lib/formatters';
 import type { CommittedItem } from '@/services/user.service';
 
@@ -150,7 +151,16 @@ export default function BalanceCard({
       style={{boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)'}}>
       {/* Main Balance */}
       <div className="mb-6">
-        <p className="text-sm font-medium text-gray-500 mb-2">Balance</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-gray-500">Balance</p>
+          {/* Entry point to income editing + income sources (mobile parity) */}
+          <Link
+            href="/income-setup?edit=true"
+            className="p-1.5 -m-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Edit income & income sources">
+            <Pencil className="w-4 h-4" />
+          </Link>
+        </div>
         <p className="text-4xl font-bold text-gray-900 tracking-tight">
           {format(balance)}
         </p>
