@@ -775,18 +775,10 @@ function AccountCard({account, currency}) {
           </View>
         )}
       </View>
-      <Text style={styles.totalIncome}>{format(account.received)}</Text>
-
-      <View style={[styles.balanceRow, styles.accountSecondRow]}>
+      <View style={styles.balanceRow}>
         <View style={styles.balanceItem}>
-          <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
-          <Text
-            style={[
-              styles.balanceAmount,
-              isOverspent && styles.overBudgetText,
-            ]}>
-            {format(account.left)}
-          </Text>
+          <Text style={styles.balanceLabel}>RECEIVED</Text>
+          <Text style={styles.totalIncome}>{format(account.received)}</Text>
         </View>
         <View style={[styles.balanceItem, styles.balanceItemRight]}>
           <Text style={styles.balanceLabel}>TOTAL EXPENSES</Text>
@@ -819,21 +811,34 @@ function AccountCard({account, currency}) {
         </View>
       </View>
 
-      <View style={styles.progressContainer}>
-        <View
-          style={[
-            styles.progressBar,
-            {width: `${Math.max(0, Math.min(100, pctLeft))}%`},
-            (isOverspent || isCloseToLimit) && styles.overBudgetBar,
-            isLowBalance && styles.warningBar,
-          ]}
-        />
+      {/* Left to Spend — its own full-width section, matching the main
+          balance card's leftToSpendSection (big number + progress bar +
+          status), not squeezed into a column like Total Expenses. */}
+      <View style={styles.leftToSpendSection}>
+        <View style={styles.leftToSpendHeader}>
+          <Text style={styles.balanceLabel}>LEFT TO SPEND</Text>
+        </View>
+        <Text
+          style={[styles.leftAmount, isOverspent && styles.overBudgetText]}>
+          {format(account.left)}
+        </Text>
+
+        <View style={styles.progressContainer}>
+          <View
+            style={[
+              styles.progressBar,
+              {width: `${Math.max(0, Math.min(100, pctLeft))}%`},
+              (isOverspent || isCloseToLimit) && styles.overBudgetBar,
+              isLowBalance && styles.warningBar,
+            ]}
+          />
+        </View>
+        <Text style={styles.progressText}>
+          {isOverspent
+            ? `Over-spent by ${format(Math.abs(account.left))}`
+            : `${pctLeft}% remaining`}
+        </Text>
       </View>
-      <Text style={styles.progressText}>
-        {isOverspent
-          ? `Over-spent by ${format(Math.abs(account.left))}`
-          : `${pctLeft}% remaining`}
-      </Text>
 
       <View style={[styles.balanceRow, styles.accountReceivedRow]}>
         <View style={styles.balanceItem}>
@@ -1325,9 +1330,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-  },
-  accountSecondRow: {
-    marginTop: 15,
   },
   accountReceivedRow: {
     marginTop: 15,
