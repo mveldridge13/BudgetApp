@@ -564,6 +564,55 @@ function AccountCard({
             style={{color: '#F87171'}}>
             {format(account.spent)}
           </p>
+
+          {/* Committed vs Discretionary Breakdown — same rows as the main
+              balance card, but static (per-account committed items aren't in
+              the payload, so no modal). */}
+          <div
+            className="mt-4 pt-4 space-y-2.5"
+            style={{borderTop: '1px solid rgba(254, 202, 202, 0.5)'}}>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center">
+                <div
+                  className="w-2 h-2 rounded-full mr-2.5"
+                  style={{backgroundColor: '#F59E0B'}}></div>
+                <span className="text-xs text-gray-500 font-medium">
+                  Committed
+                </span>
+              </div>
+              <span className="text-xs font-semibold text-gray-900">
+                {format(account.committed)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center">
+                <div
+                  className="w-2 h-2 rounded-full mr-2.5"
+                  style={{backgroundColor: '#6366f1'}}></div>
+                <span className="text-xs text-gray-500 font-medium">
+                  Discretionary
+                </span>
+              </div>
+              <span className="text-xs font-semibold text-gray-900">
+                {format(account.discretionary)}
+              </span>
+            </div>
+            {account.goals > 0 && (
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  <div
+                    className="w-2 h-2 rounded-full mr-2.5"
+                    style={{backgroundColor: '#10B981'}}></div>
+                  <span className="text-xs text-gray-500 font-medium">
+                    Goals
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-gray-900">
+                  {format(account.goals)}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
