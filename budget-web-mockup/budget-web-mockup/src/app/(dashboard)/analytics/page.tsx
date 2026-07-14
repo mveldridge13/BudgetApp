@@ -948,19 +948,21 @@ export default function AnalyticsPage() {
         <>
           {/* Highest Earning Period - hero insight, not another chart */}
           {incomeAnalytics?.highestEarningPeriod && (
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg p-6 text-white">
-              <p className="text-sm font-medium text-indigo-100">
+            <div
+              className="rounded-lg border p-6"
+              style={{backgroundColor: '#EEF2FF', borderColor: '#E0E7FF'}}>
+              <p className="text-sm font-medium text-gray-600">
                 🏆 Highest Earning Period
               </p>
-              <p className="text-sm text-indigo-100 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 {formatDate(incomeAnalytics.highestEarningPeriod.start)} –{' '}
                 {formatDate(incomeAnalytics.highestEarningPeriod.end)}
               </p>
-              <p className="text-3xl font-bold mt-2">
+              <p className="text-3xl font-bold mt-2" style={{color: '#6366f1'}}>
                 {formatCurrency(incomeAnalytics.highestEarningPeriod.totalAmount)}
               </p>
               {incomeAnalytics.highestEarningPeriod.percentAboveAverage > 0 && (
-                <p className="text-sm text-indigo-100 mt-2">
+                <p className="text-sm text-gray-600 mt-2">
                   {incomeAnalytics.highestEarningPeriod.percentAboveAverage.toFixed(0)}% above your average
                   {incomeAnalytics.insights?.growthTrend === 'growing' &&
                     ', and part of a broader upward trend'}
