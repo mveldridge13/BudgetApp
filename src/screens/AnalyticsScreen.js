@@ -703,6 +703,45 @@ const AnalyticsScreen = ({
 
         {selectedTab === 'income' && (
           <>
+            {/* Highest Earning Period - hero insight, web parity */}
+            {incomeAnalytics?.highestEarningPeriod && (
+              <View style={styles.highestEarningCard}>
+                <Text style={styles.highestEarningLabel}>
+                  🏆 Highest Earning Period
+                </Text>
+                <Text style={styles.highestEarningDates}>
+                  {new Date(
+                    incomeAnalytics.highestEarningPeriod.start,
+                  ).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}{' '}
+                  –{' '}
+                  {new Date(
+                    incomeAnalytics.highestEarningPeriod.end,
+                  ).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <Text style={styles.highestEarningAmount}>
+                  ${incomeAnalytics.highestEarningPeriod.totalAmount.toFixed(2)}
+                </Text>
+                {incomeAnalytics.highestEarningPeriod.percentAboveAverage > 0 && (
+                  <Text style={styles.highestEarningSubtext}>
+                    {incomeAnalytics.highestEarningPeriod.percentAboveAverage.toFixed(
+                      0,
+                    )}
+                    % above your average
+                    {incomeAnalytics.insights?.growthTrend === 'growing' &&
+                      ', and part of a broader upward trend'}
+                    {incomeAnalytics.insights?.growthTrend === 'declining' &&
+                      ', though your income has trended down recently'}
+                  </Text>
+                )}
+              </View>
+            )}
+
             {/* Income Stats Cards */}
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
@@ -1566,6 +1605,42 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
+  },
+  highestEarningCard: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  highestEarningLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+  },
+  highestEarningDates: {
+    fontSize: 13,
+    fontFamily: 'System',
+    color: colors.textSecondary || '#9CA3AF',
+    marginTop: 4,
+  },
+  highestEarningAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    fontFamily: 'System',
+    color: colors.primary || '#6366f1',
+    marginTop: 8,
+  },
+  highestEarningSubtext: {
+    fontSize: 13,
+    fontFamily: 'System',
+    color: colors.textSecondary || '#6B7280',
+    marginTop: 8,
   },
   chartTitle: {
     fontSize: 18,
