@@ -132,6 +132,7 @@ interface HighestEarningPeriod {
   end: string;
   totalAmount: number;
   percentAboveAverage: number;
+  breakdown: {name: string; amount: number; color?: string}[];
 }
 
 interface IncomeAnalytics {
@@ -231,6 +232,8 @@ export default function AnalyticsPage() {
   >(null);
   const [showVelocityBreakdown, setShowVelocityBreakdown] = useState(false);
   const [showAdhocBreakdown, setShowAdhocBreakdown] = useState(false);
+  const [showHighestEarningBreakdown, setShowHighestEarningBreakdown] =
+    useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -946,14 +949,25 @@ export default function AnalyticsPage() {
       {/* Income Tab */}
       {selectedTab === 'income' && (
         <>
-          {/* Highest Earning Period - hero insight, not another chart */}
+          {/* Highest Earning Period - hero insight, not another chart.
+              Clickable when it has a breakdown to show. */}
           {incomeAnalytics?.highestEarningPeriod && (
-            <div
-              className="rounded-lg border p-6"
+            <button
+              type="button"
+              onClick={() =>
+                (incomeAnalytics.highestEarningPeriod?.breakdown.length ?? 0) > 0 &&
+                setShowHighestEarningBreakdown(true)
+              }
+              className="group w-full text-left rounded-lg border p-6 transition-colors"
               style={{backgroundColor: '#EEF2FF', borderColor: '#E0E7FF'}}>
-              <p className="text-sm font-medium text-gray-600">
-                🏆 Highest Earning Period
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-600">
+                  🏆 Highest Earning Period
+                </p>
+                {(incomeAnalytics.highestEarningPeriod.breakdown.length ?? 0) > 0 && (
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                )}
+              </div>
               <p className="text-sm text-gray-500 mt-1">
                 {formatDate(incomeAnalytics.highestEarningPeriod.start)} –{' '}
                 {formatDate(incomeAnalytics.highestEarningPeriod.end)}
@@ -970,7 +984,7 @@ export default function AnalyticsPage() {
                     ', though your income has trended down recently'}
                 </p>
               )}
-            </div>
+            </button>
           )}
 
           {/* Income Stats Cards */}
@@ -1970,6 +1984,47 @@ export default function AnalyticsPage() {
           ) : (
             <p className="text-sm text-gray-500 text-center py-6">
               No ad-hoc income this period.
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      {/* Highest Earning Period Breakdown Modal */}
+      <Modal
+        isOpen={showHighestEarningBreakdown}
+        onClose={() => setShowHighestEarningBreakdown(false)}
+        title="Highest Earning Period Breakdown"
+        size="md">
+        <div className="p-6 space-y-3">
+          {incomeAnalytics?.highestEarningPeriod && (
+            <p className="text-sm text-gray-500 -mt-1 mb-1">
+              {formatDate(incomeAnalytics.highestEarningPeriod.start)} –{' '}
+              {formatDate(incomeAnalytics.highestEarningPeriod.end)}
+            </p>
+          )}
+          {incomeAnalytics?.highestEarningPeriod?.breakdown &&
+          incomeAnalytics.highestEarningPeriod.breakdown.length > 0 ? (
+            incomeAnalytics.highestEarningPeriod.breakdown.map(item => (
+              <div
+                key={item.name}
+                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{backgroundColor: item.color || '#6366F1'}}
+                  />
+                  <span className="text-sm font-medium text-gray-900 truncate">
+                    {item.name}
+                  </span>
+                </div>
+                <span className="text-sm font-semibold text-gray-900 shrink-0">
+                  {formatCurrency(item.amount)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-6">
+              No breakdown available for this period.
             </p>
           )}
         </div>
