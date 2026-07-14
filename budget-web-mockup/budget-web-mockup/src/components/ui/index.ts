@@ -9,3 +9,4 @@ export { default as CategoryIcon } from './CategoryIcon';
 export { default as CustomSelect } from './CustomSelect';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as DatePicker } from './DatePicker';
+export { default as InfoTooltip } from './InfoTooltip';

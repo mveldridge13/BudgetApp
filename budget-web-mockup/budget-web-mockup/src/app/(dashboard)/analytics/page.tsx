@@ -17,6 +17,7 @@ import type {DiscretionaryBreakdown} from '@/types/transaction.types';
 import {useAnalyticsData} from '@/hooks/useAnalyticsData';
 import Modal from '@/components/ui/Modal';
 import DatePicker from '@/components/ui/DatePicker';
+import InfoTooltip from '@/components/ui/InfoTooltip';
 import CategoryDonut from '@/components/analytics/CategoryDonut';
 
 // Re-export for convenience (backend now handles pay period filtering)
@@ -152,6 +153,7 @@ interface IncomeAnalytics {
   ytdChangePercentage?: number;
   hasYearOverYearData?: boolean;
   anniversaryStartDate?: string | null;
+  signupDate?: string | null;
   payPeriodInfo?: {frequency: string};
   incomeBySource: IncomeBySource[];
   incomeBreakdown?: IncomeBreakdown;
@@ -1040,8 +1042,21 @@ export default function AnalyticsPage() {
           {/* Income Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-sm font-medium text-gray-500">
+              <p className="text-sm font-medium text-gray-500 inline-flex items-center">
                 Year to Date
+                <InfoTooltip
+                  text={`Total actual income received since you joined Trend. Resets annually on your Trend anniversary (${
+                    incomeAnalytics?.anniversaryStartDate
+                      ? new Date(
+                          incomeAnalytics.anniversaryStartDate,
+                        ).toLocaleDateString('en-AU', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      : 'your signup date'
+                  }).`}
+                />
               </p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(incomeAnalytics?.totalIncomeYTD || 0)}
@@ -1096,7 +1111,19 @@ export default function AnalyticsPage() {
               two can be compared before deciding what to keep. */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-sm font-medium text-gray-500">Total Income</p>
+              <p className="text-sm font-medium text-gray-500 inline-flex items-center">
+                Total Income
+                <InfoTooltip
+                  text={`Your lifetime income in Trend. Includes all completed income transactions recorded since you joined on ${
+                    incomeAnalytics?.signupDate
+                      ? new Date(incomeAnalytics.signupDate).toLocaleDateString(
+                          'en-AU',
+                          {month: 'short', day: 'numeric', year: 'numeric'},
+                        )
+                      : 'signup'
+                  }. This total never resets.`}
+                />
+              </p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
                 {formatCurrency(incomeAnalytics?.lifetimeTotalIncome || 0)}
               </p>
