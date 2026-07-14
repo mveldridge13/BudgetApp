@@ -295,6 +295,8 @@ const AnalyticsScreen = ({
   // Ad-hoc income breakdown modal (web parity) - the "Ad-hoc" row in Income
   // by Source is an aggregate, so it's tappable to reveal what's inside it.
   const [showAdhocBreakdown, setShowAdhocBreakdown] = useState(false);
+  const [showHighestEarningBreakdown, setShowHighestEarningBreakdown] =
+    useState(false);
   const adhocIncomeSource =
     incomeAnalytics?.incomeBySource?.find(source => source.isAdhoc) || null;
 
@@ -703,12 +705,33 @@ const AnalyticsScreen = ({
 
         {selectedTab === 'income' && (
           <>
-            {/* Highest Earning Period - hero insight, web parity */}
+            {/* Highest Earning Period - hero insight, web parity. Tappable
+                when it has a breakdown to show. */}
             {incomeAnalytics?.highestEarningPeriod && (
-              <View style={styles.highestEarningCard}>
-                <Text style={styles.highestEarningLabel}>
-                  🏆 Highest Earning Period
-                </Text>
+              <TouchableOpacity
+                style={styles.highestEarningCard}
+                activeOpacity={
+                  (incomeAnalytics.highestEarningPeriod.breakdown?.length ?? 0) > 0
+                    ? 0.7
+                    : 1
+                }
+                onPress={() =>
+                  (incomeAnalytics.highestEarningPeriod.breakdown?.length ?? 0) >
+                    0 && setShowHighestEarningBreakdown(true)
+                }>
+                <View style={styles.highestEarningHeaderRow}>
+                  <Text style={styles.highestEarningLabel}>
+                    🏆 Highest Earning Period
+                  </Text>
+                  {(incomeAnalytics.highestEarningPeriod.breakdown?.length ?? 0) >
+                    0 && (
+                    <Icon
+                      name="chevron-forward"
+                      size={16}
+                      color={colors.textSecondary || '#9CA3AF'}
+                    />
+                  )}
+                </View>
                 <Text style={styles.highestEarningDates}>
                   {new Date(
                     incomeAnalytics.highestEarningPeriod.start,
@@ -739,7 +762,7 @@ const AnalyticsScreen = ({
                       ', though your income has trended down recently'}
                   </Text>
                 )}
-              </View>
+              </TouchableOpacity>
             )}
 
             {/* Income Stats Cards */}
@@ -1442,6 +1465,64 @@ const AnalyticsScreen = ({
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Highest Earning Period Breakdown Modal (web parity) */}
+      <Modal
+        visible={showHighestEarningBreakdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowHighestEarningBreakdown(false)}>
+        <TouchableWithoutFeedback
+          onPress={() => setShowHighestEarningBreakdown(false)}>
+          <View style={styles.adhocModalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.adhocModalContent}>
+                <View style={styles.adhocModalHeader}>
+                  <Text style={styles.adhocModalTitle}>
+                    Highest Earning Period Breakdown
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowHighestEarningBreakdown(false)}
+                    hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                    <Icon
+                      name="close"
+                      size={22}
+                      color={colors.textSecondary || '#9CA3AF'}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {incomeAnalytics?.highestEarningPeriod?.breakdown?.length >
+                0 ? (
+                  incomeAnalytics.highestEarningPeriod.breakdown.map(item => (
+                    <View key={item.name} style={styles.adhocModalRow}>
+                      <View style={styles.adhocModalRowLeft}>
+                        <View
+                          style={[
+                            styles.incomeSourceDot,
+                            {backgroundColor: item.color || colors.primary},
+                          ]}
+                        />
+                        <Text
+                          style={styles.adhocModalRowLabel}
+                          numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                      </View>
+                      <Text style={styles.adhocModalRowAmount}>
+                        ${item.amount.toFixed(2)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.adhocModalEmptyText}>
+                    No breakdown available for this period.
+                  </Text>
+                )}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 };
@@ -1616,6 +1697,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
+  },
+  highestEarningHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   highestEarningLabel: {
     fontSize: 14,
