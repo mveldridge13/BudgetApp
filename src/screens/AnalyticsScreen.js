@@ -766,8 +766,17 @@ const AnalyticsScreen = ({
               </TouchableOpacity>
             )}
 
-            {/* Income Stats Cards */}
+            {/* Income Stats Cards - row 1, web parity order (see memory:
+                income-analytics-redesign-direction) */}
             <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statLabel}>Total Income</Text>
+                <Text style={styles.statValue}>
+                  ${incomeAnalytics?.lifetimeTotalIncome?.toFixed(2) || '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>all-time, never resets</Text>
+              </View>
+
               <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Year to Date</Text>
                 <Text style={styles.statValue}>
@@ -818,13 +827,62 @@ const AnalyticsScreen = ({
                   </Text>
                 )}
               </View>
+            </View>
 
-              <View style={styles.statCard}>
+            {/* Income Stats Cards - row 2 (2x2 wrap, unlike row 1's 3-across:
+                4 cards at flex:1 would be unreadably narrow on phone width) */}
+            <View style={styles.statsContainerWrap}>
+              <View style={styles.statCardWrap}>
+                <Text style={styles.statLabel}>Average Income</Text>
+                <Text style={styles.statValue}>
+                  ${incomeAnalytics?.averagePeriodIncome?.toFixed(2) || '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>per pay period</Text>
+              </View>
+
+              <View style={styles.statCardWrap}>
                 <Text style={styles.statLabel}>This Week</Text>
                 <Text style={styles.statValue}>
                   ${incomeAnalytics?.totalIncomeThisWeek?.toFixed(2) || '0.00'}
                 </Text>
                 <Text style={styles.statSubtext}>7 days</Text>
+              </View>
+
+              <View style={styles.statCardWrap}>
+                <Text style={styles.statLabel}>Best Pay Period</Text>
+                <Text style={styles.statValue}>
+                  $
+                  {incomeAnalytics?.highestEarningPeriod?.totalAmount?.toFixed(
+                    2,
+                  ) || '0.00'}
+                </Text>
+                <Text style={styles.statSubtext}>
+                  {incomeAnalytics?.highestEarningPeriod
+                    ? `${new Date(
+                        incomeAnalytics.highestEarningPeriod.start,
+                      ).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })} – ${new Date(
+                        incomeAnalytics.highestEarningPeriod.end,
+                      ).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}`
+                    : 'No data yet'}
+                </Text>
+              </View>
+
+              <View style={styles.statCardWrap}>
+                <Text style={styles.statLabel}>Income Sources</Text>
+                <Text style={styles.statValue}>
+                  {(incomeAnalytics?.incomeBySource ?? []).filter(
+                    source =>
+                      source.categoryId !== 'profile_income' &&
+                      !source.isAdhoc,
+                  ).length}
+                </Text>
+                <Text style={styles.statSubtext}>this pay period</Text>
               </View>
             </View>
 
@@ -1600,6 +1658,24 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  statsContainerWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 12,
+  },
+  statCardWrap: {
+    width: '48%',
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 12,
     padding: 16,
