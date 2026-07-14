@@ -127,6 +127,13 @@ interface RecentIncomeEntry {
   amount: number;
 }
 
+interface HighestEarningPeriod {
+  start: string;
+  end: string;
+  totalAmount: number;
+  percentAboveAverage: number;
+}
+
 interface IncomeAnalytics {
   totalIncomeThisMonth: number;
   totalIncomeThisPayPeriod: number;
@@ -141,6 +148,7 @@ interface IncomeAnalytics {
   incomeBySource: IncomeBySource[];
   incomeBreakdown?: IncomeBreakdown;
   recentIncomeEntries: RecentIncomeEntry[];
+  highestEarningPeriod?: HighestEarningPeriod | null;
   insights?: IncomeInsights;
 }
 
@@ -938,6 +946,31 @@ export default function AnalyticsPage() {
       {/* Income Tab */}
       {selectedTab === 'income' && (
         <>
+          {/* Highest Earning Period - hero insight, not another chart */}
+          {incomeAnalytics?.highestEarningPeriod && (
+            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg p-6 text-white">
+              <p className="text-sm font-medium text-indigo-100">
+                🏆 Highest Earning Period
+              </p>
+              <p className="text-sm text-indigo-100 mt-1">
+                {formatDate(incomeAnalytics.highestEarningPeriod.start)} –{' '}
+                {formatDate(incomeAnalytics.highestEarningPeriod.end)}
+              </p>
+              <p className="text-3xl font-bold mt-2">
+                {formatCurrency(incomeAnalytics.highestEarningPeriod.totalAmount)}
+              </p>
+              {incomeAnalytics.highestEarningPeriod.percentAboveAverage > 0 && (
+                <p className="text-sm text-indigo-100 mt-2">
+                  {incomeAnalytics.highestEarningPeriod.percentAboveAverage.toFixed(0)}% above your average
+                  {incomeAnalytics.insights?.growthTrend === 'growing' &&
+                    ', and part of a broader upward trend'}
+                  {incomeAnalytics.insights?.growthTrend === 'declining' &&
+                    ', though your income has trended down recently'}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Income Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
