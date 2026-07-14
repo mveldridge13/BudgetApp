@@ -127,12 +127,19 @@ interface RecentIncomeEntry {
   amount: number;
 }
 
+interface HighestEarningBreakdownItem {
+  name: string;
+  amount: number;
+  color?: string;
+  transactions: {description: string; amount: number; date: string}[];
+}
+
 interface HighestEarningPeriod {
   start: string;
   end: string;
   totalAmount: number;
   percentAboveAverage: number;
-  breakdown: {name: string; amount: number; color?: string}[];
+  breakdown: HighestEarningBreakdownItem[];
 }
 
 interface IncomeAnalytics {
@@ -201,6 +208,68 @@ interface BillsAnalyticsResponse {
   }>;
 }
 
+interface DonutSegment {
+  id: string;
+  color: string;
+  percentage: number;
+  d: string;
+  labelX: number;
+  labelY: number;
+}
+
+// Cutout donut geometry: each slice is a filled annular wedge with a white
+// stroke between sections. Wedges are drawn in a center-origin group; angles
+// run clockwise from the top. Shared by the Discretionary and Highest
+// Earning Period breakdowns so the two donuts look and behave identically.
+function buildDonutSegments<T extends {amount: number}>(
+  items: T[],
+  getId: (item: T) => string,
+  getColor: (item: T) => string,
+): DonutSegment[] {
+  const OUTER_R = 47;
+  const INNER_R = 27;
+  const LABEL_R = (OUTER_R + INNER_R) / 2;
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const arcPath = (startDeg: number, endDeg: number) => {
+    const sweep = endDeg - startDeg;
+    if (sweep < 0.1) return '';
+    if (sweep >= 359.9) {
+      return `M 0,${-OUTER_R} A ${OUTER_R},${OUTER_R} 0 1,1 0,${OUTER_R} A ${OUTER_R},${OUTER_R} 0 1,1 0,${-OUTER_R} M 0,${-INNER_R} A ${INNER_R},${INNER_R} 0 1,0 0,${INNER_R} A ${INNER_R},${INNER_R} 0 1,0 0,${-INNER_R} Z`;
+    }
+    const s = toRad(startDeg - 90);
+    const e = toRad(endDeg - 90);
+    const x1 = (Math.cos(s) * OUTER_R).toFixed(2);
+    const y1 = (Math.sin(s) * OUTER_R).toFixed(2);
+    const x2 = (Math.cos(e) * OUTER_R).toFixed(2);
+    const y2 = (Math.sin(e) * OUTER_R).toFixed(2);
+    const x3 = (Math.cos(e) * INNER_R).toFixed(2);
+    const y3 = (Math.sin(e) * INNER_R).toFixed(2);
+    const x4 = (Math.cos(s) * INNER_R).toFixed(2);
+    const y4 = (Math.sin(s) * INNER_R).toFixed(2);
+    const large = sweep > 180 ? 1 : 0;
+    return `M ${x1},${y1} A ${OUTER_R},${OUTER_R} 0 ${large},1 ${x2},${y2} L ${x3},${y3} A ${INNER_R},${INNER_R} 0 ${large},0 ${x4},${y4} Z`;
+  };
+
+  let acc = 0;
+  return items.slice(0, 6).map((item) => {
+    const percentage = total > 0 ? (item.amount / total) * 100 : 0;
+    const startDeg = acc * 3.6;
+    const endDeg = (acc + percentage) * 3.6;
+    acc += percentage;
+    const theta = toRad((startDeg + endDeg) / 2);
+    return {
+      id: getId(item),
+      color: getColor(item),
+      percentage,
+      d: arcPath(startDeg, endDeg),
+      labelX: 50 + LABEL_R * Math.sin(theta),
+      labelY: 50 - LABEL_R * Math.cos(theta),
+    };
+  });
+}
+
 export default function AnalyticsPage() {
   // State
   const [selectedTab, setSelectedTab] = useState<TabType>('spending');
@@ -234,6 +303,11 @@ export default function AnalyticsPage() {
   const [showAdhocBreakdown, setShowAdhocBreakdown] = useState(false);
   const [showHighestEarningBreakdown, setShowHighestEarningBreakdown] =
     useState(false);
+  // The breakdown item whose slice/row is selected, plus its individual
+  // transactions - same "click a slice to drill in" pattern as the
+  // Discretionary Breakdown donut.
+  const [selectedHighestEarningItemId, setSelectedHighestEarningItemId] =
+    useState<string | null>(null);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -495,55 +569,11 @@ export default function AnalyticsPage() {
   // Donut geometry: each slice is a filled annular wedge (matching the mobile
   // app) with a white stroke between sections for the cutout look. Wedges are
   // drawn in a center-origin group; angles run clockwise from the top.
-  const donutSegments = (() => {
-    const OUTER_R = 47;
-    const INNER_R = 27;
-    const LABEL_R = (OUTER_R + INNER_R) / 2;
-    const total = discretionaryCategories.reduce(
-      (sum, cat) => sum + cat.amount,
-      0,
-    );
-
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const arcPath = (startDeg: number, endDeg: number) => {
-      const sweep = endDeg - startDeg;
-      if (sweep < 0.1) return '';
-      // Full circle: draw the outer and inner rings as a single annulus.
-      if (sweep >= 359.9) {
-        return `M 0,${-OUTER_R} A ${OUTER_R},${OUTER_R} 0 1,1 0,${OUTER_R} A ${OUTER_R},${OUTER_R} 0 1,1 0,${-OUTER_R} M 0,${-INNER_R} A ${INNER_R},${INNER_R} 0 1,0 0,${INNER_R} A ${INNER_R},${INNER_R} 0 1,0 0,${-INNER_R} Z`;
-      }
-      const s = toRad(startDeg - 90);
-      const e = toRad(endDeg - 90);
-      const x1 = (Math.cos(s) * OUTER_R).toFixed(2);
-      const y1 = (Math.sin(s) * OUTER_R).toFixed(2);
-      const x2 = (Math.cos(e) * OUTER_R).toFixed(2);
-      const y2 = (Math.sin(e) * OUTER_R).toFixed(2);
-      const x3 = (Math.cos(e) * INNER_R).toFixed(2);
-      const y3 = (Math.sin(e) * INNER_R).toFixed(2);
-      const x4 = (Math.cos(s) * INNER_R).toFixed(2);
-      const y4 = (Math.sin(s) * INNER_R).toFixed(2);
-      const large = sweep > 180 ? 1 : 0;
-      return `M ${x1},${y1} A ${OUTER_R},${OUTER_R} 0 ${large},1 ${x2},${y2} L ${x3},${y3} A ${INNER_R},${INNER_R} 0 ${large},0 ${x4},${y4} Z`;
-    };
-
-    let acc = 0; // cumulative percentage before the current slice
-    return discretionaryCategories.slice(0, 6).map(cat => {
-      const percentage = total > 0 ? (cat.amount / total) * 100 : 0;
-      const startDeg = acc * 3.6;
-      const endDeg = (acc + percentage) * 3.6;
-      acc += percentage;
-      const theta = toRad((startDeg + endDeg) / 2); // mid-angle, clockwise from top
-      return {
-        id: cat.categoryId,
-        color: cat.categoryColor || '#6366F1',
-        percentage,
-        d: arcPath(startDeg, endDeg),
-        // As a percentage of the (square) container box.
-        labelX: 50 + LABEL_R * Math.sin(theta),
-        labelY: 50 - LABEL_R * Math.cos(theta),
-      };
-    });
-  })();
+  const donutSegments = buildDonutSegments(
+    discretionaryCategories,
+    (cat) => cat.categoryId,
+    (cat) => cat.categoryColor || '#6366F1',
+  );
 
   // The category whose slice is selected, plus its individual line items (the
   // backend returns one subcategory entry per transaction).
@@ -569,6 +599,20 @@ export default function AnalyticsPage() {
       })
       .sort((a, b) => b.amount - a.amount);
   })();
+
+  // Highest Earning Period donut - same geometry/interaction as the
+  // Discretionary donut above, just backed by the income breakdown.
+  const highestEarningBreakdown =
+    incomeAnalytics?.highestEarningPeriod?.breakdown ?? [];
+  const highestEarningDonutSegments = buildDonutSegments(
+    highestEarningBreakdown,
+    (item) => item.name,
+    (item) => item.color || '#6366F1',
+  );
+  const selectedHighestEarningItem =
+    highestEarningBreakdown.find(
+      (item) => item.name === selectedHighestEarningItemId,
+    ) ?? null;
 
   if (isLoading) {
     return (
@@ -1989,39 +2033,187 @@ export default function AnalyticsPage() {
         </div>
       </Modal>
 
-      {/* Highest Earning Period Breakdown Modal */}
+      {/* Highest Earning Period Breakdown Modal - same donut + drill-down
+          pattern as the Discretionary Breakdown modal above. */}
       <Modal
         isOpen={showHighestEarningBreakdown}
-        onClose={() => setShowHighestEarningBreakdown(false)}
+        onClose={() => {
+          setShowHighestEarningBreakdown(false);
+          setSelectedHighestEarningItemId(null);
+        }}
         title="Highest Earning Period Breakdown"
-        size="md">
-        <div className="p-6 space-y-3">
+        size="xl">
+        <div className="p-6 space-y-6">
           {incomeAnalytics?.highestEarningPeriod && (
-            <p className="text-sm text-gray-500 -mt-1 mb-1">
-              {formatDate(incomeAnalytics.highestEarningPeriod.start)} –{' '}
-              {formatDate(incomeAnalytics.highestEarningPeriod.end)}
-            </p>
+            <div className="bg-indigo-50 rounded-lg p-4 text-center">
+              <p className="text-3xl font-bold text-indigo-700">
+                {formatCurrency(incomeAnalytics.highestEarningPeriod.totalAmount)}
+              </p>
+              <p className="text-sm text-indigo-600 mt-1">
+                {formatDate(incomeAnalytics.highestEarningPeriod.start)} –{' '}
+                {formatDate(incomeAnalytics.highestEarningPeriod.end)}
+              </p>
+            </div>
           )}
-          {incomeAnalytics?.highestEarningPeriod?.breakdown &&
-          incomeAnalytics.highestEarningPeriod.breakdown.length > 0 ? (
-            incomeAnalytics.highestEarningPeriod.breakdown.map(item => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{backgroundColor: item.color || '#6366F1'}}
-                  />
-                  <span className="text-sm font-medium text-gray-900 truncate">
-                    {item.name}
-                  </span>
+
+          {highestEarningBreakdown.length > 0 ? (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-900 mb-4">
+                Income Breakdown
+              </h4>
+
+              <div className="flex flex-col sm:flex-row gap-5">
+                {/* Cutout Donut — click a slice to drill into its transactions */}
+                <div className="relative w-44 h-44 shrink-0 mx-auto sm:mx-0">
+                  <svg viewBox="0 0 100 100" className="w-full h-full">
+                    <g transform="translate(50 50)">
+                      {highestEarningDonutSegments.map(seg =>
+                        seg.d ? (
+                          <path
+                            key={seg.id}
+                            d={seg.d}
+                            fill={seg.color}
+                            stroke="#ffffff"
+                            strokeWidth="1.5"
+                            strokeLinejoin="round"
+                            onClick={() =>
+                              setSelectedHighestEarningItemId(prev =>
+                                prev === seg.id ? null : seg.id,
+                              )
+                            }
+                            className="cursor-pointer transition-opacity"
+                            style={{
+                              opacity:
+                                selectedHighestEarningItemId &&
+                                selectedHighestEarningItemId !== seg.id
+                                  ? 0.3
+                                  : 1,
+                            }}
+                          />
+                        ) : null,
+                      )}
+                    </g>
+                  </svg>
+
+                  {highestEarningDonutSegments.map(seg =>
+                    seg.percentage >= 7 ? (
+                      <span
+                        key={`label-${seg.id}`}
+                        className="absolute text-[10px] font-semibold text-white -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity"
+                        style={{
+                          left: `${seg.labelX}%`,
+                          top: `${seg.labelY}%`,
+                          textShadow: '0 1px 2px rgba(0,0,0,0.35)',
+                          opacity:
+                            selectedHighestEarningItemId &&
+                            selectedHighestEarningItemId !== seg.id
+                              ? 0.3
+                              : 1,
+                        }}>
+                        {seg.percentage.toFixed(0)}%
+                      </span>
+                    ) : null,
+                  )}
+
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-2xl font-bold text-gray-900 leading-none">
+                      {highestEarningBreakdown.length}
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1">
+                      Sources
+                    </span>
+                  </div>
                 </div>
-                <span className="text-sm font-semibold text-gray-900 shrink-0">
-                  {formatCurrency(item.amount)}
-                </span>
+
+                {/* Right panel: breakdown list, or selected item's transactions */}
+                <div className="flex-1 min-w-0">
+                  {selectedHighestEarningItem ? (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedHighestEarningItemId(null)}
+                        className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 mb-3">
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        All sources
+                      </button>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <div
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{
+                              backgroundColor:
+                                selectedHighestEarningItem.color || '#6366F1',
+                            }}
+                          />
+                          <span className="text-sm font-semibold text-gray-900 truncate">
+                            {selectedHighestEarningItem.name}
+                          </span>
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 shrink-0">
+                          {formatCurrency(selectedHighestEarningItem.amount)}
+                        </span>
+                      </div>
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {selectedHighestEarningItem.transactions.length > 0 ? (
+                          selectedHighestEarningItem.transactions.map(
+                            (tx, i) => (
+                              <div
+                                key={`${tx.description}-${tx.date}-${i}`}
+                                className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                                <div className="min-w-0">
+                                  <p className="text-sm text-gray-700 truncate">
+                                    {tx.description}
+                                  </p>
+                                  <p className="text-xs text-gray-400">
+                                    {formatDate(tx.date)}
+                                  </p>
+                                </div>
+                                <span className="text-sm font-medium text-gray-900 shrink-0 ml-2">
+                                  {formatCurrency(tx.amount)}
+                                </span>
+                              </div>
+                            ),
+                          )
+                        ) : (
+                          <p className="text-sm text-gray-500 py-4 text-center">
+                            No individual transactions - this is your
+                            profile salary, not a recorded transaction.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto">
+                      {highestEarningBreakdown.map(item => (
+                        <button
+                          type="button"
+                          key={item.name}
+                          onClick={() =>
+                            setSelectedHighestEarningItemId(item.name)
+                          }
+                          className="w-full flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-left">
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <div
+                              className="w-4 h-4 rounded-full shrink-0"
+                              style={{backgroundColor: item.color || '#6366F1'}}
+                            />
+                            <span className="text-sm font-medium text-gray-900 truncate">
+                              {item.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {formatCurrency(item.amount)}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            ))
+            </div>
           ) : (
             <p className="text-sm text-gray-500 text-center py-6">
               No breakdown available for this period.
