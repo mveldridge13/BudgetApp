@@ -159,7 +159,7 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
             disabled={loading}
             hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Icon
-              name={showLoginPassword ? 'eye-off' : 'eye'}
+              name={showLoginPassword ? 'eye' : 'eye-off'}
               size={20}
               color={colors.textSecondary}
             />
@@ -301,7 +301,7 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
             disabled={loading}
             hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Icon
-              name={showRegisterPassword ? 'eye-off' : 'eye'}
+              name={showRegisterPassword ? 'eye' : 'eye-off'}
               size={20}
               color={colors.textSecondary}
             />
@@ -337,7 +337,7 @@ const AuthFlow = ({onLogin, onRegister, loading, errors, clearErrors}) => {
             disabled={loading}
             hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
             <Icon
-              name={showRegisterPassword ? 'eye-off' : 'eye'}
+              name={showRegisterPassword ? 'eye' : 'eye-off'}
               size={20}
               color={colors.textSecondary}
             />
