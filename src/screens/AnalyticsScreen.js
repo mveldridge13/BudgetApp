@@ -829,10 +829,12 @@ const AnalyticsScreen = ({
               </View>
             </View>
 
-            {/* Income Stats Cards - row 2 (2x2 wrap, unlike row 1's 3-across:
-                4 cards at flex:1 would be unreadably narrow on phone width) */}
-            <View style={styles.statsContainerWrap}>
-              <View style={styles.statCardWrap}>
+            {/* Income Stats Cards - row 2. Best Pay Period removed - it was
+                always identical to the Highest Earning Period hero card's
+                own number, no separate calc. Back to the row 1 3-across
+                layout now that there are only 3 cards. */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Average Income</Text>
                 <Text style={styles.statValue}>
                   ${incomeAnalytics?.averagePeriodIncome?.toFixed(2) || '0.00'}
@@ -840,7 +842,7 @@ const AnalyticsScreen = ({
                 <Text style={styles.statSubtext}>per pay period</Text>
               </View>
 
-              <View style={styles.statCardWrap}>
+              <View style={styles.statCard}>
                 <Text style={styles.statLabel}>This Week</Text>
                 <Text style={styles.statValue}>
                   ${incomeAnalytics?.totalIncomeThisWeek?.toFixed(2) || '0.00'}
@@ -848,32 +850,7 @@ const AnalyticsScreen = ({
                 <Text style={styles.statSubtext}>7 days</Text>
               </View>
 
-              <View style={styles.statCardWrap}>
-                <Text style={styles.statLabel}>Best Pay Period</Text>
-                <Text style={styles.statValue}>
-                  $
-                  {incomeAnalytics?.highestEarningPeriod?.totalAmount?.toFixed(
-                    2,
-                  ) || '0.00'}
-                </Text>
-                <Text style={styles.statSubtext}>
-                  {incomeAnalytics?.highestEarningPeriod
-                    ? `${new Date(
-                        incomeAnalytics.highestEarningPeriod.start,
-                      ).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })} – ${new Date(
-                        incomeAnalytics.highestEarningPeriod.end,
-                      ).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}`
-                    : 'No data yet'}
-                </Text>
-              </View>
-
-              <View style={styles.statCardWrap}>
+              <View style={styles.statCard}>
                 <Text style={styles.statLabel}>Income Sources</Text>
                 <Text style={styles.statValue}>
                   {(incomeAnalytics?.incomeBySource ?? []).filter(
@@ -1658,24 +1635,6 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: colors.surface || '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  statsContainerWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-    gap: 12,
-  },
-  statCardWrap: {
-    width: '48%',
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 12,
     padding: 16,

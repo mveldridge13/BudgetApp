@@ -1120,8 +1120,10 @@ export default function AnalyticsPage() {
 
           {/* Phase 2 KPI row (see memory: income-analytics-redesign-direction)
               - kept alongside the row above rather than replacing it, so the
-              two can be compared before deciding what to keep. */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              two can be compared before deciding what to keep. Best Pay
+              Period removed - it was always identical to the Highest
+              Earning Period hero card's own number, no separate calc. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
                 Average Income
@@ -1137,21 +1139,6 @@ export default function AnalyticsPage() {
                 {formatCurrency(incomeAnalytics?.totalIncomeThisWeek || 0)}
               </p>
               <p className="text-sm text-gray-500 mt-1">7 days</p>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-sm font-medium text-gray-500">
-                Best Pay Period
-              </p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(
-                  incomeAnalytics?.highestEarningPeriod?.totalAmount || 0,
-                )}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                {incomeAnalytics?.highestEarningPeriod
-                  ? `${formatDate(incomeAnalytics.highestEarningPeriod.start)} – ${formatDate(incomeAnalytics.highestEarningPeriod.end)}`
-                  : 'No data yet'}
-              </p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
