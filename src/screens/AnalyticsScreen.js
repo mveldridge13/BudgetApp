@@ -19,6 +19,7 @@ import {colors} from '../styles';
 // ✅ FIXED: Import DiscretionaryContainer instead of DiscretionaryBreakdown
 import DiscretionaryContainer from '../containers/DiscretionaryContainer';
 import SpendingVelocityContainer from '../containers/SpendingVelocityContainer';
+import HighestEarningBreakdownModal from '../components/HighestEarningBreakdownModal';
 
 // Pro Badge Component - moved outside to prevent recreation on each render
 const ProBadge = () => (
@@ -1466,63 +1467,13 @@ const AnalyticsScreen = ({
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Highest Earning Period Breakdown Modal (web parity) */}
-      <Modal
+      {/* Highest Earning Period Breakdown Modal - same donut/expandable-list
+          pattern as DiscretionaryBreakdown */}
+      <HighestEarningBreakdownModal
         visible={showHighestEarningBreakdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowHighestEarningBreakdown(false)}>
-        <TouchableWithoutFeedback
-          onPress={() => setShowHighestEarningBreakdown(false)}>
-          <View style={styles.adhocModalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.adhocModalContent}>
-                <View style={styles.adhocModalHeader}>
-                  <Text style={styles.adhocModalTitle}>
-                    Highest Earning Period Breakdown
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowHighestEarningBreakdown(false)}
-                    hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-                    <Icon
-                      name="close"
-                      size={22}
-                      color={colors.textSecondary || '#9CA3AF'}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {incomeAnalytics?.highestEarningPeriod?.breakdown?.length >
-                0 ? (
-                  incomeAnalytics.highestEarningPeriod.breakdown.map(item => (
-                    <View key={item.name} style={styles.adhocModalRow}>
-                      <View style={styles.adhocModalRowLeft}>
-                        <View
-                          style={[
-                            styles.incomeSourceDot,
-                            {backgroundColor: item.color || colors.primary},
-                          ]}
-                        />
-                        <Text
-                          style={styles.adhocModalRowLabel}
-                          numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                      </View>
-                      <Text style={styles.adhocModalRowAmount}>
-                        ${item.amount.toFixed(2)}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.adhocModalEmptyText}>
-                    No breakdown available for this period.
-                  </Text>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        onClose={() => setShowHighestEarningBreakdown(false)}
+        data={incomeAnalytics?.highestEarningPeriod}
+      />
     </View>
   );
 };
