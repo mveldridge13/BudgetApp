@@ -1043,6 +1043,25 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500 inline-flex items-center">
+                Total Income
+                <InfoTooltip
+                  text={`Your lifetime income in Trend. Includes all completed income transactions recorded since you joined on ${
+                    incomeAnalytics?.signupDate
+                      ? new Date(incomeAnalytics.signupDate).toLocaleDateString(
+                          'en-AU',
+                          {month: 'short', day: 'numeric', year: 'numeric'},
+                        )
+                      : 'signup'
+                  }. This total never resets.`}
+                />
+              </p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(incomeAnalytics?.lifetimeTotalIncome || 0)}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">all-time, never resets</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-500 inline-flex items-center">
                 Year to Date
                 <InfoTooltip
                   text={`Total actual income received since you joined Trend. Resets annually on your Trend anniversary (${
@@ -1097,38 +1116,12 @@ export default function AnalyticsPage() {
                 {incomeAnalytics?.payPeriodInfo?.frequency || 'Monthly'}
               </p>
             </div>
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-sm font-medium text-gray-500">This Week</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(incomeAnalytics?.totalIncomeThisWeek || 0)}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">7 days</p>
-            </div>
           </div>
 
           {/* Phase 2 KPI row (see memory: income-analytics-redesign-direction)
               - kept alongside the row above rather than replacing it, so the
               two can be compared before deciding what to keep. */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <p className="text-sm font-medium text-gray-500 inline-flex items-center">
-                Total Income
-                <InfoTooltip
-                  text={`Your lifetime income in Trend. Includes all completed income transactions recorded since you joined on ${
-                    incomeAnalytics?.signupDate
-                      ? new Date(incomeAnalytics.signupDate).toLocaleDateString(
-                          'en-AU',
-                          {month: 'short', day: 'numeric', year: 'numeric'},
-                        )
-                      : 'signup'
-                  }. This total never resets.`}
-                />
-              </p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(incomeAnalytics?.lifetimeTotalIncome || 0)}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">all-time, never resets</p>
-            </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
                 Average Income
@@ -1137,6 +1130,13 @@ export default function AnalyticsPage() {
                 {formatCurrency(incomeAnalytics?.averagePeriodIncome || 0)}
               </p>
               <p className="text-sm text-gray-500 mt-1">per pay period</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-500">This Week</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(incomeAnalytics?.totalIncomeThisWeek || 0)}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">7 days</p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
