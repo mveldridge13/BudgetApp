@@ -161,6 +161,8 @@ interface IncomeAnalytics {
   averagePeriodIncome?: number;
   totalIncomeAcrossPeriods?: number;
   periodsConsidered?: number;
+  // Real recorded income only, all-time, never resets.
+  lifetimeTotalIncome?: number;
   insights?: IncomeInsights;
 }
 
@@ -1096,11 +1098,9 @@ export default function AnalyticsPage() {
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">Total Income</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(incomeAnalytics?.totalIncomeAcrossPeriods || 0)}
+                {formatCurrency(incomeAnalytics?.lifetimeTotalIncome || 0)}
               </p>
-              <p className="text-sm text-gray-500 mt-1">
-                over last {incomeAnalytics?.periodsConsidered || 0} pay periods
-              </p>
+              <p className="text-sm text-gray-500 mt-1">all-time, never resets</p>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm font-medium text-gray-500">
