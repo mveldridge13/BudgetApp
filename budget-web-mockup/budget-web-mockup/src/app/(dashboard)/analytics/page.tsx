@@ -157,6 +157,10 @@ interface IncomeAnalytics {
   incomeBreakdown?: IncomeBreakdown;
   recentIncomeEntries: RecentIncomeEntry[];
   highestEarningPeriod?: HighestEarningPeriod | null;
+  // Same ~1-year lookback window as highestEarningPeriod - Phase 2 KPI row.
+  averagePeriodIncome?: number;
+  totalIncomeAcrossPeriods?: number;
+  periodsConsidered?: number;
   insights?: IncomeInsights;
 }
 
@@ -1082,6 +1086,56 @@ export default function AnalyticsPage() {
                 {formatCurrency(incomeAnalytics?.totalIncomeThisWeek || 0)}
               </p>
               <p className="text-sm text-gray-500 mt-1">7 days</p>
+            </div>
+          </div>
+
+          {/* Phase 2 KPI row (see memory: income-analytics-redesign-direction)
+              - kept alongside the row above rather than replacing it, so the
+              two can be compared before deciding what to keep. */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-500">Total Income</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(incomeAnalytics?.totalIncomeAcrossPeriods || 0)}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                over last {incomeAnalytics?.periodsConsidered || 0} pay periods
+              </p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-500">
+                Average Income
+              </p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(incomeAnalytics?.averagePeriodIncome || 0)}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">per pay period</p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-500">
+                Best Pay Period
+              </p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(
+                  incomeAnalytics?.highestEarningPeriod?.totalAmount || 0,
+                )}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                {incomeAnalytics?.highestEarningPeriod
+                  ? `${formatDate(incomeAnalytics.highestEarningPeriod.start)} – ${formatDate(incomeAnalytics.highestEarningPeriod.end)}`
+                  : 'No data yet'}
+              </p>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <p className="text-sm font-medium text-gray-500">
+                Income Sources
+              </p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {(incomeAnalytics?.incomeBySource ?? []).filter(
+                  (s) => s.categoryId !== 'profile_income' && !s.isAdhoc,
+                ).length}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">this pay period</p>
             </div>
           </div>
 
