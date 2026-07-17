@@ -29,8 +29,6 @@ interface BalanceCardProps {
   // Distinct from rolloverBanner (the one-time notification).
   rolloverAvailable?: number;
   baseIncome?: number;
-  // Named income-source amounts received this period (income.sources)
-  incomeSources?: {id: string; name: string; amount: number}[];
   // Per-source income ledger; when there's an additional income source the
   // card becomes a carousel ("Everything" card first, then one card per
   // income source)
@@ -58,7 +56,6 @@ export default function BalanceCard({
   onDismissRollover,
   rolloverAvailable = 0,
   baseIncome = 0,
-  incomeSources = [],
   incomeLedger = [],
   daysRemaining = 0,
   isNewUser = false,
@@ -145,9 +142,10 @@ export default function BalanceCard({
 
   // Mirror mobile: surface the spendable rollover folded into this period's
   // balance, and preview the surplus that will roll on the last day of the period.
+  // Named income sources are excluded here - that money lives entirely in its
+  // own carousel card below, not in the main Balance figure.
   const hasRollover = rolloverAvailable > 0;
-  const receivedSources = incomeSources.filter(s => s.amount > 0);
-  const hasBalanceBreakdown = hasRollover || receivedSources.length > 0;
+  const hasBalanceBreakdown = hasRollover;
   // Mirror the backend: a new user (no lastRolloverDate) does not roll over
   // their first-period surplus, so don't preview a rollover that won't happen.
   const shouldShowRolloverPreview =
@@ -203,11 +201,6 @@ export default function BalanceCard({
         {hasBalanceBreakdown && (
           <p className="text-sm text-gray-500 mt-1">
             {format(baseIncome)}
-            {receivedSources.map(source => (
-              <span key={source.id}>
-                {' '}+ {format(source.amount)} {source.name}
-              </span>
-            ))}
             {hasRollover && <> + {format(rolloverAvailable)} rollover</>}
           </p>
         )}

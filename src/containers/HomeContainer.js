@@ -1329,13 +1329,27 @@ const HomeContainer = ({navigation}) => {
     }
   }, [transactions, incomeData]);
 
-  // Auto-calculate additional income when dependencies change (stable memoized)
+  // Auto-calculate additional income when dependencies change (stable memoized).
+  // Prefer the backend's homeSummary.income.additionalIncome when available -
+  // it excludes both the materialized primary-salary transaction and income
+  // attributed to a named income source (that money lives in its own
+  // ledger/carousel card, not here). The local PayPeriodService calc is only
+  // a fallback for while homeSummary hasn't loaded yet, and doesn't know
+  // about either exclusion.
   const totalAdditionalIncomeValue = useMemo(() => {
+    if (homeSummary?.income) {
+      return homeSummary.income.additionalIncome ?? 0;
+    }
     if (incomeData && transactions.length >= 0) {
       return calculateTotalAdditionalIncome();
     }
     return 0;
-  }, [transactionsSignature, incomeSignature, calculateTotalAdditionalIncome]);
+  }, [
+    homeSummary?.income,
+    transactionsSignature,
+    incomeSignature,
+    calculateTotalAdditionalIncome,
+  ]);
 
   // Update state only when memoized value changes (non-blocking)
   useEffect(() => {
