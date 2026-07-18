@@ -32,6 +32,14 @@ class IncomeSourceService {
   async deleteIncomeSource(id: string): Promise<void> {
     await api.delete(`/income-sources/${id}`);
   }
+
+  /**
+   * Dismiss this source's rollover banner (per-source equivalent of
+   * userService.dismissRolloverNotification).
+   */
+  async dismissRolloverNotification(id: string): Promise<void> {
+    await api.post(`/income-sources/${id}/dismiss-rollover-notification`);
+  }
 }
 
 export const incomeSourceService = new IncomeSourceService();

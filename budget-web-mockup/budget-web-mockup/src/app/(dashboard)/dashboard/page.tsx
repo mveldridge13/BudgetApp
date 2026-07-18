@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import GoalAllocationModal from '@/components/goals/GoalAllocationModal';
 import { goalService } from '@/services/goal.service';
 import { userService } from '@/services/user.service';
+import { incomeSourceService } from '@/services/income-source.service';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -55,6 +56,15 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDismissSourceRollover = async (incomeSourceId: string) => {
+    try {
+      await incomeSourceService.dismissRolloverNotification(incomeSourceId);
+      refresh();
+    } catch (error) {
+      console.error('Failed to dismiss source rollover notification:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -82,6 +92,7 @@ export default function DashboardPage() {
           rolloverBanner={rolloverNotification}
           onAllocateRollover={() => setShowAllocationModal(true)}
           onDismissRollover={handleDismissRollover}
+          onDismissSourceRollover={handleDismissSourceRollover}
         />
 
         {/* Cash Flow Card */}

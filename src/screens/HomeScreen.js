@@ -50,6 +50,7 @@ const HomeScreen = ({
   rolloverBanner = null,
   onDismissRolloverBanner = null,
   onReassignRollover = null,
+  onDismissSourceRolloverBanner = null,
 
   // Tournament/Poker props
   tournaments = [],
@@ -227,6 +228,7 @@ const HomeScreen = ({
           rolloverBanner={rolloverBanner}
           onDismissRolloverBanner={onDismissRolloverBanner}
           onReassignRollover={onReassignRollover}
+          onDismissSourceRolloverBanner={onDismissSourceRolloverBanner}
           isNewPayPeriodForUI={isNewPayPeriodForUI}
           homeSummary={homeSummary}
         />

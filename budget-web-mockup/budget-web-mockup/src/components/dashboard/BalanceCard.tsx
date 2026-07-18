@@ -39,6 +39,8 @@ interface BalanceCardProps {
   // `!lastRolloverDate`). New users don't roll over their first-period surplus,
   // so the roll-to-next preview must be suppressed for them.
   isNewUser?: boolean;
+  // Dismiss a single income source's rollover banner (id = IncomeLedgerInfo.id).
+  onDismissSourceRollover?: (incomeSourceId: string) => void;
 }
 
 export default function BalanceCard({
@@ -59,6 +61,7 @@ export default function BalanceCard({
   incomeLedger = [],
   daysRemaining = 0,
   isNewUser = false,
+  onDismissSourceRollover,
 }: BalanceCardProps) {
   const [showCommittedModal, setShowCommittedModal] = useState(false);
 
@@ -449,7 +452,16 @@ export default function BalanceCard({
         <div className="w-full shrink-0 snap-center">{mainCard}</div>
         {additionalIncomes.map(income => (
           <div key={income.id} className="w-full shrink-0 snap-center">
-            <IncomeCard income={income} format={format} locale={locale} />
+            <IncomeCard
+              income={income}
+              format={format}
+              locale={locale}
+              onDismissRollover={
+                onDismissSourceRollover
+                  ? () => onDismissSourceRollover(income.id)
+                  : undefined
+              }
+            />
           </div>
         ))}
       </div>
@@ -484,10 +496,12 @@ function IncomeCard({
   income,
   format,
   locale,
+  onDismissRollover,
 }: {
   income: IncomeLedgerInfo;
   format: (amount: number) => string;
   locale: string;
+  onDismissRollover?: () => void;
 }) {
   const pctLeft =
     income.received > 0 ? Math.round((income.left / income.received) * 100) : 0;
@@ -527,6 +541,26 @@ function IncomeCard({
           {format(income.received)}
         </p>
       </div>
+
+      {/* Rollover Banner — this source's own surplus, shown once until dismissed */}
+      {income.rolloverNotification && income.rolloverNotification.amount > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <p className="flex-1 text-white font-medium text-center">
+              {format(income.rolloverNotification.amount)} has been rolled into
+              this period
+            </p>
+            {onDismissRollover && (
+              <button
+                onClick={onDismissRollover}
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                title="Dismiss">
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Left to Spend + Total Expenses — exactly like the main balance card */}
       <div className="grid grid-cols-2 gap-4">

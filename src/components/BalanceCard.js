@@ -36,6 +36,7 @@ const BalanceCard = ({
   rolloverBanner = null,
   onDismissRolloverBanner = null,
   onReassignRollover = null,
+  onDismissSourceRolloverBanner = null,
   // Pay period UI state (calculated by HomeContainer)
   isNewPayPeriodForUI = false,
   // Backend home summary (single source of truth)
@@ -732,7 +733,15 @@ const BalanceCard = ({
           <View style={{width: carouselWidth}}>{mainCard}</View>
           {additionalIncomes.map(income => (
             <View key={income.id} style={{width: carouselWidth}}>
-              <IncomeCard income={income} currency={currency} />
+              <IncomeCard
+                income={income}
+                currency={currency}
+                onDismissRollover={
+                  onDismissSourceRolloverBanner
+                    ? () => onDismissSourceRolloverBanner(income.id)
+                    : null
+                }
+              />
             </View>
           ))}
         </ScrollView>
@@ -762,7 +771,7 @@ const BalanceCard = ({
  * only — a negative entry is over-spent, not blocked. Web parity
  * (budget-web-mockup BalanceCard.tsx IncomeCard).
  */
-function IncomeCard({income, currency}) {
+function IncomeCard({income, currency, onDismissRollover}) {
   const format = amount => formatCurrencySync(amount, currency);
 
   const pctLeft =
@@ -790,6 +799,29 @@ function IncomeCard({income, currency}) {
           </View>
         )}
       </View>
+
+      {/* Rollover Banner — this source's own surplus, shown once until dismissed */}
+      {income.rolloverNotification && income.rolloverNotification.amount > 0 && (
+        <View style={styles.rolloverBanner}>
+          <View style={styles.rolloverBannerContent}>
+            <View style={styles.rolloverBannerText}>
+              <Text style={styles.rolloverBannerTitle}>
+                {format(income.rolloverNotification.amount)} has been rolled
+                into this period
+              </Text>
+            </View>
+            {onDismissRollover && (
+              <TouchableOpacity
+                style={styles.rolloverBannerDismiss}
+                onPress={onDismissRollover}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+                <Icon name="x" size={16} color={colors.textWhite} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
       <View style={styles.balanceRow}>
         {/* Headline — unlabeled, matching the web IncomeCard (the name/badge
             row above already identifies it; a "RECEIVED" label here would

@@ -674,6 +674,16 @@ class TrendAPIService {
   }
 
   /**
+   * Dismiss a single income source's rollover banner (per-source equivalent
+   * of the main dismissRolloverNotification flow via RolloverService).
+   */
+  async dismissIncomeSourceRolloverNotification(id) {
+    return this.makeRequest(`/income-sources/${id}/dismiss-rollover-notification`, {
+      method: 'POST',
+    });
+  }
+
+  /**
    * Get home summary for Balance Card
    * Single source of truth for all balance calculations
    * Returns: period, income, outflows (committed, discretionary, goals), totals

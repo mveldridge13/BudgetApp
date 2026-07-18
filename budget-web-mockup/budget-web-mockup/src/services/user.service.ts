@@ -101,6 +101,13 @@ export interface IncomeLedgerInfo {
   left: number; // may be negative (over-spent)
   frequency: string | null;
   nextPaymentDate: string | null;
+  // Present when this source just rolled a surplus into `received` and it
+  // hasn't been dismissed yet (absent on older backend deploys).
+  rolloverNotification?: {
+    amount: number;
+    fromPeriod?: string;
+    createdAt?: string;
+  } | null;
 }
 
 export interface HomeSummaryResponse {

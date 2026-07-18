@@ -2462,6 +2462,19 @@ const HomeContainer = ({navigation}) => {
           setRolloverAmountToAllocate(amount);
           setShowGoalAllocationModal(true);
         }}
+        onDismissSourceRolloverBanner={async incomeSourceId => {
+          try {
+            await TrendAPIService.dismissIncomeSourceRolloverNotification(
+              incomeSourceId,
+            );
+            await loadHomeSummary();
+          } catch (error) {
+            console.error(
+              '🔄 HomeContainer: Failed to dismiss source rollover notification:',
+              error,
+            );
+          }
+        }}
         // Tournament/Poker props
         tournaments={tournaments}
         pokerSectionExpanded={pokerSectionExpanded}
