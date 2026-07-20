@@ -130,10 +130,13 @@ export default function ForecastChart({
 
   const handleChartMouseMove = (state: MouseHandlerDataParam) => {
     if (!dragPlanIdRef.current) return;
-    if (state.isTooltipActive && typeof state.activeTooltipIndex === 'number') {
-      dragIndexRef.current = state.activeTooltipIndex;
-      setDragPreview({planId: dragPlanIdRef.current, index: state.activeTooltipIndex});
-    }
+    if (!state.isTooltipActive || state.activeTooltipIndex == null) return;
+    // activeTooltipIndex is a string in Recharts v3 (TooltipIndex = string | null),
+    // not a number - it must be parsed before use as a chartData index.
+    const index = Number(state.activeTooltipIndex);
+    if (Number.isNaN(index)) return;
+    dragIndexRef.current = index;
+    setDragPreview({planId: dragPlanIdRef.current, index});
   };
 
   const handleChartMouseUp = () => {
