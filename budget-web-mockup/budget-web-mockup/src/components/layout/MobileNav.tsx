@@ -8,6 +8,7 @@ import {
   FileText,
   Shapes,
   Trophy,
+  TrendingUp,
   Settings as SettingsIcon,
   HelpCircle,
   MessageSquare,
@@ -86,6 +87,7 @@ export default function MobileNav() {
 
   // Mirrors the desktop sidebar's Workspace / Modules / secondary sections.
   const moreItems: MoreItem[] = [
+    { name: 'Planner', href: '/planner', icon: TrendingUp },
     { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Categories', href: '/categories', icon: Shapes },
     ...(settings.modules.pokerTracker
