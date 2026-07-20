@@ -1,9 +1,8 @@
 'use client';
 
 import {useMemo} from 'react';
-import {TrendingDown, TrendingUp, ShieldAlert, Sparkles} from 'lucide-react';
-import {formatCurrency} from '@/lib/formatters';
-import {ForecastResult, Plan} from '@/types';
+import {CheckCircle2, AlertTriangle, Info, Sparkles} from 'lucide-react';
+import {ForecastResult, Plan, PlanInsight, InsightSeverity} from '@/types';
 
 interface ImpactSummaryCardProps {
   forecast?: ForecastResult;
@@ -11,40 +10,40 @@ interface ImpactSummaryCardProps {
   currency?: string;
 }
 
-function describePlanEffect(plan: Plan, currency: string): string {
-  const amountStr = formatCurrency(plan.amount, currency);
-  const dateStr = new Date(plan.plannedDate).toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-  });
-  const label = plan.description || plan.type;
+const SEVERITY_ICON: Record<InsightSeverity, typeof CheckCircle2> = {
+  positive: CheckCircle2,
+  warning: AlertTriangle,
+  neutral: Info,
+};
 
-  switch (plan.type) {
-    case 'BILL_CHANGE':
-      return `${label}: bill payment moves to ${dateStr}`;
-    case 'GOAL_CHANGE':
-    case 'DEBT_PAYMENT':
-      return `${label}: ${plan.direction === 'OUTFLOW' ? 'extra' : 'reduced'} contribution of ${amountStr} on ${dateStr}`;
-    default:
-      return `${label}: ${plan.direction === 'OUTFLOW' ? '-' : '+'}${amountStr} on ${dateStr}`;
-  }
+const SEVERITY_COLOR: Record<InsightSeverity, string> = {
+  positive: 'text-emerald-600',
+  warning: 'text-amber-600',
+  neutral: 'text-gray-500',
+};
+
+function InsightRow({insight}: {insight: PlanInsight}) {
+  const Icon = SEVERITY_ICON[insight.severity];
+  return (
+    <li className="flex items-start gap-2 text-sm text-gray-700">
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${SEVERITY_COLOR[insight.severity]}`} />
+      <span>{insight.message}</span>
+    </li>
+  );
 }
 
 export default function ImpactSummaryCard({
   forecast,
   activePlans,
-  currency = 'USD',
 }: ImpactSummaryCardProps) {
-  const impact = useMemo(() => {
-    if (!forecast) return null;
-    const lowestWithPlans = Math.min(...forecast.dailyBalances.map((d) => d.balance));
-    const lowestBaseline = Math.min(...forecast.baselineDailyBalances.map((d) => d.balance));
-    return {
-      lowestWithPlans,
-      lowestBaseline,
-      delta: lowestWithPlans - lowestBaseline,
-      breachDelta: forecast.breaches.length - forecast.baselineBreaches.length,
-    };
+  const insightsByPlan = useMemo(() => {
+    const map = new Map<string, PlanInsight[]>();
+    for (const insight of forecast?.insights || []) {
+      const bucket = map.get(insight.planId) ?? [];
+      bucket.push(insight);
+      map.set(insight.planId, bucket);
+    }
+    return map;
   }, [forecast]);
 
   if (activePlans.length === 0) {
@@ -60,14 +59,13 @@ export default function ImpactSummaryCard({
     );
   }
 
-  if (!impact) {
+  if (!forecast) {
     return (
-      <div className="h-24 animate-pulse rounded-xl border border-gray-200 bg-gray-50" />
+      <div className="h-32 animate-pulse rounded-xl border border-gray-200 bg-gray-50" />
     );
   }
 
-  const isWorse = impact.delta < -0.005;
-  const isBetter = impact.delta > 0.005;
+  const scenarioInsights = insightsByPlan.get('') || [];
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -76,48 +74,42 @@ export default function ImpactSummaryCard({
         {activePlans.length > 1 ? 's' : ''}
       </h2>
 
-      <div className="flex items-center gap-3">
-        {isWorse && <TrendingDown className="h-5 w-5 shrink-0 text-red-500" />}
-        {isBetter && <TrendingUp className="h-5 w-5 shrink-0 text-emerald-500" />}
-        <div>
-          <p className="text-sm text-gray-600">
-            Your lowest projected balance goes from{' '}
-            <span className="font-medium text-gray-900">
-              {formatCurrency(impact.lowestBaseline, currency)}
-            </span>{' '}
-            to{' '}
-            <span
-              className={`font-semibold ${
-                isWorse ? 'text-red-600' : isBetter ? 'text-emerald-600' : 'text-gray-900'
-              }`}
-            >
-              {formatCurrency(impact.lowestWithPlans, currency)}
-            </span>
-          </p>
-        </div>
+      <div className="space-y-4">
+        {activePlans.map((plan) => {
+          const planInsights = insightsByPlan.get(plan.id) || [];
+          return (
+            <div key={plan.id}>
+              <p className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-900">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    plan.status === 'DRAFT' ? 'border border-indigo-300 bg-white' : 'bg-indigo-500'
+                  }`}
+                />
+                {plan.description || plan.type}
+              </p>
+              {planInsights.length > 0 ? (
+                <ul className="space-y-1 pl-3.5">
+                  {planInsights.map((insight, i) => (
+                    <InsightRow key={i} insight={insight} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="pl-3.5 text-sm text-gray-400">
+                  No notable schedule effects from this change.
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {impact.breachDelta !== 0 && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
-          {impact.breachDelta > 0
-            ? `This adds ${impact.breachDelta} day${impact.breachDelta > 1 ? 's' : ''} below your safety buffer.`
-            : `This removes ${Math.abs(impact.breachDelta)} day${Math.abs(impact.breachDelta) > 1 ? 's' : ''} below your safety buffer.`}
-        </div>
+      {scenarioInsights.length > 0 && (
+        <ul className="mt-4 space-y-1 border-t border-gray-100 pt-3">
+          {scenarioInsights.map((insight, i) => (
+            <InsightRow key={i} insight={insight} />
+          ))}
+        </ul>
       )}
-
-      <ul className="mt-4 space-y-1.5 border-t border-gray-100 pt-3">
-        {activePlans.map((plan) => (
-          <li key={plan.id} className="flex items-center gap-2 text-sm text-gray-600">
-            <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                plan.status === 'DRAFT' ? 'border border-indigo-300 bg-white' : 'bg-indigo-500'
-              }`}
-            />
-            {describePlanEffect(plan, currency)}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

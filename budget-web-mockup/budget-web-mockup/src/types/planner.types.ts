@@ -64,6 +64,17 @@ export interface DailyBalance {
   balance: number;
 }
 
+export type InsightSeverity = 'positive' | 'warning' | 'neutral';
+
+// A schedule-level observation about one active plan's consequences
+// (clustering, income timing, period shift, cash availability, risk) -
+// planId === '' means it's scenario-level, not attributable to one plan.
+export interface PlanInsight {
+  planId: string;
+  severity: InsightSeverity;
+  message: string;
+}
+
 export interface ForecastResult {
   events: FinancialEvent[];
   dailyBalances: DailyBalance[];
@@ -71,6 +82,7 @@ export interface ForecastResult {
   // Same projection with all active plans excluded - "if nothing changes."
   baselineDailyBalances: DailyBalance[];
   baselineBreaches: DailyBalance[];
+  insights: PlanInsight[];
 }
 
 export type ForecastHorizonDays = 30 | 60 | 90;
