@@ -58,6 +58,11 @@ interface ForecastChartProps {
   currency?: string;
   // Called when a plan dot is dragged to a new day and dropped there.
   onPlanDateChange?: (planId: string, newDate: string) => void;
+  // Called continuously while a plan dot is being dragged (before drop), with
+  // the day currently under the cursor - null once the drag ends. Lets the
+  // parent show a live "what would this do" preview instead of waiting for
+  // the drop + refetch.
+  onDragPreview?: (info: {planId: string; date: string} | null) => void;
 }
 
 export default function ForecastChart({
@@ -67,6 +72,7 @@ export default function ForecastChart({
   plans,
   currency = 'USD',
   onPlanDateChange,
+  onDragPreview,
 }: ForecastChartProps) {
   const chartData = useMemo(
     () =>
@@ -133,6 +139,7 @@ export default function ForecastChart({
     dragPlanIdRef.current = marker.id;
     dragIndexRef.current = marker.index;
     setDragPreview({planId: marker.id, index: marker.index});
+    onDragPreview?.({planId: marker.id, date: marker.date});
   };
 
   const endDrag = () => {
@@ -140,6 +147,7 @@ export default function ForecastChart({
     const index = dragIndexRef.current;
     dragPlanIdRef.current = null;
     dragIndexRef.current = null;
+    onDragPreview?.(null);
     if (planId === null || index === null) {
       setDragPreview(null);
       return;
@@ -180,6 +188,8 @@ export default function ForecastChart({
       if (index === dragIndexRef.current) return;
       dragIndexRef.current = index;
       setDragPreview({planId: dragPlanIdRef.current, index});
+      const point = chartData[index];
+      if (point) onDragPreview?.({planId: dragPlanIdRef.current, date: point.date});
     };
     const handleMouseUp = () => {
       if (dragPlanIdRef.current) endDrag();
@@ -190,7 +200,7 @@ export default function ForecastChart({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [chartData, plans, onPlanDateChange]);
+  }, [chartData, plans, onPlanDateChange, onDragPreview]);
 
   // Money coming in (salary + income sources), so it's visible on the chart
   // when income arrives relative to bills/plans, not just the balance line.

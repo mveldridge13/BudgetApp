@@ -8,6 +8,10 @@ interface ImpactSummaryCardProps {
   forecast?: ForecastResult;
   activePlans: Plan[];
   currency?: string;
+  // Live, client-computed insights for whichever plan is currently being
+  // dragged on the chart - shown in addition to (not replacing) that plan's
+  // committed insights, since the drag hasn't been saved yet.
+  livePreview?: {planId: string; insights: PlanInsight[]} | null;
 }
 
 const SEVERITY_ICON: Record<InsightSeverity, typeof CheckCircle2> = {
@@ -35,6 +39,7 @@ function InsightRow({insight}: {insight: PlanInsight}) {
 export default function ImpactSummaryCard({
   forecast,
   activePlans,
+  livePreview,
 }: ImpactSummaryCardProps) {
   const insightsByPlan = useMemo(() => {
     const map = new Map<string, PlanInsight[]>();
@@ -74,6 +79,7 @@ export default function ImpactSummaryCard({
       <div className="space-y-4">
         {activePlans.map((plan) => {
           const planInsights = insightsByPlan.get(plan.id) || [];
+          const preview = livePreview?.planId === plan.id ? livePreview.insights : [];
           return (
             <div key={plan.id}>
               <p className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-900">
@@ -90,10 +96,20 @@ export default function ImpactSummaryCard({
                     <InsightRow key={i} insight={insight} />
                   ))}
                 </ul>
-              ) : (
+              ) : preview.length === 0 ? (
                 <p className="pl-3.5 text-sm text-gray-400">
                   No notable schedule effects from this change.
                 </p>
+              ) : null}
+              {preview.length > 0 && (
+                <div className="mt-1.5 ml-3.5 rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2">
+                  <p className="mb-1 text-xs font-medium text-indigo-600">While dragging</p>
+                  <ul className="space-y-1">
+                    {preview.map((insight, i) => (
+                      <InsightRow key={i} insight={insight} />
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           );

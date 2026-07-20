@@ -217,6 +217,52 @@ export function calculatePayPeriodBoundaries(
 }
 
 /**
+ * Find the pay period boundaries containing an arbitrary target date - not
+ * just "today's" period like calculatePayPeriodBoundaries. Walks forward or
+ * backward from nextPayDate one cycle at a time until the target date falls
+ * inside a period. Used e.g. to tell whether a date being dragged around a
+ * forecast chart has crossed into a different pay period.
+ */
+export function findPayPeriodContaining(
+  targetDate: Date,
+  nextPayDateString: string,
+  frequency: string
+): PayPeriodBoundaries | null {
+  const anchor = parseDate(nextPayDateString);
+  if (!anchor || !frequency) return null;
+
+  const target = startOfDay(targetDate);
+  let periodStart = startOfDay(anchor);
+  let guard = 0;
+
+  if (target >= periodStart) {
+    while (guard++ < 500) {
+      const next = calculateNextPayDate(periodStart, frequency);
+      if (!next) break;
+      const nextStart = startOfDay(next);
+      if (target < nextStart) break;
+      periodStart = nextStart;
+    }
+  } else {
+    while (guard++ < 500) {
+      const prev = calculatePreviousPayDate(periodStart, frequency);
+      if (!prev) break;
+      periodStart = startOfDay(prev);
+      if (target >= periodStart) break;
+    }
+  }
+
+  const nextBoundary = calculateNextPayDate(periodStart, frequency);
+  if (!nextBoundary) return null;
+
+  return {
+    start: periodStart,
+    end: endOfDay(subDays(startOfDay(nextBoundary), 1)),
+    isNewPeriod: false,
+  };
+}
+
+/**
  * Get pay period status text for UI display
  */
 export function getPayPeriodStatusText(nextPayDateString: string): string | null {

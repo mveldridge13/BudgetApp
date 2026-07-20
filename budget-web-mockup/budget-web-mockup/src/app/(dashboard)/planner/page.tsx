@@ -6,7 +6,8 @@ import {Plus, TrendingUp, AlertTriangle, Pencil} from 'lucide-react';
 import {useAuth} from '@/contexts/AuthContext';
 import {plannerService} from '@/services/planner.service';
 import {formatCurrency} from '@/lib/formatters';
-import {CreatePlanData, ForecastHorizonDays, Plan} from '@/types';
+import {findPayPeriodContaining} from '@/utils/payPeriodService';
+import {CreatePlanData, ForecastHorizonDays, Plan, PlanInsight} from '@/types';
 import ForecastChart from '@/components/planner/ForecastChart';
 import PlanFormModal from '@/components/planner/PlanFormModal';
 import ImpactSummaryCard from '@/components/planner/ImpactSummaryCard';
@@ -24,6 +25,7 @@ export default function PlannerPage() {
   const [editingSettings, setEditingSettings] = useState(false);
   const [bufferDraft, setBufferDraft] = useState('');
   const [activeTab, setActiveTab] = useState<'whatif' | 'moneyIn' | 'moneyOut'>('whatif');
+  const [dragPreview, setDragPreview] = useState<{planId: string; date: string} | null>(null);
 
   const {
     data: forecast,
@@ -65,6 +67,69 @@ export default function PlannerPage() {
     () => (forecast?.events || []).filter((e) => e.direction === 'OUTFLOW'),
     [forecast],
   );
+
+  // Live "what would this do" feedback while a plan dot is mid-drag, computed
+  // entirely client-side from data already loaded (no backend round-trip -
+  // that's the whole point, the drag needs to stay snappy). Two signals:
+  // has the drop point crossed into a different pay period, and would it
+  // land near enough to other bills to cluster spending in the same week.
+  const dragPreviewInsights = useMemo(() => {
+    if (!dragPreview) return null;
+    const plan = plans.find((p) => p.id === dragPreview.planId);
+    if (!plan) return null;
+
+    const insights: PlanInsight[] = [];
+    const draggedDate = new Date(dragPreview.date);
+
+    if (user?.nextPayDate && user?.incomeFrequency) {
+      const originalDate = new Date(plan.plannedDate.slice(0, 10));
+      const originalPeriod = findPayPeriodContaining(
+        originalDate,
+        user.nextPayDate,
+        user.incomeFrequency,
+      );
+      const newPeriod = findPayPeriodContaining(
+        draggedDate,
+        user.nextPayDate,
+        user.incomeFrequency,
+      );
+      if (
+        originalPeriod &&
+        newPeriod &&
+        originalPeriod.start.getTime() !== newPeriod.start.getTime()
+      ) {
+        const fmt = (d: Date) =>
+          d.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+        insights.push({
+          planId: plan.id,
+          severity: 'neutral',
+          message: `This now falls in the pay period of ${fmt(newPeriod.start)} - ${fmt(newPeriod.end)}.`,
+        });
+      }
+    }
+
+    if (plan.direction === 'OUTFLOW') {
+      const windowStart = new Date(draggedDate);
+      windowStart.setDate(windowStart.getDate() - 3);
+      const windowEnd = new Date(draggedDate);
+      windowEnd.setDate(windowEnd.getDate() + 3);
+      const nearbyBills = (forecast?.events || []).filter((e) => {
+        if (e.sourceType !== 'RECURRING_BILL') return false;
+        const d = new Date(e.date);
+        return d >= windowStart && d <= windowEnd;
+      });
+      const total = nearbyBills.length + 1; // + this plan itself
+      if (total >= 3) {
+        insights.push({
+          planId: plan.id,
+          severity: 'warning',
+          message: `${total} bills now fall in the same week.`,
+        });
+      }
+    }
+
+    return {planId: plan.id, insights};
+  }, [dragPreview, plans, user, forecast]);
 
   const refreshAll = () =>
     Promise.all([mutateForecast(), mutatePlans(), mutateSettings()]);
@@ -295,6 +360,7 @@ export default function PlannerPage() {
             plans={activePlans}
             currency={currency}
             onPlanDateChange={handlePlanDateChange}
+            onDragPreview={setDragPreview}
           />
         )}
         {forecast && forecast.breaches.length > 0 && (
@@ -310,6 +376,7 @@ export default function PlannerPage() {
         forecast={forecast}
         activePlans={activePlans}
         currency={currency}
+        livePreview={dragPreviewInsights}
       />
 
       <div className="rounded-xl border border-gray-200 bg-white">
