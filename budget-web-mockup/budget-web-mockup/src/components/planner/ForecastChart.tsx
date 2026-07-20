@@ -367,6 +367,20 @@ export default function ForecastChart({
             const point = chartData[dragging ? dragPreview.index : marker.index];
             if (!point) return null;
             return (
+              <ReferenceLine
+                key={`line-${marker.id}`}
+                x={point.label}
+                stroke={marker.status === 'DRAFT' ? DRAFT_COLOR : PLANNED_COLOR}
+                strokeDasharray="4 4"
+                strokeOpacity={0.6}
+              />
+            );
+          })}
+          {planMarkers.map((marker) => {
+            const dragging = dragPreview?.planId === marker.id;
+            const point = chartData[dragging ? dragPreview.index : marker.index];
+            if (!point) return null;
+            return (
               <ReferenceDot
                 key={marker.id}
                 x={point.label}
