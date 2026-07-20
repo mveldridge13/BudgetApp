@@ -1,6 +1,6 @@
 'use client';
 
-import {useMemo} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {
   Area,
   AreaChart,
@@ -11,6 +11,7 @@ import {
   ReferenceLine,
   ReferenceDot,
   ResponsiveContainer,
+  MouseHandlerDataParam,
 } from 'recharts';
 import {formatCurrency, formatCurrencyCompact} from '@/lib/formatters';
 import {DailyBalance, FinancialEvent, FinancialEventSourceType, Plan, PlanStatus} from '@/types';
@@ -20,6 +21,7 @@ interface PlanMarker {
   date: string;
   balance: number;
   status: PlanStatus;
+  index: number;
 }
 
 interface EventMarker {
@@ -50,6 +52,8 @@ interface ForecastChartProps {
   safetyBufferAmount: number | null;
   plans: Plan[];
   currency?: string;
+  // Called when a plan dot is dragged to a new day and dropped there.
+  onPlanDateChange?: (planId: string, newDate: string) => void;
 }
 
 export default function ForecastChart({
@@ -58,6 +62,7 @@ export default function ForecastChart({
   safetyBufferAmount,
   plans,
   currency = 'USD',
+  onPlanDateChange,
 }: ForecastChartProps) {
   const chartData = useMemo(
     () =>
@@ -87,10 +92,63 @@ export default function ForecastChart({
       const date = p.plannedDate.slice(0, 10);
       const balance = balanceByDate.get(date);
       if (balance === undefined) continue;
-      markers.push({id: p.id, date, balance, status: p.status});
+      const index = chartData.findIndex((c) => c.date === date);
+      if (index === -1) continue;
+      markers.push({id: p.id, date, balance, status: p.status, index});
     }
     return markers;
-  }, [plans, balanceByDate]);
+  }, [plans, balanceByDate, chartData]);
+
+  // Dragging a plan dot reschedules it: dragPlanIdRef/dragIndexRef track the
+  // in-progress drag imperatively (read from event handlers and the window
+  // mouseup fallback without stale closures), while dragPreview state drives
+  // the ghost dot's position during the drag.
+  const dragPlanIdRef = useRef<string | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragPreview, setDragPreview] = useState<{planId: string; index: number} | null>(null);
+
+  const beginDrag = (marker: PlanMarker) => {
+    dragPlanIdRef.current = marker.id;
+    dragIndexRef.current = marker.index;
+    setDragPreview({planId: marker.id, index: marker.index});
+  };
+
+  const endDrag = () => {
+    const planId = dragPlanIdRef.current;
+    const index = dragIndexRef.current;
+    dragPlanIdRef.current = null;
+    dragIndexRef.current = null;
+    setDragPreview(null);
+    if (planId === null || index === null) return;
+    const point = chartData[index];
+    const original = plans.find((p) => p.id === planId);
+    if (!point || !original) return;
+    if (point.date !== original.plannedDate.slice(0, 10)) {
+      onPlanDateChange?.(planId, point.date);
+    }
+  };
+
+  const handleChartMouseMove = (state: MouseHandlerDataParam) => {
+    if (!dragPlanIdRef.current) return;
+    if (state.isTooltipActive && typeof state.activeTooltipIndex === 'number') {
+      dragIndexRef.current = state.activeTooltipIndex;
+      setDragPreview({planId: dragPlanIdRef.current, index: state.activeTooltipIndex});
+    }
+  };
+
+  const handleChartMouseUp = () => {
+    if (dragPlanIdRef.current) endDrag();
+  };
+
+  // Fallback for a mouseup outside the chart's own mouse-tracking area
+  // (e.g. the cursor overshoots past the plot before the button is released).
+  useEffect(() => {
+    const onWindowMouseUp = () => {
+      if (dragPlanIdRef.current) endDrag();
+    };
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+  }, [chartData, plans, onPlanDateChange]);
 
   // Money coming in (salary + income sources), so it's visible on the chart
   // when income arrives relative to bills/plans, not just the balance line.
@@ -154,7 +212,12 @@ export default function ForecastChart({
   return (
     <div className="h-[320px] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={chartData} margin={{top: 8, right: 8, left: 0, bottom: 0}}>
+        <AreaChart
+          data={chartData}
+          margin={{top: 8, right: 8, left: 0, bottom: 0}}
+          onMouseMove={handleChartMouseMove}
+          onMouseUp={handleChartMouseUp}
+        >
           <defs>
             <linearGradient id="planner-balance" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={BALANCE_COLOR} stopOpacity={0.25} />
@@ -247,21 +310,32 @@ export default function ForecastChart({
             dot={false}
             activeDot={{r: 4}}
           />
-          {planMarkers.map((marker) => (
-            <ReferenceDot
-              key={marker.id}
-              x={
-                chartData.find((c) => c.date === marker.date)?.label ??
-                marker.date
-              }
-              y={marker.balance}
-              r={5}
-              fill={marker.status === 'DRAFT' ? 'white' : PLANNED_COLOR}
-              stroke={marker.status === 'DRAFT' ? DRAFT_COLOR : PLANNED_COLOR}
-              strokeWidth={2}
-              strokeDasharray={marker.status === 'DRAFT' ? '2 2' : undefined}
-            />
-          ))}
+          {planMarkers.map((marker) => {
+            const dragging = dragPreview?.planId === marker.id;
+            const point = chartData[dragging ? dragPreview.index : marker.index];
+            if (!point) return null;
+            return (
+              <ReferenceDot
+                key={marker.id}
+                x={point.label}
+                y={dragging ? point.balance : marker.balance}
+                r={dragging ? 6 : 5}
+                fill={marker.status === 'DRAFT' ? 'white' : PLANNED_COLOR}
+                stroke={marker.status === 'DRAFT' ? DRAFT_COLOR : PLANNED_COLOR}
+                strokeWidth={2}
+                strokeDasharray={marker.status === 'DRAFT' ? '2 2' : undefined}
+                style={onPlanDateChange ? {cursor: dragging ? 'grabbing' : 'grab'} : undefined}
+                onMouseDown={
+                  onPlanDateChange
+                    ? (_dotProps, e) => {
+                        e.preventDefault();
+                        beginDrag(marker);
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
           {incomeMarkers.map((marker) => (
             <ReferenceDot
               key={marker.key}

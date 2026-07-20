@@ -78,6 +78,11 @@ export default function PlannerPage() {
     await refreshAll();
   };
 
+  const handlePlanDateChange = async (planId: string, newDate: string) => {
+    await plannerService.updatePlan(planId, {plannedDate: newDate});
+    await refreshAll();
+  };
+
   const handlePromote = async (id: string) => {
     await plannerService.promotePlan(id);
     await refreshAll();
@@ -289,6 +294,7 @@ export default function PlannerPage() {
             safetyBufferAmount={settings?.safetyBufferAmount ?? null}
             plans={activePlans}
             currency={currency}
+            onPlanDateChange={handlePlanDateChange}
           />
         )}
         {forecast && forecast.breaches.length > 0 && (
