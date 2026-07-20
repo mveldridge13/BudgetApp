@@ -123,6 +123,11 @@ export default function ForecastChart({
   const dragPlanIdRef = useRef<string | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragPreview, setDragPreview] = useState<{planId: string; index: number} | null>(null);
+  // True while a drop has been committed (onPlanDateChange called) but the
+  // parent hasn't re-fetched yet - keeps dragPreview rendered at the dropped
+  // spot so the dot doesn't snap back to the old day and then jump forward
+  // again once the network round-trip (PATCH + refetch) finishes.
+  const awaitingRefreshRef = useRef(false);
 
   const beginDrag = (marker: PlanMarker) => {
     dragPlanIdRef.current = marker.id;
@@ -135,15 +140,29 @@ export default function ForecastChart({
     const index = dragIndexRef.current;
     dragPlanIdRef.current = null;
     dragIndexRef.current = null;
-    setDragPreview(null);
-    if (planId === null || index === null) return;
+    if (planId === null || index === null) {
+      setDragPreview(null);
+      return;
+    }
     const point = chartData[index];
     const original = plans.find((p) => p.id === planId);
-    if (!point || !original) return;
-    if (point.date !== original.plannedDate.slice(0, 10)) {
-      onPlanDateChange?.(planId, point.date);
+    if (!point || !original || point.date === original.plannedDate.slice(0, 10)) {
+      setDragPreview(null);
+      return;
     }
+    awaitingRefreshRef.current = true;
+    onPlanDateChange?.(planId, point.date);
   };
+
+  // Clears the optimistic preview once the parent's plans data actually
+  // refreshes (success or failure) - at that point marker.index reflects
+  // reality, so there's nothing left for dragPreview to override.
+  useEffect(() => {
+    if (awaitingRefreshRef.current) {
+      awaitingRefreshRef.current = false;
+      setDragPreview(null);
+    }
+  }, [plans]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
