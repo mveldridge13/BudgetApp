@@ -11,7 +11,6 @@ import {
   ReferenceLine,
   ReferenceDot,
   ResponsiveContainer,
-  MouseHandlerDataParam,
 } from 'recharts';
 import {formatCurrency, formatCurrencyCompact} from '@/lib/formatters';
 import {DailyBalance, FinancialEvent, FinancialEventSourceType, Plan, PlanStatus} from '@/types';
@@ -38,6 +37,11 @@ const DRAFT_COLOR = '#A5B4FC';
 const PLANNED_COLOR = '#6366F1';
 const INCOME_COLOR = '#10B981';
 const BILL_COLOR = '#EF4444';
+
+// Shared between the chart's own layout props and the drag hit-testing math
+// below, so the two can't silently drift apart.
+const CHART_MARGIN = {top: 8, right: 8, left: 0, bottom: 0};
+const Y_AXIS_WIDTH = 56;
 
 const SOURCE_LABELS: Record<FinancialEventSourceType, string> = {
   PRIMARY_INCOME: 'Salary',
@@ -107,10 +111,15 @@ export default function ForecastChart({
     return map;
   }, [planMarkers]);
 
-  // Dragging a plan dot reschedules it: dragPlanIdRef/dragIndexRef track the
-  // in-progress drag imperatively (read from event handlers and the window
-  // mouseup fallback without stale closures), while dragPreview state drives
-  // the ghost dot's position during the drag.
+  // Dragging a plan dot reschedules it. Tracked with raw mouse coordinates
+  // (window-level listeners + a bounding-rect check) instead of Recharts' own
+  // hover state, which is Redux + requestAnimationFrame throttled and made
+  // the dot visibly trail the cursor - this follows it immediately.
+  // dragPlanIdRef/dragIndexRef hold the in-progress drag imperatively so the
+  // window listeners (defined once, not per-drag) always see the current
+  // gesture without stale closures; dragPreview state drives the ghost dot's
+  // rendered position.
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const dragPlanIdRef = useRef<string | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const [dragPreview, setDragPreview] = useState<{planId: string; index: number} | null>(null);
@@ -136,34 +145,32 @@ export default function ForecastChart({
     }
   };
 
-  const handleChartMouseMove = (state: MouseHandlerDataParam) => {
-    if (!dragPlanIdRef.current) return;
-    if (!state.isTooltipActive || state.activeTooltipIndex == null) return;
-    // activeTooltipIndex is a string in Recharts v3 (TooltipIndex = string | null),
-    // not a number - it must be parsed before use as a chartData index.
-    const index = Number(state.activeTooltipIndex);
-    if (Number.isNaN(index)) return;
-    // Skip the state update (and the chart re-render it triggers) unless the
-    // cursor actually crossed into a new day's column - mousemove fires far
-    // more often than that, and re-rendering on every tick made dragging feel
-    // laggy for no visual benefit.
-    if (dragIndexRef.current === index) return;
-    dragIndexRef.current = index;
-    setDragPreview({planId: dragPlanIdRef.current, index});
-  };
-
-  const handleChartMouseUp = () => {
-    if (dragPlanIdRef.current) endDrag();
-  };
-
-  // Fallback for a mouseup outside the chart's own mouse-tracking area
-  // (e.g. the cursor overshoots past the plot before the button is released).
   useEffect(() => {
-    const onWindowMouseUp = () => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragPlanIdRef.current || chartData.length === 0) return;
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      // Day columns are evenly spaced (point scale, no padding) across the
+      // plot area - same margin/axis-width constants the chart itself uses.
+      const plotLeft = rect.left + CHART_MARGIN.left + Y_AXIS_WIDTH;
+      const plotWidth = rect.right - CHART_MARGIN.right - plotLeft;
+      if (plotWidth <= 0) return;
+      const n = chartData.length;
+      const fraction = n === 1 ? 0 : (e.clientX - plotLeft) / plotWidth;
+      const index = Math.min(n - 1, Math.max(0, Math.round(fraction * (n - 1))));
+      if (index === dragIndexRef.current) return;
+      dragIndexRef.current = index;
+      setDragPreview({planId: dragPlanIdRef.current, index});
+    };
+    const handleMouseUp = () => {
       if (dragPlanIdRef.current) endDrag();
     };
-    window.addEventListener('mouseup', onWindowMouseUp);
-    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
   }, [chartData, plans, onPlanDateChange]);
 
   // Money coming in (salary + income sources), so it's visible on the chart
@@ -266,14 +273,9 @@ export default function ForecastChart({
   }
 
   return (
-    <div className="h-[320px] w-full">
+    <div className="h-[320px] w-full" ref={wrapperRef}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={chartData}
-          margin={{top: 8, right: 8, left: 0, bottom: 0}}
-          onMouseMove={handleChartMouseMove}
-          onMouseUp={handleChartMouseUp}
-        >
+        <AreaChart data={chartData} margin={CHART_MARGIN}>
           <defs>
             <linearGradient id="planner-balance" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={BALANCE_COLOR} stopOpacity={0.25} />
@@ -292,7 +294,7 @@ export default function ForecastChart({
             tick={{fontSize: 12, fill: '#9CA3AF'}}
             tickLine={false}
             axisLine={false}
-            width={56}
+            width={Y_AXIS_WIDTH}
             tickFormatter={(value) => formatCurrencyCompact(Number(value), currency)}
           />
           <Tooltip
