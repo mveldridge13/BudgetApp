@@ -323,19 +323,35 @@ export default function ForecastChart({
                 x={point.label}
                 y={dragging ? point.balance : marker.balance}
                 r={dragging ? 6 : 5}
-                fill={marker.status === 'DRAFT' ? 'white' : PLANNED_COLOR}
-                stroke={marker.status === 'DRAFT' ? DRAFT_COLOR : PLANNED_COLOR}
-                strokeWidth={2}
-                strokeDasharray={marker.status === 'DRAFT' ? '2 2' : undefined}
-                style={onPlanDateChange ? {cursor: dragging ? 'grabbing' : 'grab'} : undefined}
-                onMouseDown={
-                  onPlanDateChange
-                    ? (_dotProps, e) => {
-                        e.preventDefault();
-                        beginDrag(marker);
-                      }
-                    : undefined
-                }
+                // Custom shape so the draggable hit area (14px radius) is much
+                // bigger than the visible dot (5-6px) - grabbing the visual dot
+                // precisely was too finicky otherwise.
+                shape={(dotProps: {cx?: number; cy?: number}) => (
+                  <g
+                    style={onPlanDateChange ? {cursor: dragging ? 'grabbing' : 'grab'} : undefined}
+                    onMouseDown={
+                      onPlanDateChange
+                        ? (e: React.MouseEvent) => {
+                            e.preventDefault();
+                            beginDrag(marker);
+                          }
+                        : undefined
+                    }
+                  >
+                    {onPlanDateChange && (
+                      <circle cx={dotProps.cx} cy={dotProps.cy} r={14} fill="transparent" />
+                    )}
+                    <circle
+                      cx={dotProps.cx}
+                      cy={dotProps.cy}
+                      r={dragging ? 6 : 5}
+                      fill={marker.status === 'DRAFT' ? 'white' : PLANNED_COLOR}
+                      stroke={marker.status === 'DRAFT' ? DRAFT_COLOR : PLANNED_COLOR}
+                      strokeWidth={2}
+                      strokeDasharray={marker.status === 'DRAFT' ? '2 2' : undefined}
+                    />
+                  </g>
+                )}
               />
             );
           })}
