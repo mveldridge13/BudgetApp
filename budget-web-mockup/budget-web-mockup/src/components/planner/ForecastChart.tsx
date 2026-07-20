@@ -99,6 +99,14 @@ export default function ForecastChart({
     return markers;
   }, [plans, balanceByDate, chartData]);
 
+  // Lets the hover cursor line (rendered per chartData index) look up whether
+  // the day it's over has a draggable plan on it.
+  const planMarkerByIndex = useMemo(() => {
+    const map = new Map<number, PlanMarker>();
+    for (const m of planMarkers) map.set(m.index, m);
+    return map;
+  }, [planMarkers]);
+
   // Dragging a plan dot reschedules it: dragPlanIdRef/dragIndexRef track the
   // in-progress drag imperatively (read from event handlers and the window
   // mouseup fallback without stale closures), while dragPreview state drives
@@ -204,6 +212,46 @@ export default function ForecastChart({
     return map;
   }, [events]);
 
+  // Recharts' own hover guide line - draggable when the hovered day has a
+  // plan on it, so the line (not just the tiny dot) is a grab handle too.
+  // `points`/`payloadIndex` are injected by Recharts' Tooltip cursor plumbing.
+  const DraggableCursor = (cursorProps: {points?: {x: number; y: number}[]; payloadIndex?: string}) => {
+    const {points, payloadIndex} = cursorProps;
+    if (!points || points.length < 2) return null;
+    const [p1, p2] = points;
+    const index = Number(payloadIndex);
+    const marker = Number.isNaN(index) ? undefined : planMarkerByIndex.get(index);
+    const draggable = Boolean(marker && onPlanDateChange);
+    return (
+      <g>
+        <line
+          x1={p1.x}
+          y1={p1.y}
+          x2={p2.x}
+          y2={p2.y}
+          stroke={draggable ? PLANNED_COLOR : '#ccc'}
+          strokeWidth={draggable ? 2 : 1}
+          strokeDasharray={draggable ? undefined : '3 3'}
+        />
+        {draggable && marker && (
+          <line
+            x1={p1.x}
+            y1={p1.y}
+            x2={p2.x}
+            y2={p2.y}
+            stroke="transparent"
+            strokeWidth={24}
+            style={{cursor: dragPreview?.planId === marker.id ? 'grabbing' : 'grab'}}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              beginDrag(marker);
+            }}
+          />
+        )}
+      </g>
+    );
+  };
+
   if (chartData.length === 0) {
     return (
       <div className="flex h-[320px] w-full items-center justify-center text-sm text-gray-500">
@@ -243,6 +291,7 @@ export default function ForecastChart({
             tickFormatter={(value) => formatCurrencyCompact(Number(value), currency)}
           />
           <Tooltip
+            cursor={<DraggableCursor />}
             content={({active, payload}) => {
               if (!active || !payload || payload.length === 0) return null;
               const point = payload[0].payload as {date: string; balance: number};
@@ -323,7 +372,7 @@ export default function ForecastChart({
                 x={point.label}
                 y={dragging ? point.balance : marker.balance}
                 r={dragging ? 6 : 5}
-                // Custom shape so the draggable hit area (14px radius) is much
+                // Custom shape so the draggable hit area (20px radius) is much
                 // bigger than the visible dot (5-6px) - grabbing the visual dot
                 // precisely was too finicky otherwise.
                 shape={(dotProps: {cx?: number; cy?: number}) => (
@@ -339,7 +388,7 @@ export default function ForecastChart({
                     }
                   >
                     {onPlanDateChange && (
-                      <circle cx={dotProps.cx} cy={dotProps.cy} r={14} fill="transparent" />
+                      <circle cx={dotProps.cx} cy={dotProps.cy} r={20} fill="transparent" />
                     )}
                     <circle
                       cx={dotProps.cx}
