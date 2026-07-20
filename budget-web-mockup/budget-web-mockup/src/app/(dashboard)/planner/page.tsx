@@ -285,6 +285,7 @@ export default function PlannerPage() {
         ) : (
           <ForecastChart
             dailyBalances={forecast?.dailyBalances || []}
+            events={forecast?.events || []}
             safetyBufferAmount={settings?.safetyBufferAmount ?? null}
             plans={activePlans}
             currency={currency}

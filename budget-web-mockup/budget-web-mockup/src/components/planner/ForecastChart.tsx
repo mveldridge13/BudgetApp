@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {formatCurrency, formatCurrencyCompact} from '@/lib/formatters';
-import {DailyBalance, Plan, PlanStatus} from '@/types';
+import {DailyBalance, FinancialEvent, Plan, PlanStatus} from '@/types';
 
 interface PlanMarker {
   id: string;
@@ -22,13 +22,23 @@ interface PlanMarker {
   status: PlanStatus;
 }
 
+interface IncomeMarker {
+  key: string;
+  date: string;
+  balance: number;
+  description: string;
+  amount: number;
+}
+
 const BALANCE_COLOR = '#6366F1';
 const BUFFER_COLOR = '#F87171';
 const DRAFT_COLOR = '#A5B4FC';
 const PLANNED_COLOR = '#6366F1';
+const INCOME_COLOR = '#10B981';
 
 interface ForecastChartProps {
   dailyBalances: DailyBalance[];
+  events: FinancialEvent[];
   safetyBufferAmount: number | null;
   plans: Plan[];
   currency?: string;
@@ -36,6 +46,7 @@ interface ForecastChartProps {
 
 export default function ForecastChart({
   dailyBalances,
+  events,
   safetyBufferAmount,
   plans,
   currency = 'USD',
@@ -72,6 +83,25 @@ export default function ForecastChart({
     }
     return markers;
   }, [plans, balanceByDate]);
+
+  // Money coming in (salary + income sources), so it's visible on the chart
+  // when income arrives relative to bills/plans, not just the balance line.
+  const incomeMarkers = useMemo(() => {
+    const markers: IncomeMarker[] = [];
+    events.forEach((e, i) => {
+      if (e.direction !== 'INFLOW') return;
+      const balance = balanceByDate.get(e.date);
+      if (balance === undefined) return;
+      markers.push({
+        key: `${e.sourceId}-${e.date}-${i}`,
+        date: e.date,
+        balance,
+        description: e.description,
+        amount: e.amount,
+      });
+    });
+    return markers;
+  }, [events, balanceByDate]);
 
   if (chartData.length === 0) {
     return (
@@ -153,8 +183,28 @@ export default function ForecastChart({
               strokeDasharray={marker.status === 'DRAFT' ? '2 2' : undefined}
             />
           ))}
+          {incomeMarkers.map((marker) => (
+            <ReferenceDot
+              key={marker.key}
+              x={chartData.find((c) => c.date === marker.date)?.label ?? marker.date}
+              y={marker.balance}
+              r={4}
+              fill={INCOME_COLOR}
+              stroke="white"
+              strokeWidth={1.5}
+            />
+          ))}
         </AreaChart>
       </ResponsiveContainer>
+      {incomeMarkers.length > 0 && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full border border-white"
+            style={{backgroundColor: INCOME_COLOR}}
+          />
+          Money in
+        </div>
+      )}
     </div>
   );
 }
