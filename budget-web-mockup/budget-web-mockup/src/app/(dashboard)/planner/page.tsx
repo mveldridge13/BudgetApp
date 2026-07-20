@@ -2,13 +2,15 @@
 
 import {useMemo, useState} from 'react';
 import useSWR from 'swr';
-import {Plus, TrendingUp, AlertTriangle, Pencil} from 'lucide-react';
+import {Plus, TrendingUp, AlertTriangle, Pencil, ChevronDown, ChevronUp} from 'lucide-react';
 import {useAuth} from '@/contexts/AuthContext';
 import {plannerService} from '@/services/planner.service';
 import {formatCurrency} from '@/lib/formatters';
 import {CreatePlanData, ForecastHorizonDays, Plan} from '@/types';
 import ForecastChart from '@/components/planner/ForecastChart';
 import PlanFormModal from '@/components/planner/PlanFormModal';
+import ImpactSummaryCard from '@/components/planner/ImpactSummaryCard';
+import MoneyTimeline from '@/components/planner/MoneyTimeline';
 
 const HORIZONS: ForecastHorizonDays[] = [30, 60, 90];
 
@@ -21,6 +23,7 @@ export default function PlannerPage() {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingSettings, setEditingSettings] = useState(false);
   const [bufferDraft, setBufferDraft] = useState('');
+  const [showChart, setShowChart] = useState(false);
 
   const {
     data: forecast,
@@ -247,47 +250,11 @@ export default function PlannerPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Cash flow forecast
-          </h2>
-          <div className="flex gap-2">
-            {HORIZONS.map((h) => (
-              <button
-                key={h}
-                onClick={() => setHorizon(h)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  horizon === h
-                    ? 'bg-indigo-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {h}D
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {forecastLoading ? (
-          <div className="h-[320px] w-full animate-pulse rounded-lg bg-gray-50" />
-        ) : (
-          <ForecastChart
-            dailyBalances={forecast?.dailyBalances || []}
-            safetyBufferAmount={settings?.safetyBufferAmount ?? null}
-            plans={activePlans}
-            currency={currency}
-          />
-        )}
-
-        {forecast && forecast.breaches.length > 0 && (
-          <p className="mt-3 text-sm text-red-600">
-            Your projected balance dips below your safety buffer on{' '}
-            {forecast.breaches.length} day
-            {forecast.breaches.length > 1 ? 's' : ''} in this window.
-          </p>
-        )}
-      </div>
+      <ImpactSummaryCard
+        forecast={forecast}
+        activePlans={activePlans}
+        currency={currency}
+      />
 
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <h2 className="mb-4 text-lg font-semibold text-gray-900">
@@ -363,6 +330,69 @@ export default function PlannerPage() {
               </li>
             ))}
           </ul>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">
+          Money events
+        </h2>
+        <MoneyTimeline
+          events={forecast?.events || []}
+          plans={plans}
+          currency={currency}
+        />
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <button
+          onClick={() => setShowChart((v) => !v)}
+          className="flex w-full items-center justify-between px-6 py-4 text-left"
+        >
+          <span className="text-sm font-medium text-gray-600">
+            Cash flow chart
+          </span>
+          {showChart ? (
+            <ChevronUp className="h-4 w-4 text-gray-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-gray-400" />
+          )}
+        </button>
+        {showChart && (
+          <div className="border-t border-gray-100 px-6 pb-6 pt-4">
+            <div className="mb-4 flex justify-end gap-2">
+              {HORIZONS.map((h) => (
+                <button
+                  key={h}
+                  onClick={() => setHorizon(h)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    horizon === h
+                      ? 'bg-indigo-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {h}D
+                </button>
+              ))}
+            </div>
+            {forecastLoading ? (
+              <div className="h-[320px] w-full animate-pulse rounded-lg bg-gray-50" />
+            ) : (
+              <ForecastChart
+                dailyBalances={forecast?.dailyBalances || []}
+                safetyBufferAmount={settings?.safetyBufferAmount ?? null}
+                plans={activePlans}
+                currency={currency}
+              />
+            )}
+            {forecast && forecast.breaches.length > 0 && (
+              <p className="mt-3 text-sm text-red-600">
+                Your projected balance dips below your safety buffer on{' '}
+                {forecast.breaches.length} day
+                {forecast.breaches.length > 1 ? 's' : ''} in this window.
+              </p>
+            )}
+          </div>
         )}
       </div>
 

@@ -68,6 +68,9 @@ export interface ForecastResult {
   events: FinancialEvent[];
   dailyBalances: DailyBalance[];
   breaches: DailyBalance[];
+  // Same projection with all active plans excluded - "if nothing changes."
+  baselineDailyBalances: DailyBalance[];
+  baselineBreaches: DailyBalance[];
 }
 
 export type ForecastHorizonDays = 30 | 60 | 90;
