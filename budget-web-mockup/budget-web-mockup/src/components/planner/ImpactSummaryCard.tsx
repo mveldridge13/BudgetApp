@@ -69,10 +69,7 @@ export default function ImpactSummaryCard({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <h2 className="mb-3 text-sm font-medium text-gray-500">
-        Impact of your {activePlans.length} what-if plan
-        {activePlans.length > 1 ? 's' : ''}
-      </h2>
+      <h2 className="mb-3 text-sm font-medium text-gray-500">Plan Impact</h2>
 
       <div className="space-y-4">
         {activePlans.map((plan) => {

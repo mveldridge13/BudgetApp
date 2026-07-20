@@ -310,7 +310,7 @@ export default function PlannerPage() {
         <div className="flex border-b border-gray-100 px-6 pt-4">
           {(
             [
-              {id: 'whatif' as const, label: 'What if'},
+              {id: 'whatif' as const, label: 'Plan'},
               {id: 'moneyIn' as const, label: 'Money in'},
               {id: 'moneyOut' as const, label: 'Money out'},
             ]
