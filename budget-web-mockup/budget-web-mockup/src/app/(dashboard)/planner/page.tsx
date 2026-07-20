@@ -2,7 +2,7 @@
 
 import {useMemo, useState} from 'react';
 import useSWR from 'swr';
-import {Plus, TrendingUp, AlertTriangle, Pencil, ChevronDown, ChevronUp} from 'lucide-react';
+import {Plus, TrendingUp, AlertTriangle, Pencil} from 'lucide-react';
 import {useAuth} from '@/contexts/AuthContext';
 import {plannerService} from '@/services/planner.service';
 import {formatCurrency} from '@/lib/formatters';
@@ -23,7 +23,7 @@ export default function PlannerPage() {
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editingSettings, setEditingSettings] = useState(false);
   const [bufferDraft, setBufferDraft] = useState('');
-  const [showChart, setShowChart] = useState(false);
+  const [activeTab, setActiveTab] = useState<'whatif' | 'moneyIn' | 'moneyOut'>('whatif');
 
   const {
     data: forecast,
@@ -55,6 +55,15 @@ export default function PlannerPage() {
         (p) => p.status === 'PLANNED' && p.plannedDate.slice(0, 10) <= today,
       ),
     [plans, today],
+  );
+
+  const moneyInEvents = useMemo(
+    () => (forecast?.events || []).filter((e) => e.direction === 'INFLOW'),
+    [forecast],
+  );
+  const moneyOutEvents = useMemo(
+    () => (forecast?.events || []).filter((e) => e.direction === 'OUTFLOW'),
+    [forecast],
   );
 
   const refreshAll = () =>
@@ -250,150 +259,157 @@ export default function PlannerPage() {
         </div>
       )}
 
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Cash flow chart
+          </h2>
+          <div className="flex gap-2">
+            {HORIZONS.map((h) => (
+              <button
+                key={h}
+                onClick={() => setHorizon(h)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  horizon === h
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {h}D
+              </button>
+            ))}
+          </div>
+        </div>
+        {forecastLoading ? (
+          <div className="h-[320px] w-full animate-pulse rounded-lg bg-gray-50" />
+        ) : (
+          <ForecastChart
+            dailyBalances={forecast?.dailyBalances || []}
+            safetyBufferAmount={settings?.safetyBufferAmount ?? null}
+            plans={activePlans}
+            currency={currency}
+          />
+        )}
+        {forecast && forecast.breaches.length > 0 && (
+          <p className="mt-3 text-sm text-red-600">
+            Your projected balance dips below your safety buffer on{' '}
+            {forecast.breaches.length} day
+            {forecast.breaches.length > 1 ? 's' : ''} in this window.
+          </p>
+        )}
+      </div>
+
       <ImpactSummaryCard
         forecast={forecast}
         activePlans={activePlans}
         currency={currency}
       />
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">
-          What-if plans
-        </h2>
-        {activePlans.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No plans yet. Add one to see how it changes your forecast.
-          </p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {activePlans.map((plan) => (
-              <li
-                key={plan.id}
-                className="flex items-center justify-between py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      plan.status === 'DRAFT'
-                        ? 'border-2 border-indigo-300 bg-white'
-                        : 'bg-indigo-500'
-                    }`}
-                  />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {plan.description || plan.type}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(plan.plannedDate).toLocaleDateString('en-US', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}{' '}
-                      ·{' '}
-                      {plan.direction === 'OUTFLOW' ? '-' : '+'}
-                      {formatCurrency(plan.amount, currency)} ·{' '}
-                      {plan.status === 'DRAFT' ? 'Exploring' : 'Planned'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {plan.status === 'DRAFT' && (
-                    <button
-                      onClick={() => handlePromote(plan.id)}
-                      className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
-                    >
-                      Plan it
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setEditingPlan(plan);
-                      setShowForm(true);
-                    }}
-                    className="text-xs font-medium text-gray-500 hover:text-gray-700"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleCancel(plan.id)}
-                    className="text-xs font-medium text-gray-500 hover:text-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleDelete(plan.id)}
-                    className="text-xs font-medium text-red-500 hover:text-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">
-          Money events
-        </h2>
-        <MoneyTimeline
-          events={forecast?.events || []}
-          plans={plans}
-          currency={currency}
-        />
-      </div>
-
       <div className="rounded-xl border border-gray-200 bg-white">
-        <button
-          onClick={() => setShowChart((v) => !v)}
-          className="flex w-full items-center justify-between px-6 py-4 text-left"
-        >
-          <span className="text-sm font-medium text-gray-600">
-            Cash flow chart
-          </span>
-          {showChart ? (
-            <ChevronUp className="h-4 w-4 text-gray-400" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-gray-400" />
-          )}
-        </button>
-        {showChart && (
-          <div className="border-t border-gray-100 px-6 pb-6 pt-4">
-            <div className="mb-4 flex justify-end gap-2">
-              {HORIZONS.map((h) => (
-                <button
-                  key={h}
-                  onClick={() => setHorizon(h)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                    horizon === h
-                      ? 'bg-indigo-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {h}D
-                </button>
-              ))}
-            </div>
-            {forecastLoading ? (
-              <div className="h-[320px] w-full animate-pulse rounded-lg bg-gray-50" />
-            ) : (
-              <ForecastChart
-                dailyBalances={forecast?.dailyBalances || []}
-                safetyBufferAmount={settings?.safetyBufferAmount ?? null}
-                plans={activePlans}
-                currency={currency}
-              />
-            )}
-            {forecast && forecast.breaches.length > 0 && (
-              <p className="mt-3 text-sm text-red-600">
-                Your projected balance dips below your safety buffer on{' '}
-                {forecast.breaches.length} day
-                {forecast.breaches.length > 1 ? 's' : ''} in this window.
+        <div className="flex border-b border-gray-100 px-6 pt-4">
+          {(
+            [
+              {id: 'whatif' as const, label: 'What if'},
+              {id: 'moneyIn' as const, label: 'Money in'},
+              {id: 'moneyOut' as const, label: 'Money out'},
+            ]
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`border-b-2 px-4 pb-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'whatif' &&
+            (activePlans.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                No plans yet. Add one to see how it changes your forecast.
               </p>
-            )}
-          </div>
-        )}
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {activePlans.map((plan) => (
+                  <li
+                    key={plan.id}
+                    className="flex items-center justify-between py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          plan.status === 'DRAFT'
+                            ? 'border-2 border-indigo-300 bg-white'
+                            : 'bg-indigo-500'
+                        }`}
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {plan.description || plan.type}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(plan.plannedDate).toLocaleDateString('en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}{' '}
+                          ·{' '}
+                          {plan.direction === 'OUTFLOW' ? '-' : '+'}
+                          {formatCurrency(plan.amount, currency)} ·{' '}
+                          {plan.status === 'DRAFT' ? 'Exploring' : 'Planned'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {plan.status === 'DRAFT' && (
+                        <button
+                          onClick={() => handlePromote(plan.id)}
+                          className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          Plan it
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setEditingPlan(plan);
+                          setShowForm(true);
+                        }}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleCancel(plan.id)}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleDelete(plan.id)}
+                        className="text-xs font-medium text-red-500 hover:text-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ))}
+
+          {activeTab === 'moneyIn' && (
+            <MoneyTimeline events={moneyInEvents} plans={plans} currency={currency} />
+          )}
+
+          {activeTab === 'moneyOut' && (
+            <MoneyTimeline events={moneyOutEvents} plans={plans} currency={currency} />
+          )}
+        </div>
       </div>
 
       <PlanFormModal
