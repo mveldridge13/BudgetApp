@@ -143,6 +143,11 @@ export default function ForecastChart({
     // not a number - it must be parsed before use as a chartData index.
     const index = Number(state.activeTooltipIndex);
     if (Number.isNaN(index)) return;
+    // Skip the state update (and the chart re-render it triggers) unless the
+    // cursor actually crossed into a new day's column - mousemove fires far
+    // more often than that, and re-rendering on every tick made dragging feel
+    // laggy for no visual benefit.
+    if (dragIndexRef.current === index) return;
     dragIndexRef.current = index;
     setDragPreview({planId: dragPlanIdRef.current, index});
   };
