@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import {formatCurrency, formatCurrencyCompact} from '@/lib/formatters';
-import {DailyBalance, FinancialEvent, Plan, PlanStatus} from '@/types';
+import {DailyBalance, FinancialEvent, FinancialEventSourceType, Plan, PlanStatus} from '@/types';
 
 interface PlanMarker {
   id: string;
@@ -22,7 +22,7 @@ interface PlanMarker {
   status: PlanStatus;
 }
 
-interface IncomeMarker {
+interface EventMarker {
   key: string;
   date: string;
   balance: number;
@@ -35,6 +35,14 @@ const BUFFER_COLOR = '#F87171';
 const DRAFT_COLOR = '#A5B4FC';
 const PLANNED_COLOR = '#6366F1';
 const INCOME_COLOR = '#10B981';
+const BILL_COLOR = '#EF4444';
+
+const SOURCE_LABELS: Record<FinancialEventSourceType, string> = {
+  PRIMARY_INCOME: 'Salary',
+  INCOME_SOURCE: 'Income',
+  RECURRING_BILL: 'Bill',
+  PLAN: 'Plan',
+};
 
 interface ForecastChartProps {
   dailyBalances: DailyBalance[];
@@ -87,7 +95,7 @@ export default function ForecastChart({
   // Money coming in (salary + income sources), so it's visible on the chart
   // when income arrives relative to bills/plans, not just the balance line.
   const incomeMarkers = useMemo(() => {
-    const markers: IncomeMarker[] = [];
+    const markers: EventMarker[] = [];
     events.forEach((e, i) => {
       if (e.direction !== 'INFLOW') return;
       const balance = balanceByDate.get(e.date);
@@ -102,6 +110,38 @@ export default function ForecastChart({
     });
     return markers;
   }, [events, balanceByDate]);
+
+  // Scheduled/committed bills - real recurring bills, not what-if plans
+  // (those already get an indigo dot via planMarkers).
+  const billMarkers = useMemo(() => {
+    const markers: EventMarker[] = [];
+    events.forEach((e, i) => {
+      if (e.sourceType !== 'RECURRING_BILL') return;
+      const balance = balanceByDate.get(e.date);
+      if (balance === undefined) return;
+      markers.push({
+        key: `${e.sourceId}-${e.date}-${i}`,
+        date: e.date,
+        balance,
+        description: e.description,
+        amount: e.amount,
+      });
+    });
+    return markers;
+  }, [events, balanceByDate]);
+
+  // Every event grouped by date, for the hover tooltip - so hovering a day
+  // shows what actually happened (Salary, Phone Bill, etc.), not just the
+  // resulting balance number.
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, FinancialEvent[]>();
+    for (const e of events) {
+      const bucket = map.get(e.date) ?? [];
+      bucket.push(e);
+      map.set(e.date, bucket);
+    }
+    return map;
+  }, [events]);
 
   if (chartData.length === 0) {
     return (
@@ -137,13 +177,52 @@ export default function ForecastChart({
             tickFormatter={(value) => formatCurrencyCompact(Number(value), currency)}
           />
           <Tooltip
-            formatter={(value) => [formatCurrency(Number(value), currency), 'Balance']}
-            contentStyle={{
-              backgroundColor: 'white',
-              border: '1px solid #E5E7EB',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              fontSize: '12px',
+            content={({active, payload}) => {
+              if (!active || !payload || payload.length === 0) return null;
+              const point = payload[0].payload as {date: string; balance: number};
+              const dayEvents = eventsByDate.get(point.date) || [];
+              return (
+                <div
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                    fontSize: '12px',
+                    padding: '8px 12px',
+                    minWidth: '170px',
+                  }}
+                >
+                  <p style={{fontWeight: 600, color: '#111827', margin: '0 0 4px'}}>
+                    {formatCurrency(point.balance, currency)}
+                  </p>
+                  {dayEvents.length === 0 ? (
+                    <p style={{color: '#9CA3AF', margin: 0}}>No activity this day</p>
+                  ) : (
+                    <ul style={{listStyle: 'none', padding: 0, margin: 0}}>
+                      {dayEvents.map((e, i) => (
+                        <li
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            color: e.direction === 'INFLOW' ? '#059669' : '#DC2626',
+                          }}
+                        >
+                          <span style={{color: '#6B7280'}}>
+                            {SOURCE_LABELS[e.sourceType]}: {e.description}
+                          </span>
+                          <span>
+                            {e.direction === 'INFLOW' ? '+' : '-'}
+                            {formatCurrency(e.amount, currency)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
             }}
           />
           {safetyBufferAmount !== null && (
@@ -194,15 +273,39 @@ export default function ForecastChart({
               strokeWidth={1.5}
             />
           ))}
+          {billMarkers.map((marker) => (
+            <ReferenceDot
+              key={marker.key}
+              x={chartData.find((c) => c.date === marker.date)?.label ?? marker.date}
+              y={marker.balance}
+              r={4}
+              fill={BILL_COLOR}
+              stroke="white"
+              strokeWidth={1.5}
+            />
+          ))}
         </AreaChart>
       </ResponsiveContainer>
-      {incomeMarkers.length > 0 && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full border border-white"
-            style={{backgroundColor: INCOME_COLOR}}
-          />
-          Money in
+      {(incomeMarkers.length > 0 || billMarkers.length > 0) && (
+        <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+          {incomeMarkers.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border border-white"
+                style={{backgroundColor: INCOME_COLOR}}
+              />
+              Money in
+            </span>
+          )}
+          {billMarkers.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border border-white"
+                style={{backgroundColor: BILL_COLOR}}
+              />
+              Committed bills
+            </span>
+          )}
         </div>
       )}
     </div>
