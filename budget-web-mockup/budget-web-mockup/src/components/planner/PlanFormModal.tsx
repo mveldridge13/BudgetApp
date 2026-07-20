@@ -75,7 +75,9 @@ export default function PlanFormModal({
   );
   const billOptions = useMemo(
     () => [
-      ...(billsAnalytics?.overdueBills || []),
+      // overdueBills/unpaidBills etc. on this response are counts, not
+      // arrays - the actual bill lists are the *List-suffixed fields.
+      ...(billsAnalytics?.overdueBillsList || []),
       ...(billsAnalytics?.upcomingBills || []),
     ],
     [billsAnalytics],

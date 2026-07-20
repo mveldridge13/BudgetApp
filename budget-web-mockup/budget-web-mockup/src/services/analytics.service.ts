@@ -88,8 +88,10 @@ class AnalyticsService {
       budgetLimit,
       percentageUsed:
         budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0,
-      upcomingBills: billsAnalytics.totalUpcoming || 0,
-      overdueAmount: billsAnalytics.totalOverdue || 0,
+      // totalUpcoming/totalOverdue never existed on the real backend
+      // response (always undefined -> 0) - these are the actual fields.
+      upcomingBills: billsAnalytics.unpaidBills || 0,
+      overdueAmount: billsAnalytics.overdueAmount || 0,
       activeGoals: goalsSummary.activeGoals || 0,
       goalProgress: goalsSummary.overallProgress || 0,
     };

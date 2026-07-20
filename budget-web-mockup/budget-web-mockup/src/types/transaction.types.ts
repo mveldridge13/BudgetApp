@@ -106,11 +106,40 @@ export interface TransactionAnalytics {
   }[];
 }
 
+// Matches the actual backend response (TransactionsService.getBillsAnalytics)
+// exactly - this previously didn't (claimed totalUpcoming/totalOverdue and
+// typed overdueBills as an array), which crashed PlanFormModal in production
+// since overdueBills is really a count; the array is overdueBillsList.
+export interface BillsAnalyticsBill {
+  id: string;
+  description: string;
+  amount: number;
+  dueDate?: string | null;
+  status: string;
+  category?: {name: string} | null;
+  recurrence?: string;
+}
+
 export interface BillsAnalytics {
-  totalUpcoming: number;
-  totalOverdue: number;
-  upcomingBills: Transaction[];
-  overdueBills: Transaction[];
+  period?: {
+    start: string;
+    end: string;
+    isPayPeriod: boolean;
+    frequency: string | null;
+  };
+  totalBills: number;
+  paidBills: number;
+  unpaidBills: number;
+  overdueBills: number;
+  totalAmount: number;
+  paidAmount: number;
+  unpaidAmount: number;
+  overdueAmount: number;
+  progress: number;
+  upcomingBills: BillsAnalyticsBill[];
+  paidBillsList: BillsAnalyticsBill[];
+  unpaidBillsList: BillsAnalyticsBill[];
+  overdueBillsList: BillsAnalyticsBill[];
 }
 
 export interface DiscretionarySubcategory {
