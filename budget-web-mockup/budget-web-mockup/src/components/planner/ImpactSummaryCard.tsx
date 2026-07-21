@@ -36,6 +36,37 @@ function InsightRow({insight}: {insight: PlanInsight}) {
   );
 }
 
+// Same boxed treatment as the live drag-preview callout - warning-severity
+// insights (risk of some kind) get called out visually instead of blending
+// into the plain bullet list, whether they're a committed or a preview
+// insight.
+function InsightGroup({insights}: {insights: PlanInsight[]}) {
+  const warnings = insights.filter((i) => i.severity === 'warning');
+  const others = insights.filter((i) => i.severity !== 'warning');
+  return (
+    <>
+      {others.length > 0 && (
+        <ul className="space-y-1">
+          {others.map((insight, i) => (
+            <InsightRow key={i} insight={insight} />
+          ))}
+        </ul>
+      )}
+      {warnings.length > 0 && (
+        <div
+          className={`rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2 ${others.length > 0 ? 'mt-1.5' : ''}`}
+        >
+          <ul className="space-y-1">
+            {warnings.map((insight, i) => (
+              <InsightRow key={i} insight={insight} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function ImpactSummaryCard({
   forecast,
   activePlans,
@@ -91,11 +122,9 @@ export default function ImpactSummaryCard({
                 {plan.description || plan.type}
               </p>
               {planInsights.length > 0 ? (
-                <ul className="space-y-1 pl-3.5">
-                  {planInsights.map((insight, i) => (
-                    <InsightRow key={i} insight={insight} />
-                  ))}
-                </ul>
+                <div className="pl-3.5">
+                  <InsightGroup insights={planInsights} />
+                </div>
               ) : preview.length === 0 ? (
                 <p className="pl-3.5 text-sm text-gray-400">
                   No notable schedule effects from this change.
@@ -117,11 +146,9 @@ export default function ImpactSummaryCard({
       </div>
 
       {scenarioInsights.length > 0 && (
-        <ul className="mt-4 space-y-1 border-t border-gray-100 pt-3">
-          {scenarioInsights.map((insight, i) => (
-            <InsightRow key={i} insight={insight} />
-          ))}
-        </ul>
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <InsightGroup insights={scenarioInsights} />
+        </div>
       )}
     </div>
   );
