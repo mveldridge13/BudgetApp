@@ -113,17 +113,19 @@ export default function PlannerPage() {
       windowStart.setDate(windowStart.getDate() - 3);
       const windowEnd = new Date(draggedDate);
       windowEnd.setDate(windowEnd.getDate() + 3);
+      // Only real recurring bills count as "commitments" here - this plan
+      // itself is a discretionary purchase, not one, regardless of how many
+      // land nearby (matches the backend's committed-only clustering rule).
       const nearbyBills = (forecast?.events || []).filter((e) => {
         if (e.sourceType !== 'RECURRING_BILL') return false;
         const d = new Date(e.date);
         return d >= windowStart && d <= windowEnd;
       });
-      const total = nearbyBills.length + 1; // + this plan itself
-      if (total >= 3) {
+      if (nearbyBills.length > 0) {
         insights.push({
           planId: plan.id,
           severity: 'warning',
-          message: `${total} bills now fall in the same week.`,
+          message: `You now have ${nearbyBills.length} upcoming commitment${nearbyBills.length === 1 ? '' : 's'} in the same week.`,
         });
       }
     }
