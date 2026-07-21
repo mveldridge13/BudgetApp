@@ -229,19 +229,33 @@ export default function PlannerPage() {
   // Baseline (no active plans applied) leads, since that's your real Left to
   // Spend right now - the with-plans figure is a hypothetical "if you went
   // ahead with this" projection, not a replacement for the real number.
-  //
-  // The bracket compares balance at the END of the forecast horizon, not
-  // day-0 - a plan dated in the future (the common case; day-0 can only
-  // differ if a plan is dated today) still needs to preview its effect here,
-  // and by the last day every active plan's effect (purchase, income, etc.)
-  // has fully landed in the running balance regardless of its own date.
   const todaysBalance = forecast?.baselineDailyBalances[0]?.balance ?? 0;
-  const baselineHorizonEnd =
-    forecast?.baselineDailyBalances[forecast.baselineDailyBalances.length - 1]?.balance ??
-    todaysBalance;
-  const withPlansHorizonEnd =
-    forecast?.dailyBalances[forecast.dailyBalances.length - 1]?.balance ?? todaysBalance;
-  const showPlannedBalance = activePlans.length > 0 && withPlansHorizonEnd !== baselineHorizonEnd;
+
+  // The bracket tracks balance around your nearest upcoming plan's date -
+  // the same "what will my funds look like around then" question the live
+  // drag preview answers, kept alive after dropping instead of collapsing
+  // back to a static horizon-end number once the drag ends. Horizon-end was
+  // wrong for this: a one-time plan's effect on the running balance lands
+  // the same by the end of the forecast no matter which day it's dated, so
+  // it never actually reflected the plan's timing.
+  const nextActivePlan = useMemo(
+    () =>
+      activePlans.length > 0
+        ? [...activePlans].sort((a, b) => a.plannedDate.localeCompare(b.plannedDate))[0]
+        : null,
+    [activePlans],
+  );
+  const committedPreviewBalance = useMemo(() => {
+    if (!nextActivePlan || !forecast) return null;
+    const dateKey = nextActivePlan.plannedDate.slice(0, 10);
+    return forecast.dailyBalances.find((d) => d.date === dateKey)?.balance ?? null;
+  }, [nextActivePlan, forecast]);
+  const committedPreviewDateLabel = nextActivePlan
+    ? new Date(nextActivePlan.plannedDate).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+      })
+    : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 lg:px-8">
@@ -279,9 +293,10 @@ export default function PlannerPage() {
                   ({formatCurrency(dragPreviewBalance, currency)} while dragging)
                 </span>
               ) : (
-                showPlannedBalance && (
+                committedPreviewBalance !== null && (
                   <span className="ml-2 text-base font-normal text-gray-400">
-                    ({formatCurrency(withPlansHorizonEnd, currency)} projected with your plans)
+                    ({formatCurrency(committedPreviewBalance, currency)} by {committedPreviewDateLabel}{' '}
+                    with your plans)
                   </span>
                 )
               )}
