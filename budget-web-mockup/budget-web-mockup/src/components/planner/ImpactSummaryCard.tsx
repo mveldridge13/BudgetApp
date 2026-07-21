@@ -56,9 +56,11 @@ function InsightRow({insight, onClick}: {insight: PlanInsight; onClick?: () => v
 // a plain "no effect" observation (warning severity = a risk, neutral
 // severity = a real schedule change like a pay-period crossing) gets called
 // out visually instead of blending into the plain bullet list. Only
-// "positive" reassurance-style insights stay as plain text. Boxed insights
-// that carry a breakdown (e.g. bill clustering) are clickable, opening
-// InsightBreakdownModal for the detail.
+// "positive" reassurance-style insights stay as plain text. Each boxed
+// insight gets its OWN box - a clustering warning and a pay-period-shift
+// note are different kinds of information and shouldn't read as one
+// combined observation. Insights that carry a breakdown (e.g. bill
+// clustering) are clickable, opening InsightBreakdownModal for the detail.
 function InsightGroup({
   insights,
   onInsightClick,
@@ -69,7 +71,7 @@ function InsightGroup({
   const boxed = insights.filter((i) => i.severity === 'warning' || i.severity === 'neutral');
   const plain = insights.filter((i) => i.severity === 'positive');
   return (
-    <>
+    <div className="space-y-1.5">
       {plain.length > 0 && (
         <ul className="space-y-1">
           {plain.map((insight, i) => (
@@ -77,24 +79,17 @@ function InsightGroup({
           ))}
         </ul>
       )}
-      {boxed.length > 0 && (
-        <div
-          className={`rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2 ${plain.length > 0 ? 'mt-1.5' : ''}`}
-        >
-          <ul className="space-y-1">
-            {boxed.map((insight, i) => (
-              <InsightRow
-                key={i}
-                insight={insight}
-                onClick={
-                  insight.breakdown && onInsightClick ? () => onInsightClick(insight) : undefined
-                }
-              />
-            ))}
+      {boxed.map((insight, i) => (
+        <div key={i} className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2">
+          <ul>
+            <InsightRow
+              insight={insight}
+              onClick={insight.breakdown && onInsightClick ? () => onInsightClick(insight) : undefined}
+            />
           </ul>
         </div>
-      )}
-    </>
+      ))}
+    </div>
   );
 }
 
@@ -165,13 +160,18 @@ export default function ImpactSummaryCard({
                 </p>
               ) : null}
               {preview.length > 0 && (
-                <div className="mt-1.5 ml-3.5 rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2">
-                  <p className="mb-1 text-xs font-medium text-indigo-600">While dragging</p>
-                  <ul className="space-y-1">
-                    {preview.map((insight, i) => (
-                      <InsightRow key={i} insight={insight} />
-                    ))}
-                  </ul>
+                <div className="mt-1.5 ml-3.5 space-y-1.5">
+                  <p className="text-xs font-medium text-indigo-600">While dragging</p>
+                  {preview.map((insight, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2"
+                    >
+                      <ul>
+                        <InsightRow insight={insight} />
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
