@@ -202,10 +202,19 @@ export default function PlannerPage() {
   // Baseline (no active plans applied) leads, since that's your real Left to
   // Spend right now - the with-plans figure is a hypothetical "if you went
   // ahead with this" projection, not a replacement for the real number.
+  //
+  // The bracket compares balance at the END of the forecast horizon, not
+  // day-0 - a plan dated in the future (the common case; day-0 can only
+  // differ if a plan is dated today) still needs to preview its effect here,
+  // and by the last day every active plan's effect (purchase, income, etc.)
+  // has fully landed in the running balance regardless of its own date.
   const todaysBalance = forecast?.baselineDailyBalances[0]?.balance ?? 0;
-  const todaysBalanceWithPlans = forecast?.dailyBalances[0]?.balance ?? 0;
-  const showPlannedBalance =
-    activePlans.length > 0 && todaysBalanceWithPlans !== todaysBalance;
+  const baselineHorizonEnd =
+    forecast?.baselineDailyBalances[forecast.baselineDailyBalances.length - 1]?.balance ??
+    todaysBalance;
+  const withPlansHorizonEnd =
+    forecast?.dailyBalances[forecast.dailyBalances.length - 1]?.balance ?? todaysBalance;
+  const showPlannedBalance = activePlans.length > 0 && withPlansHorizonEnd !== baselineHorizonEnd;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 lg:px-8">
@@ -240,7 +249,7 @@ export default function PlannerPage() {
               {formatCurrency(todaysBalance, currency)}
               {showPlannedBalance && (
                 <span className="ml-2 text-base font-normal text-gray-400">
-                  ({formatCurrency(todaysBalanceWithPlans, currency)} with your plans)
+                  ({formatCurrency(withPlansHorizonEnd, currency)} projected with your plans)
                 </span>
               )}
             </p>
