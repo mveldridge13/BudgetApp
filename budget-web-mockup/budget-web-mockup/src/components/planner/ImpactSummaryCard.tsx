@@ -52,11 +52,13 @@ function InsightRow({insight, onClick}: {insight: PlanInsight; onClick?: () => v
   return <li className="flex items-start gap-2 text-sm text-gray-700">{content}</li>;
 }
 
-// Same boxed treatment as the live drag-preview callout - warning-severity
-// insights (risk of some kind) get called out visually instead of blending
-// into the plain bullet list, whether they're a committed or a preview
-// insight. Warnings that carry a breakdown (e.g. bill clustering) are
-// clickable, opening InsightBreakdownModal for the detail.
+// Same boxed treatment as the live drag-preview callout - anything more than
+// a plain "no effect" observation (warning severity = a risk, neutral
+// severity = a real schedule change like a pay-period crossing) gets called
+// out visually instead of blending into the plain bullet list. Only
+// "positive" reassurance-style insights stay as plain text. Boxed insights
+// that carry a breakdown (e.g. bill clustering) are clickable, opening
+// InsightBreakdownModal for the detail.
 function InsightGroup({
   insights,
   onInsightClick,
@@ -64,23 +66,23 @@ function InsightGroup({
   insights: PlanInsight[];
   onInsightClick?: (insight: PlanInsight) => void;
 }) {
-  const warnings = insights.filter((i) => i.severity === 'warning');
-  const others = insights.filter((i) => i.severity !== 'warning');
+  const boxed = insights.filter((i) => i.severity === 'warning' || i.severity === 'neutral');
+  const plain = insights.filter((i) => i.severity === 'positive');
   return (
     <>
-      {others.length > 0 && (
+      {plain.length > 0 && (
         <ul className="space-y-1">
-          {others.map((insight, i) => (
+          {plain.map((insight, i) => (
             <InsightRow key={i} insight={insight} />
           ))}
         </ul>
       )}
-      {warnings.length > 0 && (
+      {boxed.length > 0 && (
         <div
-          className={`rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2 ${others.length > 0 ? 'mt-1.5' : ''}`}
+          className={`rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 px-2.5 py-2 ${plain.length > 0 ? 'mt-1.5' : ''}`}
         >
           <ul className="space-y-1">
-            {warnings.map((insight, i) => (
+            {boxed.map((insight, i) => (
               <InsightRow
                 key={i}
                 insight={insight}

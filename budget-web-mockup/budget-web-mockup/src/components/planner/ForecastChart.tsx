@@ -147,30 +147,39 @@ export default function ForecastChart({
     const index = dragIndexRef.current;
     dragPlanIdRef.current = null;
     dragIndexRef.current = null;
-    onDragPreview?.(null);
     if (planId === null || index === null) {
       setDragPreview(null);
+      onDragPreview?.(null);
       return;
     }
     const point = chartData[index];
     const original = plans.find((p) => p.id === planId);
     if (!point || !original || point.date === original.plannedDate.slice(0, 10)) {
       setDragPreview(null);
+      onDragPreview?.(null);
       return;
     }
     awaitingRefreshRef.current = true;
     onPlanDateChange?.(planId, point.date);
+    // Deliberately don't clear dragPreview/onDragPreview here - both the dot
+    // and the live "Plan Impact" preview stay showing the dropped state
+    // until the parent's plans prop actually refreshes below. Clearing
+    // immediately left a gap where neither the preview nor the (not-yet-
+    // fetched) real committed insight was visible, reading as the insight
+    // failing to render rather than just a network round-trip in progress.
   };
 
-  // Clears the optimistic preview once the parent's plans data actually
-  // refreshes (success or failure) - at that point marker.index reflects
-  // reality, so there's nothing left for dragPreview to override.
+  // Clears the optimistic preview (dot position + Plan Impact callout) once
+  // the parent's plans data actually refreshes (success or failure) - at
+  // that point marker.index/the real insights reflect reality, so there's
+  // nothing left for the preview to override.
   useEffect(() => {
     if (awaitingRefreshRef.current) {
       awaitingRefreshRef.current = false;
       setDragPreview(null);
+      onDragPreview?.(null);
     }
-  }, [plans]);
+  }, [plans, onDragPreview]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
