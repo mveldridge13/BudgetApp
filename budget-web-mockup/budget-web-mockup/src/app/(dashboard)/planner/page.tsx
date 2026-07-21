@@ -133,6 +133,33 @@ export default function PlannerPage() {
     return {planId: plan.id, insights};
   }, [dragPreview, plans, user, forecast]);
 
+  // Live "balance on this day if it lands here" while dragging - lets
+  // Today's Balance respond to the drag itself instead of only updating
+  // after drop (and only once the plan's date actually matters again, e.g.
+  // vs. money in/out dots nearby), rather than sitting static throughout.
+  // baselineDailyBalances already has every real income/bill event through
+  // that day; add every OTHER active plan's own contribution up to that day
+  // (at their real, already-committed dates) plus this plan's own amount
+  // (always "on or before" its own date, trivially).
+  const dragPreviewBalance = useMemo(() => {
+    if (!dragPreview || !forecast) return null;
+    const plan = plans.find((p) => p.id === dragPreview.planId);
+    if (!plan) return null;
+    const dayBalance = forecast.baselineDailyBalances.find(
+      (d) => d.date === dragPreview.date,
+    )?.balance;
+    if (dayBalance === undefined) return null;
+
+    const otherPlanEffect = forecast.events
+      .filter(
+        (e) => e.sourceType === 'PLAN' && e.sourceId !== plan.id && e.date <= dragPreview.date,
+      )
+      .reduce((sum, e) => sum + (e.direction === 'INFLOW' ? e.amount : -e.amount), 0);
+    const planAmount = Number(plan.amount) * (plan.direction === 'INFLOW' ? 1 : -1);
+
+    return dayBalance + otherPlanEffect + planAmount;
+  }, [dragPreview, plans, forecast]);
+
   const refreshAll = () =>
     Promise.all([mutateForecast(), mutatePlans(), mutateSettings()]);
 
@@ -247,10 +274,16 @@ export default function PlannerPage() {
             </div>
             <p className="mt-1 text-2xl font-semibold text-gray-900">
               {formatCurrency(todaysBalance, currency)}
-              {showPlannedBalance && (
-                <span className="ml-2 text-base font-normal text-gray-400">
-                  ({formatCurrency(withPlansHorizonEnd, currency)} projected with your plans)
+              {dragPreviewBalance !== null ? (
+                <span className="ml-2 text-base font-normal text-indigo-500">
+                  ({formatCurrency(dragPreviewBalance, currency)} while dragging)
                 </span>
+              ) : (
+                showPlannedBalance && (
+                  <span className="ml-2 text-base font-normal text-gray-400">
+                    ({formatCurrency(withPlansHorizonEnd, currency)} projected with your plans)
+                  </span>
+                )
               )}
             </p>
             <p className="mt-0.5 text-xs text-gray-400">
