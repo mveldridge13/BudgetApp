@@ -66,6 +66,19 @@ export interface DailyBalance {
 
 export type InsightSeverity = 'positive' | 'warning' | 'neutral';
 
+// One line item behind an insight's headline number (e.g. one of the "N
+// payments" in a bill-clustering warning). "committed" = a real,
+// already-scheduled bill; "discretionary" = a Draft/Planned Plan -
+// hypothetical regardless of type (a PURCHASE plan is discretionary spend,
+// not a committed one).
+export interface PlanInsightBreakdownItem {
+  id: string;
+  name: string;
+  amount: number;
+  date: string;
+  kind: 'committed' | 'discretionary';
+}
+
 // A schedule-level observation about one active plan's consequences
 // (clustering, income timing, period shift, cash availability, risk) -
 // planId === '' means it's scenario-level, not attributable to one plan.
@@ -73,6 +86,9 @@ export interface PlanInsight {
   planId: string;
   severity: InsightSeverity;
   message: string;
+  // Present only for insights with a drill-down breakdown (currently just
+  // bill clustering).
+  breakdown?: PlanInsightBreakdownItem[];
 }
 
 export interface ForecastResult {

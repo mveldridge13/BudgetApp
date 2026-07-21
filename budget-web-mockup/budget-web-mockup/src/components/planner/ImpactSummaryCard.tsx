@@ -1,8 +1,9 @@
 'use client';
 
-import {useMemo} from 'react';
-import {CheckCircle2, AlertTriangle, Info, Sparkles} from 'lucide-react';
+import {useMemo, useState} from 'react';
+import {CheckCircle2, AlertTriangle, Info, Sparkles, ChevronRight} from 'lucide-react';
 import {ForecastResult, Plan, PlanInsight, InsightSeverity} from '@/types';
+import InsightBreakdownModal from './InsightBreakdownModal';
 
 interface ImpactSummaryCardProps {
   forecast?: ForecastResult;
@@ -26,21 +27,43 @@ const SEVERITY_COLOR: Record<InsightSeverity, string> = {
   neutral: 'text-gray-500',
 };
 
-function InsightRow({insight}: {insight: PlanInsight}) {
+function InsightRow({insight, onClick}: {insight: PlanInsight; onClick?: () => void}) {
   const Icon = SEVERITY_ICON[insight.severity];
-  return (
-    <li className="flex items-start gap-2 text-sm text-gray-700">
+  const content = (
+    <>
       <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${SEVERITY_COLOR[insight.severity]}`} />
-      <span>{insight.message}</span>
-    </li>
+      <span className="flex-1">{insight.message}</span>
+      {onClick && <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />}
+    </>
   );
+  if (onClick) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={onClick}
+          className="flex w-full items-start gap-2 text-left text-sm text-gray-700 hover:text-gray-900"
+        >
+          {content}
+        </button>
+      </li>
+    );
+  }
+  return <li className="flex items-start gap-2 text-sm text-gray-700">{content}</li>;
 }
 
 // Same boxed treatment as the live drag-preview callout - warning-severity
 // insights (risk of some kind) get called out visually instead of blending
 // into the plain bullet list, whether they're a committed or a preview
-// insight.
-function InsightGroup({insights}: {insights: PlanInsight[]}) {
+// insight. Warnings that carry a breakdown (e.g. bill clustering) are
+// clickable, opening InsightBreakdownModal for the detail.
+function InsightGroup({
+  insights,
+  onInsightClick,
+}: {
+  insights: PlanInsight[];
+  onInsightClick?: (insight: PlanInsight) => void;
+}) {
   const warnings = insights.filter((i) => i.severity === 'warning');
   const others = insights.filter((i) => i.severity !== 'warning');
   return (
@@ -58,7 +81,13 @@ function InsightGroup({insights}: {insights: PlanInsight[]}) {
         >
           <ul className="space-y-1">
             {warnings.map((insight, i) => (
-              <InsightRow key={i} insight={insight} />
+              <InsightRow
+                key={i}
+                insight={insight}
+                onClick={
+                  insight.breakdown && onInsightClick ? () => onInsightClick(insight) : undefined
+                }
+              />
             ))}
           </ul>
         </div>
@@ -70,8 +99,11 @@ function InsightGroup({insights}: {insights: PlanInsight[]}) {
 export default function ImpactSummaryCard({
   forecast,
   activePlans,
+  currency,
   livePreview,
 }: ImpactSummaryCardProps) {
+  const [breakdownInsight, setBreakdownInsight] = useState<PlanInsight | null>(null);
+
   const insightsByPlan = useMemo(() => {
     const map = new Map<string, PlanInsight[]>();
     for (const insight of forecast?.insights || []) {
@@ -123,7 +155,7 @@ export default function ImpactSummaryCard({
               </p>
               {planInsights.length > 0 ? (
                 <div className="pl-3.5">
-                  <InsightGroup insights={planInsights} />
+                  <InsightGroup insights={planInsights} onInsightClick={setBreakdownInsight} />
                 </div>
               ) : preview.length === 0 ? (
                 <p className="pl-3.5 text-sm text-gray-400">
@@ -147,9 +179,16 @@ export default function ImpactSummaryCard({
 
       {scenarioInsights.length > 0 && (
         <div className="mt-4 border-t border-gray-100 pt-3">
-          <InsightGroup insights={scenarioInsights} />
+          <InsightGroup insights={scenarioInsights} onInsightClick={setBreakdownInsight} />
         </div>
       )}
+
+      <InsightBreakdownModal
+        isOpen={breakdownInsight !== null}
+        onClose={() => setBreakdownInsight(null)}
+        insight={breakdownInsight}
+        currency={currency}
+      />
     </div>
   );
 }
