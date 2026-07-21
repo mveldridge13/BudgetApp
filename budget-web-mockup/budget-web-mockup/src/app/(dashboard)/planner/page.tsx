@@ -199,7 +199,13 @@ export default function PlannerPage() {
     await mutateForecast();
   };
 
-  const todaysBalance = forecast?.dailyBalances[0]?.balance ?? 0;
+  // Baseline (no active plans applied) leads, since that's your real Left to
+  // Spend right now - the with-plans figure is a hypothetical "if you went
+  // ahead with this" projection, not a replacement for the real number.
+  const todaysBalance = forecast?.baselineDailyBalances[0]?.balance ?? 0;
+  const todaysBalanceWithPlans = forecast?.dailyBalances[0]?.balance ?? 0;
+  const showPlannedBalance =
+    activePlans.length > 0 && todaysBalanceWithPlans !== todaysBalance;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 lg:px-8">
@@ -232,6 +238,11 @@ export default function PlannerPage() {
             </div>
             <p className="mt-1 text-2xl font-semibold text-gray-900">
               {formatCurrency(todaysBalance, currency)}
+              {showPlannedBalance && (
+                <span className="ml-2 text-base font-normal text-gray-400">
+                  ({formatCurrency(todaysBalanceWithPlans, currency)} with your plans)
+                </span>
+              )}
             </p>
             <p className="mt-0.5 text-xs text-gray-400">
               Left to Spend + income-source surplus — updates automatically
