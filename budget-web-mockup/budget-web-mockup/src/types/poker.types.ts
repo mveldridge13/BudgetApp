@@ -8,7 +8,8 @@ export type GameType =
   | 'BOUNTY'
   | 'TURBO'
   | 'DEEPSTACK'
-  | 'TEAM_EVENT';
+  | 'TEAM_EVENT'
+  | 'ADD_ON';
 
 export const GAME_TYPE_LABELS: Record<GameType, string> = {
   NO_LIMIT_HOLDEM: "No-Limit Hold'em",
@@ -18,6 +19,7 @@ export const GAME_TYPE_LABELS: Record<GameType, string> = {
   TURBO: 'Turbo',
   DEEPSTACK: 'Deepstack',
   TEAM_EVENT: 'Team Event',
+  ADD_ON: 'Add-On Option',
 };
 
 // Derived from a tournament's date range (not stored on the backend).
@@ -69,6 +71,9 @@ export interface PokerTournamentEvent {
   reBuyAmount?: number;
   startingStack?: number;
   isClosed: boolean;
+  addOnAmount?: number;
+  addOnStack?: number;
+  addOnPurchased?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,6 +105,9 @@ export interface EventInput {
   fieldSize?: number | null;
   winnings?: number;
   isClosed?: boolean;
+  addOnAmount?: number;
+  addOnStack?: number;
+  addOnPurchased?: boolean;
 }
 
 // ── Analytics responses ────────────────────────────────────────────────────

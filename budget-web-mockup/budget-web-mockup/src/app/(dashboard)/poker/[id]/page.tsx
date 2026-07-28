@@ -57,6 +57,7 @@ export default function TournamentDetailPage() {
     updateEvent,
     deleteEvent,
     rebuyEvent,
+    addOnEvent,
     refresh,
   } = usePokerTournament(id);
 
@@ -73,12 +74,17 @@ export default function TournamentDetailPage() {
     const buyIns =
       analytics?.totalBuyIns ??
       events.reduce((s, e) => s + (e.buyIn || 0), 0);
-    // Analytics doesn't return re-buys separately, so roll them up from events.
+    // Analytics doesn't return re-buys/add-ons separately, so roll them up
+    // from events for the local fallback.
     const reBuys = events.reduce((s, e) => s + (e.reBuyAmount || 0), 0);
+    const addOns = events.reduce(
+      (s, e) => s + (e.addOnPurchased ? e.addOnAmount || 0 : 0),
+      0,
+    );
     const winnings =
       analytics?.totalWinnings ??
       events.reduce((s, e) => s + (e.winnings || 0), 0);
-    const net = analytics?.netProfit ?? winnings - buyIns - reBuys;
+    const net = analytics?.netProfit ?? winnings - buyIns - reBuys - addOns;
     return {
       events: events.length,
       buyIns,
@@ -122,6 +128,14 @@ export default function TournamentDetailPage() {
       await rebuyEvent(event);
     } catch {
       alert('Failed to record re-buy. Please try again.');
+    }
+  };
+
+  const handleAddOn = async (event: PokerTournamentEvent) => {
+    try {
+      await addOnEvent(event);
+    } catch {
+      alert('Failed to record add-on. Please try again.');
     }
   };
 
@@ -278,6 +292,7 @@ export default function TournamentDetailPage() {
                 onEdit={openEditEvent}
                 onDelete={handleEventDelete}
                 onRebuy={handleRebuy}
+                onAddOn={handleAddOn}
                 onCloseOut={openCloseOut}
               />
             ))}

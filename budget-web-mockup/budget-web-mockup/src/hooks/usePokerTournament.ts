@@ -22,6 +22,7 @@ interface UsePokerTournamentReturn {
   ) => Promise<PokerTournamentEvent>;
   deleteEvent: (eventId: string) => Promise<void>;
   rebuyEvent: (event: PokerTournamentEvent) => Promise<PokerTournamentEvent>;
+  addOnEvent: (event: PokerTournamentEvent) => Promise<PokerTournamentEvent>;
   closeOutEvent: (
     eventId: string,
     results: Pick<EventInput, 'finishPosition' | 'fieldSize' | 'winnings'>,
@@ -121,6 +122,14 @@ export function usePokerTournament(id: string): UsePokerTournamentReturn {
     [updateEvent],
   );
 
+  // Add-On: mark the event's pre-configured add-on as purchased. The cost
+  // (addOnAmount) was already set up on the event, so this just flips the flag.
+  const addOnEvent = useCallback(
+    (event: PokerTournamentEvent) =>
+      updateEvent(event.id, {addOnPurchased: true}),
+    [updateEvent],
+  );
+
   const closeOutEvent = useCallback(
     (
       eventId: string,
@@ -143,6 +152,7 @@ export function usePokerTournament(id: string): UsePokerTournamentReturn {
     updateEvent,
     deleteEvent,
     rebuyEvent,
+    addOnEvent,
     closeOutEvent,
     refresh,
   };

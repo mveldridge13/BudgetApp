@@ -1,6 +1,6 @@
 'use client';
 
-import {Pencil, Trash2, PlusCircle, CheckCircle, Trophy, DollarSign} from 'lucide-react';
+import {Pencil, Trash2, PlusCircle, CheckCircle, Trophy, DollarSign, Layers} from 'lucide-react';
 import {GAME_TYPE_LABELS} from '@/types';
 import type {PokerTournamentEvent} from '@/types';
 
@@ -9,6 +9,7 @@ interface EventCardProps {
   onEdit: (event: PokerTournamentEvent) => void;
   onDelete: (event: PokerTournamentEvent) => void;
   onRebuy: (event: PokerTournamentEvent) => void;
+  onAddOn: (event: PokerTournamentEvent) => void;
   onCloseOut: (event: PokerTournamentEvent) => void;
 }
 
@@ -32,10 +33,12 @@ export default function EventCard({
   onEdit,
   onDelete,
   onRebuy,
+  onAddOn,
   onCloseOut,
 }: EventCardProps) {
   const won = (event.winnings || 0) > 0;
   const showBanner = !!event.finishPosition || won;
+  const isAddOnEvent = event.gameType === 'ADD_ON';
 
   return (
     <div
@@ -105,6 +108,16 @@ export default function EventCard({
               {formatMoney(event.reBuyAmount || 0)}
             </span>
           </div>
+          {isAddOnEvent && (
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">
+                Add-On {event.addOnPurchased ? '(purchased)' : '(not purchased)'}
+              </span>
+              <span className="font-medium text-gray-800">
+                {formatMoney(event.addOnAmount || 0)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Actions (open events only) */}
@@ -116,6 +129,14 @@ export default function EventCard({
               <PlusCircle className="w-4 h-4" />
               Re-Buy
             </button>
+            {isAddOnEvent && !event.addOnPurchased && (
+              <button
+                onClick={() => onAddOn(event)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+                <Layers className="w-4 h-4" />
+                Add-On
+              </button>
+            )}
             <button
               onClick={() => onCloseOut(event)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">

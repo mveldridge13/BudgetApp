@@ -26,6 +26,8 @@ interface FormState {
   eventDate: string; // yyyy-mm-dd
   finishPosition: string; // "9" or "9/119"
   prize: string;
+  addOnAmount: string;
+  addOnStack: string;
 }
 
 const EMPTY: FormState = {
@@ -37,6 +39,8 @@ const EMPTY: FormState = {
   eventDate: '',
   finishPosition: '',
   prize: '',
+  addOnAmount: '',
+  addOnStack: '',
 };
 
 const labelClass =
@@ -113,6 +117,12 @@ export default function EventModal({
         eventDate: editingEvent.eventDate?.split('T')[0] || '',
         finishPosition: pos ? (field ? `${pos}/${field}` : String(pos)) : '',
         prize: editingEvent.winnings ? String(editingEvent.winnings) : '',
+        addOnAmount: editingEvent.addOnAmount
+          ? String(editingEvent.addOnAmount)
+          : '',
+        addOnStack: editingEvent.addOnStack
+          ? String(editingEvent.addOnStack)
+          : '',
       });
     } else {
       setForm(EMPTY);
@@ -169,6 +179,11 @@ export default function EventModal({
       // out an event doesn't reset its re-buy count/amount to 0.
       reBuys: editingEvent?.reBuys,
       reBuyAmount: editingEvent?.reBuyAmount,
+      addOnAmount: toNum(form.addOnAmount) ?? 0,
+      addOnStack: toInt(form.addOnStack) ?? 0,
+      // Same full-replace concern as re-buys: purchase state isn't editable
+      // here, so carry it through rather than resetting it to false.
+      addOnPurchased: editingEvent?.addOnPurchased ?? false,
     };
     try {
       setSaving(true);
@@ -288,6 +303,25 @@ export default function EventModal({
               {errors.buyIn && (
                 <p className="mt-1.5 text-sm text-red-600">{errors.buyIn}</p>
               )}
+              {form.gameType === 'ADD_ON' && (
+                <div className="mt-3">
+                  <label className={labelClass}>Add-On Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      value={form.addOnAmount}
+                      onChange={(e) => update('addOnAmount', e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      disabled={detailsDisabled}
+                      className={moneyInputClass}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className={labelClass}>Starting Stack</label>
@@ -299,6 +333,19 @@ export default function EventModal({
                 disabled={detailsDisabled}
                 className={inputClass}
               />
+              {form.gameType === 'ADD_ON' && (
+                <div className="mt-3">
+                  <label className={labelClass}>Add-On Stack</label>
+                  <input
+                    type="number"
+                    value={form.addOnStack}
+                    onChange={(e) => update('addOnStack', e.target.value)}
+                    placeholder="e.g., 10000"
+                    disabled={detailsDisabled}
+                    className={inputClass}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
