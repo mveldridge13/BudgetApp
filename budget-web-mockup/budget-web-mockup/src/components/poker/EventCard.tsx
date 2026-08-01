@@ -114,7 +114,7 @@ export default function EventCard({
                 Add-On {event.addOnPurchased ? '(purchased)' : '(not purchased)'}
               </span>
               <span className="font-medium text-gray-800">
-                {formatMoney(event.addOnAmount || 0)}
+                {formatMoney(event.addOnPurchased ? event.addOnAmount || 0 : 0)}
               </span>
             </div>
           )}
