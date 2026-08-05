@@ -42,9 +42,9 @@ export default function EventCard({
 
   return (
     <div
-      className="group relative bg-white rounded-xl border border-gray-100 overflow-hidden"
+      className="group relative bg-white rounded-xl border border-gray-100 overflow-hidden flex flex-col h-full"
       style={{boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)'}}>
-      <div className="p-5">
+      <div className="p-5 flex-1">
         {/* Hover actions */}
         <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
